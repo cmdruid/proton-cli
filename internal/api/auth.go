@@ -155,7 +155,7 @@ func (c *Client) srpLogin(ctx context.Context, username string, password []byte,
 		return nil, fmt.Errorf("auth parse: %w", err)
 	}
 	if r.Code != 1000 {
-		return nil, fmt.Errorf("auth code %d: %s", r.Code, string(raw))
+		return nil, parseAuthError(raw, r.Code)
 	}
 	serverProof, err := base64.StdEncoding.DecodeString(r.ServerProof)
 	if err != nil {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -34,4 +35,33 @@ type HumanVerificationError struct {
 
 func (e *HumanVerificationError) Error() string {
 	return fmt.Sprintf("human verification required: %s", e.WebURL)
+}
+
+// parseAuthError converts a Proton auth response body into a typed error.
+// Returns *HumanVerificationError for code 9001 (CAPTCHA required), otherwise
+// an *APIError carrying the server-provided message and raw body. The HTTP
+// request itself succeeded — the failure is application-level — so HTTPStatus
+// is left at zero.
+func parseAuthError(raw []byte, code int) error {
+	var env struct {
+		Error   string
+		Details *struct {
+			HumanVerificationToken   string
+			HumanVerificationMethods []string
+			WebUrl                   string
+		}
+	}
+	_ = json.Unmarshal(raw, &env)
+	if code == 9001 && env.Details != nil {
+		return &HumanVerificationError{
+			Token:   env.Details.HumanVerificationToken,
+			Methods: env.Details.HumanVerificationMethods,
+			WebURL:  env.Details.WebUrl,
+		}
+	}
+	msg := env.Error
+	if msg == "" {
+		msg = fmt.Sprintf("auth code %d", code)
+	}
+	return &APIError{Code: code, Message: msg, RawBody: raw}
 }

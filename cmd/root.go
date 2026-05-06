@@ -18,6 +18,7 @@ import (
 	"github.com/roman-16/proton-cli/cmd/drive"
 	"github.com/roman-16/proton-cli/cmd/mail"
 	"github.com/roman-16/proton-cli/cmd/pass"
+	"github.com/roman-16/proton-cli/internal/api"
 	"github.com/roman-16/proton-cli/internal/app"
 	"github.com/roman-16/proton-cli/internal/render"
 	"github.com/spf13/cobra"
@@ -64,7 +65,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&gFlags.logLevel, "log-level", "", "Log level: debug, info, warn, error")
 	rootCmd.PersistentFlags().BoolVar(&gFlags.dryRun, "dry-run", false, "Preview mutations without applying them")
 
-	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		a, err := app.New(app.Options{
@@ -105,6 +106,11 @@ func Execute() {
 	if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		fmt.Fprintln(os.Stderr, "\nCancelled.")
 		os.Exit(130)
+	}
+	var hvErr *api.HumanVerificationError
+	if errors.As(err, &hvErr) {
+		fmt.Fprintf(os.Stderr, "Error: Proton requires human verification \u2014 open %s in a browser, complete the CAPTCHA, then retry.\n", hvErr.WebURL)
+		os.Exit(app.ExitCodeFor(err))
 	}
 	fmt.Fprintln(os.Stderr, "Error:", err)
 	os.Exit(app.ExitCodeFor(err))
