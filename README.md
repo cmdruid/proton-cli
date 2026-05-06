@@ -14,19 +14,19 @@ Grab the latest binary for your platform from [**GitHub Releases**](https://gith
 
 | Platform | Binary |
 |---|---|
-| Linux (x86_64) | `proton-cli_VERSION_linux_amd64` |
-| Linux (ARM64) | `proton-cli_VERSION_linux_arm64` |
-| macOS (Apple Silicon) | `proton-cli_VERSION_darwin_arm64` |
-| macOS (Intel) | `proton-cli_VERSION_darwin_amd64` |
-| Windows (x86_64) | `proton-cli_VERSION_windows_amd64.exe` |
-| Windows (ARM64) | `proton-cli_VERSION_windows_arm64.exe` |
+| Linux (x86_64) | `proton-cli_linux_amd64` |
+| Linux (ARM64) | `proton-cli_linux_arm64` |
+| macOS (Apple Silicon) | `proton-cli_darwin_arm64` |
+| macOS (Intel) | `proton-cli_darwin_amd64` |
+| Windows (x86_64) | `proton-cli_windows_amd64.exe` |
+| Windows (ARM64) | `proton-cli_windows_arm64.exe` |
 
 **Linux / macOS:**
 
 ```bash
-curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_VERSION_linux_amd64
-chmod +x proton-cli_*
-sudo mv proton-cli_* /usr/local/bin/proton-cli
+curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64
+chmod +x proton-cli_linux_amd64
+sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
 ```
 
 **Windows:** download the `.exe` from the [releases page](https://github.com/roman-16/proton-cli/releases/latest) and add it to your PATH.
