@@ -195,7 +195,7 @@ components:
   # LinkState: 0=DRAFT, 1=ACTIVE, 2=TRASHED
   # LinkType: 1=FOLDER, 2=FILE, 3=ALBUM
   # LinkURLType: folder=FOLDER, file=FILE
-  # LUMO_UPSELL_PATHS: top-navigation-bar=TOP_NAVIGATION_BAR, chat-history=CHAT_HISTORY, sidebar=SIDEBAR, sidebar-button=SIDEBAR_BUTTON, settings-modal=SETTINGS_MODAL, settings-modal-plan=SETTINGS_MODAL_PLAN, limit-questions=LIMIT_QUESTIONS, free-user-question-limit=QUESTION_LIMIT_FREE, paid-user-question-limit=QUESTION_LIMIT_B2B_B2C, lumo-plus-upgrade-modal=LUMO_PLUS_UPGRADE_MODAL, lumo-plus-upgrade-toggle=LUMO_PLUS_UPGRADE_TOGGLE
+  # LUMO_UPSELL_PATHS: top-navigation-bar=TOP_NAVIGATION_BAR, chat-history=CHAT_HISTORY, sidebar=SIDEBAR, sidebar-button=SIDEBAR_BUTTON, settings-modal=SETTINGS_MODAL, settings-modal-plan=SETTINGS_MODAL_PLAN, api-keys=API_KEYS, limit-questions=LIMIT_QUESTIONS, free-user-question-limit=QUESTION_LIMIT_FREE, paid-user-question-limit=QUESTION_LIMIT_B2B_B2C, lumo-plus-upgrade-modal=LUMO_PLUS_UPGRADE_MODAL, lumo-plus-upgrade-toggle=LUMO_PLUS_UPGRADE_TOGGLE
   # MAIL_PAGE_SIZE: 50=FIFTY, 100=ONE_HUNDRED, 200=TWO_HUNDRED
   # MAIL_UPSELL_BANNER_LINK_ID_REF_PATH: 3=SEND_FROM_PM_ADDRESS, 4=GET_MORE_FOLDERS_FILTERS_AND_ADDRESSES, 5=AUTO_REPLY, 7=THIRD_PARTY_CLIENTS, 9=GET_MORE_FEATURES, 15=HOST_EMAILS_FROM_YOUR_DOMAINS, 16=PROTECT_YOUR_BUSINESS, 17=ADD_MORE_ADDRESSES, 18=CONTACT_GROUPS, 19=PRIVACY_FIRST_INTERNET, 20=PRIVACY_FOR_ALL, 23=PREMIUM_FEATURES, 24=LVL_UP_PRIVACY, 25=PROTON_SENTINEL
   # MAIL_UPSELL_PATHS: auto-reply=AUTO_REPLY, domain-names=DOMAIN_NAMES, catch-all=CATCH_ALL, bridge=BRIDGE, pm-me=PM_ME, short-address=SHORT_ADDRESS, auto-delete=AUTO_DELETE, schedule-send=SCHEDULE_SEND, storage-full=STORAGE_FULL, get-started-checklist=GET_STARTED_CHECKLIST, mail-footer=MAIL_FOOTER, unlimited-folders=UNLIMITED_FOLDERS, unlimited-labels=UNLIMITED_LABELS, unlimited-filters=UNLIMITED_FILTERS, unlimited-filters-newsletter-subscription=UNLIMITED_FILTERS_NEWSLETTER_SUBSCRIPTION, unlimited-folders-newsletter-subscription=UNLIMITED_FOLDERS_NEWSLETTER_SUBSCRIPTION, unlimited-addresses=UNLIMITED_ADDRESSES, forward-emails=FORWARD_EMAILS, smtp-submission=SMTP_SUBMISSION, snooze-message=SNOOZE_MESSAGE, proton-sentinel=PROTON_SENTINEL, pass-aliases=PASS_ALIASES, trial-welcome=TRIAL_WELCOME, trial-banner=TRIAL_BANNER, trial-end=TRIAL_END, assistant-toggle=ASSISTANT_TOGGLE, assistant-toggle-downgrade=ASSISTANT_TOGGLE_DOWNGRADE, assistant-composer=ASSISTANT_COMPOSER, zoom-meeting=ZOOM_MEETING, account-locked-state=ACCOUNT_LOCKED, dark-web-monitoring=DARK_WEB_MONITORING, subscription-reminder-privacy=SUBSCRIPTION_REMINDER_PRIVACY, subscription-reminder-productivity=SUBSCRIPTION_REMINDER_PRODUCTIVITY, one-dollar-initial-reminder=ONE_DOLLAR_INITIAL_REMINDER, one-dollar-second-reminder=ONE_DOLLAR_SECOND_REMINDER, one-dollar-last-reminder=ONE_DOLLAR_LAST_REMINDER, go-unlimited-2025=GO_UNLIMITED_2025, unlimited-to-duo=UNLIMITED_TO_DUO, plus_monthly-subscriber-nudge-variant-money=PLUS_MONTHLY_SUBSCRIBER_NUDGE_VARIANT_MONEY, bundle_monthly-subscriber-nudge-variant-money=BUNDLE_MONTHLY_SUBSCRIBER_NUDGE_VARIANT_MONEY
@@ -271,7 +271,7 @@ components:
   # SEND_MESSAGE_DIRECT_ACTION: 0=REPLY, 1=REPLY_ALL, 2=FORWARD, 3=AUTO_RESPONSE, 4=READ_RECEIPT
   # SentryCalendarInitiatives: rsvp-note=RSVP_NOTE, bookings=BOOKINGS
   # SentryCommonInitiatives: post-subscription=POST_SUBSCRIPTION, encrypted-search=ENCRYPTED_SEARCH
-  # SentryMailInitiatives: drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, composer=COMPOSER, assistant=ASSISTANT, mail-onboarding=MAIL_ONBOARDING, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS, move-actions=MOVE_ACTIONS, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL
+  # SentryMailInitiatives: assistant=ASSISTANT, attachment-encryption-error=ATTACHMENT_ENCRYPTION_ERROR, attachment-upload-error=ATTACHMENT_UPLOAD_ERROR, composer=COMPOSER, drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, mail-onboarding=MAIL_ONBOARDING, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL, move-actions=MOVE_ACTIONS, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS
   # SentryMailPerformanceInitiatives: apply-location-performance=APPLY_LOCATION_PERFORMANCE
   # SERVER_FEATURES: 1=SECURE_CORE, 2=TOR, 4=P2P, 8=XOR, 16=IPV6, 32=RESTRICTED, 64=PARTNER, 128=DOUBLE_RESTRICTION
   # SessionRecoveryReason: 0=NONE, 1=CANCELLED, 2=AUTHENTICATION
@@ -295,7 +295,7 @@ components:
   # SHOW_IMAGES: 0=SHOW, 1=HIDE
   # SHOW_MOVED: 0=NONE, 1=DRAFTS, 2=SENT, 3=DRAFTS_AND_SENT
   # SIGN: 0=DISABLED, 1=ENABLED
-  # SIMPLE_LOGIN_EXTENSION_LINKS: https://simplelogin.io=MAIN_PAGE, https://app.simplelogin.io/dashboard/=DASHBOARD
+  # SIMPLE_LOGIN_EXTENSION_LINKS: https://simplelogin.io=MAIN_PAGE, https://app.simplelogin.io/dashboard/=DASHBOARD, https://app.simplelogin.io/admin/=ADMIN_DASHBOARD, https://app.sldev.ovh/admin/=ADMIN_DASHBOARD_DEV
   # SIMPLE_LOGIN_TAGS: EXTENSION_INSTALLED_QUERY=EXTENSION_INSTALLED_QUERY, EXTENSION_INSTALLED_RESPONSE=EXTENSION_INSTALLED_RESPONSE
   # SORT_DIRECTION: ASC=ASC, DESC=DESC
   # SortSetting: 1=NameAsc, 2=SizeAsc, 4=ModifiedAsc, -1=NameDesc, -2=SizeDesc, -4=ModifiedDesc
@@ -335,6 +335,7 @@ components:
   # TelemetryInboxDestkopEvents: mailto_heartbeat=mailto_heartbeat, daily_stats_heartbeat=daily_stats_heartbeat
   # TelemetryKeyTransparencyErrorEvents: self_audit_error=self_audit_error, key_verification_failure=key_verification_failure
   # TelemetryListSetting: list_filter_all=list_filter_all, list_filter_read=list_filter_read, list_filter_unread=list_filter_unread, list_filter_file=list_filter_file, list_order_new_first=list_order_new_first, list_order_old_first=list_order_old_first, list_order_large_first=list_order_large_first, list_order_small_first=list_order_small_first
+  # TelemetryMailBlockquotes: expand_composer_blockquotes=expandComposerBlockquotes, create_reply=createReply
   # TelemetryMailComposerAssistantEvents: show_assistant=show_assistant, free_trial_start=free_trial_start, download_model=download_model, use_answer=use_answer, not_use_answer=not_use_answer, request_assistant=request_assistant, assistant_error=assistant_error, send_message=send_message, pause_download=pause_download, load_model=load_model, unload_model=unload_model, incompatible_assistant=incompatible_assistant
   # TelemetryMailDrivePostSignupOneDollarEvents: automatic_modal_open=automaticModalOpen, click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, close_offer=closeOffer, user_subscribed=userSubscribed
   # TelemetryMailEvents: privacy_dropdown_opened=privacy_dropdown_opened, snooze_open_dropdown=snooze_open_dropdown
@@ -344,7 +345,7 @@ components:
   # TelemetryMailPagingControlsEvents: move_to_previous_page=move_to_previous_page, move_to_next_page=move_to_next_page, clicked_load_more_search_results=clicked_load_more_search_results, move_to_custom_page=move_to_custom_page
   # TelemetryMailSelectAllEvents: button_move_to_archive=button_move_to_archive, button_move_to_trash=button_move_to_trash, banner_move_to=banner_move_to, banner_label_as=banner_label_as, banner_mark_as_read=banner_mark_as_read, banner_mark_as_unread=banner_mark_as_unread, banner_permanent_delete=banner_permanent_delete
   # TelemetryMailTrial2024UpsellModal: no_thanks=noThanks, close_modal=closeModal, upsell=upsell
-  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.recovery_settings=accountRecoverySettings, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, account.web.cancellation=accountCancellation, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage
+  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.recovery_settings=accountRecoverySettings, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, account.web.cancellation=accountCancellation, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.expand_blockquotes=mailExpandBlockquotes, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage
   # TelemetryPaidUsersNudge: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, close_offer=closeOffer, user_subscribed=userSubscribed, click_hide_offer=clickHideOffer
   # TelemetryPassExtensionEvents: fe.pass_extension_installed=pass_extension_installed
   # TelemetryPassNudgeEvents: banner_display=banner_display, banner_interaction=banner_interaction, pass_cta_click=pass_cta_click
@@ -356,7 +357,7 @@ components:
   # TelemetryResetPasswordEvents: page_load=page_load, page_exit=page_exit, step_load=step_load, recovery_methods_requested=recovery_methods_requested, code_sent=code_sent, method_validated=method_validated, success=success, failure=failure
   # TelemetrySecurityCenterEvents: account_security_card=account_security_card, proton_pass_discover_banner=proton_pass_discover_banner, proton_pass_create_alias=proton_pass_create_alias, proton_sentinel_toggle=proton_sentinel_toggle
   # TelemetrySmartBannerEvents: click_app_store_link=clickAppStoreLink
-  # TelemetrySubscriptionModalEvents: initialization=initialization, payment=payment, cancelled_on_same_day=cancelledOnSameDay, add_lumo=addLumo, add_meet=addMeet
+  # TelemetrySubscriptionModalEvents: initialization=initialization, payment=payment, cancelled_on_same_day=cancelledOnSameDay, add_lumo=addLumo
   # TelemetryUnauthLost2FAEvents: step_load=step_load, flow_outcome=flow_outcome
   # TelemetryUnlimitedOffer2025: click_top_navbar=clickTopNavbar, click_upsell_button=clickUpsellButton, close_offer=closeOffer, user_subscribed=userSubscribed, click_hide_offer=clickHideOffer
   # TelemetryUnlimitedToDuoOffer: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, user_subscribed=userSubscribed, close_offer=closeOffer, click_hide_offer=clickHideOffer
@@ -1276,6 +1277,54 @@ paths:
       responses:
         "200":
           description: Reauth Mnemonic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /auth/v4/organizations/loginlink/token:
+    post:
+      tags: [Auth]
+      summary: Redeem Token
+      operationId: redeemToken
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Redeem Token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /auth/v4/organizations/loginlink/verify-code:
+    post:
+      tags: [Auth]
+      summary: Verify Code
+      operationId: verifyCode
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Verify Code
           content:
             application/json:
               schema:
@@ -7848,6 +7897,21 @@ It's just not needed at this point"
       responses:
         "200":
           description: Search Members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /core/v4/members/search/summary:
+    get:
+      tags: [Core]
+      summary: Search Members Summary
+      operationId: searchMembersSummary
+      responses:
+        "200":
+          description: Search Members Summary
           content:
             application/json:
               schema:
