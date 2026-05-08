@@ -50,6 +50,10 @@ build_one() {
     local out="$OUT_DIR/proton-cli-hv-${goos}-${goarch}${suffix}"
     echo "==> building helper $goos/$goarch -> $out"
 
+    # Reset any cross-arch CC/CGO flags from a previous iteration so
+    # an arm64 build later in the loop doesn't accidentally pick them up.
+    unset CC CXX CGO_CFLAGS CGO_LDFLAGS
+
     # pkg-config shim (Linux only): aliases webkit2gtk-4.0 → 4.1, used
     # by webview_go's hardcoded cgo line. See tools/pkgconfig/.
     if [[ "$goos" == "linux" ]]; then
@@ -62,6 +66,22 @@ build_one() {
             echo "       Install libwebkit2gtk-4.1-dev (Debian/Ubuntu)" >&2
             echo "       or enter \`devbox shell\` first." >&2
             return 1
+        fi
+    fi
+
+    # darwin/amd64 cross-compile from arm64: GitHub's macos-latest
+    # runners are Apple Silicon now (Intel macos-13 runners are
+    # deprecated and routinely queue for hours). macOS ships a
+    # universal SDK so clang -arch x86_64 produces x86_64 Mach-O
+    # binaries while running natively on arm64. CGO picks up the
+    # arch via CC / CGO_*FLAGS.
+    if [[ "$goos" == "darwin" && "$goarch" == "amd64" ]]; then
+        host_arch="$(uname -m)"
+        if [[ "$host_arch" == "arm64" ]]; then
+            export CC="cc -arch x86_64"
+            export CXX="c++ -arch x86_64"
+            export CGO_CFLAGS="-arch x86_64"
+            export CGO_LDFLAGS="-arch x86_64"
         fi
     fi
 
