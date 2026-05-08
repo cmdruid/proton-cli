@@ -1,4 +1,5 @@
 **/node_modules/
+internal/hv/assets/
 .devbox/
 dist/
 .env

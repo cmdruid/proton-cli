@@ -19,7 +19,6 @@ Grab the latest binary for your platform from [**GitHub Releases**](https://gith
 | macOS (Apple Silicon) | `proton-cli_darwin_arm64` |
 | macOS (Intel) | `proton-cli_darwin_amd64` |
 | Windows (x86_64) | `proton-cli_windows_amd64.exe` |
-| Windows (ARM64) | `proton-cli_windows_arm64.exe` |
 
 **Linux / macOS:**
 
@@ -85,8 +84,10 @@ proton-cli mail messages list --folder sent
 proton-cli mail messages list --folder drafts --page 1 --page-size 10 --unread
 proton-cli mail messages search --keyword "invoice"
 proton-cli mail messages search --from "amazon" --after 2026-01-01
-proton-cli mail messages read REF
-proton-cli mail messages read REF --format text            # text|html|raw
+proton-cli mail messages read REF                          # body + an attachments footer (non-inline)
+proton-cli mail messages read --include-inline REF         # also surface signature graphics in the footer
+proton-cli mail messages read --format text REF            # text|html|raw (footer only in text mode)
+proton-cli mail messages read --body-only REF > body.txt   # body only, no header, no footer
 proton-cli mail messages send --to "to@ex.com" --subject "Hi" --body "Hello"
 echo "body" | proton-cli mail messages send --to foo --subject bar --body -
 proton-cli mail messages trash REF...
@@ -103,10 +104,38 @@ proton-cli mail messages move --dest archive --from "newsletter@" --older-than 7
 proton-cli mail messages mark read --folder inbox --unread
 proton-cli mail messages delete --folder spam --all
 
+# Conversations (full threads)
+proton-cli mail conversations list
+proton-cli mail conversations list --folder sent --unread
+proton-cli mail conversations search --keyword "invoice"
+proton-cli mail conversations read CONV_ID            # full thread, chronological; per-message attachments footer
+proton-cli mail conversations read --include-inline CONV_ID  # also tag signature graphics per message
+proton-cli mail conversations read --body-only CONV_ID > thread.txt  # bodies only, separated by blank lines
+proton-cli mail conversations read --strip-quotes CONV_ID    # remove quoted reply blocks from each message
+proton-cli mail conversations read --summary CONV_ID         # one line per message: index/total, date, sender, preview
+proton-cli mail conversations trash CONV_ID...
+proton-cli mail conversations delete CONV_ID...       # permanent
+proton-cli mail conversations move --dest archive CONV_ID...
+proton-cli mail conversations mark read CONV_ID       # ACTION: read|unread
+proton-cli mail conversations star CONV_ID
+proton-cli mail conversations unstar CONV_ID
+
+# Conversation-wide attachments (union across all messages in the thread)
+proton-cli mail conversations attachments list CONV_ID                              # MESSAGE_ID column shows where each one came from
+proton-cli mail conversations attachments list --include-inline CONV_ID             # also show signature graphics
+proton-cli mail conversations attachments download CONV_ID ATTACHMENT_ID            # resolves to its parent message internally
+proton-cli mail conversations attachments download CONV_ID --all --output-dir ./atts/
+
 # Attachments
 proton-cli mail attachments list MESSAGE_ID
-proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID ./file.pdf
-proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID -   # stdout
+proton-cli mail attachments list MESSAGE_ID --include-inline                   # include signature graphics etc.
+proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID                  # uses the attachment's own name; auto-suffixes name_1.pdf on collision
+proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID ./file.pdf       # explicit path; errors if file exists
+proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID --output ./f.pdf # same as above via flag
+proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID --output ./f.pdf --force  # overwrite
+proton-cli mail attachments download MESSAGE_ID --all --output-dir ./atts/     # download every attachment
+proton-cli mail attachments download MESSAGE_ID --all --include-inline --output-dir ./atts/  # also fetch inline images
+proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID -                # stdout
 
 # Labels and folders
 proton-cli mail labels list
@@ -137,6 +166,7 @@ proton-cli drive items upload ./report.pdf /Documents      # into a folder
 proton-cli drive items upload - /Notes/note.txt            # from stdin
 proton-cli drive items upload --recursive ./folder /Backup
 proton-cli drive items download /Documents/report.pdf ./report.pdf
+proton-cli drive items download --force /Documents/report.pdf ./report.pdf   # overwrite if local exists
 proton-cli drive items download /Photos/pic.jpg            # to stdout
 proton-cli drive items download /Photos/pic.jpg -          # to stdout (explicit)
 proton-cli drive items rename /Documents/old.txt new.txt
@@ -187,7 +217,7 @@ proton-cli calendar events delete "Meeting"                # search by title
 proton-cli contacts list
 proton-cli contacts get REF                                # ID or search
 proton-cli contacts create --name "John Doe" --email "john@example.com" --phone "+1234567890"
-proton-cli contacts update REF --email "new@example.com"
+proton-cli contacts update --email "new@example.com" REF
 proton-cli contacts delete REF
 ```
 
@@ -239,6 +269,35 @@ proton-cli api POST /calendar/v1 --body '{"Name":"Work",...}'
 proton-cli api GET /mail/v4/messages --query Page=0 --query PageSize=10
 proton-cli api GET /calendar/v1 --output json | jq '.Calendars[].ID'
 ```
+
+## Short IDs
+
+In interactive terminals, list commands shorten Proton IDs to 8 characters for readability:
+
+```
+$ proton-cli mail messages list
+ID        FROM            SUBJECT          DATE              ⚑
+────────  ──────────────  ───────────────  ────────────────  ─
+NWM5AYGx  alice@a.com     Hello            2026-04-15 14:32
+```
+
+Pipes, file redirection, and `--output json|yaml` always emit full IDs:
+
+```
+$ proton-cli mail messages list --output json | jq -r '.messages[].id' NWM5AYGx_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A5C-ADmohv7TjXfYbDEIHZPQ==
+```
+
+The CLI keeps a per-profile cache of IDs you have seen at `~/.config/proton-cli/idcache/<profile>.json`, so a short prefix can be pasted into any command that takes an ID:
+
+```
+$ proton-cli mail messages read NWM5AYGx
+Subject: Hello
+...
+```
+
+If the prefix isn't in your local cache (e.g. you copied it from another machine), run the matching list command first or use the full ID. Pass `--full-ids` (a global flag) to disable shortening entirely.
+
+Ambiguous prefixes (two cached IDs share the same first 8 chars) exit 4 with both candidates listed.
 
 ## Profiles (multi-account)
 
@@ -295,6 +354,14 @@ Flags override env vars; env vars override profile values.
 | Mail | Session key | Address key |
 | Pass items | AES-256-GCM (item key) | N/A (symmetric) |
 | Pass vaults | AES-256-GCM (vault key) | N/A (symmetric) |
+
+## Human Verification (CAPTCHA)
+
+Proton's anti-bot may demand a CAPTCHA at login. proton-cli opens a small webview window via an embedded helper, you solve it, the original command retries automatically. No extra install — the helper is `//go:embed`-ded into the main binary.
+
+Linux desktop needs `libwebkit2gtk-4.1` + `libgtk-3` installed: macOS / Windows: nothing to install (system WebKit / WebView2).
+
+**Headless** (server, container, no GUI): the webview can't run. proton-cli exits with an error — there is no way to solve the CAPTCHA from this environment. Run the command on a desktop machine instead.
 
 ## API Reference
 

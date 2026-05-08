@@ -1,6 +1,7 @@
 # Build the binary
 build:
-    go build -o proton-cli .
+    bash scripts/build-hv-helpers.sh
+    go build -tags=embed_hv -o proton-cli .
 
 # Clean build artifacts
 clean:
@@ -15,10 +16,14 @@ lint:
 run *args:
     go run . {{args}}
 
-# Run integration tests (requires PROTON_USER and PROTON_PASSWORD)
-test:
-    go test ./tests/ -v -count=1 -timeout 10m
+# Run unit tests (no API, no credentials — fast)
+test-unit:
+    go test ./cmd/... ./internal/... -count=1
 
-# Run a single test
-test-one name:
-    go test ./tests/ -v -count=1 -run {{name}} -timeout 5m
+# Run unit + integration tests (requires PROTON_USER and PROTON_PASSWORD)
+test: test-unit
+    go test ./tests/ -v -count=1 -timeout 20m
+
+# Run a single test (or a `|`-separated regex of test names)
+test-one pattern:
+    go test ./tests/ -v -count=1 -run '{{pattern}}' -timeout 5m

@@ -16,7 +16,12 @@ import (
 
 var binaryPath string
 
-// TestMain builds the CLI binary once before any integration test runs.
+// TestMain builds the CLI binary once before any integration test
+// runs. The binary is built release-shaped (with -tags=embed_hv) so
+// any test that triggers Proton's CAPTCHA HV flow can solve it via
+// the embedded webview helper instead of skipping. This requires
+// libwebkit2gtk-4.1-dev + pkg-config in the environment, which
+// `devbox shell` provides.
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "proton-cli-test-*")
 	if err != nil {
@@ -25,8 +30,17 @@ func TestMain(m *testing.M) {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
+	// Build the per-platform proton-cli-hv helper into
+	// internal/hv/assets/ so the main build's //go:embed picks it up.
+	helpers := exec.Command("bash", "../scripts/build-hv-helpers.sh")
+	helpers.Stderr = os.Stderr
+	if err := helpers.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to build hv helper: %v\n", err)
+		os.Exit(1)
+	}
+
 	binaryPath = filepath.Join(dir, "proton-cli")
-	cmd := exec.Command("go", "build", "-o", binaryPath, "..")
+	cmd := exec.Command("go", "build", "-tags=embed_hv", "-o", binaryPath, "..")
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to build binary: %v\n", err)

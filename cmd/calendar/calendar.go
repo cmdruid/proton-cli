@@ -35,13 +35,21 @@ func calendarsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if a.IDCache != nil && len(cals) > 0 {
+				ids := make([]string, 0, len(cals))
+				for _, c := range cals {
+					ids = append(ids, c.ID)
+				}
+				_ = a.IDCache.Save(ids...)
+			}
 			if a.R.Format != render.FormatText {
 				return a.R.Object(cals)
 			}
+			short := a.R.IsTTY() && !a.FullIDs
 			headers := []string{"ID", "NAME", "COLOR", "MEMBERS"}
 			var rows [][]string
 			for _, c := range cals {
-				rows = append(rows, []string{c.ID, c.Name, c.Color, fmt.Sprintf("%d", c.MemberCount)})
+				rows = append(rows, []string{render.ShortID(c.ID, short), c.Name, c.Color, fmt.Sprintf("%d", c.MemberCount)})
 			}
 			render.Table(a.R.Stdout, headers, rows)
 			return nil
@@ -90,15 +98,19 @@ func calendarsCmd() *cobra.Command {
 			if a.Creds.Password == "" {
 				return fmt.Errorf("password is required for calendar delete")
 			}
+			calID, err := shared.ResolvePrefix(a, args[0])
+			if err != nil {
+				return err
+			}
 			if a.DryRun {
-				a.R.Info(fmt.Sprintf("dry-run: would delete calendar %s", args[0]))
+				a.R.Info(fmt.Sprintf("dry-run: would delete calendar %s", calID))
 				return nil
 			}
 			a.R.Info("Unlocking password scope...")
 			if err := a.API.UnlockPasswordScope(cmd.Context(), a.Creds.User, []byte(a.Creds.Password)); err != nil {
 				return fmt.Errorf("unlock password scope: %w", err)
 			}
-			if err := a.Calendar.CalendarDelete(cmd.Context(), args[0]); err != nil {
+			if err := a.Calendar.CalendarDelete(cmd.Context(), calID); err != nil {
 				return err
 			}
 			a.R.Success("Calendar deleted.")
@@ -125,7 +137,11 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			id, err := a.Calendar.ResolveCalendarID(cmd.Context(), listCal)
+			listCalRef, err := shared.ResolvePrefix(a, listCal)
+			if err != nil {
+				return err
+			}
+			id, err := a.Calendar.ResolveCalendarID(cmd.Context(), listCalRef)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -148,16 +164,25 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if a.IDCache != nil && len(events) > 0 {
+				ids := make([]string, 0, len(events)*2)
+				for _, e := range events {
+					ids = append(ids, e.CalendarID, e.ID)
+				}
+				_ = a.IDCache.Save(ids...)
+			}
 			if a.R.Format != render.FormatText {
 				return a.R.Object(events)
 			}
+			short := a.R.IsTTY() && !a.FullIDs
 			headers := []string{"DATE", "TIME", "DURATION", "TITLE", "LOCATION", "CALENDAR_ID", "EVENT_ID"}
 			var rows [][]string
 			for _, e := range events {
 				st := e.Start.Local()
 				rows = append(rows, []string{
 					st.Format("2006-01-02"), st.Format("15:04"),
-					render.Duration(e.End.Sub(e.Start)), e.Title, e.Location, e.CalendarID, e.ID,
+					render.Duration(e.End.Sub(e.Start)), e.Title, e.Location,
+					render.ShortID(e.CalendarID, short), render.ShortID(e.ID, short),
 				})
 			}
 			render.Table(a.R.Stdout, headers, rows)
@@ -181,7 +206,11 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			calID, eventID, err := a.Calendar.ResolveEvent(cmd.Context(), u, args)
+			refs, err := shared.ResolvePrefixes(a, args)
+			if err != nil {
+				return err
+			}
+			calID, eventID, err := a.Calendar.ResolveEvent(cmd.Context(), u, refs)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -221,7 +250,11 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			calID, err := a.Calendar.ResolveCalendarID(cmd.Context(), eCal)
+			eCalRef, err := shared.ResolvePrefix(a, eCal)
+			if err != nil {
+				return err
+			}
+			calID, err := a.Calendar.ResolveCalendarID(cmd.Context(), eCalRef)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -286,7 +319,15 @@ func eventsCmd() *cobra.Command {
 				a.R.Info("dry-run: would update event")
 				return nil
 			}
-			if err := a.Calendar.EventUpdate(cmd.Context(), u, args[0], args[1], uTitle, uLocation, start, end); err != nil {
+			calID, err := shared.ResolvePrefix(a, args[0])
+			if err != nil {
+				return err
+			}
+			eventID, err := shared.ResolvePrefix(a, args[1])
+			if err != nil {
+				return err
+			}
+			if err := a.Calendar.EventUpdate(cmd.Context(), u, calID, eventID, uTitle, uLocation, start, end); err != nil {
 				return err
 			}
 			a.R.Success("Event updated.")
@@ -311,7 +352,11 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			calID, eventID, err := a.Calendar.ResolveEvent(cmd.Context(), u, args)
+			refs, err := shared.ResolvePrefixes(a, args)
+			if err != nil {
+				return err
+			}
+			calID, eventID, err := a.Calendar.ResolveEvent(cmd.Context(), u, refs)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}

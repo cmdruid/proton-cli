@@ -178,9 +178,18 @@ func (r *Renderer) Info(msg string) {
 	_, _ = fmt.Fprintln(r.Stderr, msg)
 }
 
-// IsTTY reports whether stderr is a terminal.
+// IsTTY reports whether stdout is a terminal. The PROTON_CLI_FORCE_TTY=1
+// env var overrides the check so integration tests can exercise the
+// interactive-mode rendering paths without a pty wrapper.
+//
+// stdout is the right check for short-ID display: when stdout is a pipe,
+// the consumer almost certainly wants full IDs even if the user's stderr
+// is still a terminal.
 func (r *Renderer) IsTTY() bool {
-	if f, ok := r.Stderr.(*os.File); ok {
+	if os.Getenv("PROTON_CLI_FORCE_TTY") == "1" {
+		return true
+	}
+	if f, ok := r.Stdout.(*os.File); ok {
 		return term.IsTerminal(int(f.Fd()))
 	}
 	return false

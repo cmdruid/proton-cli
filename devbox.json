@@ -1,13 +1,22 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
-  "packages": [
-    "go@latest",
-    "gopls@latest",
-    "golangci-lint@latest",
-    "nodejs@24",
-    "just@latest",
-    "protobuf@latest"
-  ],
+  "packages": {
+    "go": "latest",
+    "gopls": "latest",
+    "golangci-lint": "latest",
+    "nodejs": "24",
+    "just": "latest",
+    "protobuf": "latest",
+    "pkg-config": "latest",
+    "webkitgtk_4_1": {
+      "version": "latest",
+      "outputs": ["out", "dev"],
+      "platforms": ["x86_64-linux"]
+    }
+  },
+  "env": {
+    "PKG_CONFIG_PATH_FOR_TARGET": "$DEVBOX_PROJECT_ROOT/tools/pkgconfig:$PKG_CONFIG_PATH_FOR_TARGET"
+  },
   "shell": {
     "init_hook": [
       "if [ -f .env ]; then set -a; . ./.env; set +a; fi"

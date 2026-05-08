@@ -17,3 +17,14 @@ func From(ctx context.Context) *App {
 	}
 	return a
 }
+
+// FromOrNil returns the App in ctx, or nil if absent. Used by code
+// paths that may run before PersistentPreRunE has installed an app
+// (e.g. cmd/root.go's final-error formatter when arg-parsing fails).
+func FromOrNil(ctx context.Context) *App {
+	if ctx == nil {
+		return nil
+	}
+	a, _ := ctx.Value(ctxKey{}).(*App)
+	return a
+}

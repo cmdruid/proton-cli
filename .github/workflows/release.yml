@@ -12,8 +12,10 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Validate version
         run: |
@@ -35,16 +37,111 @@ jobs:
           fi
 
       - name: Create and push tag
+        id: tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
           git push origin "v${{ inputs.version }}"
+          echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+
+  build-helpers:
+    needs: prepare
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-22.04,       goos: linux,   goarch: amd64 }
+          - { os: ubuntu-22.04-arm,   goos: linux,   goarch: arm64 }
+          - { os: macos-13,           goos: darwin,  goarch: amd64 }
+          - { os: macos-14,           goos: darwin,  goarch: arm64 }
+          - { os: windows-latest,     goos: windows, goarch: amd64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+
+      - name: Install Linux deps
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config build-essential
+
+      - name: Build helper
+        env:
+          GOOS:   ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        shell: bash
+        run: bash scripts/build-hv-helpers.sh
+
+      - name: Smoke test helper
+        shell: bash
+        env:
+          GOOS:   ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set +e  # we WANT a non-zero exit here
+          suffix=""
+          [[ "$GOOS" == "windows" ]] && suffix=".exe"
+          bin="internal/hv/assets/proton-cli-hv-${GOOS}-${GOARCH}${suffix}"
+          ls -la "$bin"
+
+          out=$("$bin" 2>&1)
+          code=$?
+          echo "exit:   $code"
+          echo "stderr: $out"
+
+          if [[ "$code" != "2" ]]; then
+            echo "::error::smoke test FAILED on ${GOOS}/${GOARCH}: expected exit 2, got $code"
+            exit 1
+          fi
+          if ! grep -q '^hv: usage:' <<<"$out"; then
+            echo "::error::smoke test FAILED on ${GOOS}/${GOARCH}: stderr did not start with 'hv: usage:'"
+            exit 1
+          fi
+          echo "✓ smoke test passed for ${GOOS}/${GOARCH}"
+
+      - name: Upload helper artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hv-helper-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: internal/hv/assets/proton-cli-hv-*
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    needs: [prepare, build-helpers]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Download all helper artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: internal/hv/assets
+          pattern: hv-helper-*
+          merge-multiple: true
+
+      - name: Show downloaded helpers
+        run: |
+          ls -la internal/hv/assets/
+          file internal/hv/assets/proton-cli-hv-* || true
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7

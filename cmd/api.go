@@ -1,13 +1,9 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 
 	"github.com/roman-16/proton-cli/internal/api"
@@ -50,12 +46,9 @@ Examples:
 			}
 			req := api.Request{Method: method, Path: path, Query: q, Body: body}
 
+			// HV retry is now handled inside the api package via the
+			// HVResolver installed on the client (see cmd/hv.go).
 			resp, err := a.API.Do(cmd.Context(), req)
-			if e := errHumanVerify(err); e != nil {
-				if err = handleHumanVerification(cmd, a, &req, e); err == nil {
-					resp, err = a.API.Do(cmd.Context(), req)
-				}
-			}
 			if err != nil {
 				// Still emit the server body if we have one, matching the old `api` behaviour.
 				var apiErr *api.APIError
@@ -71,39 +64,4 @@ Examples:
 	cmd.Flags().StringArrayVar(&query, "query", nil, "Query parameter (key=value, repeatable)")
 	cmd.Flags().StringVar(&body, "body", "", "JSON request body")
 	return cmd
-}
-
-func errHumanVerify(err error) *api.HumanVerificationError {
-	var hv *api.HumanVerificationError
-	if errors.As(err, &hv) {
-		return hv
-	}
-	return nil
-}
-
-func handleHumanVerification(cmd *cobra.Command, a *app.App, req *api.Request, hv *api.HumanVerificationError) error {
-	fmt.Fprintf(os.Stderr, "\nHuman verification required.\nOpening: %s\nMethods: %s\n", hv.WebURL, strings.Join(hv.Methods, ", "))
-	openBrowser(hv.WebURL)
-	fmt.Fprintf(os.Stderr, "\nComplete verification in your browser, then press Enter to retry...")
-	_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
-	req.HVToken = hv.Token
-	if len(hv.Methods) > 0 {
-		req.HVType = hv.Methods[0]
-	} else {
-		req.HVType = "ownership-email"
-	}
-	return nil
-}
-
-func openBrowser(url string) {
-	var c *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		c = exec.Command("open", url)
-	case "windows":
-		c = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		c = exec.Command("xdg-open", url)
-	}
-	_ = c.Start()
 }

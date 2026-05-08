@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -36,6 +37,7 @@ type Client struct {
 	ref           string
 	saltedKeyPass string
 	profile       string
+	hvResolver    HVResolver
 }
 
 // Options configures a new Client.
@@ -141,6 +143,12 @@ type Response struct {
 
 // Do sends a request and returns the response. Non-2xx responses return a
 // typed error; connection errors are returned as-is.
+//
+// HV retry: if the response is a 9001 (human-verification required) AND
+// an HVResolver is installed (see SetHVResolver), Do invokes the
+// resolver, then retries the request once with the resulting
+// x-pm-human-verification-token and -type headers set. Resolver returns
+// ErrHVUnavailable => original HV error surfaces unchanged.
 func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 	resp, err := c.doOnce(ctx, req)
 	if err != nil {
@@ -162,7 +170,34 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 		return resp, nil
 	}
 
-	// Parse Proton error envelope for HTTP errors and Code 9001 (HV).
+	hvErr, apiErr := classifyErrorBody(resp.Status, resp.Body)
+	if hvErr != nil {
+		// Try the resolver path. Avoid re-resolving if this request
+		// already carried an HV header (resolver loop guard).
+		if req.HVToken == "" {
+			if resolver := c.getHVResolver(); resolver != nil {
+				token, kind, rerr := resolver(hvErr)
+				switch {
+				case rerr == nil && token != "":
+					retry := req
+					retry.HVToken = token
+					retry.HVType = kind
+					return c.Do(ctx, retry)
+				case errors.Is(rerr, ErrHVUnavailable):
+					// fall through and return the original HV error
+				case rerr != nil:
+					return resp, rerr
+				}
+			}
+		}
+		return resp, hvErr
+	}
+	return resp, apiErr
+}
+
+// classifyErrorBody decodes a non-2xx Proton response body into either
+// a *HumanVerificationError (Code 9001) or a generic *APIError.
+func classifyErrorBody(status int, body []byte) (*HumanVerificationError, *APIError) {
 	var env struct {
 		Code    int
 		Error   string
@@ -172,19 +207,19 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 			WebUrl                   string
 		}
 	}
-	_ = json.Unmarshal(resp.Body, &env)
+	_ = json.Unmarshal(body, &env)
 	if env.Code == 9001 && env.Details != nil {
-		return resp, &HumanVerificationError{
+		return &HumanVerificationError{
 			Token:   env.Details.HumanVerificationToken,
 			Methods: env.Details.HumanVerificationMethods,
 			WebURL:  env.Details.WebUrl,
-		}
+		}, nil
 	}
 	msg := env.Error
 	if msg == "" {
-		msg = http.StatusText(resp.Status)
+		msg = http.StatusText(status)
 	}
-	return resp, &APIError{HTTPStatus: resp.Status, Code: env.Code, Message: msg, RawBody: resp.Body}
+	return nil, &APIError{HTTPStatus: status, Code: env.Code, Message: msg, RawBody: body}
 }
 
 // Send is Do + JSON unmarshal into out (out may be nil for discard).

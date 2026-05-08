@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/roman-16/proton-cli/internal/api"
 	"github.com/roman-16/proton-cli/internal/config"
+	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/keys"
 	"github.com/roman-16/proton-cli/internal/render"
 	"github.com/roman-16/proton-cli/internal/services/calendar"
@@ -44,7 +46,18 @@ type App struct {
 
 	R *render.Renderer
 
-	DryRun bool
+	DryRun  bool
+	FullIDs bool
+
+	IDCache *idcache.Cache
+
+	// HVUnavailableDetail is a one-line diagnostic the HV resolver may
+	// stash when it returns api.ErrHVUnavailable. cmd/root.go reads it
+	// in the final-error formatter to give the user actionable advice
+	// ("libwebkit2gtk missing", "$DISPLAY empty", etc.) instead of a
+	// generic "human verification required" message. Empty when no
+	// resolver attempt has been made.
+	HVUnavailableDetail string
 
 	mu    sync.Mutex
 	cache *keys.Unlocked
@@ -62,6 +75,7 @@ type Options struct {
 	LogLevel   slog.Level
 	Quiet      bool
 	DryRun     bool
+	FullIDs    bool
 }
 
 // New constructs an App: loads the config, resolves the profile, installs any
@@ -101,7 +115,22 @@ func New(opts Options) (*App, error) {
 		Pass:     pass.New(c),
 		R:        r,
 		DryRun:   opts.DryRun,
+		FullIDs:  opts.FullIDs,
+		IDCache:  idcache.New(idCachePath(profileName)),
 	}, nil
+}
+
+// idCachePath is ~/.config/proton-cli/idcache/<profile>.json. Mirrors the
+// session-file convention.
+func idCachePath(profile string) string {
+	if profile == "" {
+		profile = "default"
+	}
+	cd, err := os.UserConfigDir()
+	if err != nil {
+		cd = "."
+	}
+	return filepath.Join(cd, "proton-cli", "idcache", profile+".json")
 }
 
 // Authenticate ensures the client has valid tokens, logging in if needed.

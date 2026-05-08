@@ -34,13 +34,21 @@ func listCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if a.IDCache != nil && len(contacts) > 0 {
+				ids := make([]string, 0, len(contacts))
+				for _, c := range contacts {
+					ids = append(ids, c.ID)
+				}
+				_ = a.IDCache.Save(ids...)
+			}
 			if a.R.Format != render.FormatText {
 				return a.R.Object(contacts)
 			}
+			short := a.R.IsTTY() && !a.FullIDs
 			headers := []string{"ID", "NAME", "EMAIL", "PHONE"}
 			var rows [][]string
 			for _, c := range contacts {
-				rows = append(rows, []string{c.ID, c.Name, c.Email, c.Phone})
+				rows = append(rows, []string{render.ShortID(c.ID, short), c.Name, c.Email, c.Phone})
 			}
 			render.Table(a.R.Stdout, headers, rows)
 			return nil
@@ -61,7 +69,11 @@ func getCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			id, err := a.Contacts.Resolve(cmd.Context(), u, args[0])
+			ref, err := shared.ResolvePrefix(a, args[0])
+			if err != nil {
+				return err
+			}
+			id, err := a.Contacts.Resolve(cmd.Context(), u, ref)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -141,7 +153,11 @@ func updateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			id, err := a.Contacts.Resolve(cmd.Context(), u, args[0])
+			ref, err := shared.ResolvePrefix(a, args[0])
+			if err != nil {
+				return err
+			}
+			id, err := a.Contacts.Resolve(cmd.Context(), u, ref)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -177,8 +193,12 @@ func deleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ids := make([]string, 0, len(args))
-			for _, ref := range args {
+			refs, err := shared.ResolvePrefixes(a, args)
+			if err != nil {
+				return err
+			}
+			ids := make([]string, 0, len(refs))
+			for _, ref := range refs {
 				id, err := a.Contacts.Resolve(cmd.Context(), u, ref)
 				if err != nil {
 					return app.Exit(shared.ResolveExit(err), err)

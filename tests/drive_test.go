@@ -95,6 +95,62 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 	}
 }
 
+func TestDriveItemsDownloadOverwriteRefused(t *testing.T) {
+	skipIfNoCredentials(t)
+	folder := "/" + testID() + "-overwrite"
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "a.txt")
+	_ = os.WriteFile(src, []byte("original-cloud"), 0644)
+
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", "--permanent", folder)
+	runOK(t, "drive", "items", "upload", src, folder)
+
+	dest := filepath.Join(tmp, "out.txt")
+	if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	_, stderr, code := run(t, "drive", "items", "download", folder+"/a.txt", dest)
+	if code == 0 {
+		t.Error("expected non-zero exit when destination exists without --force")
+	}
+	if !strings.Contains(stderr, "exists") {
+		t.Errorf("expected stderr to mention 'exists', got: %s", stderr)
+	}
+	if data, _ := os.ReadFile(dest); string(data) != "local-existing" {
+		t.Errorf("local file should be untouched, got: %q", string(data))
+	}
+}
+
+func TestDriveItemsDownloadForce(t *testing.T) {
+	skipIfNoCredentials(t)
+	folder := "/" + testID() + "-force"
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "a.txt")
+	_ = os.WriteFile(src, []byte("new-cloud-content"), 0644)
+
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", "--permanent", folder)
+	runOK(t, "drive", "items", "upload", src, folder)
+
+	dest := filepath.Join(tmp, "out.txt")
+	if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	runOK(t, "drive", "items", "download", "--force", folder+"/a.txt", dest)
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("read after force: %v", err)
+	}
+	if string(data) != "new-cloud-content" {
+		t.Errorf("--force did not overwrite, got: %q", string(data))
+	}
+}
+
 func TestDriveItemsDownloadToStdoutNoArg(t *testing.T) {
 	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-stdout"

@@ -56,9 +56,17 @@ func itemsListCmd() *cobra.Command {
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
+			if a.IDCache != nil && len(children) > 0 {
+				ids := make([]string, 0, len(children))
+				for _, ch := range children {
+					ids = append(ids, ch.LinkID)
+				}
+				_ = a.IDCache.Save(ids...)
+			}
 			if a.R.Format != render.FormatText {
 				return a.R.Object(children)
 			}
+			short := a.R.IsTTY() && !a.FullIDs
 			headers := []string{"TYPE", "SIZE", "NAME", "LINK_ID"}
 			var rows [][]string
 			for _, ch := range children {
@@ -66,7 +74,7 @@ func itemsListCmd() *cobra.Command {
 				if ch.Type == 1 {
 					t = "DIR "
 				}
-				rows = append(rows, []string{t, render.Size(ch.Size), ch.Name, ch.LinkID})
+				rows = append(rows, []string{t, render.Size(ch.Size), ch.Name, render.ShortID(ch.LinkID, short)})
 			}
 			render.Table(a.R.Stdout, headers, rows)
 			return nil
@@ -200,7 +208,8 @@ func uploadRecursive(cmd *cobra.Command, a *app.App, dc *drivesvc.Context, src, 
 }
 
 func itemsDownloadCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	c := &cobra.Command{
 		Use: "download PATH [DEST]", Short: "Download a file (DEST omitted or - writes to stdout)",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -222,6 +231,13 @@ func itemsDownloadCmd() *cobra.Command {
 			var dest string
 			if len(args) >= 2 && args[1] != "-" {
 				dest = args[1]
+				// Refuse to silently overwrite. The user supplied an
+				// explicit destination so collision is meaningful.
+				if !force {
+					if _, err := os.Stat(dest); err == nil {
+						return fmt.Errorf("destination %s exists; use --force to overwrite", dest)
+					}
+				}
 				f, err := os.Create(dest)
 				if err != nil {
 					return err
@@ -246,6 +262,8 @@ func itemsDownloadCmd() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&force, "force", false, "Overwrite existing destination")
+	return c
 }
 
 func itemsRenameCmd() *cobra.Command {
@@ -493,6 +511,13 @@ func trashCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if a.IDCache != nil && len(entries) > 0 {
+				ids := make([]string, 0, len(entries))
+				for _, e := range entries {
+					ids = append(ids, e.LinkID)
+				}
+				_ = a.IDCache.Save(ids...)
+			}
 			if a.R.Format != render.FormatText {
 				return a.R.Object(entries)
 			}
@@ -500,6 +525,7 @@ func trashCmd() *cobra.Command {
 				a.R.Info("(trash is empty)")
 				return nil
 			}
+			short := a.R.IsTTY() && !a.FullIDs
 			headers := []string{"LINK_ID", "TYPE", "SIZE"}
 			var rows [][]string
 			for _, e := range entries {
@@ -507,7 +533,7 @@ func trashCmd() *cobra.Command {
 				if e.Type == 1 {
 					t = "DIR "
 				}
-				rows = append(rows, []string{e.LinkID, t, render.Size(e.Size)})
+				rows = append(rows, []string{render.ShortID(e.LinkID, short), t, render.Size(e.Size)})
 			}
 			render.Table(a.R.Stdout, headers, rows)
 			return nil
@@ -529,14 +555,18 @@ func trashCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if a.DryRun {
-				a.R.Info(fmt.Sprintf("dry-run: would restore %d item(s)", len(args)))
-				return nil
-			}
-			if err := a.Drive.TrashRestore(cmd.Context(), dc, args); err != nil {
+			linkIDs, err := shared.ResolvePrefixes(a, args)
+			if err != nil {
 				return err
 			}
-			a.R.Success(fmt.Sprintf("Restored %d item(s)", len(args)))
+			if a.DryRun {
+				a.R.Info(fmt.Sprintf("dry-run: would restore %d item(s)", len(linkIDs)))
+				return nil
+			}
+			if err := a.Drive.TrashRestore(cmd.Context(), dc, linkIDs); err != nil {
+				return err
+			}
+			a.R.Success(fmt.Sprintf("Restored %d item(s)", len(linkIDs)))
 			return nil
 		},
 	})

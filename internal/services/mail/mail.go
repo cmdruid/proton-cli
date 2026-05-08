@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +16,32 @@ import (
 	"github.com/roman-16/proton-cli/internal/api"
 	"github.com/roman-16/proton-cli/internal/keys"
 )
+
+// WrongTableError signals that an ID-shaped REF was passed to the wrong
+// endpoint family (a conversation ID into the messages tree, or vice versa).
+// The cmd layer catches this to emit a redirect hint and exit 3.
+type WrongTableError struct {
+	// Kind is what the ID actually is ("message" or "conversation") — i.e.
+	// the OTHER table from the one the user invoked.
+	Kind string
+	ID   string
+}
+
+func (e *WrongTableError) Error() string {
+	return fmt.Sprintf("that ID is a %s, not a %s", e.Kind, oppositeKind(e.Kind))
+}
+
+func oppositeKind(k string) string {
+	if k == "conversation" {
+		return "message"
+	}
+	return "conversation"
+}
+
+// LooksLikeID is the package's heuristic for recognising a Proton ID. Used
+// by both the service (Resolve happy path) and the cmd layer (deciding when
+// to run a wrong-table probe).
+func LooksLikeID(s string) bool { return looksLikeID(s) }
 
 // Proton built-in mailbox label IDs.
 var MailboxLabelIDs = map[string]string{
@@ -59,19 +87,62 @@ type Full struct {
 	Subject     string           `json:"subject"`
 	Sender      map[string]any   `json:"sender"`
 	ToList      []map[string]any `json:"to_list"`
+	Time        int64            `json:"time,omitempty"`
 	Body        string           `json:"body"`
 	MIMEType    string           `json:"mime_type"`
 	AddressID   string           `json:"address_id"`
 	Attachments []Attachment     `json:"attachments,omitempty"`
 }
 
+// Conversation is a list-view conversation.
+type Conversation struct {
+	ID             string           `json:"id"`
+	Subject        string           `json:"subject"`
+	NumMessages    int              `json:"num_messages"`
+	NumUnread      int              `json:"num_unread"`
+	NumAttachments int              `json:"num_attachments"`
+	Time           int64            `json:"time"`
+	Senders        []map[string]any `json:"senders,omitempty"`
+	Recipients     []map[string]any `json:"recipients,omitempty"`
+	Labels         []string         `json:"labels,omitempty"`
+}
+
+// ConversationFull is a decrypted thread: conversation envelope plus all
+// messages sorted chronologically.
+type ConversationFull struct {
+	Conversation Conversation `json:"conversation"`
+	Messages     []Full       `json:"messages"`
+}
+
 // Attachment describes a message attachment.
+//
+// Disposition is the Proton API field that distinguishes "attachment"
+// (a real attachment surfaced to the user) from "inline" (an asset
+// referenced from the HTML body, typically signature graphics). Empty or
+// missing dispositions are treated as "attachment" by IsInline.
 type Attachment struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Size       int64  `json:"size"`
-	MIMEType   string `json:"mime_type"`
-	KeyPackets string `json:"-"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	MIMEType    string `json:"mime_type"`
+	Disposition string `json:"disposition"`
+	KeyPackets  string `json:"-"`
+}
+
+// IsInline reports whether the attachment's disposition explicitly says
+// "inline". Missing/empty/unrecognised values count as a real attachment.
+func (a Attachment) IsInline() bool { return a.Disposition == "inline" }
+
+// FilterInline returns the subset of atts that are NOT inline. Used by
+// callers that want the default-visible set (real attachments only).
+func FilterInline(atts []Attachment) []Attachment {
+	out := make([]Attachment, 0, len(atts))
+	for _, a := range atts {
+		if !a.IsInline() {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // ListOptions filters for List.
@@ -196,52 +267,377 @@ func (s *Service) Search(ctx context.Context, opts SearchOptions) ([]Message, in
 	return out, r.Total, nil
 }
 
-// Read returns a single message with decrypted body.
-func (s *Service) Read(ctx context.Context, u *keys.Unlocked, id string) (*Full, error) {
-	var r struct {
-		Message struct {
-			ID          string
-			Subject     string
-			Sender      map[string]any
-			ToList      []map[string]any
-			Body        string
-			MIMEType    string
-			AddressID   string
-			Attachments []struct {
-				ID, Name, MIMEType, KeyPackets string
-				Size                           int64
-			}
+// rawMessage is the API shape for a single message envelope; shared by Read
+// and ConversationRead since /mail/v4/conversations/{id} returns the same
+// per-message struct nested inside.
+type rawMessage struct {
+	ID          string
+	Subject     string
+	Sender      map[string]any
+	ToList      []map[string]any
+	Time        int64
+	Body        string
+	MIMEType    string
+	AddressID   string
+	Attachments []struct {
+		ID, Name, MIMEType, KeyPackets, Disposition string
+		Size                                        int64
+	}
+}
+
+// decryptMessage turns a rawMessage into a Full, decrypting the body with
+// the unlocked address keyring (falling back to the first available key
+// ring when the message's AddressID is unknown).
+func (s *Service) decryptMessage(u *keys.Unlocked, m rawMessage) Full {
+	addrKR, ok := u.AddrKR(m.AddressID)
+	if !ok {
+		if kr, _, _, err := u.FirstAddrKR(); err == nil {
+			addrKR = kr
 		}
 	}
+	var body string
+	if addrKR == nil {
+		body = "(decryption failed: no address key available)"
+	} else if b, err := decryptBody(m.Body, addrKR); err != nil {
+		body = "(decryption failed: " + err.Error() + ")"
+	} else {
+		body = b
+	}
+	atts := make([]Attachment, 0, len(m.Attachments))
+	for _, a := range m.Attachments {
+		atts = append(atts, Attachment{
+			ID: a.ID, Name: a.Name, Size: a.Size, MIMEType: a.MIMEType,
+			Disposition: a.Disposition, KeyPackets: a.KeyPackets,
+		})
+	}
+	return Full{
+		ID:          m.ID,
+		Subject:     m.Subject,
+		Sender:      m.Sender,
+		ToList:      m.ToList,
+		Time:        m.Time,
+		Body:        body,
+		MIMEType:    m.MIMEType,
+		AddressID:   m.AddressID,
+		Attachments: atts,
+	}
+}
+
+// Read returns a single message with decrypted body.
+func (s *Service) Read(ctx context.Context, u *keys.Unlocked, id string) (*Full, error) {
+	raw, err := s.fetchMessageRaw(ctx, id)
+	if err != nil {
+		return nil, s.crossTableProbe(ctx, id, err, "messages")
+	}
+	full := s.decryptMessage(u, *raw)
+	return &full, nil
+}
+
+// fetchMessageRaw fetches the rawMessage envelope for a single message ID
+// without decryption. Used by Read and by ConversationRead's per-message
+// body fallback (see comment there).
+func (s *Service) fetchMessageRaw(ctx context.Context, id string) (*rawMessage, error) {
+	var r struct{ Message rawMessage }
 	if err := s.C.Send(ctx, api.Request{Method: "GET", Path: "/mail/v4/messages/" + id}, &r); err != nil {
 		return nil, err
 	}
-	addrKR, ok := u.AddrKR(r.Message.AddressID)
-	if !ok {
-		kr, _, _, err := u.FirstAddrKR()
-		if err != nil {
-			return nil, err
+	return &r.Message, nil
+}
+
+// ConversationRead returns a full thread with each message decrypted, sorted
+// chronologically (earliest first).
+func (s *Service) ConversationRead(ctx context.Context, u *keys.Unlocked, id string) (*ConversationFull, error) {
+	var r struct {
+		Conversation struct {
+			ID                                     string
+			Subject                                string
+			NumMessages, NumUnread, NumAttachments int
+			Time                                   int64
+			Senders                                []map[string]any
+			Recipients                             []map[string]any
+			Labels                                 []struct{ ID string }
 		}
-		addrKR = kr
+		Messages []rawMessage
 	}
-	body, err := decryptBody(r.Message.Body, addrKR)
-	if err != nil {
-		body = "(decryption failed: " + err.Error() + ")"
+	if err := s.C.Send(ctx, api.Request{Method: "GET", Path: "/mail/v4/conversations/" + id}, &r); err != nil {
+		return nil, s.crossTableProbe(ctx, id, err, "conversations")
 	}
-	atts := make([]Attachment, 0, len(r.Message.Attachments))
-	for _, a := range r.Message.Attachments {
-		atts = append(atts, Attachment{ID: a.ID, Name: a.Name, Size: a.Size, MIMEType: a.MIMEType, KeyPackets: a.KeyPackets})
+	sort.SliceStable(r.Messages, func(i, j int) bool { return r.Messages[i].Time < r.Messages[j].Time })
+	msgs := make([]Full, 0, len(r.Messages))
+	for _, m := range r.Messages {
+		// Proton's /mail/v4/conversations/{id} returns the full Message
+		// envelope (with Body, Attachments, MIMEType, Header, ParsedHeaders
+		// etc.) only for the most recent message in the thread; older
+		// messages come back as MessageMetadata only — no Body. The web
+		// client lazy-loads each older body when the user expands it; we
+		// do the equivalent here so a `mail conversations read` actually
+		// shows every message decrypted.
+		if m.Body == "" {
+			if full, err := s.fetchMessageRaw(ctx, m.ID); err == nil {
+				m = *full
+			}
+			// On error, fall through with the empty body —
+			// decryptMessage will surface a clear "decryption failed"
+			// placeholder rather than abort the whole thread.
+		}
+		msgs = append(msgs, s.decryptMessage(u, m))
 	}
-	return &Full{
-		ID:          r.Message.ID,
-		Subject:     r.Message.Subject,
-		Sender:      r.Message.Sender,
-		ToList:      r.Message.ToList,
-		Body:        body,
-		MIMEType:    r.Message.MIMEType,
-		AddressID:   r.Message.AddressID,
-		Attachments: atts,
+	labels := make([]string, 0, len(r.Conversation.Labels))
+	for _, l := range r.Conversation.Labels {
+		labels = append(labels, l.ID)
+	}
+	return &ConversationFull{
+		Conversation: Conversation{
+			ID:             r.Conversation.ID,
+			Subject:        r.Conversation.Subject,
+			NumMessages:    r.Conversation.NumMessages,
+			NumUnread:      r.Conversation.NumUnread,
+			NumAttachments: r.Conversation.NumAttachments,
+			Time:           r.Conversation.Time,
+			Senders:        r.Conversation.Senders,
+			Recipients:     r.Conversation.Recipients,
+			Labels:         labels,
+		},
+		Messages: msgs,
 	}, nil
+}
+
+// crossTableProbe wraps an HTTP 422 error from a single-resource GET with a
+// best-effort probe of the other table. callerKind is "messages" or
+// "conversations" — i.e. the table the failed call was against.
+//
+// Proton uses several internal codes for "resource doesn't exist in this
+// table" depending on which table is hit: code 2501 ("Message does not
+// exist") and code 20052 ("Conversation does not exist") are both
+// observed. Rather than hardcode every variant we probe on ANY 422 — the
+// probe itself is a single GET, harmless when the other table also lacks
+// the ID, and produces the helpful WrongTableError when it does have it.
+func (s *Service) crossTableProbe(ctx context.Context, id string, err error, callerKind string) error {
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) || apiErr.HTTPStatus != 422 {
+		return err
+	}
+	var otherPath, otherKind string
+	switch callerKind {
+	case "messages":
+		otherPath = "/mail/v4/conversations/" + id
+		otherKind = "conversation"
+	case "conversations":
+		otherPath = "/mail/v4/messages/" + id
+		otherKind = "message"
+	default:
+		return err
+	}
+	if probeErr := s.C.Send(ctx, api.Request{Method: "GET", Path: otherPath}, nil); probeErr == nil {
+		return &WrongTableError{Kind: otherKind, ID: id}
+	}
+	return err
+}
+
+// AssertMessageKind probes the messages endpoint for an ID-shaped string and
+// returns *WrongTableError when the ID belongs to the conversations table.
+// Used by bulk operations on a single REF where the API would otherwise
+// silently no-op rather than error.
+func (s *Service) AssertMessageKind(ctx context.Context, id string) error {
+	err := s.C.Send(ctx, api.Request{Method: "GET", Path: "/mail/v4/messages/" + id}, nil)
+	if err == nil {
+		return nil
+	}
+	return s.crossTableProbe(ctx, id, err, "messages")
+}
+
+// AssertConversationKind is the conversations-side counterpart of
+// AssertMessageKind.
+func (s *Service) AssertConversationKind(ctx context.Context, id string) error {
+	err := s.C.Send(ctx, api.Request{Method: "GET", Path: "/mail/v4/conversations/" + id}, nil)
+	if err == nil {
+		return nil
+	}
+	return s.crossTableProbe(ctx, id, err, "conversations")
+}
+
+// rawConversation mirrors the per-row shape returned by /mail/v4/conversations.
+type rawConversation struct {
+	ID                                     string
+	Subject                                string
+	NumMessages, NumUnread, NumAttachments int
+	Time                                   int64
+	Senders                                []map[string]any
+	Recipients                             []map[string]any
+	Labels                                 []struct{ ID string }
+}
+
+func toConversation(c rawConversation) Conversation {
+	labels := make([]string, 0, len(c.Labels))
+	for _, l := range c.Labels {
+		labels = append(labels, l.ID)
+	}
+	return Conversation{
+		ID: c.ID, Subject: c.Subject,
+		NumMessages: c.NumMessages, NumUnread: c.NumUnread, NumAttachments: c.NumAttachments,
+		Time:    c.Time,
+		Senders: c.Senders, Recipients: c.Recipients,
+		Labels: labels,
+	}
+}
+
+// ConversationsList returns a page of conversations.
+func (s *Service) ConversationsList(ctx context.Context, opts ListOptions) ([]Conversation, int, error) {
+	if opts.PageSize <= 0 {
+		opts.PageSize = 25
+	}
+	q := url.Values{}
+	q.Set("LabelID", ResolveFolder(opts.Folder))
+	q.Set("Page", fmt.Sprintf("%d", opts.Page))
+	q.Set("PageSize", fmt.Sprintf("%d", opts.PageSize))
+	q.Set("Sort", "Time")
+	q.Set("Desc", "1")
+	if opts.Unread {
+		q.Set("Unread", "1")
+	}
+	var r struct {
+		Total         int
+		Conversations []rawConversation
+	}
+	if err := s.C.Send(ctx, api.Request{Method: "GET", Path: "/mail/v4/conversations", Query: q}, &r); err != nil {
+		return nil, 0, err
+	}
+	out := make([]Conversation, 0, len(r.Conversations))
+	for _, c := range r.Conversations {
+		out = append(out, toConversation(c))
+	}
+	return out, r.Total, nil
+}
+
+// ConversationsSearch returns conversations matching the given filters.
+func (s *Service) ConversationsSearch(ctx context.Context, opts SearchOptions) ([]Conversation, int, error) {
+	if opts.Limit <= 0 {
+		opts.Limit = 25
+	}
+	q := url.Values{}
+	folder := opts.Folder
+	if folder == "" {
+		folder = "all"
+	}
+	q.Set("LabelID", ResolveFolder(folder))
+	q.Set("Sort", "Time")
+	q.Set("Desc", "1")
+	q.Set("PageSize", fmt.Sprintf("%d", opts.Limit))
+	if opts.Unread {
+		q.Set("Unread", "1")
+	}
+	if opts.Keyword != "" {
+		q.Set("Keyword", opts.Keyword)
+	}
+	if opts.From != "" {
+		q.Set("From", opts.From)
+	}
+	if opts.To != "" {
+		// /conversations expects "Recipients" rather than "To" (per WebClients).
+		q.Set("Recipients", opts.To)
+	}
+	if opts.Subject != "" {
+		q.Set("Subject", opts.Subject)
+	}
+	if opts.After != "" {
+		t, err := time.Parse("2006-01-02", opts.After)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid --after: %w", err)
+		}
+		q.Set("Begin", fmt.Sprintf("%d", t.Unix()))
+	}
+	if opts.Before != "" {
+		t, err := time.Parse("2006-01-02", opts.Before)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid --before: %w", err)
+		}
+		q.Set("End", fmt.Sprintf("%d", t.Unix()))
+	}
+	var r struct {
+		Total         int
+		Conversations []rawConversation
+	}
+	if err := s.C.Send(ctx, api.Request{Method: "GET", Path: "/mail/v4/conversations", Query: q}, &r); err != nil {
+		return nil, 0, err
+	}
+	out := make([]Conversation, 0, len(r.Conversations))
+	for _, c := range r.Conversations {
+		out = append(out, toConversation(c))
+	}
+	return out, r.Total, nil
+}
+
+// ConversationsTrash moves conversations to trash.
+func (s *Service) ConversationsTrash(ctx context.Context, ids []string) error {
+	return s.C.Send(ctx, api.Request{
+		Method: "PUT", Path: "/mail/v4/conversations/label",
+		Body: map[string]any{"LabelID": "3", "IDs": ids},
+	}, nil)
+}
+
+// ConversationsDelete permanently deletes conversations. The Proton API
+// requires a LabelID context for delete; default to "5" (all mail) when no
+// folder is supplied.
+func (s *Service) ConversationsDelete(ctx context.Context, ids []string, folder string) error {
+	labelID := "5"
+	if folder != "" {
+		labelID = ResolveFolder(folder)
+	}
+	return s.C.Send(ctx, api.Request{
+		Method: "PUT", Path: "/mail/v4/conversations/delete",
+		Body: map[string]any{"IDs": ids, "LabelID": labelID},
+	}, nil)
+}
+
+// ConversationsMove moves conversations to the given folder (name or label ID).
+func (s *Service) ConversationsMove(ctx context.Context, ids []string, folder string) error {
+	return s.C.Send(ctx, api.Request{
+		Method: "PUT", Path: "/mail/v4/conversations/label",
+		Body: map[string]any{"LabelID": ResolveFolder(folder), "IDs": ids},
+	}, nil)
+}
+
+// ConversationsMark sets read/unread/starred flags on conversations.
+// folder supplies the LabelID context required by the unread endpoint;
+// pass "" for the default ("5" / all mail).
+func (s *Service) ConversationsMark(ctx context.Context, ids []string, read, unread, starred, unstar bool, folder string) error {
+	if read {
+		if err := s.C.Send(ctx, api.Request{
+			Method: "PUT", Path: "/mail/v4/conversations/read",
+			Body: map[string]any{"IDs": ids},
+		}, nil); err != nil {
+			return err
+		}
+	}
+	if unread {
+		labelID := "5"
+		if folder != "" {
+			labelID = ResolveFolder(folder)
+		}
+		if err := s.C.Send(ctx, api.Request{
+			Method: "PUT", Path: "/mail/v4/conversations/unread",
+			Body: map[string]any{"IDs": ids, "LabelID": labelID},
+		}, nil); err != nil {
+			return err
+		}
+	}
+	if starred {
+		if err := s.C.Send(ctx, api.Request{
+			Method: "PUT", Path: "/mail/v4/conversations/label",
+			Body: map[string]any{"LabelID": "10", "IDs": ids},
+		}, nil); err != nil {
+			return err
+		}
+	}
+	if unstar {
+		if err := s.C.Send(ctx, api.Request{
+			Method: "PUT", Path: "/mail/v4/conversations/unlabel",
+			Body: map[string]any{"LabelID": "10", "IDs": ids},
+		}, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Trash moves messages to trash.
@@ -294,15 +690,56 @@ func (s *Service) Mark(ctx context.Context, ids []string, read, unread, starred,
 	return nil
 }
 
-// AttachmentsList returns the attachment metadata for a message.
-func (s *Service) AttachmentsList(ctx context.Context, msgID string) ([]Attachment, error) {
+// ConversationAttachment is an attachment surfaced from a conversation-wide
+// listing; carries its parent MessageID so callers can disambiguate (and so
+// AttachmentDownload can be invoked against the correct message).
+type ConversationAttachment struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	MIMEType    string `json:"mime_type"`
+	Disposition string `json:"disposition"`
+	MessageID   string `json:"message_id"`
+}
+
+// ConversationAttachmentsList returns the union of attachments across all
+// messages in the conversation, ordered by message Time ascending. Each
+// entry carries its parent MessageID. includeInline applies the same filter
+// as AttachmentsList.
+func (s *Service) ConversationAttachmentsList(ctx context.Context, convID string, includeInline bool) ([]ConversationAttachment, error) {
+	var r struct {
+		Messages []rawMessage
+	}
+	if err := s.C.Send(ctx, api.Request{Method: "GET", Path: "/mail/v4/conversations/" + convID}, &r); err != nil {
+		return nil, s.crossTableProbe(ctx, convID, err, "conversations")
+	}
+	sort.SliceStable(r.Messages, func(i, j int) bool { return r.Messages[i].Time < r.Messages[j].Time })
+	var out []ConversationAttachment
+	for _, m := range r.Messages {
+		for _, a := range m.Attachments {
+			att := Attachment{Disposition: a.Disposition}
+			if !includeInline && att.IsInline() {
+				continue
+			}
+			out = append(out, ConversationAttachment{
+				ID: a.ID, Name: a.Name, Size: a.Size,
+				MIMEType: a.MIMEType, Disposition: a.Disposition,
+				MessageID: m.ID,
+			})
+		}
+	}
+	return out, nil
+}
+
+// AttachmentsList returns the attachment metadata for a message. By default
+// inline attachments (signature graphics, embedded images referenced by the
+// HTML body) are filtered out; pass includeInline=true to get every entry.
+func (s *Service) AttachmentsList(ctx context.Context, msgID string, includeInline bool) ([]Attachment, error) {
 	var r struct {
 		Message struct {
 			Attachments []struct {
-				ID       string
-				Name     string
-				Size     int64
-				MIMEType string
+				ID, Name, MIMEType, Disposition string
+				Size                            int64
 			}
 		}
 	}
@@ -311,7 +748,13 @@ func (s *Service) AttachmentsList(ctx context.Context, msgID string) ([]Attachme
 	}
 	out := make([]Attachment, 0, len(r.Message.Attachments))
 	for _, a := range r.Message.Attachments {
-		out = append(out, Attachment{ID: a.ID, Name: a.Name, Size: a.Size, MIMEType: a.MIMEType})
+		out = append(out, Attachment{
+			ID: a.ID, Name: a.Name, Size: a.Size,
+			MIMEType: a.MIMEType, Disposition: a.Disposition,
+		})
+	}
+	if !includeInline {
+		out = FilterInline(out)
 	}
 	return out, nil
 }
@@ -632,6 +1075,35 @@ func (s *Service) Resolve(ctx context.Context, ref string) (string, error) {
 	lines := []string{fmt.Sprintf("ambiguous: %d messages match %q:", len(msgs), ref)}
 	for _, m := range msgs {
 		lines = append(lines, fmt.Sprintf("  %s  %s  %s", m.ID, m.FromAddress, m.Subject))
+	}
+	return "", fmt.Errorf("%s", strings.Join(lines, "\n"))
+}
+
+// ResolveConversation returns a conversation ID for either a literal ID or
+// a subject/from search.
+func (s *Service) ResolveConversation(ctx context.Context, ref string) (string, error) {
+	if looksLikeID(ref) {
+		return ref, nil
+	}
+	convs, _, err := s.ConversationsSearch(ctx, SearchOptions{Keyword: ref, Folder: "all", Limit: 20})
+	if err != nil {
+		return "", err
+	}
+	switch len(convs) {
+	case 0:
+		return "", fmt.Errorf("no conversations matching %q", ref)
+	case 1:
+		return convs[0].ID, nil
+	}
+	lines := []string{fmt.Sprintf("ambiguous: %d conversations match %q:", len(convs), ref)}
+	for _, c := range convs {
+		fromAddr := ""
+		if len(c.Senders) > 0 {
+			if a, ok := c.Senders[0]["Address"].(string); ok {
+				fromAddr = a
+			}
+		}
+		lines = append(lines, fmt.Sprintf("  %s  %s  %s", c.ID, fromAddr, c.Subject))
 	}
 	return "", fmt.Errorf("%s", strings.Join(lines, "\n"))
 }

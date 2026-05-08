@@ -8,6 +8,8 @@ require (
 	github.com/ProtonMail/gopenpgp/v2 v2.10.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.10
+	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 	golang.org/x/net v0.53.0
 	golang.org/x/term v0.42.0
 	google.golang.org/protobuf v1.36.11
@@ -21,7 +23,6 @@ require (
 	github.com/cronokirby/saferith v0.33.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect

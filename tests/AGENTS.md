@@ -143,43 +143,29 @@ Every command that takes an ID also accepts a substring search term. Ambiguous m
 
 ## Cobra and Positional IDs
 
-Proton IDs are Base64URL-encoded and can start with `-`. Cobra interprets any
-positional arg that starts with `-` as a flag, so **every** command that takes
-a Proton ID positionally needs `--` before the ID:
+Proton IDs are Base64URL-encoded and can start with `-`. Two layers in the
+binary handle this automatically:
 
-```go
-// Wrong — breaks if ID starts with -
-runOK(t, "mail", "labels", "delete", labelID)
+1. **Auto-`--` injection** (`cmd/root.go` `preprocessArgs`) detects a
+   leading-dash token shaped like a full Proton ID (≥60 chars, ends
+   `==`, URL-safe base64) and inserts `--` before it before cobra
+   parses argv.
+2. **Layer-C error rewrap** (`cmd/root.go` `rewrapFlagError`) replaces
+   cobra/pflag's flag-parse and "accepts N args" errors with a hint
+   mentioning `--` when a leading-dash ID is detected in argv.
 
-// Correct
-runOK(t, "mail", "labels", "delete", "--", labelID)
-```
+In practice `--` is **no longer required** in tests — leading-dash full
+IDs parse cleanly via Layer 1; leading-dash *short* IDs (rare — ~1.5%
+of random base64 prefixes) need explicit `--` and are caught by Layer 2.
 
-Applies to (non-exhaustive):
+Flags can be placed before OR after positionals on every command —
+same as any normal cobra CLI.
 
-- `mail messages {mark,star,unstar,trash,delete,move,read}`
-- `mail labels delete`
-- `mail filters {delete,enable,disable}`
-- `calendar calendars delete`
-- `calendar events {get,update,delete}` (both calendar ID + event ID)
-- `contacts {get,update,delete}`
-- `pass vaults delete`
-- `pass items {get,edit,trash,restore,delete}` (when passing SHARE_ID ITEM_ID)
-- `drive trash restore`
+### `cleanupRun` descriptions
 
-The same rule applies to copy-pasteable commands in `cleanupRun` descriptions
-— those are shown to the user on cleanup failure, and the user will need `--`
-when they run them manually:
-
-```go
-cleanupRun(t,
-    fmt.Sprintf("Delete label: proton-cli mail labels delete -- %s", id),
-    "mail", "labels", "delete", "--", id)
-```
-
-String args that start with a letter or `/` are safe (names, paths, titles).
-Only raw Proton IDs (from create responses, list responses, etc.) need `--`
-protection.
+The copy-pasteable commands surfaced on cleanup failure no longer need
+`--`; the user can paste them as-is even if the ID starts with a dash.
+Keeping `--` in those strings is harmless but unnecessary.
 
 ## Naming
 

@@ -37,13 +37,25 @@ func itemsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			items, err := a.Pass.ItemsList(cmd.Context(), u, listVault)
+			listVaultRef, err := shared.ResolvePrefix(a, listVault)
 			if err != nil {
 				return err
+			}
+			items, err := a.Pass.ItemsList(cmd.Context(), u, listVaultRef)
+			if err != nil {
+				return err
+			}
+			if a.IDCache != nil && len(items) > 0 {
+				ids := make([]string, 0, len(items)*2)
+				for _, it := range items {
+					ids = append(ids, it.ShareID, it.ItemID)
+				}
+				_ = a.IDCache.Save(ids...)
 			}
 			if a.R.Format != render.FormatText {
 				return a.R.Object(items)
 			}
+			short := a.R.IsTTY() && !a.FullIDs
 			headers := []string{"TYPE", "NAME", "USERNAME", "SHARE_ID", "ITEM_ID"}
 			var rows [][]string
 			for _, it := range items {
@@ -51,7 +63,7 @@ func itemsCmd() *cobra.Command {
 				if uname == "" {
 					uname = it.Email
 				}
-				rows = append(rows, []string{it.Type, it.Name, uname, it.ShareID, it.ItemID})
+				rows = append(rows, []string{it.Type, it.Name, uname, render.ShortID(it.ShareID, short), render.ShortID(it.ItemID, short)})
 			}
 			render.Table(a.R.Stdout, headers, rows)
 			_, _ = fmt.Fprintf(a.R.Stderr, "\n%d item(s)\n", len(items))
@@ -73,7 +85,11 @@ func itemsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, args)
+			refs, err := shared.ResolvePrefixes(a, args)
+			if err != nil {
+				return err
+			}
+			shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, refs)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -144,7 +160,11 @@ func itemsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			shareID, err := a.Pass.ResolveVault(cmd.Context(), u, createVault)
+			createVaultRef, err := shared.ResolvePrefix(a, createVault)
+			if err != nil {
+				return err
+			}
+			shareID, err := a.Pass.ResolveVault(cmd.Context(), u, createVaultRef)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -189,7 +209,11 @@ func itemsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, args)
+			refs, err := shared.ResolvePrefixes(a, args)
+			if err != nil {
+				return err
+			}
+			shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, refs)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -237,7 +261,11 @@ func simpleItemCmd(use, short string, fn func(a *app.App, cmd *cobra.Command, sh
 			if err != nil {
 				return err
 			}
-			shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, args)
+			refs, err := shared.ResolvePrefixes(a, args)
+			if err != nil {
+				return err
+			}
+			shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, refs)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}
@@ -278,10 +306,14 @@ func collectItemIDs(cmd *cobra.Command, u *keys.Unlocked, args []string, f *item
 	var pairs [][2]string
 
 	// Explicit arg(s): either [SHARE ITEM] or a single search term.
-	if len(args) == 2 {
-		pairs = append(pairs, [2]string{args[0], args[1]})
-	} else if len(args) == 1 {
-		shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, args)
+	refs, err := shared.ResolvePrefixes(a, args)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) == 2 {
+		pairs = append(pairs, [2]string{refs[0], refs[1]})
+	} else if len(refs) == 1 {
+		shareID, itemID, err := a.Pass.ResolveItem(cmd.Context(), u, refs)
 		if err != nil {
 			return nil, app.Exit(shared.ResolveExit(err), err)
 		}
@@ -304,7 +336,11 @@ func collectItemIDs(cmd *cobra.Command, u *keys.Unlocked, args []string, f *item
 			}
 			newerCutoff = time.Now().Add(-d).Unix()
 		}
-		items, err := a.Pass.ItemsList(cmd.Context(), u, f.vault)
+		vaultRef, err := shared.ResolvePrefix(a, f.vault)
+		if err != nil {
+			return nil, err
+		}
+		items, err := a.Pass.ItemsList(cmd.Context(), u, vaultRef)
 		if err != nil {
 			return nil, err
 		}
@@ -397,9 +433,17 @@ func vaultsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if a.IDCache != nil && len(vaults) > 0 {
+				ids := make([]string, 0, len(vaults))
+				for _, v := range vaults {
+					ids = append(ids, v.ShareID)
+				}
+				_ = a.IDCache.Save(ids...)
+			}
 			if a.R.Format != render.FormatText {
 				return a.R.Object(vaults)
 			}
+			short := a.R.IsTTY() && !a.FullIDs
 			headers := []string{"SHARE_ID", "NAME", "MEMBERS", "OWNER", "SHARED"}
 			var rows [][]string
 			for _, v := range vaults {
@@ -407,15 +451,15 @@ func vaultsCmd() *cobra.Command {
 				if v.Owner {
 					owner = "yes"
 				}
-				shared := "no"
+				isShared := "no"
 				if v.Shared {
-					shared = "yes"
+					isShared = "yes"
 				}
 				name := v.Name
 				if name == "" {
 					name = "(encrypted)"
 				}
-				rows = append(rows, []string{v.ShareID, name, fmt.Sprintf("%d", v.Members), owner, shared})
+				rows = append(rows, []string{render.ShortID(v.ShareID, short), name, fmt.Sprintf("%d", v.Members), owner, isShared})
 			}
 			render.Table(a.R.Stdout, headers, rows)
 			return nil
@@ -460,11 +504,15 @@ func vaultsCmd() *cobra.Command {
 			if err := a.Authenticate(cmd.Context()); err != nil {
 				return err
 			}
+			shareID, err := shared.ResolvePrefix(a, args[0])
+			if err != nil {
+				return err
+			}
 			if a.DryRun {
-				a.R.Info(fmt.Sprintf("dry-run: would delete vault %s", args[0]))
+				a.R.Info(fmt.Sprintf("dry-run: would delete vault %s", shareID))
 				return nil
 			}
-			if err := a.Pass.VaultDelete(cmd.Context(), args[0]); err != nil {
+			if err := a.Pass.VaultDelete(cmd.Context(), shareID); err != nil {
 				return err
 			}
 			a.R.Success("Vault deleted.")
@@ -526,7 +574,11 @@ func aliasCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			shareID, err := a.Pass.ResolveVault(cmd.Context(), u, vault)
+			vaultRef, err := shared.ResolvePrefix(a, vault)
+			if err != nil {
+				return err
+			}
+			shareID, err := a.Pass.ResolveVault(cmd.Context(), u, vaultRef)
 			if err != nil {
 				return app.Exit(shared.ResolveExit(err), err)
 			}

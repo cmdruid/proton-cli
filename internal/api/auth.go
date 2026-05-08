@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,6 +34,11 @@ type authResp struct {
 }
 
 // Login performs the full web-client auth flow (unauth session → SRP → 2FA).
+// On a Proton 9001 (human-verification) response from the SRP step, Login
+// consults the installed HVResolver (if any) and retries the auth POST
+// once with HV headers. The retry path redoes getAuthInfo to obtain a
+// fresh SRPSession and regenerates SRP proofs — the original session is
+// considered consumed by the failed attempt.
 func (c *Client) Login(ctx context.Context, username string, password []byte, totp string) error {
 	sess, err := c.createSession(ctx)
 	if err != nil {
@@ -42,11 +48,21 @@ func (c *Client) Login(ctx context.Context, username string, password []byte, to
 	c.uid, c.acc, c.ref = sess.UID, sess.AccessToken, sess.RefreshToken
 	c.mu.Unlock()
 
-	info, err := c.getAuthInfo(ctx, username)
-	if err != nil {
-		return fmt.Errorf("login: %w", err)
+	auth, err := c.loginSRP(ctx, username, password, "", "")
+	var hvErr *HumanVerificationError
+	if errors.As(err, &hvErr) {
+		if resolver := c.getHVResolver(); resolver != nil {
+			token, kind, rerr := resolver(hvErr)
+			switch {
+			case rerr == nil && token != "":
+				auth, err = c.loginSRP(ctx, username, password, token, kind)
+			case errors.Is(rerr, ErrHVUnavailable):
+				// keep err = hvErr, surfaced below
+			case rerr != nil:
+				return fmt.Errorf("login: hv resolver: %w", rerr)
+			}
+		}
 	}
-	auth, err := c.srpLogin(ctx, username, password, info)
 	if err != nil {
 		return fmt.Errorf("login: %w", err)
 	}
@@ -131,7 +147,20 @@ func (c *Client) getAuthInfo(ctx context.Context, username string) (*authInfo, e
 	return &r, nil
 }
 
-func (c *Client) srpLogin(ctx context.Context, username string, password []byte, info *authInfo) (*authResp, error) {
+// loginSRP runs getAuthInfo + the SRP POST /auth in one shot. When
+// hvToken/hvType are non-empty they're attached as HV headers on the
+// auth POST, used by the retry path after the resolver provides a
+// solution. Each call gets a fresh authInfo (and thus fresh SRPSession
+// and proofs) — the previous attempt's session is consumed by the API.
+func (c *Client) loginSRP(ctx context.Context, username string, password []byte, hvToken, hvType string) (*authResp, error) {
+	info, err := c.getAuthInfo(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	return c.srpLogin(ctx, username, password, info, hvToken, hvType)
+}
+
+func (c *Client) srpLogin(ctx context.Context, username string, password []byte, info *authInfo, hvToken, hvType string) (*authResp, error) {
 	srpAuth, err := srp.NewAuth(info.Version, username, password, info.Salt, info.Modulus, info.ServerEphemeral)
 	if err != nil {
 		return nil, fmt.Errorf("SRP setup: %w", err)
@@ -146,7 +175,7 @@ func (c *Client) srpLogin(ctx context.Context, username string, password []byte,
 		"ClientEphemeral": base64.StdEncoding.EncodeToString(proofs.ClientEphemeral),
 		"SRPSession":      info.SRPSession,
 	})
-	raw, err := c.rawAuth(ctx, "POST", "/core/v4/auth", body)
+	raw, err := c.rawAuthWithHV(ctx, "POST", "/core/v4/auth", body, hvToken, hvType)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +215,12 @@ func (c *Client) auth2FA(ctx context.Context, totp string) error {
 // rawAuth sends a request with current session headers and returns the body.
 // Used for auth-flow endpoints that bypass the normal Do retry path.
 func (c *Client) rawAuth(ctx context.Context, method, path string, body []byte) ([]byte, error) {
+	return c.rawAuthWithHV(ctx, method, path, body, "", "")
+}
+
+// rawAuthWithHV is rawAuth plus optional human-verification headers.
+// Used by srpLogin's retry path after the resolver supplies a solution.
+func (c *Client) rawAuthWithHV(ctx context.Context, method, path string, body []byte, hvToken, hvType string) ([]byte, error) {
 	c.mu.RLock()
 	uid, acc := c.uid, c.acc
 	c.mu.RUnlock()
@@ -200,6 +235,10 @@ func (c *Client) rawAuth(ctx context.Context, method, path string, body []byte) 
 	}
 	if acc != "" {
 		req.Header.Set("Authorization", "Bearer "+acc)
+	}
+	if hvToken != "" && hvType != "" {
+		req.Header.Set("x-pm-human-verification-token", hvToken)
+		req.Header.Set("x-pm-human-verification-token-type", hvType)
 	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
