@@ -31,10 +31,13 @@ func TestProfileFromConfig(t *testing.T) {
 	}
 	workSession := filepath.Join(sessionDir, "work.json")
 	_ = os.Remove(workSession)
+	workIDCache := filepath.Join(configDir, "proton-cli", "idcache", "work.json")
+	_ = os.Remove(workIDCache)
 
 	t.Cleanup(func() {
 		_ = os.Remove(cfgPath)
 		_ = os.Remove(workSession)
+		_ = os.Remove(workIDCache)
 		if backupPath != "" {
 			_ = os.Rename(backupPath, cfgPath)
 		}
