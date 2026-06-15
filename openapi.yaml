@@ -154,10 +154,10 @@ components:
   # GENERATION_TYPE: WRITE_FULL_EMAIL=WRITE_FULL_EMAIL, SHORTEN=SHORTEN, PROOFREAD=PROOFREAD, EXPAND=EXPAND, FORMALIZE=FORMALIZE, FRIENDLY=FRIENDLY, CUSTOM_REFINE=CUSTOM_REFINE
   # GetActiveSessionType: 0=Switch, 1=AutoPick
   # GROUP_MEMBER_PERMISSIONS: 0=NONE, 1=SEND, 2=LEAVE, 4=OWNER, 8=OWNER_WITH_KEYS
-  # GROUP_MEMBER_STATE: 0=PENDING, 1=ACTIVE, 2=OUTDATED, 3=PAUSED, 4=REJECTED
+  # GROUP_MEMBER_STATE: 0=PENDING, 1=ACTIVE, 2=OUTDATED, 3=PAUSED, 4=REJECTED, 5=PENDING_ADMIN
   # GROUP_MEMBER_TYPE: 0=INTERNAL, 1=EXTERNAL, 2=INTERNAL_TYPE_EXTERNAL
   # GROUP_MEMBERSHIP_STATUS: active=ACTIVE, unanswered=UNANSWERED
-  # GroupFlags: 0=None
+  # GroupFlags: 0=None, 1=System, 2=Drive, 4=Scim
   # GroupMemberType: 0=Internal, 1=External
   # GroupPermissions: 0=NobodyCanSend, 1=GroupMembersCanSend, 2=OrgMembersCanSend, 3=EveryoneCanSend
   # HandshakeInfoVendorType: 0=ProtonDrive, 1=ProtonDoc, 2=ProtonSheet
@@ -241,6 +241,7 @@ components:
   # PACKAGE_TYPE: 1=SEND_PM, 2=SEND_EO, 4=SEND_CLEAR, 8=SEND_PGP_INLINE, 16=SEND_PGP_MIME, 32=SEND_CLEAR_MIME
   # ParticipantCapabilityPermission: 0=NotAllowed, 1=Allowed
   # PASSWORD_MODE: 1=SINGLE, 2=TWO_PASSWORD
+  # PASSWORD_REMINDERS_VALUE: 0=ENABLED, 1=DISABLED
   # PasswordPolicyState: 1=ENABLED, 2=OPTIONAL
   # PGP_SCHEME_TEXT: PGP/Inline=INLINE, PGP/MIME=MIME
   # PGP_SCHEMES: pgp-inline=PGP_INLINE, pgp-mime=PGP_MIME
@@ -248,6 +249,7 @@ components:
   # PhotoTag: -1=All, 0=Favorites, 1=Screenshots, 2=Videos, 3=LivePhotos, 4=MotionPhotos, 5=Selfies, 6=Portraits, 7=Bursts, 8=Panoramas, 9=Raw
   # PM_SIGNATURE: 0=DISABLED, 1=ENABLED, 2=LOCKED
   # PM_SIGNATURE_REFERRAL: 0=DISABLED, 1=ENABLED
+  # PREDEFINED_ROLE_NAME: Organization Admin=ORGANIZATION_ADMIN, User Admin=USER_ADMIN, Security Admin=SECURITY_ADMIN
   # Product: Account=Account, Authenticator=Authenticator, Mail=Mail, Calendar=Calendar, Wallet=Wallet, Docs=Docs, Sheets=Sheets, Lumo=Lumo, Drive=Drive, VPN=VPN, VPN=Verify, Admin=Admin, Pass=Pass, Meet=Meet, Other=Other
   # PRODUCT: 1=MAIL, 2=VPN, 3=CALENDAR, 4=DRIVE, 5=PASS, 6=WALLET, 9=LUMO, 10=AUTHENTICATOR
   # PRODUCT_BIT: 1=MAIL, 2=DRIVE, 4=VPN, 8=PASS, 16=WALLET, 32=NEUTRON, 64=LUMO, 256=MEET
@@ -288,7 +290,7 @@ components:
   # SETTINGS_WEEK_START: 0=LOCALE_DEFAULT, 1=MONDAY, 2=TUESDAY, 3=WEDNESDAY, 4=THURSDAY, 5=FRIDAY, 6=SATURDAY, 7=SUNDAY
   # SHARE_EXTERNAL_INVITATION_STATE: 1=PENDING, 2=USER_REGISTERED
   # SHARE_MEMBER_STATE: 1=PENDING, 2=REJECTED, 3=DELETED
-  # SHARED_UPSELL_PATHS: emergency-access=EMERGENCY_ACCESS, multi-user=MULTI_USER, contact-groups=CONTACT_GROUP, storage=STORAGE, user-dropdown=USER_DROPDOWN, storage-percentage=STORAGE_PERCENTAGE, organization-capacity=ORGANIZATION_CAPACITY, sentinel=SENTINEL, sentinel-b2b=SENTINEL_B2B, trial-will-end=TRIAL_WILL_END, top-navigation-bar=TOP_NAVIGATION_BAR, public-sharing-permissions-menu=PUBLIC_SHARING_PERMISSIONS_MENU, easy-switch-byoe=EASY_SWITCH_BYOE
+  # SHARED_UPSELL_PATHS: emergency-access=EMERGENCY_ACCESS, multi-user=MULTI_USER, contact-groups=CONTACT_GROUP, storage=STORAGE, user-dropdown=USER_DROPDOWN, storage-percentage=STORAGE_PERCENTAGE, organization-capacity=ORGANIZATION_CAPACITY, sentinel=SENTINEL, sentinel-b2b=SENTINEL_B2B, trial-will-end=TRIAL_WILL_END, top-navigation-bar=TOP_NAVIGATION_BAR, public-sharing-permissions-menu=PUBLIC_SHARING_PERMISSIONS_MENU, easy-switch-byoe=EASY_SWITCH_BYOE, easy-switch-byoe-more-storage=EASY_SWITCH_BYOE_MORE_STORAGE
   # SharedURLFlags: 0=Legacy, 1=CustomPassword, 2=GeneratedPasswordIncluded, 3=GeneratedPasswordWithCustom
   # ShareTargetType: 0=Root, 1=Folder, 2=File, 3=Album, 4=Photo, 5=ProtonVendor
   # SHORTCUTS: 0=DISABLED, 1=ENABLED
@@ -311,6 +313,7 @@ components:
   # SupportedProtonDocsMimeTypes: application/vnd.openxmlformats-officedocument.wordprocessingml.document=docx, text/plain=txt, text/markdown=md, text/html=html, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=xlsx, text/csv=csv, text/tab-separated-values=tsv, application/vnd.oasis.opendocument.spreadsheet=ods
   # SWIPE_ACTION: -1=None, 0=Trash, 1=Spam, 2=Star, 3=Archive, 4=MarkAsRead, 5=LabelAs, 6=MoveTo
   # TelemetryAccountCancellationEvents: start_cancellation=startCancellation, cancel_page=cancelPage, cancel_modal=cancelModal, feedback_modal=feedbackModal, resubscribe_modal=resubscribeModal, dashboard_reactivate=dashboardReactivate, upsell_modal=upsellModal
+  # TelemetryAccountCancellationFlowFeedbackEvents: start_cancellation=startCancellation, feedback_step=feedbackStep, second_step=secondStep, confirm_cancellation=confirmCancellation
   # TelemetryAccountDashboardEvents: page_load=pageLoad
   # TelemetryAccountOrganizationLogoUploadEvents: process_start=processStart, process_success=processSuccess, process_failure=processFailure
   # TelemetryAccountSecurityCheckupEvents: page_load=pageLoad, cohort_change.complete_recovery_multiple=completeRecoveryMultiple, cohort_change.complete_recovery_single=completeRecoverySingle, cohort_change.account_recovery_enabled=accountRecoveryEnabled, cohort_change.complete_recovery_sentinel=completeRecoverySentinel, cohort_change.sentinel_recommendations=sentinelRecommendations
@@ -322,6 +325,7 @@ components:
   # TelemetryBringYourOwnEmailEvents: claim_proton_address=claim_proton_address
   # TelemetryCalendarEvents: change_temporary_time_zone=change_temporary_time_zone, answer_invite=answer_invite
   # TelemetryCalendarVideoConferencing: video_conference_widget=video_conference_widget, video_conference_settings_toggle=video_conference_settings_toggle, video_conference_zoom_integration=video_conference_zoom_integration, video_conference_proton_meet_integration=video_conference_proton_meet_integration, video_conference_proton_meet_settings_toggle=video_conference_proton_meet_settings_toggle
+  # TelemetryCategoriesOnboardingEvents: onboarding_reply=onboarding_reply, onboarding_card_close=onboarding_card_close, category_nav=category_nav, recategorize_email=recategorize_email, settings_toggle_category_view=settings_toggle_category_view, settings_toggle_category=settings_toggle_category, settings_toggle_notification=settings_toggle_notification
   # TelemetryChangelog: opened=opened
   # TelemetryCollapsibleLeftSidebarEvents: toggle_left_sidebar=toggleLeftSidebar
   # TelemetryDesktopEvents: client_first_launch=client_first_launch
@@ -330,6 +334,7 @@ components:
   # TelemetryDriveWebFeature: drive_web_feature_performance_unauth=performance, drive_web_actions_unauth=actions
   # TelemetryEncryptedSearchEvents: start_es_indexing=start_es_indexing, end_es_indexing=end_es_indexing, pause_es_indexing=pause_es_indexing, perform_search=perform_search, es_search_complete=es_search_complete, clear_search_fields=clear_search_fields, delete_es_data=delete_es_data, switch_search_type=switch_search_type
   # TelemetryESMigrationToolEvents: es_migration_tool.migration_finished=migration_finished
+  # TelemetryExploreAppsEvents: page_load=page_load, app_click=app_click
   # TelemetryHeartbeatEvents: mail_heartbeat=mail_heartbeat, calendar_heartbeat=calendar_heartbeat
   # TelemetryIcsSurgeryEvents: import=import, import_publish=import_publish, invitation=invitation, ics_parsing=ics_parsing
   # TelemetryInboxDestkopEvents: mailto_heartbeat=mailto_heartbeat, daily_stats_heartbeat=daily_stats_heartbeat
@@ -345,25 +350,32 @@ components:
   # TelemetryMailPagingControlsEvents: move_to_previous_page=move_to_previous_page, move_to_next_page=move_to_next_page, clicked_load_more_search_results=clicked_load_more_search_results, move_to_custom_page=move_to_custom_page
   # TelemetryMailSelectAllEvents: button_move_to_archive=button_move_to_archive, button_move_to_trash=button_move_to_trash, banner_move_to=banner_move_to, banner_label_as=banner_label_as, banner_mark_as_read=banner_mark_as_read, banner_mark_as_unread=banner_mark_as_unread, banner_permanent_delete=banner_permanent_delete
   # TelemetryMailTrial2024UpsellModal: no_thanks=noThanks, close_modal=closeModal, upsell=upsell
-  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.recovery_settings=accountRecoverySettings, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, account.web.cancellation=accountCancellation, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.expand_blockquotes=mailExpandBlockquotes, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage
+  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.safety_review_ctr=accountSafetyReviewCtr, account.web.safety_review_score_diff=accountSafetyReviewScoreDiff, account.web.recovery_settings=accountRecoverySettings, account.web.password_reminder=accountPasswordReminder, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, account.web.upgrade_page=accountUpgradePage, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, meet.web.meet_funnel_telemetry=meetFunnelTelemetry, account.web.cancellation=accountCancellation, account.web.cancellation_feedback_first=accountCancellationFeedbackFirst, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.expand_blockquotes=mailExpandBlockquotes, any.web.categories_view=categoriesView, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, account.web.explore_apps=accountExploreApps, any.web.prevent_wasm_loading=preventWasmLoading, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage, vpn.any.tv_signin=vpnTv
+  # TelemetryMeetFunnelTelemetry: spotlight_displayed=spotlight_displayed, explore_meet_clicked=explore_meet_clicked, meeting_created=meeting_created, meet_opened=meet_opened
   # TelemetryPaidUsersNudge: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, close_offer=closeOffer, user_subscribed=userSubscribed, click_hide_offer=clickHideOffer
   # TelemetryPassExtensionEvents: fe.pass_extension_installed=pass_extension_installed
   # TelemetryPassNudgeEvents: banner_display=banner_display, banner_interaction=banner_interaction, pass_cta_click=pass_cta_click
+  # TelemetryPasswordReminderEvents: open=open, success=success, wrong_password=wrong_password, api_error=api_error, close=close, dismiss=dismiss, forgot_password_exit=forgot_password_exit, enable=enable, disable=disable
   # TelemetryPaymentsEvents: load_payment=load_payment, payment_attempt=payment_attempt, payment_success=payment_success, payment_failure=payment_failure
   # TelemetryPostSubscriptionTourEvents: post_subscription_action=post_subscription_action, start_feature_tour=start_feature_tour, quit_feature_tour=quit_feature_tour, finish_feature_tour=finish_feature_tour, replaced_default_short_domain_address=replaced_default_short_domain_address
+  # TelemetryPreventWasmLoading: wasm_unsupported=wasm_unsupported, wasm_loading=wasm_loading, wasm_failed=wasm_failed
   # TelemetryProtonTipsEvents: tip_displayed=tipDispayed, cta_clicked=CTAButtonClicked, tip_change_state=tipChangeState, close_button_clicked=closeButtonClicked, tip_snoozed=tipSnoozed
-  # TelemetryRecoverySettingsEvents: page_load=page_load, setting_enabled=setting_enabled
+  # TelemetryRecoverySettingsEvents: page_load=page_load, account_safety_review_click=account_safety_review_click, setting_enabled=setting_enabled
   # TelemetryReferralDiscoverEvents: top_bar_button_view=top_bar_button_view, top_bar_button_click=top_bar_button_click, top_bar_spotlight_cta_click=top_bar_spotlight_cta_click, settings_spotlight_view=settings_spotlight_view, referral_page_view=referral_page_view, drawer_app_view=drawer_app_view, copy_link_drawer=copy_link_drawer, copy_link_page=copy_link_page, share=share, send_email_invite=send_email_invite
   # TelemetryResetPasswordEvents: page_load=page_load, page_exit=page_exit, step_load=step_load, recovery_methods_requested=recovery_methods_requested, code_sent=code_sent, method_validated=method_validated, success=success, failure=failure
+  # TelemetrySafetyReviewCtrEvents: step_load=step_load, step_exit=step_exit, step_skip=step_skip, step_success=step_success
+  # TelemetrySafetyReviewScoreDiffEvents: score_diff=score_diff
   # TelemetrySecurityCenterEvents: account_security_card=account_security_card, proton_pass_discover_banner=proton_pass_discover_banner, proton_pass_create_alias=proton_pass_create_alias, proton_sentinel_toggle=proton_sentinel_toggle
   # TelemetrySmartBannerEvents: click_app_store_link=clickAppStoreLink
   # TelemetrySubscriptionModalEvents: initialization=initialization, payment=payment, cancelled_on_same_day=cancelledOnSameDay, add_lumo=addLumo
   # TelemetryUnauthLost2FAEvents: step_load=step_load, flow_outcome=flow_outcome
   # TelemetryUnlimitedOffer2025: click_top_navbar=clickTopNavbar, click_upsell_button=clickUpsellButton, close_offer=closeOffer, user_subscribed=userSubscribed, click_hide_offer=clickHideOffer
   # TelemetryUnlimitedToDuoOffer: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, user_subscribed=userSubscribed, close_offer=closeOffer, click_hide_offer=clickHideOffer
+  # TelemetryUpgradePageEvents: page_load=page_load, cta_click=cta_click, subscription_success=subscription_success
   # TelemetryVPNDrawerEvents: tooltip_displayed=tooltip_displayed, tooltip_clicked=tooltip_clicked, tooltip_dismissed=tooltip_dismissed, drawer_displayed=drawer_displayed, download_clicked=download_clicked, status_changed=status_changed
+  # TelemetryVpnTvEvents: tv_auth_initiated=tvAuthInitiated
   # ThemeFeatureSetting: 0=DEFAULT, 1=SCROLLBARS_OFF, 2=ANIMATIONS_OFF
-  # ThemeFontFaceSetting: 0=DEFAULT, 1=SYSTEM, 2=ARIAL, 3=TIMES, 4=DYSLEXIC
+  # ThemeFontFaceSetting: 0=DEFAULT, 1=SYSTEM, 2=ARIAL, 3=TIMES, 4=DYSLEXIC, 5=ATKINSON
   # ThemeFontSizeSetting: 0=DEFAULT, 1=X_SMALL, 2=SMALL, 3=LARGE, 4=X_LARGE
   # ThemeModeSetting: 0=Auto, 1=Dark, 2=Light
   # ThemeTypes: 0=Duotone, 1=Carbon, 2=Snow, 3=Monokai, 4=ContrastLight, 5=Legacy, 6=Classic, 7=ContrastDark, 8=PassDark, 9=Storefront, 10=WalletLight, 11=StorefrontWallet, 12=PassLight, 13=WalletDark, 14=LumoLight, 15=LumoDark
@@ -1325,6 +1337,47 @@ paths:
       responses:
         "200":
           description: Verify Code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /auth/v4/reminder:
+    post:
+      tags: [Auth]
+      summary: Auth Reminder
+      operationId: authReminder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ClientEphemeral:
+                  type: string
+                ClientProof:
+                  type: string
+                SRPSession:
+                  type: string
+      responses:
+        "200":
+          description: Auth Reminder
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+    delete:
+      tags: [Auth]
+      summary: Delete Auth Reminder
+      operationId: deleteAuthReminder
+      responses:
+        "200":
+          description: Delete Auth Reminder
           content:
             application/json:
               schema:
@@ -5683,6 +5736,37 @@ It's just not needed at this point"
                 properties:
                   Code:
                     type: integer
+  /core/v4/groups/members/{groupMemberID}/keys:
+    post:
+      tags: [Core]
+      summary: Add Group Member Keys
+      operationId: addGroupMemberKeys
+      parameters:
+        - name: groupMemberID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Email:
+                  type: string
+                AddressSignaturePacket:
+                  type: string
+      responses:
+        "200":
+          description: Add Group Member Keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
   /core/v4/groups/members/{groupMemberID}/reinvite:
     put:
       tags: [Core]
@@ -7490,6 +7574,137 @@ It's just not needed at this point"
                 properties:
                   Code:
                     type: integer
+  /core/v4/labels/{labelId}/seen:
+    post:
+      tags: [Core]
+      summary: Update Last Event I D
+      operationId: updateLastEventID
+      parameters:
+        - name: labelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                toString:
+                  type: object
+                charAt:
+                  type: object
+                charCodeAt:
+                  type: object
+                concat:
+                  type: object
+                indexOf:
+                  type: object
+                lastIndexOf:
+                  type: object
+                localeCompare:
+                  type: object
+                match:
+                  type: object
+                replace:
+                  type: object
+                search:
+                  type: object
+                slice:
+                  type: object
+                split:
+                  type: object
+                substring:
+                  type: object
+                toLowerCase:
+                  type: object
+                toLocaleLowerCase:
+                  type: object
+                toUpperCase:
+                  type: object
+                toLocaleUpperCase:
+                  type: object
+                trim:
+                  type: object
+                length:
+                  type: integer
+                substr:
+                  type: object
+                valueOf:
+                  type: object
+                codePointAt:
+                  type: object
+                includes:
+                  type: object
+                endsWith:
+                  type: object
+                normalize:
+                  type: object
+                repeat:
+                  type: object
+                startsWith:
+                  type: object
+                anchor:
+                  type: object
+                big:
+                  type: object
+                blink:
+                  type: object
+                bold:
+                  type: object
+                fixed:
+                  type: object
+                fontcolor:
+                  type: object
+                fontsize:
+                  type: object
+                italics:
+                  type: object
+                link:
+                  type: object
+                small:
+                  type: object
+                strike:
+                  type: object
+                sub:
+                  type: object
+                sup:
+                  type: object
+                padStart:
+                  type: object
+                padEnd:
+                  type: object
+                trimEnd:
+                  type: object
+                trimStart:
+                  type: object
+                trimLeft:
+                  type: object
+                trimRight:
+                  type: object
+                matchAll:
+                  type: object
+                replaceAll:
+                  type: object
+                at:
+                  type: object
+                isWellFormed:
+                  type: object
+                toWellFormed:
+                  type: object
+                __@iterator@260:
+                  type: object
+      responses:
+        "200":
+          description: Update Last Event I D
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
   /core/v4/load:
     get:
       tags: [Core]
@@ -8042,6 +8257,9 @@ It's just not needed at this point"
                   type: string
                 Domain:
                   type: string
+                DisableE2EE:
+                  type: string
+                  nullable: true
       responses:
         "200":
           description: Create Member Address
@@ -11375,6 +11593,22 @@ It's just not needed at this point"
           application/json:
             schema:
               type: object
+              properties:
+                Welcomed:
+                  type: string
+                  nullable: true
+                SupportPgpV6Keys:
+                  type: string
+                  nullable: true
+                EdmOptOut:
+                  type: string
+                  nullable: true
+                DisplayTrialEndModal:
+                  type: string
+                  nullable: true
+                PasswordReminderOptOut:
+                  type: string
+                  nullable: true
       responses:
         "200":
           description: Update Flags
@@ -13102,6 +13336,8 @@ It's just not needed at this point"
                 Salt:
                   type: string
                   nullable: true
+                VisitorId:
+                  type: string
       responses:
         "200":
           description: Query Create User External
@@ -14114,6 +14350,27 @@ It's just not needed at this point"
       responses:
         "200":
           description: Update Catch All
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /domains/{domainID}/registrar:
+    get:
+      tags: [Domains]
+      summary: Get Domain Registrar
+      operationId: getDomainRegistrar
+      parameters:
+        - name: domainID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Get Domain Registrar
           content:
             application/json:
               schema:
@@ -19957,6 +20214,42 @@ See the file uploader in the Drive app.
       responses:
         "200":
           description: Delete Org Users Auth Logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /lumo/v1/events/latest:
+    get:
+      tags: [Lumo]
+      summary: Get Latest Lumo Event I D
+      operationId: getLatestLumoEventID
+      responses:
+        "200":
+          description: Get Latest Lumo Event I D
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /lumo/v1/events/{eventID}:
+    get:
+      tags: [Lumo]
+      summary: Get Lumo Events
+      operationId: getLumoEvents
+      parameters:
+        - name: eventID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Get Lumo Events
           content:
             application/json:
               schema:
@@ -26805,6 +27098,157 @@ See the file uploader in the Drive app.
                 properties:
                   Code:
                     type: integer
+  /permissions/v1/groups/{groupID}/roles:
+    get:
+      tags: [Permissions]
+      summary: Get Group Organization Roles
+      operationId: getGroupOrganizationRoles
+      parameters:
+        - name: groupID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Get Group Organization Roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+    put:
+      tags: [Permissions]
+      summary: Update Group Organization Roles
+      operationId: updateGroupOrganizationRoles
+      parameters:
+        - name: groupID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                toString:
+                  type: object
+                charAt:
+                  type: object
+                charCodeAt:
+                  type: object
+                concat:
+                  type: object
+                indexOf:
+                  type: object
+                lastIndexOf:
+                  type: object
+                localeCompare:
+                  type: object
+                match:
+                  type: object
+                replace:
+                  type: object
+                search:
+                  type: object
+                slice:
+                  type: object
+                split:
+                  type: object
+                substring:
+                  type: object
+                toLowerCase:
+                  type: object
+                toLocaleLowerCase:
+                  type: object
+                toUpperCase:
+                  type: object
+                toLocaleUpperCase:
+                  type: object
+                trim:
+                  type: object
+                length:
+                  type: integer
+                substr:
+                  type: object
+                valueOf:
+                  type: object
+                codePointAt:
+                  type: object
+                includes:
+                  type: object
+                endsWith:
+                  type: object
+                normalize:
+                  type: object
+                repeat:
+                  type: object
+                startsWith:
+                  type: object
+                anchor:
+                  type: object
+                big:
+                  type: object
+                blink:
+                  type: object
+                bold:
+                  type: object
+                fixed:
+                  type: object
+                fontcolor:
+                  type: object
+                fontsize:
+                  type: object
+                italics:
+                  type: object
+                link:
+                  type: object
+                small:
+                  type: object
+                strike:
+                  type: object
+                sub:
+                  type: object
+                sup:
+                  type: object
+                padStart:
+                  type: object
+                padEnd:
+                  type: object
+                trimEnd:
+                  type: object
+                trimStart:
+                  type: object
+                trimLeft:
+                  type: object
+                trimRight:
+                  type: object
+                matchAll:
+                  type: object
+                replaceAll:
+                  type: object
+                at:
+                  type: object
+                isWellFormed:
+                  type: object
+                toWellFormed:
+                  type: object
+                __@iterator@260:
+                  type: object
+      responses:
+        "200":
+          description: Update Group Organization Roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
   /permissions/v1/me:
     get:
       tags: [Permissions]
@@ -26834,6 +27278,136 @@ See the file uploader in the Drive app.
       responses:
         "200":
           description: Get Member Organization Roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+    put:
+      tags: [Permissions]
+      summary: Update Member Organization Roles
+      operationId: updateMemberOrganizationRoles
+      parameters:
+        - name: memberID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                toString:
+                  type: object
+                charAt:
+                  type: object
+                charCodeAt:
+                  type: object
+                concat:
+                  type: object
+                indexOf:
+                  type: object
+                lastIndexOf:
+                  type: object
+                localeCompare:
+                  type: object
+                match:
+                  type: object
+                replace:
+                  type: object
+                search:
+                  type: object
+                slice:
+                  type: object
+                split:
+                  type: object
+                substring:
+                  type: object
+                toLowerCase:
+                  type: object
+                toLocaleLowerCase:
+                  type: object
+                toUpperCase:
+                  type: object
+                toLocaleUpperCase:
+                  type: object
+                trim:
+                  type: object
+                length:
+                  type: integer
+                substr:
+                  type: object
+                valueOf:
+                  type: object
+                codePointAt:
+                  type: object
+                includes:
+                  type: object
+                endsWith:
+                  type: object
+                normalize:
+                  type: object
+                repeat:
+                  type: object
+                startsWith:
+                  type: object
+                anchor:
+                  type: object
+                big:
+                  type: object
+                blink:
+                  type: object
+                bold:
+                  type: object
+                fixed:
+                  type: object
+                fontcolor:
+                  type: object
+                fontsize:
+                  type: object
+                italics:
+                  type: object
+                link:
+                  type: object
+                small:
+                  type: object
+                strike:
+                  type: object
+                sub:
+                  type: object
+                sup:
+                  type: object
+                padStart:
+                  type: object
+                padEnd:
+                  type: object
+                trimEnd:
+                  type: object
+                trimStart:
+                  type: object
+                trimLeft:
+                  type: object
+                trimRight:
+                  type: object
+                matchAll:
+                  type: object
+                replaceAll:
+                  type: object
+                at:
+                  type: object
+                isWellFormed:
+                  type: object
+                toWellFormed:
+                  type: object
+                __@iterator@260:
+                  type: object
+      responses:
+        "200":
+          description: Update Member Organization Roles
           content:
             application/json:
               schema:
