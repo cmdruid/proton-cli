@@ -146,11 +146,11 @@ Every command that takes an ID also accepts a substring search term. Ambiguous m
 Proton IDs are Base64URL-encoded and can start with `-`. Two layers in the
 binary handle this automatically:
 
-1. **Auto-`--` injection** (`cmd/root.go` `preprocessArgs`) detects a
+1. **Auto-`--` injection** (`internal/cli/dashids.go` `preprocessArgs`) detects a
    leading-dash token shaped like a full Proton ID (≥60 chars, ends
    `==`, URL-safe base64) and inserts `--` before it before cobra
    parses argv.
-2. **Layer-C error rewrap** (`cmd/root.go` `rewrapFlagError`) replaces
+2. **Layer-C error rewrap** (`internal/cli/dashids.go` `rewrapFlagError`) replaces
    cobra/pflag's flag-parse and "accepts N args" errors with a hint
    mentioning `--` when a leading-dash ID is detected in argv.
 

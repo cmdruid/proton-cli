@@ -7,7 +7,6 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// TrashEntry is a trashed link.
 type TrashEntry struct {
 	ShareID string `json:"share_id"`
 	LinkID  string `json:"link_id"`
@@ -16,7 +15,6 @@ type TrashEntry struct {
 	Trashed int64  `json:"trashed"`
 }
 
-// TrashList returns trashed link IDs grouped by share.
 func (s *Service) TrashList(ctx context.Context, dc *Context) ([]TrashEntry, error) {
 	var r struct {
 		Trash []struct {
@@ -44,7 +42,6 @@ func (s *Service) TrashList(ctx context.Context, dc *Context) ([]TrashEntry, err
 	return out, nil
 }
 
-// TrashRestore restores items from trash.
 func (s *Service) TrashRestore(ctx context.Context, dc *Context, linkIDs []string) error {
 	return s.C.Decode(ctx, proton.Request{
 		Method: "PUT", Path: "/drive/v2/volumes/" + dc.VolumeID + "/trash/restore_multiple",
@@ -52,7 +49,6 @@ func (s *Service) TrashRestore(ctx context.Context, dc *Context, linkIDs []strin
 	}, nil)
 }
 
-// TrashEmpty empties the trash.
 func (s *Service) TrashEmpty(ctx context.Context, dc *Context) error {
 	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/drive/volumes/" + dc.VolumeID + "/trash"}, nil)
 }

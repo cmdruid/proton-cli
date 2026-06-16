@@ -212,7 +212,6 @@ func simpleItemCmd(use, short string, fn func(c *Ctx, share, item string) error,
 	}
 }
 
-// itemFilter holds the batch-filter flags for pass items.
 type itemFilter struct {
 	vault, itemType      string
 	olderThan, newerThan string

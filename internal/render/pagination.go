@@ -22,7 +22,6 @@ func PaginationFooter(noun string, total, page, pageSize, shown int) string {
 		}
 		return fmt.Sprintf("%d %s total (single page).", total, word)
 	}
-	// Multi-page from here on.
 	if (page+1)*pageSize >= total {
 		return fmt.Sprintf("Showing %d of %d total. (last page)", shown, total)
 	}

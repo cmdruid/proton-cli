@@ -9,7 +9,7 @@
 // The main binary stays CGO-free and statically linked. The helper
 // links against libwebkit2gtk-4.x and libgtk-3 dynamically, so its
 // exec failure on minimal Linux systems is reported back as a clean
-// *UnavailableError that the cmd layer can format for the user.
+// *UnavailableError that the cli layer can format for the user.
 //
 // Contract with cmd/proton-cli-hv (helper exit codes):
 //
@@ -31,19 +31,22 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/roman-16/proton-cli/internal/hv/hvexit"
 )
 
-// Helper exit codes. Mirror cmd/proton-cli-hv/main.go.
+// Helper exit codes. Sourced from internal/hv/hvexit so the helper binary and
+// this interpreter share one definition.
 const (
-	exitSuccess     = 0
-	exitUsage       = 2
-	exitUnavailable = 3
-	exitCancelled   = 4
-	exitNetwork     = 5
+	exitSuccess     = hvexit.Success
+	exitUsage       = hvexit.Usage
+	exitUnavailable = hvexit.Unavailable
+	exitCancelled   = hvexit.Cancelled
+	exitNetwork     = hvexit.Network
 )
 
 // UnavailableError signals the helper could not run on this machine
-// (no GUI, no webkit, init failed, missing libs). The cmd layer
+// (no GUI, no webkit, init failed, missing libs). The cli layer
 // converts this into a user-facing message that suggests workarounds
 // (Proton web/mobile login, install libwebkit2gtk, etc.).
 type UnavailableError struct {

@@ -64,7 +64,6 @@ func Encrypt(key, plaintext, aad []byte) ([]byte, error) {
 	return out, nil
 }
 
-// NewKey returns a random 32-byte AES key.
 func NewKey() ([]byte, error) {
 	k := make([]byte, KeyLen)
 	if _, err := rand.Read(k); err != nil {

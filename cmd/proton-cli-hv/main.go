@@ -42,6 +42,8 @@ import (
 	"time"
 
 	webview "github.com/webview/webview_go"
+
+	"github.com/roman-16/proton-cli/internal/hv/hvexit"
 )
 
 const (
@@ -80,14 +82,15 @@ const (
 `
 )
 
-// Exit codes match the contract documented above. Keep in sync with
-// internal/hv/helper.go's switch statement on the parent side.
+// Exit codes match the contract documented above. Sourced from
+// internal/hv/hvexit so the helper and its parent interpreter share one
+// definition.
 const (
-	exitSuccess     = 0
-	exitUsage       = 2
-	exitUnavailable = 3
-	exitCancelled   = 4
-	exitNetwork     = 5
+	exitSuccess     = hvexit.Success
+	exitUsage       = hvexit.Usage
+	exitUnavailable = hvexit.Unavailable
+	exitCancelled   = hvexit.Cancelled
+	exitNetwork     = hvexit.Network
 )
 
 // fail emits a one-line machine-parseable diagnostic to stderr and exits

@@ -10,7 +10,6 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Profile is a set of credentials and endpoint overrides.
 type Profile struct {
 	User       string `toml:"user"`
 	Password   string `toml:"password"`
@@ -19,7 +18,6 @@ type Profile struct {
 	AppVersion string `toml:"app_version"`
 }
 
-// Config is the full on-disk configuration.
 type Config struct {
 	DefaultProfile string             `toml:"default_profile"`
 	Profiles       map[string]Profile `toml:"profiles"`
@@ -41,6 +39,13 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	return loadFile(p)
+}
+
+// loadFile parses the config at path, returning an empty default config when
+// the file is absent. Split out from Load so it can be tested against a
+// temporary path.
+func loadFile(p string) (*Config, error) {
 	data, err := os.ReadFile(p)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

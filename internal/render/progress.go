@@ -33,13 +33,11 @@ func (p *Progress) Start() {
 	p.draw()
 }
 
-// Add increments progress by n bytes.
 func (p *Progress) Add(n int64) {
 	p.current += n
 	p.draw()
 }
 
-// Set sets absolute progress in bytes.
 func (p *Progress) Set(n int64) {
 	p.current = n
 	p.draw()

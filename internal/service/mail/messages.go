@@ -27,7 +27,6 @@ func toMessage(m rawListMessage) Message {
 	}
 }
 
-// List returns a page of messages.
 func (s *Service) List(ctx context.Context, opts ListOptions) ([]Message, int, error) {
 	if opts.PageSize <= 0 {
 		opts.PageSize = 25
@@ -55,7 +54,6 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]Message, int, e
 	return out, r.Total, nil
 }
 
-// Search returns messages matching the given filters.
 func (s *Service) Search(ctx context.Context, opts SearchOptions) ([]Message, int, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = 25
@@ -78,8 +76,8 @@ func (s *Service) Search(ctx context.Context, opts SearchOptions) ([]Message, in
 	return out, r.Total, nil
 }
 
-// searchQuery builds the shared messages/conversations search query. recipients
-// switches the "To" field name to "Recipients" (conversations endpoint).
+// searchQuery's recipients flag renames the To field to "Recipients", as the
+// conversations endpoint expects.
 func searchQuery(opts SearchOptions, recipients bool) url.Values {
 	folder := opts.Folder
 	if folder == "" {
@@ -130,7 +128,6 @@ func validateDates(opts SearchOptions, q url.Values) error {
 	return nil
 }
 
-// rawMessage is the API shape for a single message envelope.
 type rawMessage struct {
 	ID          string
 	Subject     string
@@ -175,7 +172,6 @@ func (s *Service) decryptMessage(u *keys.Unlocked, m rawMessage) Full {
 	}
 }
 
-// Read returns a single message with decrypted body.
 func (s *Service) Read(ctx context.Context, u *keys.Unlocked, id string) (*Full, error) {
 	raw, err := s.fetchMessageRaw(ctx, id)
 	if err != nil {
@@ -203,22 +199,18 @@ func (s *Service) AssertMessageKind(ctx context.Context, id string) error {
 	return s.crossTableProbe(ctx, id, err, "messages")
 }
 
-// Trash moves messages to trash.
 func (s *Service) Trash(ctx context.Context, ids []string) error {
-	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": "3", "IDs": ids}}, nil)
+	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": labelTrash, "IDs": ids}}, nil)
 }
 
-// Delete permanently deletes messages.
 func (s *Service) Delete(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/delete", Body: map[string]any{"IDs": ids}}, nil)
 }
 
-// Move moves messages to the given folder.
 func (s *Service) Move(ctx context.Context, ids []string, folder string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": ResolveFolder(folder), "IDs": ids}}, nil)
 }
 
-// Mark sets read/unread/starred flags on messages.
 func (s *Service) Mark(ctx context.Context, ids []string, read, unread, starred, unstar bool) error {
 	body := map[string]any{"IDs": ids}
 	if read {
@@ -232,12 +224,12 @@ func (s *Service) Mark(ctx context.Context, ids []string, read, unread, starred,
 		}
 	}
 	if starred {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": "10", "IDs": ids}}, nil); err != nil {
+		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
 			return err
 		}
 	}
 	if unstar {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/unlabel", Body: map[string]any{"LabelID": "10", "IDs": ids}}, nil); err != nil {
+		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/unlabel", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
 			return err
 		}
 	}

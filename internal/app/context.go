@@ -4,7 +4,6 @@ import "context"
 
 type ctxKey struct{}
 
-// WithApp stores a into ctx.
 func WithApp(ctx context.Context, a *App) context.Context {
 	return context.WithValue(ctx, ctxKey{}, a)
 }
@@ -20,7 +19,7 @@ func From(ctx context.Context) *App {
 
 // FromOrNil returns the App in ctx, or nil if absent. Used by code
 // paths that may run before PersistentPreRunE has installed an app
-// (e.g. cmd/root.go's final-error formatter when arg-parsing fails).
+// (e.g. the internal/cli final-error formatter when arg-parsing fails).
 func FromOrNil(ctx context.Context) *App {
 	if ctx == nil {
 		return nil

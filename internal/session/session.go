@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 )
 
-// Session holds the persisted auth state for one profile.
 type Session struct {
 	UID           string `json:"uid"`
 	AccessToken   string `json:"access_token"`
@@ -35,20 +34,28 @@ func Path(profile string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return pathIn(d, profile), nil
+}
+
+// pathIn resolves the session-file path for profile within base config dir d.
+// For the default profile it prefers an existing new-style file, then a legacy
+// ~/.config/proton-cli/session.json, else the new-style path. Split out from
+// Path so the legacy-migration branch can be tested against a temp dir.
+func pathIn(d, profile string) string {
 	if profile == "" {
 		profile = "default"
 	}
 	newPath := filepath.Join(d, "sessions", profile+".json")
 	if profile == "default" {
 		if _, err := os.Stat(newPath); err == nil {
-			return newPath, nil
+			return newPath
 		}
 		legacy := filepath.Join(d, "session.json")
 		if _, err := os.Stat(legacy); err == nil {
-			return legacy, nil
+			return legacy
 		}
 	}
-	return newPath, nil
+	return newPath
 }
 
 // Load reads the session for the given profile. Returns nil (no error) when
@@ -75,7 +82,6 @@ func Load(profile string) (*Session, error) {
 	return &s, nil
 }
 
-// Save writes the session for the given profile to disk.
 func Save(profile string, s *Session) error {
 	if profile == "" {
 		profile = "default"
@@ -95,7 +101,6 @@ func Save(profile string, s *Session) error {
 	return os.WriteFile(newPath, data, 0600)
 }
 
-// Clear removes the session file for the given profile.
 func Clear(profile string) error {
 	p, err := Path(profile)
 	if err != nil {

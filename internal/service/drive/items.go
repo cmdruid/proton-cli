@@ -9,7 +9,6 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// Child describes an item in a folder listing.
 type Child struct {
 	LinkID     string `json:"link_id"`
 	Name       string `json:"name"`
@@ -20,7 +19,6 @@ type Child struct {
 	ModifyTime int64  `json:"modify_time,omitempty"`
 }
 
-// List returns decrypted child entries of a folder.
 func (s *Service) List(ctx context.Context, dc *Context, path string) ([]Child, error) {
 	res, err := s.ResolvePath(ctx, dc, path)
 	if err != nil {
@@ -44,8 +42,8 @@ func (s *Service) List(ctx context.Context, dc *Context, path string) ([]Child, 
 	return out, nil
 }
 
-// Walk recursively lists all descendants of path (depth-first, folders before
-// contents), with full decrypted paths in Path.
+// Walk lists all descendants depth-first; each Child carries its full
+// decrypted Path.
 func (s *Service) Walk(ctx context.Context, dc *Context, path string) ([]Child, error) {
 	res, err := s.ResolvePath(ctx, dc, path)
 	if err != nil {
@@ -85,7 +83,7 @@ func (s *Service) walk(ctx context.Context, shareID, linkID string, parentKR *pg
 	return out, nil
 }
 
-// CreateFolder creates a new folder at the given path (parent must exist).
+// CreateFolder requires the parent path to already exist.
 func (s *Service) CreateFolder(ctx context.Context, dc *Context, fullPath string) error {
 	parent := dirOf(fullPath)
 	name := baseOf(fullPath)
@@ -135,7 +133,6 @@ func (s *Service) CreateFolder(ctx context.Context, dc *Context, fullPath string
 	return s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/drive/shares/" + p.ShareID + "/folders", Body: body}, nil)
 }
 
-// Rename renames a file or folder in place.
 func (s *Service) Rename(ctx context.Context, dc *Context, path, newName string) error {
 	res, err := s.ResolvePath(ctx, dc, path)
 	if err != nil {
@@ -168,7 +165,6 @@ func (s *Service) Rename(ctx context.Context, dc *Context, path, newName string)
 	}, nil)
 }
 
-// Move relocates a file/folder to a different parent folder.
 func (s *Service) Move(ctx context.Context, dc *Context, sourcePath, destPath string) error {
 	src, err := s.ResolvePath(ctx, dc, sourcePath)
 	if err != nil {
@@ -214,7 +210,6 @@ func (s *Service) Move(ctx context.Context, dc *Context, sourcePath, destPath st
 	}, nil)
 }
 
-// Delete moves an item to trash (or permanently deletes when permanent=true).
 func (s *Service) Delete(ctx context.Context, dc *Context, path string, permanent bool) error {
 	res, err := s.ResolvePath(ctx, dc, path)
 	if err != nil {

@@ -13,10 +13,12 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/roman-16/proton-cli/internal/hv/hvexit"
 )
 
 func main() {
 	fmt.Fprintln(os.Stderr,
 		"hv: webview-unavailable: this binary was built without -tags webview")
-	os.Exit(3)
+	os.Exit(hvexit.Unavailable)
 }

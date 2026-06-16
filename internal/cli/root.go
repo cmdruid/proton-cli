@@ -67,6 +67,10 @@ func init() {
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		format, err := render.ParseFormat(gFlags.output)
+		if err != nil {
+			return err
+		}
 		a, err := app.New(app.Options{
 			Profile:    gFlags.profile,
 			User:       gFlags.user,
@@ -74,7 +78,7 @@ func init() {
 			TOTP:       gFlags.totp,
 			APIURL:     gFlags.apiURL,
 			AppVersion: gFlags.appVersion,
-			Output:     parseFormat(gFlags.output),
+			Output:     format,
 			LogLevel:   parseLevel(gFlags.logLevel, gFlags.verbose),
 			Quiet:      gFlags.quiet,
 			DryRun:     gFlags.dryRun,
@@ -92,7 +96,6 @@ func init() {
 	}
 }
 
-// Execute runs the root command and exits with the appropriate code.
 func Execute() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -150,15 +153,6 @@ func registerSubcommands() {
 	rootCmd.AddCommand(newCalendarCmd())
 	rootCmd.AddCommand(newContactsCmd())
 	rootCmd.AddCommand(newPassCmd())
-}
-
-func parseFormat(s string) render.Format {
-	f, err := render.ParseFormat(s)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-		os.Exit(1)
-	}
-	return f
 }
 
 func parseLevel(s string, verbose bool) slog.Level {

@@ -1,7 +1,7 @@
 // Package view is the declarative presentation layer. A command describes its
 // list output as columns; Render handles text-table vs json/yaml, short-ID
 // shortening, ID-cache population and footers uniformly — removing the
-// per-command format branching the old cmd layer repeated everywhere.
+// per-command format branching that would otherwise be repeated everywhere.
 package view
 
 import (
@@ -11,7 +11,6 @@ import (
 	"github.com/roman-16/proton-cli/internal/render"
 )
 
-// Column describes one table column over rows of type T.
 type Column[T any] struct {
 	Header string
 	Cell   func(T) string
@@ -20,7 +19,6 @@ type Column[T any] struct {
 	ID bool
 }
 
-// List is a declarative description of a list rendering.
 type List[T any] struct {
 	Columns []Column[T]
 	// CacheIDs returns the IDs of a row to persist to the short-ID cache.

@@ -12,7 +12,7 @@ import (
 
 // fakeHelper builds a tiny shell-script "helper" that prints the
 // requested stdout, the requested stderr, and exits with the given
-// code. The cmd-layer uses exec.Command, so anything that's an
+// code. The hv package uses exec.Command, so anything that's an
 // executable file works — we don't actually need a Go binary here.
 //
 // Skips on Windows (POSIX shebangs).

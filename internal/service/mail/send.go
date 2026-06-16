@@ -10,7 +10,7 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// Send sends a new mail. Handles both internal (PGP) and external recipients.
+// Send packages the body differently for internal (PGP) vs external recipients.
 func (s *Service) Send(ctx context.Context, u *keys.Unlocked, to, subject, body string) error {
 	addrKR, _, senderEmail, err := u.FirstAddrKR()
 	if err != nil {

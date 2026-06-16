@@ -7,7 +7,6 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// Label describes a label or folder.
 type Label struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
@@ -21,7 +20,6 @@ type rawLabel struct {
 	Type                  int
 }
 
-// LabelsList returns all labels + folders.
 func (s *Service) LabelsList(ctx context.Context) ([]Label, []Label, error) {
 	var labels, folders struct{ Labels []rawLabel }
 	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/labels", Query: keys.Query("Type", "1")}, &labels); err != nil {
@@ -43,8 +41,6 @@ func (s *Service) LabelsList(ctx context.Context) ([]Label, []Label, error) {
 	return ll, ff, nil
 }
 
-// LabelCreate creates a label (isFolder=false) or folder (isFolder=true) and
-// returns the new ID.
 func (s *Service) LabelCreate(ctx context.Context, name, color string, isFolder bool) (string, error) {
 	t := 1
 	if isFolder {
@@ -60,12 +56,10 @@ func (s *Service) LabelCreate(ctx context.Context, name, color string, isFolder 
 	return r.Label.ID, nil
 }
 
-// LabelDelete deletes labels/folders by ID.
 func (s *Service) LabelDelete(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/core/v4/labels", Body: map[string]any{"LabelIDs": ids}}, nil)
 }
 
-// Filter is a sieve filter list entry.
 type Filter struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -73,7 +67,6 @@ type Filter struct {
 	Version int    `json:"version"`
 }
 
-// FiltersList returns all sieve filters.
 func (s *Service) FiltersList(ctx context.Context) ([]Filter, error) {
 	var r struct{ Filters []Filter }
 	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/filters"}, &r); err != nil {
@@ -82,7 +75,6 @@ func (s *Service) FiltersList(ctx context.Context) ([]Filter, error) {
 	return r.Filters, nil
 }
 
-// FilterCreate creates a sieve filter and returns the new ID.
 func (s *Service) FilterCreate(ctx context.Context, name, sieve string, status int) (string, error) {
 	var r struct{ Filter struct{ ID string } }
 	if err := s.C.Decode(ctx, proton.Request{
@@ -104,7 +96,6 @@ func (s *Service) FilterDisable(ctx context.Context, id string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/filters/" + id + "/disable"}, nil)
 }
 
-// Address is an account email address.
 type Address struct {
 	ID          string `json:"id"`
 	Email       string `json:"email"`
@@ -113,7 +104,6 @@ type Address struct {
 	Status      int    `json:"status"`
 }
 
-// AddressesList returns all account email addresses.
 func (s *Service) AddressesList(ctx context.Context) ([]Address, error) {
 	var r struct {
 		Addresses []struct {

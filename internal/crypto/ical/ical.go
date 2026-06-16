@@ -33,12 +33,10 @@ func Field(text, name string) string {
 	return ""
 }
 
-// EventUID returns a new locally-unique UID for a VEVENT.
 func EventUID() string {
 	return fmt.Sprintf("%d@proton-cli", time.Now().UnixNano())
 }
 
-// ContactUID returns a new locally-unique UID for a vCard.
 func ContactUID() string {
 	return fmt.Sprintf("proton-cli-%d", time.Now().UnixNano())
 }

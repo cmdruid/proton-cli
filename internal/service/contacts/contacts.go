@@ -10,16 +10,14 @@ import (
 	"github.com/roman-16/proton-cli/internal/crypto/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// Service is the Contacts domain service.
 type Service struct{ C proton.Doer }
 
-// New returns a new Contacts service.
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
-// Contact is a decrypted contact.
 type Contact struct {
 	ID    string   `json:"id"`
 	Name  string   `json:"name"`
@@ -30,7 +28,6 @@ type Contact struct {
 	Cards []string `json:"cards,omitempty"`
 }
 
-// NewContact describes a contact to create or update.
 type NewContact struct {
 	Name  string
 	Email string
@@ -39,7 +36,6 @@ type NewContact struct {
 	Org   string
 }
 
-// List returns all decrypted contacts on the account.
 func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error) {
 	var out []Contact
 	for page := 0; ; page++ {
@@ -70,7 +66,6 @@ func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error)
 	return out, nil
 }
 
-// Get returns a single decrypted contact by ID.
 func (s *Service) Get(ctx context.Context, u *keys.Unlocked, id string) (*Contact, error) {
 	var r struct {
 		Contact struct {
@@ -90,7 +85,6 @@ func (s *Service) Get(ctx context.Context, u *keys.Unlocked, id string) (*Contac
 	return &c, nil
 }
 
-// Resolve returns a contact ID for a literal ID or a name/email search.
 func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, ref string) (string, error) {
 	if looksLikeID(ref) {
 		return ref, nil
@@ -119,7 +113,6 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, ref string) (st
 	return "", &errs.Ambiguous{Kind: "contact", Ref: ref, Candidates: cands}
 }
 
-// Create creates a new contact and returns its ID.
 func (s *Service) Create(ctx context.Context, u *keys.Unlocked, nc NewContact) (string, error) {
 	if nc.Name == "" && nc.Email == "" {
 		return "", fmt.Errorf("name or email is required")
@@ -163,7 +156,6 @@ func (s *Service) Create(ctx context.Context, u *keys.Unlocked, nc NewContact) (
 	return "", nil
 }
 
-// Update replaces the cards on an existing contact.
 func (s *Service) Update(ctx context.Context, u *keys.Unlocked, id string, patch NewContact) error {
 	existing, err := s.Get(ctx, u, id)
 	if err != nil {
@@ -201,7 +193,6 @@ func (s *Service) Update(ctx context.Context, u *keys.Unlocked, id string, patch
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/contacts/v4/contacts/" + id, Body: map[string]any{"Cards": cards}}, nil)
 }
 
-// Delete permanently deletes the given contacts.
 func (s *Service) Delete(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/contacts/v4/contacts/delete", Body: map[string]any{"IDs": ids}}, nil)
 }
@@ -225,4 +216,4 @@ func firstNonEmpty(a, b string) string {
 	return b
 }
 
-func looksLikeID(s string) bool { return len(s) > 60 && strings.HasSuffix(s, "==") }
+func looksLikeID(s string) bool { return idcache.IsFullID(s) }

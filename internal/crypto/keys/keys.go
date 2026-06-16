@@ -14,7 +14,6 @@ import (
 	"github.com/roman-16/proton-cli/internal/session"
 )
 
-// Unlocked holds the unlocked key hierarchy.
 type Unlocked struct {
 	UserKR    *pgp.KeyRing
 	AddrKRs   map[string]*pgp.KeyRing
@@ -104,7 +103,6 @@ func (u *Unlocked) PrimaryAddrKR() (*pgp.KeyRing, string, string, error) {
 	return u.FirstAddrKR()
 }
 
-// FirstAddrKR returns the first unlockable address key ring.
 func (u *Unlocked) FirstAddrKR() (*pgp.KeyRing, string, string, error) {
 	for _, a := range u.Addresses {
 		if kr, ok := u.AddrKRs[a.ID]; ok {
@@ -114,7 +112,6 @@ func (u *Unlocked) FirstAddrKR() (*pgp.KeyRing, string, string, error) {
 	return nil, "", "", fmt.Errorf("no address key rings available")
 }
 
-// AddrKR returns the key ring for the given address ID.
 func (u *Unlocked) AddrKR(addrID string) (*pgp.KeyRing, bool) {
 	kr, ok := u.AddrKRs[addrID]
 	return kr, ok
@@ -207,7 +204,6 @@ func decryptToken(tokenArm, sigArm string, kr *pgp.KeyRing) ([]byte, error) {
 	return dec.GetBinary(), nil
 }
 
-// Query makes a url.Values with the provided key/value pairs.
 func Query(kv ...string) url.Values {
 	q := url.Values{}
 	for i := 0; i+1 < len(kv); i += 2 {

@@ -20,7 +20,6 @@ func newDriveCmd() *cobra.Command {
 	return c
 }
 
-// driveCtx unlocks keys and resolves the default share context.
 func driveCtx(c *Ctx) (*drivesvc.Context, error) {
 	u, err := c.App.Unlock(c.Ctx)
 	if err != nil {

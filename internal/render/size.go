@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// Size formats a byte count in human-readable form.
 func Size(bytes int64) string {
 	switch {
 	case bytes >= 1<<30:
@@ -19,7 +18,6 @@ func Size(bytes int64) string {
 	}
 }
 
-// Duration formats a duration compactly ("1h30m", "45s").
 func Duration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))

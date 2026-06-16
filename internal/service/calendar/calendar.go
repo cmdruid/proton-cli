@@ -17,13 +17,10 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// Service is the Calendar domain service.
 type Service struct{ C proton.Doer }
 
-// New constructs a calendar service.
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
-// Calendar is a Proton calendar entry.
 type Calendar struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -32,7 +29,6 @@ type Calendar struct {
 	MemberCount int    `json:"member_count"`
 }
 
-// Event is a decrypted calendar event.
 type Event struct {
 	ID         string    `json:"id"`
 	CalendarID string    `json:"calendar_id"`
@@ -50,8 +46,7 @@ type calKeys struct {
 	memberID string
 }
 
-// CalendarsList returns all calendars on the account. Per-user prefs
-// (Name/Color/Description) live under Members[].
+// CalendarsList reads per-user prefs (Name/Color/Description) from Members[0].
 func (s *Service) CalendarsList(ctx context.Context) ([]Calendar, error) {
 	var r struct {
 		Calendars []struct {
@@ -80,7 +75,6 @@ func (s *Service) CalendarsList(ctx context.Context) ([]Calendar, error) {
 	return out, nil
 }
 
-// CalendarCreate creates a new calendar on the primary address and returns its ID.
 func (s *Service) CalendarCreate(ctx context.Context, u *keys.Unlocked, name, color string) (string, error) {
 	_, addrID, _, err := u.PrimaryAddrKR()
 	if err != nil {
@@ -96,12 +90,11 @@ func (s *Service) CalendarCreate(ctx context.Context, u *keys.Unlocked, name, co
 	return r.Calendar.ID, nil
 }
 
-// CalendarDelete deletes a calendar. Requires scope unlock by the caller.
+// CalendarDelete requires the caller to have unlocked the password scope first.
 func (s *Service) CalendarDelete(ctx context.Context, id string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/calendar/v1/" + id}, nil)
 }
 
-// ResolveCalendarID accepts a literal ID or a name.
 func (s *Service) ResolveCalendarID(ctx context.Context, nameOrID string) (string, error) {
 	cals, err := s.CalendarsList(ctx)
 	if err != nil {
@@ -126,7 +119,6 @@ func (s *Service) ResolveCalendarID(ctx context.Context, nameOrID string) (strin
 	return "", &errs.NotFound{Kind: "calendar", Ref: nameOrID}
 }
 
-// EventsList returns decrypted events in the given time range.
 func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarID string, start, end time.Time) ([]Event, error) {
 	ck, err := s.unlockCalendar(ctx, u, calendarID)
 	if err != nil {
@@ -171,7 +163,6 @@ func (e rawEvent) toEvent(ck *calKeys) Event {
 	}
 }
 
-// EventGet returns a single decrypted event.
 func (s *Service) EventGet(ctx context.Context, u *keys.Unlocked, calendarID, eventID string) (*Event, error) {
 	ck, err := s.unlockCalendar(ctx, u, calendarID)
 	if err != nil {
@@ -185,7 +176,6 @@ func (s *Service) EventGet(ctx context.Context, u *keys.Unlocked, calendarID, ev
 	return &ev, nil
 }
 
-// EventCreate creates a new event and returns its ID.
 func (s *Service) EventCreate(ctx context.Context, u *keys.Unlocked, calendarID, title, location string, start, end time.Time, allDay bool) (string, error) {
 	ck, err := s.unlockCalendar(ctx, u, calendarID)
 	if err != nil {
@@ -227,7 +217,7 @@ func (s *Service) EventCreate(ctx context.Context, u *keys.Unlocked, calendarID,
 	return "", nil
 }
 
-// EventUpdate updates an existing event. Empty fields are left unchanged.
+// EventUpdate leaves empty fields unchanged.
 func (s *Service) EventUpdate(ctx context.Context, u *keys.Unlocked, calendarID, eventID, title, location string, start, end time.Time) error {
 	ck, err := s.unlockCalendar(ctx, u, calendarID)
 	if err != nil {
@@ -283,7 +273,6 @@ func (s *Service) EventUpdate(ctx context.Context, u *keys.Unlocked, calendarID,
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/calendar/v1/" + calendarID + "/events/sync", Body: body}, nil)
 }
 
-// EventDelete deletes an event.
 func (s *Service) EventDelete(ctx context.Context, u *keys.Unlocked, calendarID, eventID string) error {
 	ck, err := s.unlockCalendar(ctx, u, calendarID)
 	if err != nil {
@@ -295,8 +284,8 @@ func (s *Service) EventDelete(ctx context.Context, u *keys.Unlocked, calendarID,
 	}, nil)
 }
 
-// ResolveEvent accepts (calendarID eventID) or a single title searched across
-// calendars in the next 30 days.
+// ResolveEvent takes (calendarID, eventID), or a single title which it searches
+// across all calendars over the next 30 days.
 func (s *Service) ResolveEvent(ctx context.Context, u *keys.Unlocked, args []string) (string, string, error) {
 	if len(args) == 2 {
 		return args[0], args[1], nil
@@ -438,7 +427,6 @@ func decryptTitleLocation(cards []map[string]any, keyPacket string, ck *calKeys)
 	return ical.Field(joined, "SUMMARY"), ical.Field(joined, "LOCATION")
 }
 
-// DefaultRange returns start/end of a default 30-day window.
 func DefaultRange() (time.Time, time.Time) {
 	now := time.Now()
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())

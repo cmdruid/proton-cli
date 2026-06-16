@@ -13,13 +13,10 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// Service is the Drive domain service.
 type Service struct{ C proton.Doer }
 
-// New constructs a drive service.
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
-// Context holds the default share + address keys for a session.
 type Context struct {
 	ShareID    string
 	ShareKR    *pgp.KeyRing
@@ -30,7 +27,6 @@ type Context struct {
 	RootLinkID string
 }
 
-// Resolve returns the default share + key context, unlocking on first call.
 func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked) (*Context, error) {
 	var r struct {
 		Volumes []struct {
@@ -98,7 +94,6 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked) (*Context, erro
 	}, nil
 }
 
-// Link is a decrypted view of a Proton Drive link (file or folder).
 type Link struct {
 	LinkID                  string
 	ParentLinkID            string
@@ -119,7 +114,6 @@ type Link struct {
 	}
 }
 
-// Resolved is the outcome of resolving a path.
 type Resolved struct {
 	ShareID  string
 	LinkID   string
@@ -129,7 +123,6 @@ type Resolved struct {
 	IsFolder bool
 }
 
-// ResolvePath walks /a/b/c from the root, decrypting names as it goes.
 func (s *Service) ResolvePath(ctx context.Context, dc *Context, path string) (*Resolved, error) {
 	path = strings.Trim(path, "/")
 	rootLink, err := s.getLink(ctx, dc.ShareID, dc.RootLinkID)

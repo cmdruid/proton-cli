@@ -15,7 +15,6 @@ import (
 	"golang.org/x/term"
 )
 
-// Format is the output mode selected via --output.
 type Format string
 
 const (
@@ -24,7 +23,6 @@ const (
 	FormatYAML Format = "yaml"
 )
 
-// ParseFormat returns the canonical Format for a user-supplied value.
 func ParseFormat(s string) (Format, error) {
 	switch s {
 	case "", "text":
@@ -37,7 +35,6 @@ func ParseFormat(s string) (Format, error) {
 	return "", fmt.Errorf("unknown output format %q (want text|json|yaml)", s)
 }
 
-// Renderer centralises all output formatting.
 type Renderer struct {
 	Format Format
 	Stdout io.Writer
@@ -46,7 +43,6 @@ type Renderer struct {
 	Quiet  bool
 }
 
-// New constructs a Renderer writing to the given streams.
 func New(format Format, stdout, stderr io.Writer, level slog.Level, quiet bool) *Renderer {
 	if stdout == nil {
 		stdout = os.Stdout
@@ -142,15 +138,6 @@ func convertJSONNumbers(v any) any {
 	return v
 }
 
-// TableOrObject prints a table when format=text, else marshals v.
-func (r *Renderer) TableOrObject(headers []string, rows [][]string, v any) error {
-	if r.Format == FormatText {
-		Table(r.Stdout, headers, rows)
-		return nil
-	}
-	return r.Object(v)
-}
-
 // ID prints just the ID on stdout (for scripts that want to capture it) and a
 // success message on stderr. Use after a creating/mutating call.
 func (r *Renderer) ID(id, msg string) {
@@ -162,7 +149,6 @@ func (r *Renderer) ID(id, msg string) {
 	}
 }
 
-// Success prints a success notice to stderr (no stdout).
 func (r *Renderer) Success(msg string) {
 	if r.Quiet || msg == "" {
 		return
@@ -170,7 +156,6 @@ func (r *Renderer) Success(msg string) {
 	_, _ = fmt.Fprintln(r.Stderr, "✓ "+msg)
 }
 
-// Info prints a neutral progress notice to stderr.
 func (r *Renderer) Info(msg string) {
 	if r.Quiet || msg == "" {
 		return

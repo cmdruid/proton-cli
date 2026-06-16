@@ -23,8 +23,6 @@ type ConversationAttachment struct {
 	MessageID   string `json:"message_id"`
 }
 
-// ConversationAttachmentsList returns the union of attachments across all
-// messages in the conversation, ordered by message Time ascending.
 func (s *Service) ConversationAttachmentsList(ctx context.Context, convID string, includeInline bool) ([]ConversationAttachment, error) {
 	var r struct{ Messages []rawMessage }
 	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/conversations/" + convID}, &r); err != nil {
@@ -47,8 +45,7 @@ func (s *Service) ConversationAttachmentsList(ctx context.Context, convID string
 	return out, nil
 }
 
-// AttachmentsList returns the attachment metadata for a message. Inline
-// attachments are filtered out unless includeInline is true.
+// AttachmentsList drops inline attachments unless includeInline is set.
 func (s *Service) AttachmentsList(ctx context.Context, msgID string, includeInline bool) ([]Attachment, error) {
 	var r struct {
 		Message struct {
@@ -71,7 +68,6 @@ func (s *Service) AttachmentsList(ctx context.Context, msgID string, includeInli
 	return out, nil
 }
 
-// AttachmentDownload returns the decrypted bytes of a single attachment.
 func (s *Service) AttachmentDownload(ctx context.Context, u *keys.Unlocked, msgID, attID string) ([]byte, string, error) {
 	var r struct {
 		Message struct {

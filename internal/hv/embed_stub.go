@@ -1,7 +1,7 @@
 //go:build !embed_hv
 
 // Default build (no `-tags embed_hv`): the helper is NOT embedded.
-// extractHelper() returns ErrHelperMissing, the cmd-layer surfaces
+// extractHelper() returns ErrHelperMissing, the cli layer surfaces
 // that as "this build of proton-cli has no captcha-HV support; please
 // log in via Proton web/mobile to clear HV, or rebuild with
 // -tags embed_hv after producing helper assets via goreleaser".

@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -263,67 +263,26 @@ func convUnstarCmd() *cobra.Command {
 }
 
 func bulkConversationAction(f *msgFilter, successFmt, otherVerb string, do func(c *Ctx, ids []string) error) func(*cobra.Command, []string) error {
-	return run([]Step{stepAuth}, func(c *Ctx) error {
-		ids, err := collectConversationIDs(c, c.Args, f)
-		if err != nil {
-			return handleWrongTable(err, otherVerb)
-		}
-		if c.App.DryRun {
-			c.R().Info(fmt.Sprintf("dry-run: would affect %d conversation(s)", len(ids)))
-			for _, id := range ids {
-				_, _ = fmt.Fprintln(c.R().Stderr, "  "+id)
-			}
-			return nil
-		}
-		if err := do(c, ids); err != nil {
-			return err
-		}
-		c.R().Success(fmt.Sprintf(successFmt, len(ids)))
-		return nil
-	})
+	return bulkMailAction(collectConversationIDs, "conversation", f, successFmt, otherVerb, do)
 }
 
 func collectConversationIDs(c *Ctx, args []string, f *msgFilter) ([]string, error) {
-	var ids []string
-	refs, err := resolvePrefixes(c.App, args)
-	if err != nil {
-		return nil, err
-	}
-	if len(refs) == 1 && mailsvc.LooksLikeID(refs[0]) {
-		if err := c.App.Mail.AssertConversationKind(c.Ctx, refs[0]); err != nil {
-			var wte *mailsvc.WrongTableError
-			if errors.As(err, &wte) {
+	return collectMailIDs(c, args, f, mailIDCollector{
+		noun: "conversation", plural: "conversations",
+		assertKind: c.App.Mail.AssertConversationKind,
+		resolve:    c.App.Mail.ResolveConversation,
+		searchIDs: func(ctx context.Context, opts mailsvc.SearchOptions) ([]string, error) {
+			convs, _, err := c.App.Mail.ConversationsSearch(ctx, opts)
+			if err != nil {
 				return nil, err
 			}
-		}
-	}
-	for _, arg := range refs {
-		id, err := c.App.Mail.ResolveConversation(c.Ctx, arg)
-		if err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if f.set() {
-		if f.onlyAll() {
-			c.R().Info("--all with no other filter will affect every conversation in the account. Add --folder to scope it.")
-		}
-		search, err := f.toSearch()
-		if err != nil {
-			return nil, err
-		}
-		convs, _, err := c.App.Mail.ConversationsSearch(c.Ctx, search)
-		if err != nil {
-			return nil, err
-		}
-		for _, cv := range convs {
-			ids = append(ids, cv.ID)
-		}
-	}
-	if len(args) == 0 && !f.set() {
-		return nil, fmt.Errorf("no conversations selected: pass REF(s) or a filter (e.g. --unread, --from, --older-than); use --all to target an entire folder")
-	}
-	return dedupe(ids), nil
+			ids := make([]string, len(convs))
+			for i, cv := range convs {
+				ids[i] = cv.ID
+			}
+			return ids, nil
+		},
+	})
 }
 
 func renderConversationText(c *Ctx, conv *mailsvc.ConversationFull, format string, includeInline, bodyOnly, stripQuotes bool) error {

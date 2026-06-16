@@ -11,13 +11,11 @@ import (
 	"github.com/roman-16/proton-cli/internal/render"
 )
 
-// DownloadOptions controls streaming downloads.
 type DownloadOptions struct {
 	Label string
 	Quiet bool
 }
 
-// Download streams a decrypted file to w.
 func (s *Service) Download(ctx context.Context, dc *Context, path string, w io.Writer, opts DownloadOptions) error {
 	res, err := s.ResolvePath(ctx, dc, path)
 	if err != nil {

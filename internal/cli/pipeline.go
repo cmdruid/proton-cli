@@ -11,7 +11,7 @@ import (
 
 // Ctx is the prepared per-invocation context handed to command handlers. The
 // requirement steps populate it (auth, unlock, resolved args) before the
-// handler runs, collapsing the boilerplate the old cmd layer repeated.
+// handler runs, collapsing the boilerplate each command would otherwise repeat.
 type Ctx struct {
 	Ctx  context.Context
 	App  *app.App
@@ -19,22 +19,17 @@ type Ctx struct {
 	Args []string
 }
 
-// R is the renderer for this invocation.
 func (c *Ctx) R() *render.Renderer { return c.App.R }
 
-// short reports whether IDs should be shortened (interactive TTY, full IDs off).
 func (c *Ctx) short() bool { return c.App.R.IsTTY() && !c.App.FullIDs }
 
 // Step is a requirement run before the handler. The first failing step aborts.
 type Step func(*Ctx) error
 
-// Handler is a prepared command body.
 type Handler func(*Ctx) error
 
-// stepAuth ensures the client is authenticated.
 func stepAuth(c *Ctx) error { return c.App.Authenticate(c.Ctx) }
 
-// stepUnlock ensures the PGP key hierarchy is unlocked, caching it on c.U.
 func stepUnlock(c *Ctx) error {
 	u, err := c.App.Unlock(c.Ctx)
 	if err != nil {
@@ -55,8 +50,6 @@ func stepResolve(c *Ctx) error {
 	return nil
 }
 
-// run builds a cobra RunE that prepares a Ctx, runs the steps in order, then
-// invokes the handler.
 func run(steps []Step, h Handler) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		c := &Ctx{Ctx: cmd.Context(), App: app.From(cmd.Context()), Args: args}

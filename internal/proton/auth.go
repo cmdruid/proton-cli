@@ -213,7 +213,6 @@ func (c *Client) rawAuth(ctx context.Context, method, path string, body []byte) 
 	return c.rawAuthWithHV(ctx, method, path, body, "", "")
 }
 
-// rawAuthWithHV is rawAuth plus optional human-verification headers.
 func (c *Client) rawAuthWithHV(ctx context.Context, method, path string, body []byte, hvToken, hvType string) ([]byte, error) {
 	c.mu.RLock()
 	uid, acc := c.uid, c.acc

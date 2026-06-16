@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -15,13 +16,6 @@ func newMailCmd() *cobra.Command {
 	c := &cobra.Command{Use: "mail", Short: "Mail operations"}
 	c.AddCommand(messagesCmd(), conversationsCmd(), attachmentsCmd(), labelsCmd(), filtersCmd(), addressesCmd())
 	return c
-}
-
-func mailOppositeKind(k string) string {
-	if k == "conversation" {
-		return "message"
-	}
-	return "conversation"
 }
 
 // handleWrongTable converts a *mailsvc.WrongTableError into an exit-3 redirect
@@ -45,7 +39,7 @@ func handleWrongTable(err error, otherVerb string) error {
 	}
 	return errs.WithExit(3, fmt.Errorf(
 		"that ID is a %s, not a %s. Run: proton-cli %s %s %s",
-		wte.Kind, mailOppositeKind(wte.Kind), otherTree, otherVerb, wte.ID))
+		wte.Kind, mailsvc.OppositeKind(wte.Kind), otherTree, otherVerb, wte.ID))
 }
 
 // hintFromTo emits a stderr hint suggesting --keyword when a --from/--to search
@@ -134,4 +128,81 @@ func (f *msgFilter) toSearch() (mailsvc.SearchOptions, error) {
 		opts.After = time.Now().Add(-d).Format("2006-01-02")
 	}
 	return opts, nil
+}
+
+// mailIDCollector supplies the message-vs-conversation specifics that
+// collectMailIDs needs; the messages and conversations trees build one each.
+type mailIDCollector struct {
+	noun, plural string // "message"/"messages", "conversation"/"conversations"
+	assertKind   func(context.Context, string) error
+	resolve      func(context.Context, string) (string, error)
+	searchIDs    func(context.Context, mailsvc.SearchOptions) ([]string, error)
+}
+
+// collectMailIDs unions explicit REFs (resolved + kind-checked) with the IDs of
+// entities matched by the batch filters. It is the shared core of the messages
+// and conversations selection logic.
+func collectMailIDs(c *Ctx, args []string, f *msgFilter, col mailIDCollector) ([]string, error) {
+	refs, err := resolvePrefixes(c.App, args)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) == 1 && mailsvc.LooksLikeID(refs[0]) {
+		if err := col.assertKind(c.Ctx, refs[0]); err != nil {
+			var wte *mailsvc.WrongTableError
+			if errors.As(err, &wte) {
+				return nil, err
+			}
+		}
+	}
+	var ids []string
+	for _, ref := range refs {
+		id, err := col.resolve(c.Ctx, ref)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if f.set() {
+		if f.onlyAll() {
+			c.R().Info(fmt.Sprintf("--all with no other filter will affect every %s in the account. Add --folder to scope it.", col.noun))
+		}
+		search, err := f.toSearch()
+		if err != nil {
+			return nil, err
+		}
+		matched, err := col.searchIDs(c.Ctx, search)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, matched...)
+	}
+	if len(args) == 0 && !f.set() {
+		return nil, fmt.Errorf("no %s selected: pass REF(s) or a filter (e.g. --unread, --from, --older-than); use --all to target an entire folder", col.plural)
+	}
+	return dedupe(ids), nil
+}
+
+// bulkMailAction is the shared RunE for the messages/conversations bulk verbs
+// (trash/delete/star/unstar). collect selects the IDs; noun fills the dry-run
+// line; do performs the mutation.
+func bulkMailAction(collect func(*Ctx, []string, *msgFilter) ([]string, error), noun string, f *msgFilter, successFmt, otherVerb string, do func(c *Ctx, ids []string) error) func(*cobra.Command, []string) error {
+	return run([]Step{stepAuth}, func(c *Ctx) error {
+		ids, err := collect(c, c.Args, f)
+		if err != nil {
+			return handleWrongTable(err, otherVerb)
+		}
+		if c.App.DryRun {
+			c.R().Info(fmt.Sprintf("dry-run: would affect %d %s(s)", len(ids), noun))
+			for _, id := range ids {
+				_, _ = fmt.Fprintln(c.R().Stderr, "  "+id)
+			}
+			return nil
+		}
+		if err := do(c, ids); err != nil {
+			return err
+		}
+		c.R().Success(fmt.Sprintf(successFmt, len(ids)))
+		return nil
+	})
 }

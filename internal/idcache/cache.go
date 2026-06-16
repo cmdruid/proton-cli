@@ -47,7 +47,6 @@ type Cache struct {
 // are created on first write.
 func New(path string) *Cache { return &Cache{path: path} }
 
-// Path returns the on-disk file path.
 func (c *Cache) Path() string { return c.path }
 
 // Save merges ids into the cache, dedupes (preserving insertion order),
@@ -166,7 +165,7 @@ func (c *Cache) writeAtomic(ids []string) error {
 }
 
 // IsFullID reports whether s looks like a complete Proton ID: at least 60
-// characters and ending in "==". Mirrors the historical heuristic used by
+// characters ending in "==". The canonical heuristic shared by the
 // service-layer Resolve methods.
 func IsFullID(s string) bool {
 	return len(s) >= 60 && strings.HasSuffix(s, "==")

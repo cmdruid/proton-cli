@@ -134,11 +134,11 @@ func validateDownloadShape(idArg, posPath, output, outputDir string, all bool) e
 	return nil
 }
 
-func downloadOneAttachment(c *Ctx, u *keys.Unlocked, msgID, attID, posPath, output, outputDir string, force bool) error {
-	bin, name, err := c.App.Mail.AttachmentDownload(c.Ctx, u, msgID, attID)
-	if err != nil {
-		return err
-	}
+// dispatchAttachmentBytes writes decrypted attachment bytes to the destination
+// implied by the (already-validated) posPath/output/outputDir flags. name is
+// the attachment's own filename, used for the stdout-less default and the
+// --output-dir path.
+func dispatchAttachmentBytes(c *Ctx, bin []byte, name, posPath, output, outputDir string, force bool) error {
 	switch {
 	case posPath == "-" || output == "-":
 		_, err := c.R().Stdout.Write(bin)
@@ -155,6 +155,14 @@ func downloadOneAttachment(c *Ctx, u *keys.Unlocked, msgID, attID, posPath, outp
 	default:
 		return writeAttachment(c, bin, name, writeAutoSuffix, force)
 	}
+}
+
+func downloadOneAttachment(c *Ctx, u *keys.Unlocked, msgID, attID, posPath, output, outputDir string, force bool) error {
+	bin, name, err := c.App.Mail.AttachmentDownload(c.Ctx, u, msgID, attID)
+	if err != nil {
+		return err
+	}
+	return dispatchAttachmentBytes(c, bin, name, posPath, output, outputDir, force)
 }
 
 func downloadAllAttachments(c *Ctx, u *keys.Unlocked, msgID, outputDir string, force, includeInline bool) error {
@@ -312,22 +320,7 @@ func downloadOneConvAttachment(c *Ctx, u *keys.Unlocked, convID, attID, posPath,
 	if err != nil {
 		return err
 	}
-	switch {
-	case posPath == "-" || output == "-":
-		_, err := c.R().Stdout.Write(bin)
-		return err
-	case posPath != "":
-		return writeAttachment(c, bin, posPath, writeError, force)
-	case output != "":
-		return writeAttachment(c, bin, output, writeError, force)
-	case outputDir != "":
-		if err := ensureDir(outputDir); err != nil {
-			return err
-		}
-		return writeAttachment(c, bin, filepath.Join(outputDir, name), writeAutoSuffix, force)
-	default:
-		return writeAttachment(c, bin, name, writeAutoSuffix, force)
-	}
+	return dispatchAttachmentBytes(c, bin, name, posPath, output, outputDir, force)
 }
 
 func downloadAllConvAttachments(c *Ctx, u *keys.Unlocked, convID, outputDir string, force, includeInline bool) error {

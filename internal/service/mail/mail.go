@@ -3,13 +3,13 @@ package mail
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -24,36 +24,48 @@ type WrongTableError struct {
 }
 
 func (e *WrongTableError) Error() string {
-	return fmt.Sprintf("that ID is a %s, not a %s", e.Kind, oppositeKind(e.Kind))
+	return fmt.Sprintf("that ID is a %s, not a %s", e.Kind, OppositeKind(e.Kind))
 }
 func (e *WrongTableError) ExitCode() int { return 3 }
 
-func oppositeKind(k string) string {
+func OppositeKind(k string) string {
 	if k == "conversation" {
 		return "message"
 	}
 	return "conversation"
 }
 
-// LooksLikeID is the package's heuristic for recognising a Proton ID.
 func LooksLikeID(s string) bool { return looksLikeID(s) }
 
-func looksLikeID(s string) bool { return len(s) > 60 && strings.HasSuffix(s, "==") }
+func looksLikeID(s string) bool { return idcache.IsFullID(s) }
 
-// MailboxLabelIDs maps folder aliases to Proton built-in label IDs.
+// Built-in Proton system-label IDs. The mutation endpoints reference some of
+// these directly; MailboxLabelIDs is built from the same constants so the two
+// can never drift.
+const (
+	labelInbox   = "0"
+	labelTrash   = "3"
+	labelSpam    = "4"
+	labelAllMail = "5"
+	labelArchive = "6"
+	labelSent    = "7"
+	labelDrafts  = "8"
+	labelStarred = "10"
+)
+
 var MailboxLabelIDs = map[string]string{
-	"inbox":   "0",
-	"drafts":  "8",
-	"sent":    "7",
-	"trash":   "3",
-	"spam":    "4",
-	"archive": "6",
-	"starred": "10",
-	"all":     "5",
+	"inbox":   labelInbox,
+	"drafts":  labelDrafts,
+	"sent":    labelSent,
+	"trash":   labelTrash,
+	"spam":    labelSpam,
+	"archive": labelArchive,
+	"starred": labelStarred,
+	"all":     labelAllMail,
 }
 
-// ResolveFolder returns the Proton label ID for a folder name/alias; unknown
-// strings pass through so callers can use custom-label IDs directly.
+// ResolveFolder passes unknown names through unchanged, so a raw label ID
+// works anywhere a folder alias does.
 func ResolveFolder(name string) string {
 	if id, ok := MailboxLabelIDs[strings.ToLower(name)]; ok {
 		return id
@@ -61,13 +73,10 @@ func ResolveFolder(name string) string {
 	return name
 }
 
-// Service is the Mail domain service.
 type Service struct{ C proton.Doer }
 
-// New constructs a mail service.
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
-// Message is a list-view mail message.
 type Message struct {
 	ID             string `json:"id"`
 	Subject        string `json:"subject"`
@@ -78,7 +87,7 @@ type Message struct {
 	NumAttachments int    `json:"num_attachments"`
 }
 
-// Full is a decrypted single-message view.
+// Full carries a decrypted body, unlike the raw API envelope.
 type Full struct {
 	ID          string           `json:"id"`
 	Subject     string           `json:"subject"`
@@ -91,7 +100,6 @@ type Full struct {
 	Attachments []Attachment     `json:"attachments,omitempty"`
 }
 
-// Conversation is a list-view conversation.
 type Conversation struct {
 	ID             string           `json:"id"`
 	Subject        string           `json:"subject"`
@@ -104,16 +112,13 @@ type Conversation struct {
 	Labels         []string         `json:"labels,omitempty"`
 }
 
-// ConversationFull is a decrypted thread: envelope plus all messages sorted
-// chronologically.
 type ConversationFull struct {
 	Conversation Conversation `json:"conversation"`
 	Messages     []Full       `json:"messages"`
 }
 
-// Attachment describes a message attachment. Disposition distinguishes
-// "attachment" (user-facing) from "inline" (HTML-referenced, e.g. signature
-// graphics). Empty/missing dispositions count as a real attachment.
+// Attachment's Disposition is "inline" for HTML-referenced parts (e.g.
+// signature graphics); empty or any other value counts as a real attachment.
 type Attachment struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -125,7 +130,6 @@ type Attachment struct {
 
 func (a Attachment) IsInline() bool { return a.Disposition == "inline" }
 
-// FilterInline returns the subset of atts that are NOT inline.
 func FilterInline(atts []Attachment) []Attachment {
 	out := make([]Attachment, 0, len(atts))
 	for _, a := range atts {
@@ -136,7 +140,6 @@ func FilterInline(atts []Attachment) []Attachment {
 	return out
 }
 
-// ListOptions filters for List.
 type ListOptions struct {
 	Folder   string
 	Page     int
@@ -144,7 +147,6 @@ type ListOptions struct {
 	Unread   bool
 }
 
-// SearchOptions filters for Search.
 type SearchOptions struct {
 	Keyword, From, To, Subject, Folder, After, Before string
 	Limit                                             int
@@ -187,7 +189,6 @@ func (s *Service) crossTableProbe(ctx context.Context, id string, err error, cal
 	return err
 }
 
-// Resolve returns a message ID for either a literal ID or a keyword search.
 func (s *Service) Resolve(ctx context.Context, ref string) (string, error) {
 	if looksLikeID(ref) {
 		return ref, nil
@@ -209,7 +210,6 @@ func (s *Service) Resolve(ctx context.Context, ref string) (string, error) {
 	return "", &errs.Ambiguous{Kind: "message", Ref: ref, Candidates: cands}
 }
 
-// ResolveConversation returns a conversation ID for a literal ID or a search.
 func (s *Service) ResolveConversation(ctx context.Context, ref string) (string, error) {
 	if looksLikeID(ref) {
 		return ref, nil
@@ -236,6 +236,3 @@ func (s *Service) ResolveConversation(ctx context.Context, ref string) (string, 
 	}
 	return "", &errs.Ambiguous{Kind: "conversation", Ref: ref, Candidates: cands}
 }
-
-// RawJSON convenience for commands that emit the server payload as-is.
-func RawJSON(b []byte) (json.RawMessage, error) { return json.RawMessage(b), nil }

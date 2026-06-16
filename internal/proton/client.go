@@ -37,7 +37,6 @@ type Doer interface {
 	Decode(ctx context.Context, r Request, out any) error
 }
 
-// Client is a Proton API client for a single profile/session.
 type Client struct {
 	hc   *http.Client
 	base string
@@ -53,7 +52,6 @@ type Client struct {
 	hvResolver    HVResolver
 }
 
-// Options configures a new Client.
 type Options struct {
 	BaseURL    string
 	AppVersion string
@@ -62,7 +60,7 @@ type Options struct {
 	Logger     *slog.Logger
 }
 
-// New constructs a Client. Empty fields fall back to defaults.
+// New fills empty Options fields with defaults.
 func New(opts Options) *Client {
 	if opts.BaseURL == "" {
 		opts.BaseURL = DefaultBaseURL
@@ -81,39 +79,26 @@ func New(opts Options) *Client {
 	return &Client{hc: hc, base: opts.BaseURL, app: opts.AppVersion, profile: opts.Profile, log: log}
 }
 
-// SetLogger swaps the logger used for request tracing.
-func (c *Client) SetLogger(l *slog.Logger) {
-	if l != nil {
-		c.log = l
-	}
-}
+func (c *Client) Profile() string { return c.profile }
 
-func (c *Client) BaseURL() string    { return c.base }
-func (c *Client) AppVersion() string { return c.app }
-func (c *Client) Profile() string    { return c.profile }
-
-// SetTokens installs auth state (from a previously saved session).
 func (c *Client) SetTokens(uid, acc, ref, saltedKeyPass string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.uid, c.acc, c.ref, c.saltedKeyPass = uid, acc, ref, saltedKeyPass
 }
 
-// SaltedKeyPass returns the cached salted key password.
 func (c *Client) SaltedKeyPass() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.saltedKeyPass
 }
 
-// SetSaltedKeyPass stores the salted key password.
 func (c *Client) SetSaltedKeyPass(skp string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.saltedKeyPass = skp
 }
 
-// Session returns a snapshot of the current auth state for persistence.
 func (c *Client) Session() *session.Session {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -140,7 +125,6 @@ type Request struct {
 	HVType  string
 }
 
-// Response is the raw response returned by Do.
 type Response struct {
 	Status int
 	Body   []byte
@@ -287,7 +271,6 @@ func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
 	return &Response{Status: resp.StatusCode, Body: buf, retryHeader: resp.Header.Get("Retry-After")}, nil
 }
 
-// encodeBody turns a Request.Body into an io.Reader.
 func encodeBody(b any) (io.Reader, error) {
 	switch v := b.(type) {
 	case nil:

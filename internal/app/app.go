@@ -23,14 +23,12 @@ import (
 	"github.com/roman-16/proton-cli/internal/session"
 )
 
-// Credentials is the resolved set of auth material for this invocation.
 type Credentials struct {
 	User     string
 	Password string
 	TOTP     string
 }
 
-// App is the runtime container shared across commands.
 type App struct {
 	Profile string
 	Creds   Credentials
@@ -59,7 +57,6 @@ type App struct {
 	cache *keys.Unlocked
 }
 
-// Options configures New.
 type Options struct {
 	Profile    string
 	User       string
@@ -74,8 +71,6 @@ type Options struct {
 	FullIDs    bool
 }
 
-// New constructs an App: loads config, resolves the profile, installs any
-// saved session, and wires up the services.
 func New(opts Options) (*App, error) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -126,7 +121,6 @@ func idCachePath(profile string) string {
 	return filepath.Join(cd, "proton-cli", "idcache", profile+".json")
 }
 
-// Authenticate ensures the client has valid tokens, logging in if needed.
 func (a *App) Authenticate(ctx context.Context) error {
 	if a.API.Session().UID != "" {
 		return nil
@@ -145,7 +139,7 @@ func (a *App) Authenticate(ctx context.Context) error {
 	return session.Save(a.Profile, a.API.Session())
 }
 
-// Unlock returns the unlocked keys for this session, caching after first call.
+// Unlock caches the key hierarchy after the first call.
 func (a *App) Unlock(ctx context.Context) (*keys.Unlocked, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -158,11 +152,6 @@ func (a *App) Unlock(ctx context.Context) (*keys.Unlocked, error) {
 	}
 	a.cache = u
 	return u, nil
-}
-
-// ClearSession wipes the session file for the current profile.
-func (a *App) ClearSession() error {
-	return session.Clear(a.Profile)
 }
 
 func firstNonEmpty(ss ...string) string {

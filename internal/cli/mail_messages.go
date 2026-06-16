@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -214,48 +214,23 @@ func msgSendCmd() *cobra.Command {
 	return c
 }
 
-// collectMessageIDs unions explicit REFs with messages matched by filters.
 func collectMessageIDs(c *Ctx, args []string, f *msgFilter) ([]string, error) {
-	var ids []string
-	refs, err := resolvePrefixes(c.App, args)
-	if err != nil {
-		return nil, err
-	}
-	if len(refs) == 1 && mailsvc.LooksLikeID(refs[0]) {
-		if err := c.App.Mail.AssertMessageKind(c.Ctx, refs[0]); err != nil {
-			var wte *mailsvc.WrongTableError
-			if errors.As(err, &wte) {
+	return collectMailIDs(c, args, f, mailIDCollector{
+		noun: "message", plural: "messages",
+		assertKind: c.App.Mail.AssertMessageKind,
+		resolve:    c.App.Mail.Resolve,
+		searchIDs: func(ctx context.Context, opts mailsvc.SearchOptions) ([]string, error) {
+			msgs, _, err := c.App.Mail.Search(ctx, opts)
+			if err != nil {
 				return nil, err
 			}
-		}
-	}
-	for _, arg := range refs {
-		id, err := c.App.Mail.Resolve(c.Ctx, arg)
-		if err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if f.set() {
-		if f.onlyAll() {
-			c.R().Info("--all with no other filter will affect every message in the account. Add --folder to scope it.")
-		}
-		search, err := f.toSearch()
-		if err != nil {
-			return nil, err
-		}
-		msgs, _, err := c.App.Mail.Search(c.Ctx, search)
-		if err != nil {
-			return nil, err
-		}
-		for _, m := range msgs {
-			ids = append(ids, m.ID)
-		}
-	}
-	if len(args) == 0 && !f.set() {
-		return nil, fmt.Errorf("no messages selected: pass REF(s) or a filter (e.g. --unread, --from, --older-than); use --all to target an entire folder")
-	}
-	return dedupe(ids), nil
+			ids := make([]string, len(msgs))
+			for i, m := range msgs {
+				ids[i] = m.ID
+			}
+			return ids, nil
+		},
+	})
 }
 
 func msgTrashCmd() *cobra.Command {
@@ -366,22 +341,5 @@ func msgUnstarCmd() *cobra.Command {
 }
 
 func bulkMessageAction(f *msgFilter, successFmt, otherVerb string, do func(c *Ctx, ids []string) error) func(*cobra.Command, []string) error {
-	return run([]Step{stepAuth}, func(c *Ctx) error {
-		ids, err := collectMessageIDs(c, c.Args, f)
-		if err != nil {
-			return handleWrongTable(err, otherVerb)
-		}
-		if c.App.DryRun {
-			c.R().Info(fmt.Sprintf("dry-run: would affect %d message(s)", len(ids)))
-			for _, id := range ids {
-				_, _ = fmt.Fprintln(c.R().Stderr, "  "+id)
-			}
-			return nil
-		}
-		if err := do(c, ids); err != nil {
-			return err
-		}
-		c.R().Success(fmt.Sprintf(successFmt, len(ids)))
-		return nil
-	})
+	return bulkMailAction(collectMessageIDs, "message", f, successFmt, otherVerb, do)
 }

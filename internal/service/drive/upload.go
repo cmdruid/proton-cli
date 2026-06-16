@@ -14,7 +14,6 @@ import (
 	"github.com/roman-16/proton-cli/internal/render"
 )
 
-// UploadOptions controls streaming uploads.
 type UploadOptions struct {
 	MIMEType  string
 	Label     string
@@ -22,7 +21,6 @@ type UploadOptions struct {
 	TotalHint int64
 }
 
-// Upload streams the contents of r into a new file at destPath/name.
 func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string, r io.Reader, opts UploadOptions) error {
 	if opts.MIMEType == "" {
 		opts.MIMEType = "application/octet-stream"

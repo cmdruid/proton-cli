@@ -105,7 +105,6 @@ func decryptCardData(data string, keyPacket []byte, kr *pgp.KeyRing) (string, er
 	return dec.GetString(), nil
 }
 
-// SignCard produces a card of type CardSigned.
 func SignCard(data string, signingKR *pgp.KeyRing) (*Card, error) {
 	sig, err := signingKR.SignDetached(pgp.NewPlainMessageFromString(data))
 	if err != nil {

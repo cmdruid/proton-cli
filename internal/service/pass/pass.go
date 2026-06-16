@@ -17,13 +17,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Service is the Pass domain service.
 type Service struct{ C proton.Doer }
 
-// New constructs a pass service.
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
-// Vault is a decrypted Pass vault.
 type Vault struct {
 	ShareID     string `json:"share_id"`
 	VaultID     string `json:"vault_id"`
@@ -35,7 +32,6 @@ type Vault struct {
 	AddressID   string `json:"address_id,omitempty"`
 }
 
-// Item is a decrypted Pass item.
 type Item struct {
 	ShareID    string   `json:"share_id"`
 	ItemID     string   `json:"item_id"`
@@ -73,7 +69,6 @@ func (sk *shareKeys) latest() ([]byte, int) {
 	return sk.keys[max], max
 }
 
-// VaultsList returns all vaults (decrypted where possible).
 func (s *Service) VaultsList(ctx context.Context, u *keys.Unlocked) ([]Vault, error) {
 	shares, err := s.getShares(ctx)
 	if err != nil {
@@ -119,7 +114,6 @@ func (s *Service) VaultsList(ctx context.Context, u *keys.Unlocked) ([]Vault, er
 	return out, nil
 }
 
-// VaultCreate creates a new vault and returns its share ID.
 func (s *Service) VaultCreate(ctx context.Context, u *keys.Unlocked, name string) (string, error) {
 	vault := &pb.Vault{Name: name}
 	rawKey, err := aead.NewKey()
@@ -159,12 +153,10 @@ func (s *Service) VaultCreate(ctx context.Context, u *keys.Unlocked, name string
 	return r.Share.ShareID, nil
 }
 
-// VaultDelete deletes a vault by share ID.
 func (s *Service) VaultDelete(ctx context.Context, shareID string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/pass/v1/vault/" + shareID}, nil)
 }
 
-// ResolveVault returns a shareID for a vault name or ID.
 func (s *Service) ResolveVault(ctx context.Context, u *keys.Unlocked, nameOrID string) (string, error) {
 	vaults, err := s.VaultsList(ctx, u)
 	if err != nil {
@@ -189,7 +181,6 @@ func (s *Service) ResolveVault(ctx context.Context, u *keys.Unlocked, nameOrID s
 	return "", &errs.NotFound{Kind: "vault", Ref: nameOrID}
 }
 
-// ItemsList returns all items across vaults, optionally filtered by vault.
 func (s *Service) ItemsList(ctx context.Context, u *keys.Unlocked, vaultFilter string) ([]Item, error) {
 	vaults, err := s.VaultsList(ctx, u)
 	if err != nil {
@@ -213,7 +204,6 @@ func (s *Service) ItemsList(ctx context.Context, u *keys.Unlocked, vaultFilter s
 	return out, nil
 }
 
-// ItemGet returns a single decrypted item.
 func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID string) (*Item, error) {
 	sk, err := s.decryptShareKeys(ctx, shareID, u)
 	if err != nil {
@@ -267,7 +257,6 @@ func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID
 	return out, nil
 }
 
-// ResolveItem returns a (shareID, itemID) for a literal pair or a search term.
 func (s *Service) ResolveItem(ctx context.Context, u *keys.Unlocked, args []string) (string, string, error) {
 	if len(args) == 2 {
 		return args[0], args[1], nil
@@ -303,14 +292,12 @@ func (s *Service) ResolveItem(ctx context.Context, u *keys.Unlocked, args []stri
 	return "", "", &errs.Ambiguous{Kind: "item", Ref: args[0], Candidates: cands}
 }
 
-// NewItem describes a login/note/card item for ItemCreate.
 type NewItem struct {
 	Type                                       string
 	Name, Username, Password, Email, URL, Note string
 	Holder, Number, Expiry, CVV, PIN           string
 }
 
-// ItemCreate creates a new item in the given vault and returns its item ID.
 func (s *Service) ItemCreate(ctx context.Context, u *keys.Unlocked, shareID string, nc NewItem) (string, error) {
 	sk, err := s.decryptShareKeys(ctx, shareID, u)
 	if err != nil {
@@ -370,12 +357,10 @@ func (s *Service) ItemCreate(ctx context.Context, u *keys.Unlocked, shareID stri
 	return r.Item.ItemID, nil
 }
 
-// Patch is a partial update to an existing item.
 type Patch struct {
 	Name, Username, Password, Email, URL, Note string
 }
 
-// ItemEdit updates an item.
 func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemID string, patch Patch) error {
 	sk, err := s.decryptShareKeys(ctx, shareID, u)
 	if err != nil {
@@ -457,7 +442,6 @@ func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemI
 	}, nil)
 }
 
-// ItemTrash moves an item to trash.
 func (s *Service) ItemTrash(ctx context.Context, shareID, itemID string) error {
 	rev, err := s.itemRevision(ctx, shareID, itemID)
 	if err != nil {
@@ -469,7 +453,6 @@ func (s *Service) ItemTrash(ctx context.Context, shareID, itemID string) error {
 	}, nil)
 }
 
-// ItemRestore moves an item out of trash.
 func (s *Service) ItemRestore(ctx context.Context, shareID, itemID string) error {
 	rev, err := s.itemRevision(ctx, shareID, itemID)
 	if err != nil {
@@ -481,7 +464,8 @@ func (s *Service) ItemRestore(ctx context.Context, shareID, itemID string) error
 	}, nil)
 }
 
-// ItemDelete permanently deletes an item (trashing first if needed).
+// ItemDelete must trash an active item first; the API rejects deleting one
+// that isn't already in the trash.
 func (s *Service) ItemDelete(ctx context.Context, shareID, itemID string) error {
 	var r struct {
 		Item struct {
@@ -514,19 +498,16 @@ func (s *Service) itemRevision(ctx context.Context, shareID, itemID string) (int
 	return r.Item.Revision, nil
 }
 
-// AliasSuffix is an available alias suffix.
 type AliasSuffix struct {
 	Suffix, SignedSuffix, Domain string
 	IsPremium, IsCustom          bool
 }
 
-// AliasMailbox is an available forwarding mailbox.
 type AliasMailbox struct {
 	ID    int
 	Email string
 }
 
-// AliasOptions fetches alias options for the given vault.
 func (s *Service) AliasOptions(ctx context.Context, shareID string) ([]AliasSuffix, []AliasMailbox, error) {
 	var r struct {
 		Options struct {
@@ -554,7 +535,6 @@ func (s *Service) AliasOptions(ctx context.Context, shareID string) ([]AliasSuff
 	return sx, mx, nil
 }
 
-// AliasCreate creates a standalone alias item in a vault and returns its item ID.
 func (s *Service) AliasCreate(ctx context.Context, u *keys.Unlocked, shareID, prefix, suffix, mailbox, name string) (string, error) {
 	suffixes, mailboxes, err := s.AliasOptions(ctx, shareID)
 	if err != nil {

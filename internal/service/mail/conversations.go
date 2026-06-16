@@ -32,7 +32,6 @@ func toConversation(c rawConversation) Conversation {
 	}
 }
 
-// ConversationsList returns a page of conversations.
 func (s *Service) ConversationsList(ctx context.Context, opts ListOptions) ([]Conversation, int, error) {
 	if opts.PageSize <= 0 {
 		opts.PageSize = 25
@@ -60,7 +59,6 @@ func (s *Service) ConversationsList(ctx context.Context, opts ListOptions) ([]Co
 	return out, r.Total, nil
 }
 
-// ConversationsSearch returns conversations matching the given filters.
 func (s *Service) ConversationsSearch(ctx context.Context, opts SearchOptions) ([]Conversation, int, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = 25
@@ -83,8 +81,6 @@ func (s *Service) ConversationsSearch(ctx context.Context, opts SearchOptions) (
 	return out, r.Total, nil
 }
 
-// ConversationRead returns a full thread with each message decrypted, sorted
-// chronologically (earliest first).
 func (s *Service) ConversationRead(ctx context.Context, u *keys.Unlocked, id string) (*ConversationFull, error) {
 	var r struct {
 		Conversation rawConversation
@@ -109,8 +105,6 @@ func (s *Service) ConversationRead(ctx context.Context, u *keys.Unlocked, id str
 	return &ConversationFull{Conversation: toConversation(r.Conversation), Messages: msgs}, nil
 }
 
-// AssertConversationKind is the conversations-side counterpart of
-// AssertMessageKind.
 func (s *Service) AssertConversationKind(ctx context.Context, id string) error {
 	err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/conversations/" + id}, nil)
 	if err == nil {
@@ -119,17 +113,15 @@ func (s *Service) AssertConversationKind(ctx context.Context, id string) error {
 	return s.crossTableProbe(ctx, id, err, "conversations")
 }
 
-// ConversationsTrash moves conversations to trash.
 func (s *Service) ConversationsTrash(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{
 		Method: "PUT", Path: "/mail/v4/conversations/label",
-		Body: map[string]any{"LabelID": "3", "IDs": ids},
+		Body: map[string]any{"LabelID": labelTrash, "IDs": ids},
 	}, nil)
 }
 
-// ConversationsDelete permanently deletes conversations.
 func (s *Service) ConversationsDelete(ctx context.Context, ids []string, folder string) error {
-	labelID := "5"
+	labelID := labelAllMail
 	if folder != "" {
 		labelID = ResolveFolder(folder)
 	}
@@ -139,7 +131,6 @@ func (s *Service) ConversationsDelete(ctx context.Context, ids []string, folder 
 	}, nil)
 }
 
-// ConversationsMove moves conversations to the given folder.
 func (s *Service) ConversationsMove(ctx context.Context, ids []string, folder string) error {
 	return s.C.Decode(ctx, proton.Request{
 		Method: "PUT", Path: "/mail/v4/conversations/label",
@@ -147,7 +138,6 @@ func (s *Service) ConversationsMove(ctx context.Context, ids []string, folder st
 	}, nil)
 }
 
-// ConversationsMark sets read/unread/starred flags on conversations.
 func (s *Service) ConversationsMark(ctx context.Context, ids []string, read, unread, starred, unstar bool, folder string) error {
 	if read {
 		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/read", Body: map[string]any{"IDs": ids}}, nil); err != nil {
@@ -155,7 +145,7 @@ func (s *Service) ConversationsMark(ctx context.Context, ids []string, read, unr
 		}
 	}
 	if unread {
-		labelID := "5"
+		labelID := labelAllMail
 		if folder != "" {
 			labelID = ResolveFolder(folder)
 		}
@@ -164,12 +154,12 @@ func (s *Service) ConversationsMark(ctx context.Context, ids []string, read, unr
 		}
 	}
 	if starred {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/label", Body: map[string]any{"LabelID": "10", "IDs": ids}}, nil); err != nil {
+		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/label", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
 			return err
 		}
 	}
 	if unstar {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/unlabel", Body: map[string]any{"LabelID": "10", "IDs": ids}}, nil); err != nil {
+		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/unlabel", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
 			return err
 		}
 	}
