@@ -1,5 +1,5 @@
 // Package ical contains small helpers for building and parsing the iCal/VCard
-// text used by Proton Calendar and Contacts. It is deliberately minimal — just
+// text used by Proton Calendar and Contacts. It is deliberately minimal - just
 // enough for the fields the CLI reads and writes.
 package ical
 

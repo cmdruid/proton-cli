@@ -1,6 +1,6 @@
 // Package view is the declarative presentation layer. A command describes its
 // list output as columns; Render handles text-table vs json/yaml, short-ID
-// shortening, ID-cache population and footers uniformly — removing the
+// shortening, ID-cache population and footers uniformly - removing the
 // per-command format branching that would otherwise be repeated everywhere.
 package view
 

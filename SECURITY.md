@@ -8,8 +8,8 @@
 
 Instead, use one of these private channels:
 
-1. **Preferred** — Open a [private security advisory](https://github.com/roman-16/proton-cli/security/advisories/new) on GitHub. This is encrypted, scoped to the maintainer, and lets us collaborate on a fix in a private fork.
-2. **Alternative** — Email <roman@lerchster.dev> with the details. Use `[proton-cli security]` in the subject line.
+1. **Preferred** - Open a [private security advisory](https://github.com/roman-16/proton-cli/security/advisories/new) on GitHub. This is encrypted, scoped to the maintainer, and lets us collaborate on a fix in a private fork.
+2. **Alternative** - Email <roman@lerchster.dev> with the details. Use `[proton-cli security]` in the subject line.
 
 Please include:
 
@@ -25,7 +25,7 @@ You can expect:
 - A triage assessment (severity, scope, planned fix) within **14 days**.
 - A patched release for confirmed critical issues within **30 days** where feasible.
 
-If you don't get a response within 7 days, please follow up — your message may have been missed.
+If you don't get a response within 7 days, please follow up - your message may have been missed.
 
 ## Supported versions
 
@@ -67,7 +67,7 @@ We follow [coordinated disclosure](https://en.wikipedia.org/wiki/Coordinated_vul
 
 `proton-cli` is unaudited. To reduce risk while using it:
 
-- Treat the binary as you would any third-party CLI handling secrets — run it as your normal user, not as root.
+- Treat the binary as you would any third-party CLI handling secrets - run it as your normal user, not as root.
 - Keep `proton-cli` and its dependencies (Go runtime, OS) up to date.
 - Verify release artifact checksums against the [GitHub Releases page](https://github.com/roman-16/proton-cli/releases) before installing.
 - Be aware that running `proton-cli` against a Proton account may, depending on your usage pattern, trigger Proton's automated abuse detection. This is an account-safety consideration, not a vulnerability in `proton-cli`.

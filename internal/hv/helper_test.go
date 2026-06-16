@@ -13,7 +13,7 @@ import (
 // fakeHelper builds a tiny shell-script "helper" that prints the
 // requested stdout, the requested stderr, and exits with the given
 // code. The hv package uses exec.Command, so anything that's an
-// executable file works — we don't actually need a Go binary here.
+// executable file works - we don't actually need a Go binary here.
 //
 // Skips on Windows (POSIX shebangs).
 func fakeHelper(t *testing.T, exitCode int, stdout, stderr string) string {
@@ -152,7 +152,7 @@ func TestResolveNetworkError(t *testing.T) {
 }
 
 func TestResolveSuccessButEmptyStdoutTreatedAsUnavailable(t *testing.T) {
-	// Helper exited 0 but produced no token — defensive guard.
+	// Helper exited 0 but produced no token - defensive guard.
 	helper := fakeHelper(t, 0, "", "")
 	_, err := runHelperViaExec(t, helper, "abc")
 	var unavail *UnavailableError

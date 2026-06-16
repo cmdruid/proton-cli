@@ -327,7 +327,7 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 		t.Fatal("expected at least one folder in trash after delete")
 	}
 
-	// Restore (IDs only — trashed names are encrypted)
+	// Restore (IDs only - trashed names are encrypted)
 	runOK(t, "drive", "trash", "restore", "--", linkID)
 
 	// It should be back in root

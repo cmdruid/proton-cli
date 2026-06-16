@@ -179,7 +179,7 @@ func IsFullID(s string) bool {
 //
 // The predicate is intentionally loose: many search terms ("Personal",
 // "invoice-2024", "proton-cli-test-1234") technically match. That's OK
-// because ResolvePrefix only USES the cache when there's a match —
+// because ResolvePrefix only USES the cache when there's a match -
 // cache misses fall through to the original input so the service-layer
 // keyword-search path handles them. Ambiguous cache hits (the same
 // prefix mapping to 2+ full IDs) still error with exit 4.

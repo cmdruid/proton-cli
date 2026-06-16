@@ -1,5 +1,5 @@
 // Package aead wraps AES-256-GCM for Proton Pass items, vault keys and similar
-// symmetric blobs. Everything is pure crypto — no I/O, no API calls.
+// symmetric blobs. Everything is pure crypto - no I/O, no API calls.
 package aead
 
 import (

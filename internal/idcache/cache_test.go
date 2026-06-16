@@ -67,7 +67,7 @@ func TestSavePrunesAtMaxEntries(t *testing.T) {
 	if got := len(c.load()); got != MaxEntries {
 		t.Fatalf("expected %d entries after seed, got %d", MaxEntries, got)
 	}
-	// Add one more — head should be pruned.
+	// Add one more - head should be pruned.
 	if err := c.Save("new-entry"); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestIsFullID(t *testing.T) {
 func TestIsShortID(t *testing.T) {
 	// IsShortID is a loose shape check: any base64-charset string of the
 	// right length matches. Disambiguation between "real ID prefix" and
-	// "search term" happens at ResolvePrefix time — cache miss falls
+	// "search term" happens at ResolvePrefix time - cache miss falls
 	// through to the caller, ambiguous cache hits exit 4.
 	tests := []struct {
 		name string
@@ -219,7 +219,7 @@ func TestIsShortID(t *testing.T) {
 		{"realistic 8-char prefix", "NWM5AYGx", true},
 		{"all lowercase 8 chars", "abc12345", true},
 		{"30-char base64 with hyphen", "abc12345_xy7zSTUFF-base64body", true},
-		// Search-term shapes that also match — ResolvePrefix handles them
+		// Search-term shapes that also match - ResolvePrefix handles them
 		// via cache-miss fallthrough.
 		{"capitalized name", "Personal", true},
 		{"test fixture name", "proton-cli-test-1234-5678-ref", true},

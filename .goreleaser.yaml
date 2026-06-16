@@ -18,7 +18,7 @@ builds:
       - amd64
       - arm64
     ignore:
-      # Drop windows/arm64 — we don't ship a helper for it (limited
+      # Drop windows/arm64 - we don't ship a helper for it (limited
       # webview_go support; can be added later by extending the
       # workflow matrix and adding internal/hv/embed_windows_arm64.go).
       - goos: windows

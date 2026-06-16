@@ -182,7 +182,7 @@ func cleanup(t *testing.T, description string, fn func() error) {
 		if err := fn(); err != nil {
 			t.Logf("\n"+
 				"╔══════════════════════════════════════════════════════════════╗\n"+
-				"║  ⚠️  CLEANUP FAILED — MANUAL ACTION REQUIRED                ║\n"+
+				"║  ⚠️  CLEANUP FAILED - MANUAL ACTION REQUIRED                ║\n"+
 				"╠══════════════════════════════════════════════════════════════╣\n"+
 				"║  %s\n"+
 				"║  Error: %s\n"+

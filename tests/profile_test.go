@@ -78,7 +78,7 @@ func TestProfileSessionSeparation(t *testing.T) {
 	sessionDir := filepath.Join(configDir, "proton-cli", "sessions")
 
 	// Must have at least default.json (from prior tests / the normal account).
-	// Not an error if missing — the test just describes structure.
+	// Not an error if missing - the test just describes structure.
 	entries, err := os.ReadDir(sessionDir)
 	if err != nil {
 		t.Skipf("session dir missing: %v", err)

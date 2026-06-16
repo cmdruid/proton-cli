@@ -16,7 +16,7 @@ lint:
 run *args:
     go run . {{args}}
 
-# Run unit tests (no API, no credentials — fast)
+# Run unit tests (no API, no credentials - fast)
 test-unit:
     go test ./cmd/... ./internal/... -count=1
 

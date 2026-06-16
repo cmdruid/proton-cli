@@ -58,7 +58,7 @@ func TestStripHTMLQuotesIDSelectors(t *testing.T) {
 }
 
 func TestStripHTMLQuotesAfterContentDisqualifies(t *testing.T) {
-	// gmail_quote is followed by significant text — must NOT be stripped.
+	// gmail_quote is followed by significant text - must NOT be stripped.
 	in := `<p>Hi.</p><div class="gmail_quote">old</div><p>real content after the supposed quote</p>`
 	got := StripHTMLQuotes(in)
 	if !strings.Contains(got, "old") {

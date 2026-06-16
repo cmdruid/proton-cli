@@ -273,7 +273,7 @@ components:
   # SEND_MESSAGE_DIRECT_ACTION: 0=REPLY, 1=REPLY_ALL, 2=FORWARD, 3=AUTO_RESPONSE, 4=READ_RECEIPT
   # SentryCalendarInitiatives: rsvp-note=RSVP_NOTE, bookings=BOOKINGS
   # SentryCommonInitiatives: post-subscription=POST_SUBSCRIPTION, encrypted-search=ENCRYPTED_SEARCH
-  # SentryMailInitiatives: assistant=ASSISTANT, attachment-encryption-error=ATTACHMENT_ENCRYPTION_ERROR, attachment-upload-error=ATTACHMENT_UPLOAD_ERROR, composer=COMPOSER, drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, mail-onboarding=MAIL_ONBOARDING, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL, move-actions=MOVE_ACTIONS, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS
+  # SentryMailInitiatives: assistant=ASSISTANT, attachment-encryption-error=ATTACHMENT_ENCRYPTION_ERROR, attachment-upload-error=ATTACHMENT_UPLOAD_ERROR, composer=COMPOSER, drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, mail-onboarding=MAIL_ONBOARDING, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL, move-actions=MOVE_ACTIONS, lumo-in-mail=LUMO_IN_MAIL, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS
   # SentryMailPerformanceInitiatives: apply-location-performance=APPLY_LOCATION_PERFORMANCE
   # SERVER_FEATURES: 1=SECURE_CORE, 2=TOR, 4=P2P, 8=XOR, 16=IPV6, 32=RESTRICTED, 64=PARTNER, 128=DOUBLE_RESTRICTION
   # SessionRecoveryReason: 0=NONE, 1=CANCELLED, 2=AUTHENTICATION

@@ -53,7 +53,7 @@ func TestAPIPostDeleteRoundTrip(t *testing.T) {
 		"api", "DELETE", "/core/v4/labels",
 		"--body", fmt.Sprintf(`{"LabelIDs":[%q]}`, id))
 
-	// Delete via api (this is the assert — round-trip must not error)
+	// Delete via api (this is the assert - round-trip must not error)
 	stdout2 := runOK(t, "api", "DELETE", "/core/v4/labels",
 		"--body", fmt.Sprintf(`{"LabelIDs":[%q]}`, id))
 	var v2 map[string]interface{}

@@ -1,5 +1,5 @@
 // Package hv handles Proton's Human Verification (HV) flow from the
-// CLI side. It exposes a single entry point — Resolve — that:
+// CLI side. It exposes a single entry point - Resolve - that:
 //
 //  1. Extracts the embedded proton-cli-hv helper binary to the user
 //     cache directory (once, then reuses it).
@@ -137,7 +137,7 @@ func resolveWithBinary(ctx context.Context, binPath, challenge string) (string, 
 	case exitNetwork:
 		return "", fmt.Errorf("hv: server error: %s", detail)
 	case exitUsage:
-		// Programming bug on our side — we passed the helper bad args.
+		// Programming bug on our side - we passed the helper bad args.
 		return "", fmt.Errorf("hv: helper rejected arguments: %s", detail)
 	default:
 		return "", fmt.Errorf("hv: helper exit %d: %s", code, detail)

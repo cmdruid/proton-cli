@@ -17,7 +17,7 @@ import (
 // endpoint family (a conversation ID into the messages tree, or vice versa).
 // The cli layer catches this to emit a redirect hint and exit 3.
 type WrongTableError struct {
-	// Kind is what the ID actually is ("message" or "conversation") — the
+	// Kind is what the ID actually is ("message" or "conversation") - the
 	// OTHER table from the one the user invoked.
 	Kind string
 	ID   string

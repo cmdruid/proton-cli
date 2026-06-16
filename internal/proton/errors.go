@@ -85,7 +85,7 @@ func classifyErrorBody(status int, body []byte) (*HumanVerificationError, *APIEr
 }
 
 // parseAuthError converts a Proton auth-flow response body into a typed error.
-// The HTTP request itself succeeded — the failure is application-level — so
+// The HTTP request itself succeeded - the failure is application-level - so
 // HTTPStatus is left at zero.
 func parseAuthError(raw []byte, code int) error {
 	var env struct {

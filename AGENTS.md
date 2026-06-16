@@ -3,10 +3,10 @@
 ## Project Context
 
 This is an open-source CLI tool used by other people. All changes should consider:
-- **Backwards compatibility** — consider impact on existing users when changing command syntax or flags, but don't let it block improvements
-- **Cross-platform** — must work on Linux, macOS, and Windows (amd64 + arm64)
-- **User-facing quality** — README, help text, and error messages should be clear and helpful
-- **Distribution** — binaries are published as GitHub Releases via GoReleaser; users install by downloading a binary or via `go install`
+- **Backwards compatibility** - consider impact on existing users when changing command syntax or flags, but don't let it block improvements
+- **Cross-platform** - must work on Linux, macOS, and Windows (amd64 + arm64)
+- **User-facing quality** - README, help text, and error messages should be clear and helpful
+- **Distribution** - binaries are published as GitHub Releases via GoReleaser; users install by downloading a binary or via `go install`
 
 ## Quality Gates
 
@@ -17,7 +17,7 @@ This is an open-source CLI tool used by other people. All changes should conside
 
 Tests are **integration tests** that run against the live Proton API. They require `PROTON_USER` and `PROTON_PASSWORD` environment variables.
 
-- **Never run the full test suite** (`just test` / `go test ./...`) — only the user triggers that manually
+- **Never run the full test suite** (`just test` / `go test ./...`) - only the user triggers that manually
 - **Single tests are allowed** (`just test-one TestName`) when verifying a specific change
 
 ## Reference Source

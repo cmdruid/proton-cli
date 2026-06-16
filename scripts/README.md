@@ -46,23 +46,23 @@ Global:
 
 ### How It Works
 
-1. **Clone** — shallow clones (or pulls) `ProtonMail/WebClients` into `/tmp/`
-2. **Project setup** — creates a ts-morph `Project` with `tsconfig.base.json` for path resolution
-3. **Registry** — scans all source files for string/number constants and enum declarations
-4. **Parse** — walks all exported declarations in `api/**/*.ts`, extracts endpoint metadata from the AST
-5. **Type resolution** — follows TypeScript imports to resolve `data: SomeType` to actual property lists (including `extends`, `Partial<>`, `Omit<>`, etc.)
-6. **Emit** — generates OpenAPI 3.1 YAML to stdout
+1. **Clone** - shallow clones (or pulls) `ProtonMail/WebClients` into `/tmp/`
+2. **Project setup** - creates a ts-morph `Project` with `tsconfig.base.json` for path resolution
+3. **Registry** - scans all source files for string/number constants and enum declarations
+4. **Parse** - walks all exported declarations in `api/**/*.ts`, extracts endpoint metadata from the AST
+5. **Type resolution** - follows TypeScript imports to resolve `data: SomeType` to actual property lists (including `extends`, `Partial<>`, `Omit<>`, etc.)
+6. **Emit** - generates OpenAPI 3.1 YAML to stdout
 
 ### File Structure
 
 ```
 openapi-generator/
-├── index.ts              — entry point
-├── clone.ts              — git clone/pull
-├── parse.ts              — ts-morph project setup, file discovery
-├── registry.ts           — constant and enum collection
-├── extract-endpoint.ts   — endpoint extraction from AST nodes
-├── extract-params.ts     — body/query param type resolution
-├── emit-yaml.ts          — OpenAPI YAML output
-└── types.ts              — shared TypeScript interfaces
+├── index.ts              - entry point
+├── clone.ts              - git clone/pull
+├── parse.ts              - ts-morph project setup, file discovery
+├── registry.ts           - constant and enum collection
+├── extract-endpoint.ts   - endpoint extraction from AST nodes
+├── extract-params.ts     - body/query param type resolution
+├── emit-yaml.ts          - OpenAPI YAML output
+└── types.ts              - shared TypeScript interfaces
 ```

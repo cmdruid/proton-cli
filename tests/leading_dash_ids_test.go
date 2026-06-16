@@ -7,11 +7,11 @@ import (
 
 // dashedSyntheticID is a syntactically valid Proton ID (88 chars, URL-safe
 // base64, ends "==") starting with '-'. Real APIs reject it as not-found,
-// which is fine — these tests only assert that argument parsing succeeds.
+// which is fine - these tests only assert that argument parsing succeeds.
 const dashedSyntheticID = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A=="
 
 // assertNotFlagParseError fails the test if stderr looks like cobra's
-// "unknown shorthand flag" complaint — i.e. arg parsing rejected the ID.
+// "unknown shorthand flag" complaint - i.e. arg parsing rejected the ID.
 func assertNotFlagParseError(t *testing.T, stderr string) {
 	t.Helper()
 	for _, marker := range []string{
@@ -26,7 +26,7 @@ func assertNotFlagParseError(t *testing.T, stderr string) {
 
 // TestLeadingDashIDIsAccepted: each affected command parses cleanly when
 // given a synthetic leading-dash ID. The API call may then fail with
-// not-found / invalid-id (exit 3 or 1) — that's fine; we only assert
+// not-found / invalid-id (exit 3 or 1) - that's fine; we only assert
 // that cobra doesn't reject the argument.
 func TestLeadingDashIDIsAccepted(t *testing.T) {
 	skipIfNoCredentials(t)

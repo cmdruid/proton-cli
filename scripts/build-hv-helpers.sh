@@ -6,7 +6,7 @@
 # In CI: invoked once per (OS, arch) matrix entry on a NATIVE runner
 # for that platform (Linux→ubuntu-*, macOS→macos-*, Windows→windows-*).
 # Cross-compiling CGO+webview reliably across all 5 targets isn't
-# realistic from a single runner — webkit2gtk pkg-config layouts,
+# realistic from a single runner - webkit2gtk pkg-config layouts,
 # osxcross signing, and Windows mingw all bring their own pain. Native
 # runners avoid all of it.
 #

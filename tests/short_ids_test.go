@@ -183,7 +183,7 @@ func TestShortIDPrefixCacheMissOK(t *testing.T) {
 		t.Errorf("expected non-zero exit on no-match prefix, got 0")
 	}
 	// The error should NOT come from ResolvePrefix (cache-specific hint)
-	// any more — it should be the downstream search's not-found error.
+	// any more - it should be the downstream search's not-found error.
 	if strings.Contains(stderr, "run a list command") {
 		t.Errorf("unexpected cache-hint error; ResolvePrefix should fall through to search:\n%s", stderr)
 	}

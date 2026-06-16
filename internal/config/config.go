@@ -32,7 +32,7 @@ func Path() (string, error) {
 	return filepath.Join(cd, "proton-cli", "config.toml"), nil
 }
 
-// Load reads the config file. Missing file is not an error — an empty config
+// Load reads the config file. Missing file is not an error - an empty config
 // with a "default" profile is returned instead.
 func Load() (*Config, error) {
 	p, err := Path()

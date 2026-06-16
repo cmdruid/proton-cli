@@ -22,7 +22,7 @@
 //	  4   user cancelled (window closed before solving)
 //	  5   network/server error reaching verify.proton.me
 //	  126/127 dynamic-linker errors (libwebkit2gtk missing); emitted by
-//	          glibc, not us — main binary handles same as 3
+//	          glibc, not us - main binary handles same as 3
 //
 //	Stderr (always emits one machine-parseable first line):
 //	  hv: webview-unavailable: <detail>
@@ -127,7 +127,7 @@ func main() {
 	}
 	defer w.Destroy()
 
-	w.SetTitle("proton-cli — Human Verification")
+	w.SetTitle("proton-cli - Human Verification")
 	w.SetSize(540, 720, webview.HintNone)
 
 	var (

@@ -3,8 +3,8 @@ package proton
 import "errors"
 
 // HVResolver is invoked when a Proton API request returns code 9001 (human
-// verification required). It must obtain a verification token and type —
-// typically by spawning a webview (captcha) — and return them; the client
+// verification required). It must obtain a verification token and type -
+// typically by spawning a webview (captcha) - and return them; the client
 // then retries the original request once with the HV headers set.
 //
 // Returning ErrHVUnavailable signals "this resolver can't help with the

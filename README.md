@@ -2,7 +2,7 @@
 
 > **Disclaimer:** This is an unofficial, community-built tool and is not endorsed by or affiliated with Proton AG. Use at your own risk.
 
-An unofficial command-line tool for [Proton](https://proton.me) — Mail, Drive, Calendar, Pass, and Contacts from your terminal.
+An unofficial command-line tool for [Proton](https://proton.me) - Mail, Drive, Calendar, Pass, and Contacts from your terminal.
 
 Implements the same authentication and encryption as the [Proton web client](https://github.com/ProtonMail/WebClients): SRP login, PGP key hierarchy, and full end-to-end encryption using [go-srp](https://github.com/ProtonMail/go-srp) and [gopenpgp](https://github.com/ProtonMail/gopenpgp).
 
@@ -66,12 +66,12 @@ proton-cli --help
 
 ## Conventions
 
-- **REF** — anywhere you see `REF` in usage, you can pass either a full Proton ID or a search term (subject/name/URL/title depending on the command). Ambiguous matches print candidates to stderr and exit with code 4.
-- **Exit codes** — `0` success · `1` user error · `2` auth · `3` not-found · `4` conflict / ambiguous · `5` network / server.
-- **Output** — `--output text|json|yaml` (default `text`). Mutations print `✓ …` to stderr and the new ID to stdout so `ID=$(proton-cli ...)` works.
-- **Streaming I/O** — `-` means stdin (inputs) or stdout (outputs). `mail messages send --body -`, `drive items upload - /path`, `drive items download /path -`.
-- **Cancellation** — `Ctrl+C` aborts in-flight operations.
-- **Dry run** — `--dry-run` on every mutating command previews without applying.
+- **REF** - anywhere you see `REF` in usage, you can pass either a full Proton ID or a search term (subject/name/URL/title depending on the command). Ambiguous matches print candidates to stderr and exit with code 4.
+- **Exit codes** - `0` success · `1` user error · `2` auth · `3` not-found · `4` conflict / ambiguous · `5` network / server.
+- **Output** - `--output text|json|yaml` (default `text`). Mutations print `✓ …` to stderr and the new ID to stdout so `ID=$(proton-cli ...)` works.
+- **Streaming I/O** - `-` means stdin (inputs) or stdout (outputs). `mail messages send --body -`, `drive items upload - /path`, `drive items download /path -`.
+- **Cancellation** - `Ctrl+C` aborts in-flight operations.
+- **Dry run** - `--dry-run` on every mutating command previews without applying.
 
 ## Commands
 
@@ -336,12 +336,12 @@ Flags override env vars; env vars override profile values.
 
 ## How It Works
 
-1. **Session creation** — creates an unauthenticated session via `POST /auth/v4/sessions`.
-2. **SRP authentication** — Secure Remote Password login with [go-srp](https://github.com/ProtonMail/go-srp), with 2FA/TOTP support.
-3. **Session persistence** — saves tokens + salted key password per profile.
-4. **Key hierarchy** — unlocks User key → Address keys → per-service keys (Calendar, Drive, Contacts).
-5. **End-to-end encryption** — encrypts/decrypts using [gopenpgp](https://github.com/ProtonMail/gopenpgp).
-6. **Auto-refresh** — refreshes expired tokens automatically.
+1. **Session creation** - creates an unauthenticated session via `POST /auth/v4/sessions`.
+2. **SRP authentication** - Secure Remote Password login with [go-srp](https://github.com/ProtonMail/go-srp), with 2FA/TOTP support.
+3. **Session persistence** - saves tokens + salted key password per profile.
+4. **Key hierarchy** - unlocks User key → Address keys → per-service keys (Calendar, Drive, Contacts).
+5. **End-to-end encryption** - encrypts/decrypts using [gopenpgp](https://github.com/ProtonMail/gopenpgp).
+6. **Auto-refresh** - refreshes expired tokens automatically.
 
 ### Encryption Details
 
@@ -357,11 +357,11 @@ Flags override env vars; env vars override profile values.
 
 ## Human Verification (CAPTCHA)
 
-Proton's anti-bot may demand a CAPTCHA at login. proton-cli opens a small webview window via an embedded helper, you solve it, the original command retries automatically. No extra install — the helper is `//go:embed`-ded into the main binary.
+Proton's anti-bot may demand a CAPTCHA at login. proton-cli opens a small webview window via an embedded helper, you solve it, the original command retries automatically. No extra install - the helper is `//go:embed`-ded into the main binary.
 
 Linux desktop needs `libwebkit2gtk-4.1` + `libgtk-3` installed: macOS / Windows: nothing to install (system WebKit / WebView2).
 
-**Headless** (server, container, no GUI): the webview can't run. proton-cli exits with an error — there is no way to solve the CAPTCHA from this environment. Run the command on a desktop machine instead.
+**Headless** (server, container, no GUI): the webview can't run. proton-cli exits with an error - there is no way to solve the CAPTCHA from this environment. Run the command on a desktop machine instead.
 
 ## API Reference
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-All tests are **integration tests** that run the real `proton-cli` binary against the live Proton API. There are no mocks — every test creates real data, verifies it, and cleans up.
+All tests are **integration tests** that run the real `proton-cli` binary against the live Proton API. There are no mocks - every test creates real data, verifies it, and cleans up.
 
 Unit tests live alongside the code they test (e.g. `internal/render/html_test.go`).
 
@@ -68,14 +68,14 @@ func TestDriveItemsFoo(t *testing.T) {
 
 ## Cleanup Rules
 
-- **Always register cleanup**, even for tests about deletion — the test might fail before reaching the delete step.
+- **Always register cleanup**, even for tests about deletion - the test might fail before reaching the delete step.
 - Use `cleanupRun()` for CLI commands, `cleanup()` for custom functions.
 - `t.Cleanup()` guarantees cleanup runs even on test failure.
 - Cleanup failures print a loud box with a copy-pasteable command the user can run manually:
 
   ```
   ╔══════════════════════════════════════════════════════════════╗
-  ║  ⚠️  CLEANUP FAILED — MANUAL ACTION REQUIRED                ║
+  ║  ⚠️  CLEANUP FAILED - MANUAL ACTION REQUIRED                ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Delete folder: proton-cli drive items delete --permanent /test-xxx
   ║  Error: exit 1: ...
@@ -139,7 +139,7 @@ This makes shell capture work: `ID=$(proton-cli ... create ...)`.
 
 Every command that takes an ID also accepts a substring search term. Ambiguous matches return exit 4 with candidates listed on stderr.
 
-`drive trash restore` is the single exception — it requires explicit link IDs because trashed items have encrypted names.
+`drive trash restore` is the single exception - it requires explicit link IDs because trashed items have encrypted names.
 
 ## Cobra and Positional IDs
 
@@ -154,11 +154,11 @@ binary handle this automatically:
    cobra/pflag's flag-parse and "accepts N args" errors with a hint
    mentioning `--` when a leading-dash ID is detected in argv.
 
-In practice `--` is **no longer required** in tests — leading-dash full
-IDs parse cleanly via Layer 1; leading-dash *short* IDs (rare — ~1.5%
+In practice `--` is **no longer required** in tests - leading-dash full
+IDs parse cleanly via Layer 1; leading-dash *short* IDs (rare - ~1.5%
 of random base64 prefixes) need explicit `--` and are caught by Layer 2.
 
-Flags can be placed before OR after positionals on every command —
+Flags can be placed before OR after positionals on every command -
 same as any normal cobra CLI.
 
 ### `cleanupRun` descriptions
@@ -175,7 +175,7 @@ Keeping `--` in those strings is harmless but unnecessary.
 
 ## Known Limitations
 
-- `calendar calendars delete` requires `PROTON_PASSWORD` for the password-scope unlock — works in tests because the env var is set.
+- `calendar calendars delete` requires `PROTON_PASSWORD` for the password-scope unlock - works in tests because the env var is set.
 - `drive trash empty` may not clear items from non-default volumes (e.g. Photos share).
-- Proton only allows specific hex colors for labels and calendars (e.g. `#8080FF`, `#3CBB3A`) — see `ACCENT_COLORS` in the WebClients source.
+- Proton only allows specific hex colors for labels and calendars (e.g. `#8080FF`, `#3CBB3A`) - see `ACCENT_COLORS` in the WebClients source.
 - Tests run ~8 minutes total due to API latency and mail-delivery waits.
