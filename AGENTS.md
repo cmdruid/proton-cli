@@ -8,6 +8,11 @@ This is an open-source CLI tool used by other people. All changes should conside
 - **User-facing quality** — README, help text, and error messages should be clear and helpful
 - **Distribution** — binaries are published as GitHub Releases via GoReleaser; users install by downloading a binary or via `go install`
 
+## Quality Gates
+
+- **Always run `just lint` after making code changes** and fix everything before considering the work done. It runs `gofmt -w .` and `golangci-lint run ./...` (CGO-free, so no C compiler needed).
+- `just build` produces the release-shaped binary (`-tags=embed_hv` + the CGO webview helper); it needs the toolchain from `devbox shell`.
+
 ## Testing
 
 Tests are **integration tests** that run against the live Proton API. They require `PROTON_USER` and `PROTON_PASSWORD` environment variables.

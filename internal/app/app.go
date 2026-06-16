@@ -4,23 +4,22 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/roman-16/proton-cli/internal/api"
 	"github.com/roman-16/proton-cli/internal/config"
+	"github.com/roman-16/proton-cli/internal/crypto/keys"
 	"github.com/roman-16/proton-cli/internal/idcache"
-	"github.com/roman-16/proton-cli/internal/keys"
+	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/render"
-	"github.com/roman-16/proton-cli/internal/services/calendar"
-	"github.com/roman-16/proton-cli/internal/services/contacts"
-	"github.com/roman-16/proton-cli/internal/services/drive"
-	"github.com/roman-16/proton-cli/internal/services/mail"
-	"github.com/roman-16/proton-cli/internal/services/pass"
+	"github.com/roman-16/proton-cli/internal/service/calendar"
+	"github.com/roman-16/proton-cli/internal/service/contacts"
+	"github.com/roman-16/proton-cli/internal/service/drive"
+	"github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/roman-16/proton-cli/internal/service/pass"
 	"github.com/roman-16/proton-cli/internal/session"
 )
 
@@ -36,7 +35,7 @@ type App struct {
 	Profile string
 	Creds   Credentials
 
-	API *api.Client
+	API *proton.Client
 
 	Mail     *mail.Service
 	Drive    *drive.Service
@@ -51,12 +50,9 @@ type App struct {
 
 	IDCache *idcache.Cache
 
-	// HVUnavailableDetail is a one-line diagnostic the HV resolver may
-	// stash when it returns api.ErrHVUnavailable. cmd/root.go reads it
-	// in the final-error formatter to give the user actionable advice
-	// ("libwebkit2gtk missing", "$DISPLAY empty", etc.) instead of a
-	// generic "human verification required" message. Empty when no
-	// resolver attempt has been made.
+	// HVUnavailableDetail is a one-line diagnostic the HV resolver may stash
+	// when it returns proton.ErrHVUnavailable; the cli final-error formatter
+	// surfaces it.
 	HVUnavailableDetail string
 
 	mu    sync.Mutex
@@ -78,7 +74,7 @@ type Options struct {
 	FullIDs    bool
 }
 
-// New constructs an App: loads the config, resolves the profile, installs any
+// New constructs an App: loads config, resolves the profile, installs any
 // saved session, and wires up the services.
 func New(opts Options) (*App, error) {
 	cfg, err := config.Load()
@@ -94,12 +90,10 @@ func New(opts Options) (*App, error) {
 	appVer := firstNonEmpty(opts.AppVersion, os.Getenv("PROTON_APP_VERSION"), prof.AppVersion)
 
 	r := render.New(opts.Output, os.Stdout, os.Stderr, opts.LogLevel, opts.Quiet)
-	c := api.New(api.Options{
-		BaseURL: apiURL, AppVersion: appVer, Profile: profileName,
-		Logger: r.Log,
+	c := proton.New(proton.Options{
+		BaseURL: apiURL, AppVersion: appVer, Profile: profileName, Logger: r.Log,
 	})
 
-	// Install a saved session for this profile if we have one.
 	if sess, err := session.Load(profileName); err == nil && sess != nil {
 		c.SetTokens(sess.UID, sess.AccessToken, sess.RefreshToken, sess.SaltedKeyPass)
 	}
@@ -120,8 +114,7 @@ func New(opts Options) (*App, error) {
 	}, nil
 }
 
-// idCachePath is ~/.config/proton-cli/idcache/<profile>.json. Mirrors the
-// session-file convention.
+// idCachePath mirrors the session-file convention.
 func idCachePath(profile string) string {
 	if profile == "" {
 		profile = "default"
@@ -135,7 +128,6 @@ func idCachePath(profile string) string {
 
 // Authenticate ensures the client has valid tokens, logging in if needed.
 func (a *App) Authenticate(ctx context.Context) error {
-	// If we already have a session, just trust it; Do will refresh on 401.
 	if a.API.Session().UID != "" {
 		return nil
 	}
@@ -153,8 +145,7 @@ func (a *App) Authenticate(ctx context.Context) error {
 	return session.Save(a.Profile, a.API.Session())
 }
 
-// Unlock returns the unlocked keys for this session, computing them on first
-// call and caching subsequently.
+// Unlock returns the unlocked keys for this session, caching after first call.
 func (a *App) Unlock(ctx context.Context) (*keys.Unlocked, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -172,52 +163,6 @@ func (a *App) Unlock(ctx context.Context) (*keys.Unlocked, error) {
 // ClearSession wipes the session file for the current profile.
 func (a *App) ClearSession() error {
 	return session.Clear(a.Profile)
-}
-
-// ExitError signals an exit with a specific code.
-type ExitError struct {
-	Code int
-	Err  error
-}
-
-func (e *ExitError) Error() string { return e.Err.Error() }
-func (e *ExitError) Unwrap() error { return e.Err }
-
-// Exit wraps err with a specific exit code.
-func Exit(code int, err error) error {
-	if err == nil {
-		return nil
-	}
-	return &ExitError{Code: code, Err: err}
-}
-
-// ExitCodeFor classifies an error into one of the CLI's exit codes.
-func ExitCodeFor(err error) int {
-	if err == nil {
-		return 0
-	}
-	var ee *ExitError
-	if errors.As(err, &ee) {
-		return ee.Code
-	}
-	var apiErr *api.APIError
-	if errors.As(err, &apiErr) {
-		switch apiErr.HTTPStatus {
-		case 401, 403:
-			return 2
-		case 404:
-			return 3
-		case 409, 422:
-			return 4
-		}
-		if apiErr.HTTPStatus >= 500 {
-			return 5
-		}
-	}
-	if errors.Is(err, api.ErrUnauthorized) {
-		return 2
-	}
-	return 1
 }
 
 func firstNonEmpty(ss ...string) string {

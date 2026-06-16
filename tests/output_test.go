@@ -38,8 +38,8 @@ func TestOutputJSONContacts(t *testing.T) {
 func TestOutputYAMLSnakeCase(t *testing.T) {
 	skipIfNoCredentials(t)
 	stdout := runOK(t, "mail", "messages", "list", "--page-size", "1", "--output", "yaml")
-	// Expect snake_case keys
-	for _, want := range []string{"from_address", "from_name", "num_attachments"} {
+	// Non-omitempty keys only; from_name drops out when the sender has no display name.
+	for _, want := range []string{"from_address", "num_attachments"} {
 		if !strings.Contains(stdout, want+":") {
 			t.Errorf("expected YAML key %q, got:\n%s", want, truncateOutput(stdout))
 		}
