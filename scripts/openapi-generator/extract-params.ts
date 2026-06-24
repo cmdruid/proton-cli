@@ -83,16 +83,48 @@ export function extractQueryParams(paramsNode: Node): Property[] {
     .filter((p) => p.name);
 }
 
+// Members of built-in prototypes (String, Number, Array, …) that leak as
+// schema properties when a body type resolves to a primitive/enum/`Omit<enum>`.
+// Derived from the runtime so it never drifts from the JS spec.
+const PROTOTYPE_MEMBERS = new Set<string>([
+  ...Object.getOwnPropertyNames(Object.prototype),
+  ...Object.getOwnPropertyNames(String.prototype),
+  ...Object.getOwnPropertyNames(Number.prototype),
+  ...Object.getOwnPropertyNames(Boolean.prototype),
+  ...Object.getOwnPropertyNames(Array.prototype),
+]);
+
+/**
+ * True for primitives, arrays, enums, and other built-in types whose
+ * `getProperties()` leaks String/Number/Array.prototype members instead of a
+ * meaningful body shape.
+ */
+function isPrimitiveOrBuiltin(type: Type): boolean {
+  if (type.isString() || type.isStringLiteral()) return true;
+  if (type.isNumber() || type.isNumberLiteral()) return true;
+  if (type.isBoolean() || type.isBooleanLiteral()) return true;
+  if (type.isArray() || type.isTuple()) return true;
+  if (type.isEnum() || type.isEnumLiteral()) return true;
+  if (type.isUndefined() || type.isNull() || type.isAny() || type.isUnknown()) return true;
+  if (type.isUnion()) return type.getUnionTypes().every(isPrimitiveOrBuiltin);
+  return false;
+}
+
 /**
  * Convert a TypeScript type to a list of OpenAPI properties.
  */
 export function typeToProperties(type: Type): Property[] {
+  if (isPrimitiveOrBuiltin(type)) return [];
+
   const props: Property[] = [];
   try {
     for (const sym of type.getProperties()) {
       const name = sym.getName();
+      if (name.startsWith("__@") || PROTOTYPE_MEMBERS.has(name)) continue;
       const valDecl = sym.getValueDeclaration();
       const symType = valDecl ? sym.getTypeAtLocation(valDecl) : sym.getDeclaredType();
+      // Skip prototype methods that leak from built-in types.
+      if (symType.getCallSignatures().length > 0) continue;
       const optional = sym.isOptional();
 
       let description = "";

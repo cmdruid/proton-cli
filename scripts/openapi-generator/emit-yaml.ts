@@ -189,6 +189,7 @@ function camelToTitle(name: string): string {
 
 function esc(s: string): string {
   if (!s) return s;
-  if (/[:#{}'"]/.test(s)) return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-  return s;
+  const flat = s.replace(/\s+/g, " ").trim();
+  if (/[:#{}'"]/.test(flat)) return `"${flat.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return flat;
 }
