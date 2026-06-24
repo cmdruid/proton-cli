@@ -9,9 +9,17 @@ import (
 )
 
 type Session struct {
-	UID           string `json:"uid"`
-	AccessToken   string `json:"access_token"`
-	RefreshToken  string `json:"refresh_token"`
+	UID          string `json:"uid"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	// EncKeyBlob is the salted key password encrypted (AES-256-GCM) with a random
+	// client key that lives server-side (PUT/GET /auth/v4/sessions/local/key).
+	// Recovering the key password requires fetching that client key, so revoking
+	// the session renders this blob undecryptable.
+	EncKeyBlob string `json:"enc_key_blob,omitempty"`
+	// SaltedKeyPass is the legacy cleartext field. It is read for backward
+	// compatibility and migrated to EncKeyBlob on the next unlock; new code never
+	// writes it.
 	SaltedKeyPass string `json:"salted_key_pass,omitempty"`
 	AppVersion    string `json:"app_version"`
 	BaseURL       string `json:"base_url"`

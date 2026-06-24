@@ -1,8 +1,10 @@
 package session
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +60,33 @@ func TestPathInDefaultPrefersNewOverLegacy(t *testing.T) {
 	}
 	if got := pathIn(d, "default"); got != newPath {
 		t.Errorf("pathIn(default) should prefer new path %q over legacy, got %q", newPath, got)
+	}
+}
+
+func TestSessionMarshalUsesEncKeyBlobNotCleartext(t *testing.T) {
+	b, err := json.Marshal(Session{UID: "u", AccessToken: "a", RefreshToken: "r", EncKeyBlob: "blob"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(b)
+	if !strings.Contains(out, `"enc_key_blob":"blob"`) {
+		t.Errorf("expected enc_key_blob in JSON, got: %s", out)
+	}
+	if strings.Contains(out, "salted_key_pass") {
+		t.Errorf("salted_key_pass must be omitted when empty, got: %s", out)
+	}
+}
+
+func TestSessionUnmarshalLegacyCleartext(t *testing.T) {
+	var s Session
+	if err := json.Unmarshal([]byte(`{"uid":"u","access_token":"a","refresh_token":"r","salted_key_pass":"legacy"}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.SaltedKeyPass != "legacy" {
+		t.Errorf("legacy salted_key_pass should still parse, got %q", s.SaltedKeyPass)
+	}
+	if s.EncKeyBlob != "" {
+		t.Errorf("EncKeyBlob should be empty for a legacy file, got %q", s.EncKeyBlob)
 	}
 }
 

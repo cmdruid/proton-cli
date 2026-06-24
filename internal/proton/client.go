@@ -47,7 +47,8 @@ type Client struct {
 	uid           string
 	acc           string
 	ref           string
-	saltedKeyPass string
+	saltedKeyPass string // in-memory cleartext only; never persisted as cleartext
+	encKeyBlob    string // persisted (salted key password encrypted with the server-held client key)
 	profile       string
 	hvResolver    HVResolver
 }
@@ -81,10 +82,10 @@ func New(opts Options) *Client {
 
 func (c *Client) Profile() string { return c.profile }
 
-func (c *Client) SetTokens(uid, acc, ref, saltedKeyPass string) {
+func (c *Client) SetTokens(uid, acc, ref string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.uid, c.acc, c.ref, c.saltedKeyPass = uid, acc, ref, saltedKeyPass
+	c.uid, c.acc, c.ref = uid, acc, ref
 }
 
 func (c *Client) SaltedKeyPass() string {
@@ -99,17 +100,37 @@ func (c *Client) SetSaltedKeyPass(skp string) {
 	c.saltedKeyPass = skp
 }
 
+func (c *Client) EncKeyBlob() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.encKeyBlob
+}
+
+func (c *Client) SetEncKeyBlob(blob string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.encKeyBlob = blob
+}
+
 func (c *Client) Session() *session.Session {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return &session.Session{
-		UID:           c.uid,
-		AccessToken:   c.acc,
-		RefreshToken:  c.ref,
-		SaltedKeyPass: c.saltedKeyPass,
-		AppVersion:    c.app,
-		BaseURL:       c.base,
+	s := &session.Session{
+		UID:          c.uid,
+		AccessToken:  c.acc,
+		RefreshToken: c.ref,
+		AppVersion:   c.app,
+		BaseURL:      c.base,
 	}
+	// Prefer the encrypted blob. Preserve a legacy cleartext key password only
+	// until it has been migrated to a blob; never write new cleartext.
+	switch {
+	case c.encKeyBlob != "":
+		s.EncKeyBlob = c.encKeyBlob
+	case c.saltedKeyPass != "":
+		s.SaltedKeyPass = c.saltedKeyPass
+	}
+	return s
 }
 
 // Request is a typed API request. Body is JSON-encoded when it is not nil and

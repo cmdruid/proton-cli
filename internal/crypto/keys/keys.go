@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 
 	"github.com/ProtonMail/go-srp"
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/crypto/localkey"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/session"
 )
@@ -51,7 +53,23 @@ type salt struct {
 // cached.
 func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, error) {
 	skp := c.SaltedKeyPass()
-	if skp == "" {
+	switch {
+	case skp == "" && c.EncKeyBlob() != "":
+		// Resume: recover the key password by unwrapping the on-disk blob with the
+		// server-held client key. A failure here (e.g. the session was revoked) is
+		// fatal - the blob is useless without the key.
+		key, err := localkey.Get(ctx, c)
+		if err != nil {
+			return nil, fmt.Errorf("fetch session key: %w", err)
+		}
+		d, err := localkey.Unwrap(c.EncKeyBlob(), key)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt session key blob: %w", err)
+		}
+		skp = d
+		c.SetSaltedKeyPass(skp)
+	case skp == "":
+		// First unlock: derive from the password, then wrap + persist.
 		if password == "" {
 			return nil, fmt.Errorf("password required for encrypted operations;\nset PROTON_PASSWORD, --password, or configure a profile")
 		}
@@ -61,7 +79,11 @@ func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, 
 		}
 		skp = d
 		c.SetSaltedKeyPass(skp)
-		_ = session.Save(c.Profile(), c.Session())
+		wrapAndPersist(ctx, c, skp)
+	case c.EncKeyBlob() == "":
+		// Migration: legacy cleartext key password from an old session file, not
+		// yet wrapped. Convert it on this run.
+		wrapAndPersist(ctx, c, skp)
 	}
 
 	user, err := getUser(ctx, c)
@@ -87,6 +109,29 @@ func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, 
 		return nil, fmt.Errorf("failed to unlock any address keys")
 	}
 	return &Unlocked{UserKR: userKR, AddrKRs: addrKRs, Addresses: addrs}, nil
+}
+
+// wrapAndPersist generates a fresh client key, stores it server-side, wraps the
+// salted key password with it, and rewrites the session file in encrypted form.
+// Best-effort: skp is already held in memory for this run, so a failure here
+// never fails the unlock - it only defers persistence to the next run.
+func wrapAndPersist(ctx context.Context, c *proton.Client, skp string) {
+	key, err := localkey.Generate()
+	if err != nil {
+		slog.Debug("localkey: generate failed; key password not persisted this run", "err", err)
+		return
+	}
+	if err := localkey.Put(ctx, c, key); err != nil {
+		slog.Debug("localkey: put failed; key password not persisted this run", "err", err)
+		return
+	}
+	blob, err := localkey.Wrap(skp, key)
+	if err != nil {
+		slog.Debug("localkey: wrap failed; key password not persisted this run", "err", err)
+		return
+	}
+	c.SetEncKeyBlob(blob)
+	_ = session.Save(c.Profile(), c.Session())
 }
 
 // PrimaryAddrKR returns the key ring for the user's primary proton.me/pm.me

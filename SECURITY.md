@@ -63,6 +63,20 @@ We follow [coordinated disclosure](https://en.wikipedia.org/wiki/Coordinated_vul
 3. A security advisory is published on GitHub with credit to the reporter (unless they prefer to remain anonymous).
 4. If a CVE is warranted, one is requested.
 
+## How credentials are stored at rest
+
+`proton-cli` saves a per-profile session file at `~/.config/proton-cli/sessions/<profile>.json` (mode `0600`) so you don't re-authenticate on every command. It contains:
+
+- the session **auth tokens** (UID, access, refresh), and
+- the **salted key password** that unlocks your PGP keys, stored **encrypted** with a random 256-bit AES-GCM *client key*.
+
+That client key is **not** stored on your machine - it is held by Proton's servers and fetched over an authenticated request (`/auth/v4/sessions/local/key`) when a command needs to unlock your keys. Consequences:
+
+- The key password is never written to disk in cleartext, so it can't be lifted from a backup, a synced home directory, a disk image, or with `grep`.
+- **Revoking the session** (from the Proton web/mobile app or its session settings) makes the on-disk blob undecryptable: without a live session the client key can't be fetched, so a leaked copy of the file can no longer be turned back into your key password.
+
+Caveat: the file still contains the session refresh token, so it is **not** safe to share - treat it as a secret. The encryption-at-rest above limits the damage of a *leaked copy* (it can be neutralised by revoking the session); it is not a substitute for protecting the file. Session files created by older versions stored the key password in cleartext; they are migrated to the encrypted form automatically on the next unlock.
+
 ## Hardening recommendations for users
 
 `proton-cli` is unaudited. To reduce risk while using it:

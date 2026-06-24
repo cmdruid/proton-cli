@@ -356,7 +356,7 @@ Flags override env vars; env vars override profile values.
 
 1. **Session creation** - creates an unauthenticated session via `POST /auth/v4/sessions`.
 2. **SRP authentication** - Secure Remote Password login with [go-srp](https://github.com/ProtonMail/go-srp), with 2FA/TOTP support.
-3. **Session persistence** - saves tokens + salted key password per profile.
+3. **Session persistence** - per profile, saves the auth tokens plus the salted key password **encrypted** with a random client key held server-side (fetched per session). The key password is never written to disk in cleartext, and revoking the session makes the saved blob undecryptable. See [`SECURITY.md`](SECURITY.md#how-credentials-are-stored-at-rest).
 4. **Key hierarchy** - unlocks User key → Address keys → per-service keys (Calendar, Drive, Contacts).
 5. **End-to-end encryption** - encrypts/decrypts using [gopenpgp](https://github.com/ProtonMail/gopenpgp).
 6. **Auto-refresh** - refreshes expired tokens automatically.

@@ -90,7 +90,11 @@ func New(opts Options) (*App, error) {
 	})
 
 	if sess, err := session.Load(profileName); err == nil && sess != nil {
-		c.SetTokens(sess.UID, sess.AccessToken, sess.RefreshToken, sess.SaltedKeyPass)
+		c.SetTokens(sess.UID, sess.AccessToken, sess.RefreshToken)
+		c.SetEncKeyBlob(sess.EncKeyBlob)
+		if sess.SaltedKeyPass != "" { // legacy file; migrated to a blob on next unlock
+			c.SetSaltedKeyPass(sess.SaltedKeyPass)
+		}
 	}
 
 	return &App{
