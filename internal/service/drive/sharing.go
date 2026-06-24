@@ -9,6 +9,7 @@ import (
 
 	srp "github.com/ProtonMail/go-srp"
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -162,10 +163,6 @@ func (s *Service) verifyCreator(ctx context.Context, dc *Context, res *Resolved,
 	if err != nil {
 		return "unknown"
 	}
-	sig, err := pgp.NewPGPSignatureFromArmored(link.NodePassphraseSignature)
-	if err != nil {
-		return "unknown"
-	}
 	verKR := dc.AddrKR
 	if link.SignatureEmail != dc.AddrEmail {
 		kr, err := s.addressKeyRing(ctx, link.SignatureEmail)
@@ -174,10 +171,10 @@ func (s *Service) verifyCreator(ctx context.Context, dc *Context, res *Resolved,
 		}
 		verKR = kr
 	}
-	if verKR.VerifyDetached(dec, sig, pgp.GetUnixTime()) == nil {
-		return "verified"
-	}
-	return "unverified"
+	// Verify against the text form: the passphrase is signed as text at
+	// creation, so the binary form would spuriously fail.
+	norm := pgp.NewPlainMessageFromString(string(dec.GetBinary()))
+	return string(pgphelper.VerifyDetachedStatus(verKR, norm, link.NodePassphraseSignature))
 }
 
 func (s *Service) EnsureLink(ctx context.Context, dc *Context, path string, opts LinkOptions) (*ShareLink, error) {

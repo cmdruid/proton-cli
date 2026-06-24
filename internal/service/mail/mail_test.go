@@ -5,8 +5,65 @@ import (
 	"net/url"
 	"testing"
 
+	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
+
+func genMailKeyRing(t *testing.T) *pgp.KeyRing {
+	t.Helper()
+	key, err := pgp.GenerateKey("test", "test@example.invalid", "x25519", 0)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	kr, err := pgp.NewKeyRing(key)
+	if err != nil {
+		t.Fatalf("NewKeyRing: %v", err)
+	}
+	return kr
+}
+
+// TestDecryptBody covers the verdict mapping and the key correctness property:
+// gopenpgp returns the decrypted body alongside a signature error, so a body
+// must still be recovered even when its signature cannot be verified.
+func TestDecryptBody(t *testing.T) {
+	kr := genMailKeyRing(t)
+	other := genMailKeyRing(t)
+	const plain = "secret body"
+
+	enc, err := kr.Encrypt(pgp.NewPlainMessageFromString(plain), kr) // encrypt+sign with kr
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	armored, err := enc.GetArmored()
+	if err != nil {
+		t.Fatalf("GetArmored: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		verifier *pgp.KeyRing
+		want     pgphelper.VerifyResult
+	}{
+		{"correct verifier verifies", kr, pgphelper.Verified},
+		{"no verifier is unverified", nil, pgphelper.Unverified},
+		{"unrelated verifier is unverified", other, pgphelper.Unverified},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body, v, err := decryptBody(armored, kr, tc.verifier)
+			if err != nil {
+				t.Fatalf("decryptBody: %v", err)
+			}
+			if body != plain {
+				t.Errorf("body = %q, want %q (must survive signature outcome)", body, plain)
+			}
+			if v != tc.want {
+				t.Errorf("verdict = %q, want %q", v, tc.want)
+			}
+		})
+	}
+}
 
 func TestResolveFolder(t *testing.T) {
 	tests := []struct{ in, want string }{

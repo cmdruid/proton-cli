@@ -184,14 +184,14 @@ proton-cli drive items delete --scope /OldStuff --all --recursive
 # Folders
 proton-cli drive folders create /Documents/NewFolder
 
-# Sharing — public links
+# Sharing - public links
 proton-cli drive share status /Documents/report.pdf        # who has access + public link
 proton-cli drive share link /Documents/report.pdf          # create/show the public link
 proton-cli drive share link /Documents/report.pdf --edit --expires 7d
 proton-cli drive share link /Documents/report.pdf --password hunter2
 proton-cli drive share unlink /Documents/report.pdf        # remove the public link
 
-# Sharing — members (invite Proton users)
+# Sharing - members (invite Proton users)
 proton-cli drive share add /Documents/report.pdf bob@proton.me
 proton-cli drive share add /Documents/report.pdf bob@proton.me --edit
 proton-cli drive share remove /Documents/report.pdf bob@proton.me

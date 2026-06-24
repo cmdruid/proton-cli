@@ -241,6 +241,8 @@ func TestMailMessagesSendAndReadText(t *testing.T) {
 	assertContains(t, stdout, subject)
 	assertContains(t, stdout, selfEmail())
 	assertField(t, stdout, "Subject:", subject)
+	// Signature: mail we sent ourselves is signed by our own key.
+	assertField(t, stdout, "Sig:", "verified")
 }
 
 func TestMailMessagesReadByRef(t *testing.T) {

@@ -143,7 +143,11 @@ func msgReadCmd() *cobra.Command {
 						_, _ = fmt.Fprintf(c.R().Stdout, "To:      %s\n", s)
 					}
 				}
-				_, _ = fmt.Fprintf(c.R().Stdout, "ID:      %s\n\n", msg.ID)
+				_, _ = fmt.Fprintf(c.R().Stdout, "ID:      %s\n", msg.ID)
+				if msg.Signature != "" {
+					_, _ = fmt.Fprintf(c.R().Stdout, "Sig:     %s\n", sigText(msg.Signature))
+				}
+				_, _ = fmt.Fprintln(c.R().Stdout)
 			}
 			body := msg.Body
 			if stripQuotes {

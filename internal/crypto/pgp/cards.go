@@ -28,34 +28,45 @@ type Card struct {
 // types 1/3, verificationKR is used to (best-effort) verify type 2 signatures.
 // If keyPacket is set, it is used as a prefix for types 1/3 whose Data field
 // contains only the data packet (Proton calendar shared events).
-func DecryptCards(cards []Card, decryptionKR, verificationKR *pgp.KeyRing, keyPacket []byte) ([]string, error) {
+//
+// Alongside the decrypted strings it returns a per-card verdict: type-2/3 cards
+// are signature-checked against verificationKR; clear/encrypted-only cards are
+// reported Unsigned. Callers typically pgp.Aggregate the verdicts.
+func DecryptCards(cards []Card, decryptionKR, verificationKR *pgp.KeyRing, keyPacket []byte) ([]string, []VerifyResult, error) {
 	out := make([]string, 0, len(cards))
+	verdicts := make([]VerifyResult, 0, len(cards))
 	for _, c := range cards {
 		switch c.Type {
 		case CardClear:
 			out = append(out, c.Data)
+			verdicts = append(verdicts, Unsigned)
 		case CardSigned:
-			if verificationKR != nil && c.Signature != "" {
-				if sig, err := pgp.NewPGPSignatureFromArmored(c.Signature); err == nil {
-					_ = verificationKR.VerifyDetached(pgp.NewPlainMessageFromString(c.Data), sig, pgp.GetUnixTime())
-				}
-			}
 			out = append(out, c.Data)
-		case CardEncrypted, CardEncryptedSigned:
+			verdicts = append(verdicts, VerifyDetachedStatus(verificationKR, pgp.NewPlainMessageFromString(c.Data), c.Signature))
+		case CardEncrypted:
 			plain, err := decryptCardData(c.Data, keyPacket, decryptionKR)
 			if err != nil {
-				return nil, fmt.Errorf("decrypt card (type %d): %w", c.Type, err)
+				return nil, nil, fmt.Errorf("decrypt card (type %d): %w", c.Type, err)
 			}
 			out = append(out, plain)
+			verdicts = append(verdicts, Unsigned)
+		case CardEncryptedSigned:
+			plain, err := decryptCardData(c.Data, keyPacket, decryptionKR)
+			if err != nil {
+				return nil, nil, fmt.Errorf("decrypt card (type %d): %w", c.Type, err)
+			}
+			out = append(out, plain)
+			verdicts = append(verdicts, VerifyDetachedStatus(verificationKR, pgp.NewPlainMessageFromString(plain), c.Signature))
 		default:
 			out = append(out, c.Data)
+			verdicts = append(verdicts, Unsigned)
 		}
 	}
-	return out, nil
+	return out, verdicts, nil
 }
 
 // DecryptCardsRaw accepts the map form returned from json.Unmarshal.
-func DecryptCardsRaw(cards []map[string]any, decryptionKR, verificationKR *pgp.KeyRing, keyPacket []byte) ([]string, error) {
+func DecryptCardsRaw(cards []map[string]any, decryptionKR, verificationKR *pgp.KeyRing, keyPacket []byte) ([]string, []VerifyResult, error) {
 	typed := make([]Card, 0, len(cards))
 	for _, m := range cards {
 		c := Card{}

@@ -316,7 +316,11 @@ func renderConversationText(c *Ctx, conv *mailsvc.ConversationFull, format strin
 			if m.Time > 0 {
 				_, _ = fmt.Fprintf(c.R().Stdout, "Date: %s\n", time.Unix(m.Time, 0).Local().Format("2006-01-02 15:04"))
 			}
-			_, _ = fmt.Fprintf(c.R().Stdout, "ID:   %s\n\n", m.ID)
+			_, _ = fmt.Fprintf(c.R().Stdout, "ID:   %s\n", m.ID)
+			if m.Signature != "" {
+				_, _ = fmt.Fprintf(c.R().Stdout, "Sig:  %s\n", sigText(m.Signature))
+			}
+			_, _ = fmt.Fprintln(c.R().Stdout)
 		}
 		body := m.Body
 		if stripQuotes {

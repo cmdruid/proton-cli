@@ -8,8 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 )
 
 // This file holds the node-key crypto for Drive: passphrase unlocking, name
@@ -26,8 +28,14 @@ func unlockNode(l *Link, parentKR, addrKR *pgp.KeyRing) (*pgp.KeyRing, error) {
 		return nil, fmt.Errorf("decrypt node passphrase: %w", err)
 	}
 	if l.NodePassphraseSignature != "" && addrKR != nil {
-		if sig, err := pgp.NewPGPSignatureFromArmored(l.NodePassphraseSignature); err == nil {
-			_ = addrKR.VerifyDetached(dec, sig, pgp.GetUnixTime())
+		// Normalise to a text message: the passphrase is signed as text
+		// (NewPlainMessageFromString) at creation, so verifying the binary form
+		// would spuriously fail. The surfaced verdict lives on `info`; here we
+		// only log non-verification at debug level (shared nodes are signed by a
+		// key we may not hold, which detached verify can't tell from tampering).
+		norm := pgp.NewPlainMessageFromString(string(dec.GetBinary()))
+		if v := pgphelper.VerifyDetachedStatus(addrKR, norm, l.NodePassphraseSignature); v != pgphelper.Verified {
+			slog.Debug("drive: node passphrase signature not verified", "link", l.LinkID, "signer", l.SignatureEmail, "result", string(v))
 		}
 	}
 	locked, err := pgp.NewKeyFromArmored(l.NodeKey)

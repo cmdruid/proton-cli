@@ -6,7 +6,9 @@ import (
 	"net/url"
 	"time"
 
+	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -143,7 +145,7 @@ type rawMessage struct {
 	}
 }
 
-func (s *Service) decryptMessage(u *keys.Unlocked, m rawMessage) Full {
+func (s *Service) decryptMessage(ctx context.Context, u *keys.Unlocked, m rawMessage) Full {
 	addrKR, ok := u.AddrKR(m.AddressID)
 	if !ok {
 		if kr, _, _, err := u.FirstAddrKR(); err == nil {
@@ -151,12 +153,19 @@ func (s *Service) decryptMessage(u *keys.Unlocked, m rawMessage) Full {
 		}
 	}
 	var body string
+	sig := pgphelper.Unverified
 	if addrKR == nil {
 		body = "(decryption failed: no address key available)"
-	} else if b, err := decryptBody(m.Body, addrKR); err != nil {
-		body = "(decryption failed: " + err.Error() + ")"
 	} else {
-		body = b
+		// Verify the body signature against the sender's public key (their
+		// own key for sent mail). No key available -> Unverified, never Invalid.
+		verKR := s.senderKeyRing(ctx, senderAddress(m.Sender))
+		b, v, err := decryptBody(m.Body, addrKR, verKR)
+		if err != nil {
+			body = "(decryption failed: " + err.Error() + ")"
+		} else {
+			body, sig = b, v
+		}
 	}
 	atts := make([]Attachment, 0, len(m.Attachments))
 	for _, a := range m.Attachments {
@@ -168,8 +177,53 @@ func (s *Service) decryptMessage(u *keys.Unlocked, m rawMessage) Full {
 	return Full{
 		ID: m.ID, Subject: m.Subject, Sender: m.Sender, ToList: m.ToList,
 		Time: m.Time, Body: body, MIMEType: m.MIMEType, AddressID: m.AddressID,
-		Attachments: atts,
+		Attachments: atts, Signature: sig,
 	}
+}
+
+// senderAddress extracts the sender email from a raw message Sender map.
+func senderAddress(sender map[string]any) string {
+	if s, ok := sender["Address"].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// senderKeyRing fetches and caches the public key ring for an email address,
+// used to verify message-body signatures. Returns nil (cached) when the
+// address is empty or has no published keys (e.g. external senders).
+func (s *Service) senderKeyRing(ctx context.Context, email string) *pgp.KeyRing {
+	if email == "" {
+		return nil
+	}
+	s.keyMu.Lock()
+	defer s.keyMu.Unlock()
+	if s.senderKeys == nil {
+		s.senderKeys = map[string]*pgp.KeyRing{}
+	}
+	if kr, ok := s.senderKeys[email]; ok {
+		return kr
+	}
+	var r struct {
+		Address struct {
+			Keys []struct{ PublicKey string }
+		}
+	}
+	var kr *pgp.KeyRing
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/keys/all", Query: keys.Query("Email", email)}, &r); err == nil {
+		if ring, err := pgp.NewKeyRing(nil); err == nil {
+			for _, k := range r.Address.Keys {
+				if key, err := pgp.NewKeyFromArmored(k.PublicKey); err == nil {
+					_ = ring.AddKey(key)
+				}
+			}
+			if ring.CountEntities() > 0 {
+				kr = ring
+			}
+		}
+	}
+	s.senderKeys[email] = kr
+	return kr
 }
 
 func (s *Service) Read(ctx context.Context, u *keys.Unlocked, id string) (*Full, error) {
@@ -177,7 +231,7 @@ func (s *Service) Read(ctx context.Context, u *keys.Unlocked, id string) (*Full,
 	if err != nil {
 		return nil, s.crossTableProbe(ctx, id, err, "messages")
 	}
-	full := s.decryptMessage(u, *raw)
+	full := s.decryptMessage(ctx, u, *raw)
 	return &full, nil
 }
 

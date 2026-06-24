@@ -32,6 +32,8 @@ func TestContactsCRUD(t *testing.T) {
 	got := runOK(t, "contacts", "get", "--", id)
 	assertField(t, got, "Name:", name)
 	assertField(t, got, "Email:", email)
+	// Signature: a contact we just created is signed with our own user key.
+	assertField(t, got, "Sig:", "verified")
 	assertField(t, got, "Phone:", "+1234567890")
 
 	// Update phone

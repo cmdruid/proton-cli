@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -73,7 +75,15 @@ func ResolveFolder(name string) string {
 	return name
 }
 
-type Service struct{ C proton.Doer }
+type Service struct {
+	C proton.Doer
+
+	// senderKeys caches fetched sender public key rings (per email) for body
+	// signature verification. A nil entry means "no key available" - cached so
+	// we don't refetch on every message in a conversation.
+	keyMu      sync.Mutex
+	senderKeys map[string]*pgp.KeyRing
+}
 
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
@@ -89,15 +99,16 @@ type Message struct {
 
 // Full carries a decrypted body, unlike the raw API envelope.
 type Full struct {
-	ID          string           `json:"id"`
-	Subject     string           `json:"subject"`
-	Sender      map[string]any   `json:"sender"`
-	ToList      []map[string]any `json:"to_list"`
-	Time        int64            `json:"time,omitempty"`
-	Body        string           `json:"body"`
-	MIMEType    string           `json:"mime_type"`
-	AddressID   string           `json:"address_id"`
-	Attachments []Attachment     `json:"attachments,omitempty"`
+	ID          string                 `json:"id"`
+	Subject     string                 `json:"subject"`
+	Sender      map[string]any         `json:"sender"`
+	ToList      []map[string]any       `json:"to_list"`
+	Time        int64                  `json:"time,omitempty"`
+	Body        string                 `json:"body"`
+	MIMEType    string                 `json:"mime_type"`
+	AddressID   string                 `json:"address_id"`
+	Attachments []Attachment           `json:"attachments,omitempty"`
+	Signature   pgphelper.VerifyResult `json:"signature,omitempty"`
 }
 
 type Conversation struct {
@@ -153,16 +164,31 @@ type SearchOptions struct {
 	Unread                                            bool
 }
 
-func decryptBody(armored string, addrKR *pgp.KeyRing) (string, error) {
+// decryptBody decrypts an armored PGP body with decKR and, when verKR is
+// non-nil, verifies the embedded signature against it. gopenpgp returns the
+// decrypted body alongside a SignatureVerificationError, so a bad/absent
+// signature never hides the body - it only changes the verdict.
+func decryptBody(armored string, decKR, verKR *pgp.KeyRing) (string, pgphelper.VerifyResult, error) {
 	msg, err := pgp.NewPGPMessageFromArmored(armored)
 	if err != nil {
-		return "", fmt.Errorf("parse message: %w", err)
+		return "", pgphelper.Unverified, fmt.Errorf("parse message: %w", err)
 	}
-	dec, err := addrKR.Decrypt(msg, nil, pgp.GetUnixTime())
+	var verifyTime int64
+	if verKR != nil {
+		verifyTime = pgp.GetUnixTime()
+	}
+	dec, err := decKR.Decrypt(msg, verKR, verifyTime)
 	if err != nil {
-		return "", fmt.Errorf("decrypt message: %w", err)
+		var sigErr pgp.SignatureVerificationError
+		if errors.As(err, &sigErr) {
+			return dec.GetString(), pgphelper.Classify(err), nil
+		}
+		return "", pgphelper.Unverified, fmt.Errorf("decrypt message: %w", err)
 	}
-	return dec.GetString(), nil
+	if verKR == nil {
+		return dec.GetString(), pgphelper.Unverified, nil
+	}
+	return dec.GetString(), pgphelper.Verified, nil
 }
 
 // crossTableProbe wraps an HTTP 422 from a single-resource GET with a

@@ -180,6 +180,9 @@ func eventsCmd() *cobra.Command {
 			}
 			_, _ = fmt.Fprintf(out, "ID:       %s\n", ev.ID)
 			_, _ = fmt.Fprintf(out, "Calendar: %s\n", ev.CalendarID)
+			if ev.Signature != "" {
+				_, _ = fmt.Fprintf(out, "Signature: %s\n", sigText(ev.Signature))
+			}
 			return nil
 		}),
 	})

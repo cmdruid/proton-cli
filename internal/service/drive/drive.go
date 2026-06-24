@@ -4,11 +4,13 @@ package drive
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
@@ -72,8 +74,9 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked) (*Context, erro
 	if err != nil {
 		return nil, fmt.Errorf("decrypt share passphrase: %w", err)
 	}
-	if sig, err := pgp.NewPGPSignatureFromArmored(sh.PassphraseSignature); err == nil {
-		_ = addrKR.VerifyDetached(dec, sig, pgp.GetUnixTime())
+	norm := pgp.NewPlainMessageFromString(string(dec.GetBinary()))
+	if v := pgphelper.VerifyDetachedStatus(addrKR, norm, sh.PassphraseSignature); v != pgphelper.Verified {
+		slog.Debug("drive: share passphrase signature not verified", "share", shareID, "result", string(v))
 	}
 	locked, err := pgp.NewKeyFromArmored(sh.Key)
 	if err != nil {

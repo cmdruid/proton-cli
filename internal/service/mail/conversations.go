@@ -100,7 +100,7 @@ func (s *Service) ConversationRead(ctx context.Context, u *keys.Unlocked, id str
 				m = *full
 			}
 		}
-		msgs = append(msgs, s.decryptMessage(u, m))
+		msgs = append(msgs, s.decryptMessage(ctx, u, m))
 	}
 	return &ConversationFull{Conversation: toConversation(r.Conversation), Messages: msgs}, nil
 }

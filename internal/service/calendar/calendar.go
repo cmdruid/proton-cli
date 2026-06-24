@@ -30,14 +30,15 @@ type Calendar struct {
 }
 
 type Event struct {
-	ID         string    `json:"id"`
-	CalendarID string    `json:"calendar_id"`
-	Title      string    `json:"title"`
-	Location   string    `json:"location,omitempty"`
-	Start      time.Time `json:"start"`
-	End        time.Time `json:"end"`
-	AllDay     bool      `json:"all_day"`
-	UID        string    `json:"uid,omitempty"`
+	ID         string                 `json:"id"`
+	CalendarID string                 `json:"calendar_id"`
+	Title      string                 `json:"title"`
+	Location   string                 `json:"location,omitempty"`
+	Start      time.Time              `json:"start"`
+	End        time.Time              `json:"end"`
+	AllDay     bool                   `json:"all_day"`
+	UID        string                 `json:"uid,omitempty"`
+	Signature  pgphelper.VerifyResult `json:"signature,omitempty"`
 }
 
 type calKeys struct {
@@ -155,11 +156,11 @@ type rawEvent struct {
 }
 
 func (e rawEvent) toEvent(ck *calKeys) Event {
-	title, location := decryptTitleLocation(e.SharedEvents, e.SharedKeyPacket, ck)
+	title, location, sig := decryptTitleLocation(e.SharedEvents, e.SharedKeyPacket, ck)
 	return Event{
 		ID: e.ID, CalendarID: e.CalendarID, Title: title, Location: location,
 		Start: time.Unix(e.StartTime, 0), End: time.Unix(e.EndTime, 0),
-		AllDay: e.FullDay == 1, UID: e.UID,
+		AllDay: e.FullDay == 1, UID: e.UID, Signature: sig,
 	}
 }
 
@@ -237,7 +238,7 @@ func (s *Service) EventUpdate(ctx context.Context, u *keys.Unlocked, calendarID,
 		return err
 	}
 
-	curTitle, curLoc := decryptTitleLocation(r.Event.SharedEvents, r.Event.SharedKeyPacket, ck)
+	curTitle, curLoc, _ := decryptTitleLocation(r.Event.SharedEvents, r.Event.SharedKeyPacket, ck)
 	if title == "" {
 		title = curTitle
 	}
@@ -417,14 +418,14 @@ func (s *Service) unlockCalendar(ctx context.Context, u *keys.Unlocked, calendar
 	return &calKeys{calKR: calKR, addrKR: addrKR, memberID: memberID}, nil
 }
 
-func decryptTitleLocation(cards []map[string]any, keyPacket string, ck *calKeys) (string, string) {
+func decryptTitleLocation(cards []map[string]any, keyPacket string, ck *calKeys) (string, string, pgphelper.VerifyResult) {
 	kp, _ := base64.StdEncoding.DecodeString(keyPacket)
-	decrypted, err := pgphelper.DecryptCardsRaw(cards, ck.calKR, ck.addrKR, kp)
+	decrypted, verdicts, err := pgphelper.DecryptCardsRaw(cards, ck.calKR, ck.addrKR, kp)
 	if err != nil {
-		return "", ""
+		return "", "", pgphelper.Unverified
 	}
 	joined := strings.Join(decrypted, "\n")
-	return ical.Field(joined, "SUMMARY"), ical.Field(joined, "LOCATION")
+	return ical.Field(joined, "SUMMARY"), ical.Field(joined, "LOCATION"), pgphelper.Aggregate(verdicts...)
 }
 
 func DefaultRange() (time.Time, time.Time) {

@@ -26,6 +26,8 @@ type Contact struct {
 	Org   string   `json:"org,omitempty"`
 	Note  string   `json:"note,omitempty"`
 	Cards []string `json:"cards,omitempty"`
+
+	Signature pgp.VerifyResult `json:"signature,omitempty"`
 }
 
 type NewContact struct {
@@ -53,11 +55,13 @@ func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error)
 			break
 		}
 		for _, c := range r.Contacts {
-			cards, err := pgp.DecryptCardsRaw(c.Cards, u.UserKR, u.UserKR, nil)
+			cards, verdicts, err := pgp.DecryptCardsRaw(c.Cards, u.UserKR, u.UserKR, nil)
 			if err != nil {
 				continue
 			}
-			out = append(out, contactFromCards(c.ID, cards))
+			ct := contactFromCards(c.ID, cards)
+			ct.Signature = pgp.Aggregate(verdicts...)
+			out = append(out, ct)
 		}
 		if len(r.Contacts) < 50 {
 			break
@@ -76,12 +80,13 @@ func (s *Service) Get(ctx context.Context, u *keys.Unlocked, id string) (*Contac
 	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/contacts/v4/contacts/" + id}, &r); err != nil {
 		return nil, err
 	}
-	cards, err := pgp.DecryptCardsRaw(r.Contact.Cards, u.UserKR, u.UserKR, nil)
+	cards, verdicts, err := pgp.DecryptCardsRaw(r.Contact.Cards, u.UserKR, u.UserKR, nil)
 	if err != nil {
 		return nil, err
 	}
 	c := contactFromCards(r.Contact.ID, cards)
 	c.Cards = cards
+	c.Signature = pgp.Aggregate(verdicts...)
 	return &c, nil
 }
 

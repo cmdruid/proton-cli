@@ -69,6 +69,9 @@ func contactsGetCmd() *cobra.Command {
 			if ct.Note != "" {
 				_, _ = fmt.Fprintf(out, "Note:  %s\n", ct.Note)
 			}
+			if ct.Signature != "" {
+				_, _ = fmt.Fprintf(out, "Sig:   %s\n", sigText(ct.Signature))
+			}
 			return nil
 		}),
 	}

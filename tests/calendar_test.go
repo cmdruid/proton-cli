@@ -93,6 +93,8 @@ func TestCalendarEventsCRUDByIDs(t *testing.T) {
 	// Get by IDs
 	got := runOK(t, "calendar", "events", "get", "--", calID, eventID)
 	assertContains(t, got, title)
+	// Signature: an event we just created is signed with our own address key.
+	assertField(t, got, "Signature:", "verified")
 
 	// Update title + location
 	runOK(t, "calendar", "events", "update", "--title", title+"-updated", "--location", "Vienna",
