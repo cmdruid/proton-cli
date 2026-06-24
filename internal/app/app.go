@@ -79,8 +79,8 @@ func New(opts Options) (*App, error) {
 	profileName, prof := cfg.Resolve(opts.Profile)
 
 	user := firstNonEmpty(opts.User, os.Getenv("PROTON_USER"), prof.User)
-	password := firstNonEmpty(opts.Password, os.Getenv("PROTON_PASSWORD"), prof.Password)
-	totp := firstNonEmpty(opts.TOTP, os.Getenv("PROTON_TOTP"), prof.TOTP)
+	password := firstNonEmpty(opts.Password, os.Getenv("PROTON_PASSWORD"))
+	totp := firstNonEmpty(opts.TOTP, os.Getenv("PROTON_TOTP"))
 	apiURL := firstNonEmpty(opts.APIURL, os.Getenv("PROTON_API_URL"), prof.APIURL)
 	appVer := firstNonEmpty(opts.AppVersion, os.Getenv("PROTON_APP_VERSION"), prof.AppVersion)
 
@@ -133,7 +133,7 @@ func (a *App) Authenticate(ctx context.Context) error {
 		return fmt.Errorf("user is required (set --user, PROTON_USER, or configure a profile)")
 	}
 	if a.Creds.Password == "" {
-		return fmt.Errorf("password is required (set --password, PROTON_PASSWORD, or configure a profile)")
+		return fmt.Errorf("password is required (set --password or PROTON_PASSWORD)")
 	}
 	a.R.Info(fmt.Sprintf("Authenticating as %s...", a.Creds.User))
 	if err := a.API.Login(ctx, a.Creds.User, []byte(a.Creds.Password), a.Creds.TOTP); err != nil {

@@ -71,7 +71,7 @@ func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, 
 	case skp == "":
 		// First unlock: derive from the password, then wrap + persist.
 		if password == "" {
-			return nil, fmt.Errorf("password required for encrypted operations;\nset PROTON_PASSWORD, --password, or configure a profile")
+			return nil, fmt.Errorf("password required for encrypted operations;\nset PROTON_PASSWORD or --password")
 		}
 		d, err := deriveSaltedKeyPass(ctx, c, password)
 		if err != nil {

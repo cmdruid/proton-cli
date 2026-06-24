@@ -340,6 +340,8 @@ proton-cli --profile work mail messages list
 
 Each profile gets its own session file at `~/.config/proton-cli/sessions/<profile>.json`.
 
+Profiles hold non-secret wiring only (`user`, `api_url`, `app_version`). You must provide your password and TOTP via `PROTON_PASSWORD` / `PROTON_TOTP` (or `--password` / `--totp`).
+
 ## Environment Variables
 
 | Variable | Description |

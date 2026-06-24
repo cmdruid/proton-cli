@@ -9,8 +9,10 @@ import (
 )
 
 // TestProfileFromConfig writes a temporary config.toml with a `work` profile
-// that mirrors PROTON_USER/PROTON_PASSWORD, runs a command with PROTON_* env
-// vars stripped, and verifies that credentials flow through the profile.
+// that carries only the account `user`, runs a command with PROTON_USER
+// stripped (so the user must come from the profile) while PROTON_PASSWORD is
+// kept (the password is never read from config), and verifies credentials
+// resolve through the profile + env combination.
 func TestProfileFromConfig(t *testing.T) {
 	skipIfNoCredentials(t)
 
@@ -44,18 +46,20 @@ func TestProfileFromConfig(t *testing.T) {
 	})
 
 	_ = os.MkdirAll(filepath.Dir(cfgPath), 0700)
+	// Profiles hold non-secret wiring only; the password is never read from
+	// config, so it stays in the child env below.
 	cfg := "default_profile = \"default\"\n\n" +
 		"[profiles.work]\n" +
-		"user = \"" + os.Getenv("PROTON_USER") + "\"\n" +
-		"password = \"" + os.Getenv("PROTON_PASSWORD") + "\"\n"
+		"user = \"" + os.Getenv("PROTON_USER") + "\"\n"
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
-	// Run with env stripped; rely entirely on the profile
+	// Strip PROTON_USER so the user must come from the profile; keep
+	// PROTON_PASSWORD/PROTON_TOTP since secrets resolve from env only.
 	cmd := exec.Command(binaryPath, "--profile", "work",
 		"mail", "messages", "list", "--page-size", "1", "--output", "json")
-	cmd.Env = filterEnv(os.Environ(), "PROTON_USER", "PROTON_PASSWORD", "PROTON_TOTP")
+	cmd.Env = filterEnv(os.Environ(), "PROTON_USER")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("profile run failed: %v\noutput: %s", err, string(out))

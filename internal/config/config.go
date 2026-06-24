@@ -12,8 +12,6 @@ import (
 
 type Profile struct {
 	User       string `toml:"user"`
-	Password   string `toml:"password"`
-	TOTP       string `toml:"totp"`
 	APIURL     string `toml:"api_url"`
 	AppVersion string `toml:"app_version"`
 }
