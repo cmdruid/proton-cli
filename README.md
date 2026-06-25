@@ -36,6 +36,8 @@ sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
 go install github.com/roman-16/proton-cli@latest
 ```
 
+> **Note:** A `go install` build does **not** include the CAPTCHA helper that release binaries embed (see [Human Verification](#human-verification-captcha)). If Proton demands human verification at login, install a [release binary](#download-a-binary-recommended) instead.
+
 ### Build from source
 
 ```bash
