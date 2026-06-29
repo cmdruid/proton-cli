@@ -108,18 +108,37 @@ func passItemsCmd() *cobra.Command {
 			return nil
 		}),
 	}
-	create.Flags().StringVar(&nc.Type, "type", "login", "Item type (login, note, card)")
+	create.Flags().StringVar(&nc.Type, "type", "login", "Item type (login, note, card, wifi, ssh_key, identity, custom)")
 	create.Flags().StringVar(&nc.Name, "name", "", "Item name")
 	create.Flags().StringVar(&nc.Username, "username", "", "Username (login)")
-	create.Flags().StringVar(&nc.Password, "password", "", "Password (login)")
+	create.Flags().StringVar(&nc.Password, "password", "", "Password (login, wifi)")
 	create.Flags().StringVar(&nc.Email, "email", "", "Email (login)")
 	create.Flags().StringVar(&nc.URL, "url", "", "URL (login)")
+	create.Flags().StringVar(&nc.TOTP, "totp", "", "TOTP URI or secret (login)")
 	create.Flags().StringVar(&nc.Note, "note", "", "Note")
 	create.Flags().StringVar(&nc.Holder, "holder", "", "Cardholder name (card)")
 	create.Flags().StringVar(&nc.Number, "number", "", "Card number (card)")
 	create.Flags().StringVar(&nc.Expiry, "expiry", "", "Card expiry YYYY-MM (card)")
 	create.Flags().StringVar(&nc.CVV, "cvv", "", "Card CVV (card)")
 	create.Flags().StringVar(&nc.PIN, "pin", "", "Card PIN (card)")
+	create.Flags().StringVar(&nc.SSID, "ssid", "", "Network SSID (wifi)")
+	create.Flags().StringVar(&nc.WifiSecurity, "security", "", "Wi-Fi security: WPA, WPA2, WPA3, WEP (wifi)")
+	create.Flags().StringVar(&nc.PrivateKey, "private-key", "", "Private key (ssh_key)")
+	create.Flags().StringVar(&nc.PublicKey, "public-key", "", "Public key (ssh_key)")
+	create.Flags().StringVar(&nc.FullName, "full-name", "", "Full name (identity)")
+	create.Flags().StringVar(&nc.FirstName, "first-name", "", "First name (identity)")
+	create.Flags().StringVar(&nc.LastName, "last-name", "", "Last name (identity)")
+	create.Flags().StringVar(&nc.PhoneNumber, "phone", "", "Phone number (identity)")
+	create.Flags().StringVar(&nc.Organization, "organization", "", "Organization (identity)")
+	create.Flags().StringVar(&nc.JobTitle, "job-title", "", "Job title (identity)")
+	create.Flags().StringVar(&nc.StreetAddress, "street", "", "Street address (identity)")
+	create.Flags().StringVar(&nc.City, "city", "", "City (identity)")
+	create.Flags().StringVar(&nc.PostalCode, "postal-code", "", "Postal/ZIP code (identity)")
+	create.Flags().StringVar(&nc.Country, "country", "", "Country/region (identity)")
+	create.Flags().StringVar(&nc.Birthdate, "birthdate", "", "Birthdate (identity)")
+	create.Flags().StringVar(&nc.Website, "website", "", "Website (identity)")
+	create.Flags().StringArrayVar(&nc.Fields, "field", nil, "Custom field NAME=VALUE (repeatable, any type)")
+	create.Flags().StringArrayVar(&nc.HiddenFields, "hidden", nil, "Hidden custom field NAME=VALUE (repeatable, any type)")
 	create.Flags().StringVar(&createVault, "vault", "", "Vault name or ID (default: first vault)")
 	c.AddCommand(create)
 
@@ -144,11 +163,33 @@ func passItemsCmd() *cobra.Command {
 		}),
 	}
 	edit.Flags().StringVar(&patch.Name, "name", "", "New name")
-	edit.Flags().StringVar(&patch.Username, "username", "", "New username")
-	edit.Flags().StringVar(&patch.Password, "password", "", "New password")
-	edit.Flags().StringVar(&patch.Email, "email", "", "New email")
-	edit.Flags().StringVar(&patch.URL, "url", "", "New URL")
+	edit.Flags().StringVar(&patch.Username, "username", "", "New username (login)")
+	edit.Flags().StringVar(&patch.Password, "password", "", "New password (login, wifi)")
+	edit.Flags().StringVar(&patch.Email, "email", "", "New email (login)")
+	edit.Flags().StringVar(&patch.URL, "url", "", "New URL (login)")
+	edit.Flags().StringVar(&patch.TOTP, "totp", "", "New TOTP URI/secret (login)")
 	edit.Flags().StringVar(&patch.Note, "note", "", "New note")
+	edit.Flags().StringVar(&patch.Holder, "holder", "", "New cardholder name (card)")
+	edit.Flags().StringVar(&patch.Number, "number", "", "New card number (card)")
+	edit.Flags().StringVar(&patch.Expiry, "expiry", "", "New card expiry YYYY-MM (card)")
+	edit.Flags().StringVar(&patch.CVV, "cvv", "", "New card CVV (card)")
+	edit.Flags().StringVar(&patch.PIN, "pin", "", "New card PIN (card)")
+	edit.Flags().StringVar(&patch.SSID, "ssid", "", "New SSID (wifi)")
+	edit.Flags().StringVar(&patch.WifiSecurity, "security", "", "New Wi-Fi security (wifi)")
+	edit.Flags().StringVar(&patch.PrivateKey, "private-key", "", "New private key (ssh_key)")
+	edit.Flags().StringVar(&patch.PublicKey, "public-key", "", "New public key (ssh_key)")
+	edit.Flags().StringVar(&patch.FullName, "full-name", "", "New full name (identity)")
+	edit.Flags().StringVar(&patch.FirstName, "first-name", "", "New first name (identity)")
+	edit.Flags().StringVar(&patch.LastName, "last-name", "", "New last name (identity)")
+	edit.Flags().StringVar(&patch.PhoneNumber, "phone", "", "New phone (identity)")
+	edit.Flags().StringVar(&patch.Organization, "organization", "", "New organization (identity)")
+	edit.Flags().StringVar(&patch.JobTitle, "job-title", "", "New job title (identity)")
+	edit.Flags().StringVar(&patch.StreetAddress, "street", "", "New street address (identity)")
+	edit.Flags().StringVar(&patch.City, "city", "", "New city (identity)")
+	edit.Flags().StringVar(&patch.PostalCode, "postal-code", "", "New postal code (identity)")
+	edit.Flags().StringVar(&patch.Country, "country", "", "New country (identity)")
+	edit.Flags().StringVar(&patch.Birthdate, "birthdate", "", "New birthdate (identity)")
+	edit.Flags().StringVar(&patch.Website, "website", "", "New website (identity)")
 	c.AddCommand(edit)
 
 	c.AddCommand(simpleItemCmd("restore", "Restore an item from trash", func(c *Ctx, share, item string) error {
@@ -185,7 +226,24 @@ func printPassItem(c *Ctx, it *passsvc.Item) {
 	field("CVV", it.CVV)
 	field("PIN", it.PIN)
 	field("SSID", it.SSID)
+	field("PublicKey", it.PublicKey)
+	field("PrivateKey", it.PrivateKey)
+	field("FullName", it.FullName)
+	field("FirstName", it.FirstName)
+	field("LastName", it.LastName)
+	field("Phone", it.Phone)
+	field("Org", it.Organization)
+	field("JobTitle", it.JobTitle)
+	field("Address", it.StreetAddress)
+	field("City", it.City)
+	field("Postal", it.PostalCode)
+	field("Country", it.Country)
+	field("Birthdate", it.Birthdate)
+	field("Website", it.Website)
 	field("Note", it.Note)
+	for _, f := range it.Fields {
+		field(f.Name, f.Value)
+	}
 	_, _ = fmt.Fprintf(out, "ID:       %s\n", it.ItemID)
 	_, _ = fmt.Fprintf(out, "Share:    %s\n", it.ShareID)
 }
@@ -398,6 +456,28 @@ func passVaultsCmd() *cobra.Command {
 			return nil
 		}),
 	})
+
+	var renameName string
+	rename := &cobra.Command{
+		Use: "rename SHARE_ID", Short: "Rename a vault",
+		Args: cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+			if renameName == "" {
+				return fmt.Errorf("--name is required")
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would rename vault %s to %q", c.Args[0], renameName))
+				return nil
+			}
+			if err := c.App.Pass.VaultEdit(c.Ctx, c.U, c.Args[0], renameName); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Vault renamed to %q.", renameName))
+			return nil
+		}),
+	}
+	rename.Flags().StringVar(&renameName, "name", "", "New vault name")
+	c.AddCommand(rename)
 	return c
 }
 

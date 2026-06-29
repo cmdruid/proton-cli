@@ -3,11 +3,73 @@
 package pgp
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 )
+
+// CalendarKeyPayload is the calendar key-setup data for
+// POST /calendar/v1/{id}/keys.
+type CalendarKeyPayload struct {
+	PrivateKey string // armored calendar private key, locked with a generated passphrase
+	DataPacket string // base64 symmetric ciphertext of the passphrase
+	KeyPacket  string // base64 session key encrypted to the address public key
+	Signature  string // armored detached signature over the passphrase
+}
+
+// GenerateCalendarKey creates a fresh calendar key and the split
+// (encrypted + signed) passphrase bound to the given address key ring, matching
+// Proton's calendar key-setup flow.
+func GenerateCalendarKey(addrKR *pgp.KeyRing) (*CalendarKeyPayload, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return nil, err
+	}
+	passphrase := base64.StdEncoding.EncodeToString(raw)
+
+	key, err := pgp.GenerateKey("Calendar key", "", "x25519", 0)
+	if err != nil {
+		return nil, err
+	}
+	locked, err := key.Lock([]byte(passphrase))
+	if err != nil {
+		return nil, err
+	}
+	privArmored, err := locked.Armor()
+	if err != nil {
+		return nil, err
+	}
+
+	msg := pgp.NewPlainMessageFromString(passphrase)
+	sk, err := pgp.GenerateSessionKey()
+	if err != nil {
+		return nil, err
+	}
+	dataPacket, err := sk.Encrypt(msg)
+	if err != nil {
+		return nil, err
+	}
+	keyPacket, err := addrKR.EncryptSessionKey(sk)
+	if err != nil {
+		return nil, err
+	}
+	sig, err := addrKR.SignDetached(msg)
+	if err != nil {
+		return nil, err
+	}
+	sigArmored, err := sig.GetArmored()
+	if err != nil {
+		return nil, err
+	}
+	return &CalendarKeyPayload{
+		PrivateKey: privArmored,
+		DataPacket: base64.StdEncoding.EncodeToString(dataPacket),
+		KeyPacket:  base64.StdEncoding.EncodeToString(keyPacket),
+		Signature:  sigArmored,
+	}, nil
+}
 
 // Card types used by Proton for its VEVENT / VCard blobs.
 const (
@@ -151,14 +213,15 @@ func EncryptAndSignCard(data string, encryptionKR, signingKR *pgp.KeyRing) (*Car
 	return &Card{Type: CardEncryptedSigned, Data: armored, Signature: sigArmored}, nil
 }
 
-// EncryptAndSignCardSplit produces (signedCard, encryptedCard, sharedKeyPacket)
-// for Proton calendar events. When existingKeyPacket is non-empty, the
-// existing session key is reused (update flow) and the returned keyPacket is
-// empty.
-func EncryptAndSignCardSplit(signedData, encryptedData string, encryptionKR, signingKR *pgp.KeyRing, existingKeyPacketB64 string) (signed, encrypted *Card, keyPacketB64 string, err error) {
+// EncryptAndSignCardSplit produces (signedCard, encryptedCard, sharedKeyPacket,
+// sessionKey) for Proton calendar events. When existingKeyPacket is non-empty,
+// the existing session key is reused (update flow) and the returned keyPacket
+// is empty. The returned session key lets callers encrypt sibling parts (e.g.
+// the attendees part) and wrap it to additional recipients.
+func EncryptAndSignCardSplit(signedData, encryptedData string, encryptionKR, signingKR *pgp.KeyRing, existingKeyPacketB64 string) (signed, encrypted *Card, keyPacketB64 string, sessionKey *pgp.SessionKey, err error) {
 	signed, err = SignCard(signedData, signingKR)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 
 	encMsg := pgp.NewPlainMessageFromString(encryptedData)
@@ -166,37 +229,62 @@ func EncryptAndSignCardSplit(signedData, encryptedData string, encryptionKR, sig
 	if existingKeyPacketB64 != "" {
 		kpBytes, err := base64.StdEncoding.DecodeString(existingKeyPacketB64)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("decode existing key packet: %w", err)
+			return nil, nil, "", nil, fmt.Errorf("decode existing key packet: %w", err)
 		}
-		sk, err := encryptionKR.DecryptSessionKey(kpBytes)
+		sessionKey, err = encryptionKR.DecryptSessionKey(kpBytes)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("decrypt existing session key: %w", err)
+			return nil, nil, "", nil, fmt.Errorf("decrypt existing session key: %w", err)
 		}
-		dataPacket, err = sk.Encrypt(encMsg)
+		dataPacket, err = sessionKey.Encrypt(encMsg)
 		if err != nil {
-			return nil, nil, "", err
+			return nil, nil, "", nil, err
 		}
 	} else {
 		enc, err := encryptionKR.Encrypt(encMsg, signingKR)
 		if err != nil {
-			return nil, nil, "", err
+			return nil, nil, "", nil, err
 		}
 		split, err := enc.SplitMessage()
 		if err != nil {
-			return nil, nil, "", err
+			return nil, nil, "", nil, err
 		}
 		keyPacketB64 = base64.StdEncoding.EncodeToString(split.GetBinaryKeyPacket())
 		dataPacket = split.GetBinaryDataPacket()
+		sessionKey, err = encryptionKR.DecryptSessionKey(split.GetBinaryKeyPacket())
+		if err != nil {
+			return nil, nil, "", nil, fmt.Errorf("recover session key: %w", err)
+		}
 	}
 
 	sig, err := signingKR.SignDetached(encMsg)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 	sigArmored, err := sig.GetArmored()
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 	encrypted = &Card{Type: CardEncryptedSigned, Data: base64.StdEncoding.EncodeToString(dataPacket), Signature: sigArmored}
-	return signed, encrypted, keyPacketB64, nil
+	return signed, encrypted, keyPacketB64, sessionKey, nil
+}
+
+// EncryptPartWithSessionKey encrypts data under an existing session key
+// (encrypt-only data packet) and attaches a detached signature, matching
+// Proton's ENCRYPTED_AND_SIGNED card layout for sibling event parts such as the
+// attendees part.
+func EncryptPartWithSessionKey(data string, sessionKey *pgp.SessionKey, signingKR *pgp.KeyRing) (*Card, error) {
+	msg := pgp.NewPlainMessageFromString(data)
+	dataPacket, err := sessionKey.Encrypt(msg)
+	if err != nil {
+		return nil, err
+	}
+	sig, err := signingKR.SignDetached(msg)
+	if err != nil {
+		return nil, err
+	}
+	sigArmored, err := sig.GetArmored()
+	if err != nil {
+		return nil, err
+	}
+	return &Card{Type: CardEncryptedSigned, Data: base64.StdEncoding.EncodeToString(dataPacket), Signature: sigArmored}, nil
 }

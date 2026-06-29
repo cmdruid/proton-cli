@@ -241,8 +241,10 @@ func TestShortIDRoundTripContacts(t *testing.T) {
 	// Populate cache.
 	runOK(t, "contacts", "list")
 
+	// `--` guards against the ~1.5% of IDs whose 8-char prefix starts with '-'
+	// (which cobra would otherwise read as a flag).
 	prefix := id[:8]
-	got := runOK(t, "contacts", "get", prefix)
+	got := runOK(t, "contacts", "get", "--", prefix)
 	if !strings.Contains(got, name) {
 		t.Errorf("contacts get by short prefix should resolve; stdout:\n%s", got)
 	}

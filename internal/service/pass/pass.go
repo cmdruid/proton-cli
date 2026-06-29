@@ -53,8 +53,34 @@ type Item struct {
 	CVV        string   `json:"cvv,omitempty"`
 	PIN        string   `json:"pin,omitempty"`
 	SSID       string   `json:"ssid,omitempty"`
+	PublicKey  string   `json:"public_key,omitempty"`
+	PrivateKey string   `json:"private_key,omitempty"`
+
+	// identity
+	FullName      string `json:"full_name,omitempty"`
+	FirstName     string `json:"first_name,omitempty"`
+	LastName      string `json:"last_name,omitempty"`
+	Phone         string `json:"phone,omitempty"`
+	Organization  string `json:"organization,omitempty"`
+	JobTitle      string `json:"job_title,omitempty"`
+	StreetAddress string `json:"street_address,omitempty"`
+	City          string `json:"city,omitempty"`
+	PostalCode    string `json:"postal_code,omitempty"`
+	Country       string `json:"country,omitempty"`
+	Birthdate     string `json:"birthdate,omitempty"`
+	Website       string `json:"website,omitempty"`
+
+	// extra custom fields (any item type)
+	Fields []ItemField `json:"fields,omitempty"`
 
 	raw *pb.Item
+}
+
+// ItemField is a custom extra field attached to an item.
+type ItemField struct {
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
+	Type  string `json:"type"`
 }
 
 type shareKeys struct{ keys map[int][]byte }
@@ -155,6 +181,67 @@ func (s *Service) VaultCreate(ctx context.Context, u *keys.Unlocked, name string
 
 func (s *Service) VaultDelete(ctx context.Context, shareID string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/pass/v1/vault/" + shareID}, nil)
+}
+
+// VaultEdit renames a vault, preserving its description and display settings by
+// re-encrypting the existing vault content with the latest share key.
+func (s *Service) VaultEdit(ctx context.Context, u *keys.Unlocked, shareID, newName string) error {
+	shares, err := s.getShares(ctx)
+	if err != nil {
+		return err
+	}
+	var content string
+	var rotation int
+	found := false
+	for _, raw := range shares {
+		var sh struct {
+			ShareID            string
+			TargetType         int
+			Content            string
+			ContentKeyRotation int
+		}
+		if err := json.Unmarshal(raw, &sh); err != nil {
+			continue
+		}
+		if sh.ShareID == shareID && sh.TargetType == 1 {
+			content, rotation, found = sh.Content, sh.ContentKeyRotation, true
+			break
+		}
+	}
+	if !found {
+		return &errs.NotFound{Kind: "vault", Ref: shareID}
+	}
+	sk, err := s.decryptShareKeys(ctx, shareID, u)
+	if err != nil {
+		return err
+	}
+	shareKey, ok := sk.keys[rotation]
+	if !ok {
+		return fmt.Errorf("no share key for rotation %d", rotation)
+	}
+	vault := &pb.Vault{}
+	if content != "" {
+		if v, err := decryptVault(content, shareKey); err == nil {
+			vault = v
+		}
+	}
+	vault.Name = newName
+	pbBytes, err := proto.Marshal(vault)
+	if err != nil {
+		return err
+	}
+	ct, err := aead.Encrypt(shareKey, pbBytes, []byte(aead.TagVaultContent))
+	if err != nil {
+		return err
+	}
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/pass/v1/vault/" + shareID,
+		Body: map[string]any{
+			"Content":              base64.StdEncoding.EncodeToString(ct),
+			"ContentFormatVersion": 1,
+			"KeyRotation":          rotation,
+		},
+	}, nil)
 }
 
 func (s *Service) ResolveVault(ctx context.Context, u *keys.Unlocked, nameOrID string) (string, error) {
@@ -266,6 +353,13 @@ func (s *Service) ResolveItem(ctx context.Context, u *keys.Unlocked, args []stri
 	if err != nil {
 		return "", "", err
 	}
+	// An exact item-ID match wins outright, so the ID printed by `items create`
+	// round-trips as a single REF to get/edit/delete.
+	for _, it := range items {
+		if it.ItemID == args[0] {
+			return it.ShareID, it.ItemID, nil
+		}
+	}
 	var matches []Item
 	for _, it := range items {
 		if strings.Contains(strings.ToLower(it.Name), needle) {
@@ -295,7 +389,66 @@ func (s *Service) ResolveItem(ctx context.Context, u *keys.Unlocked, args []stri
 type NewItem struct {
 	Type                                       string
 	Name, Username, Password, Email, URL, Note string
+	TOTP                                       string
 	Holder, Number, Expiry, CVV, PIN           string
+	SSID, WifiSecurity                         string
+	PrivateKey, PublicKey                      string
+	// identity
+	FullName, FirstName, LastName, PhoneNumber string
+	Organization, JobTitle                     string
+	StreetAddress, City, PostalCode, Country   string
+	Birthdate, Website                         string
+	// extra custom fields, each "NAME=VALUE"
+	Fields       []string
+	HiddenFields []string
+}
+
+func buildExtraFields(textFields, hiddenFields []string) ([]*pb.ExtraField, error) {
+	var out []*pb.ExtraField
+	for _, f := range textFields {
+		name, val, ok := strings.Cut(f, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid --field %q (expected NAME=VALUE)", f)
+		}
+		out = append(out, &pb.ExtraField{FieldName: name, Content: &pb.ExtraField_Text{Text: &pb.ExtraTextField{Content: val}}})
+	}
+	for _, f := range hiddenFields {
+		name, val, ok := strings.Cut(f, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid --hidden %q (expected NAME=VALUE)", f)
+		}
+		out = append(out, &pb.ExtraField{FieldName: name, Content: &pb.ExtraField_Hidden{Hidden: &pb.ExtraHiddenField{Content: val}}})
+	}
+	return out, nil
+}
+
+func extraFieldToItem(f *pb.ExtraField) ItemField {
+	switch c := f.Content.(type) {
+	case *pb.ExtraField_Text:
+		return ItemField{Name: f.FieldName, Value: c.Text.Content, Type: "text"}
+	case *pb.ExtraField_Hidden:
+		return ItemField{Name: f.FieldName, Value: c.Hidden.Content, Type: "hidden"}
+	case *pb.ExtraField_Totp:
+		return ItemField{Name: f.FieldName, Value: c.Totp.TotpUri, Type: "totp"}
+	}
+	return ItemField{Name: f.FieldName, Type: "unknown"}
+}
+
+// wifiSecurity maps a CLI security string to the protobuf enum; an unknown or
+// empty value falls back to unspecified.
+func wifiSecurity(s string) pb.WifiSecurity {
+	switch strings.ToUpper(s) {
+	case "WPA":
+		return pb.WifiSecurity_WPA
+	case "WPA2":
+		return pb.WifiSecurity_WPA2
+	case "WPA3":
+		return pb.WifiSecurity_WPA3
+	case "WEP":
+		return pb.WifiSecurity_WEP
+	default:
+		return pb.WifiSecurity_UnspecifiedWifiSecurity
+	}
 }
 
 func (s *Service) ItemCreate(ctx context.Context, u *keys.Unlocked, shareID string, nc NewItem) (string, error) {
@@ -313,7 +466,7 @@ func (s *Service) ItemCreate(ctx context.Context, u *keys.Unlocked, shareID stri
 			urls = append(urls, nc.URL)
 		}
 		item.Content.Content = &pb.Content_Login{Login: &pb.ItemLogin{
-			ItemUsername: nc.Username, ItemEmail: nc.Email, Password: nc.Password, Urls: urls,
+			ItemUsername: nc.Username, ItemEmail: nc.Email, Password: nc.Password, Urls: urls, TotpUri: nc.TOTP,
 		}}
 	case "note":
 		item.Content.Content = &pb.Content_Note{Note: &pb.ItemNote{}}
@@ -322,9 +475,33 @@ func (s *Service) ItemCreate(ctx context.Context, u *keys.Unlocked, shareID stri
 			CardholderName: nc.Holder, Number: nc.Number, ExpirationDate: nc.Expiry,
 			VerificationNumber: nc.CVV, Pin: nc.PIN,
 		}}
+	case "wifi":
+		item.Content.Content = &pb.Content_Wifi{Wifi: &pb.ItemWifi{
+			Ssid: nc.SSID, Password: nc.Password, Security: wifiSecurity(nc.WifiSecurity),
+		}}
+	case "ssh_key":
+		item.Content.Content = &pb.Content_SshKey{SshKey: &pb.ItemSSHKey{
+			PrivateKey: nc.PrivateKey, PublicKey: nc.PublicKey,
+		}}
+	case "identity":
+		item.Content.Content = &pb.Content_Identity{Identity: &pb.ItemIdentity{
+			FullName: nc.FullName, FirstName: nc.FirstName, LastName: nc.LastName,
+			Email: nc.Email, PhoneNumber: nc.PhoneNumber,
+			Organization: nc.Organization, JobTitle: nc.JobTitle,
+			StreetAddress: nc.StreetAddress, City: nc.City,
+			ZipOrPostalCode: nc.PostalCode, CountryOrRegion: nc.Country,
+			Birthdate: nc.Birthdate, Website: nc.Website,
+		}}
+	case "custom":
+		item.Content.Content = &pb.Content_Custom{Custom: &pb.ItemCustom{}}
 	default:
-		return "", fmt.Errorf("unsupported item type %q", nc.Type)
+		return "", fmt.Errorf("unsupported item type %q (supported: login, note, card, wifi, ssh_key, identity, custom)", nc.Type)
 	}
+	extra, err := buildExtraFields(nc.Fields, nc.HiddenFields)
+	if err != nil {
+		return "", err
+	}
+	item.ExtraFields = extra
 
 	itemKey, err := aead.NewKey()
 	if err != nil {
@@ -359,6 +536,15 @@ func (s *Service) ItemCreate(ctx context.Context, u *keys.Unlocked, shareID stri
 
 type Patch struct {
 	Name, Username, Password, Email, URL, Note string
+	TOTP                                       string
+	Holder, Number, Expiry, CVV, PIN           string
+	SSID, WifiSecurity                         string
+	PrivateKey, PublicKey                      string
+	// identity
+	FullName, FirstName, LastName, PhoneNumber string
+	Organization, JobTitle                     string
+	StreetAddress, City, PostalCode, Country   string
+	Birthdate, Website                         string
 }
 
 func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemID string, patch Patch) error {
@@ -404,18 +590,100 @@ func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemI
 		it.Metadata.Note = patch.Note
 	}
 	if it.Content != nil {
-		if login, ok := it.Content.Content.(*pb.Content_Login); ok {
+		switch content := it.Content.Content.(type) {
+		case *pb.Content_Login:
+			l := content.Login
 			if patch.Username != "" {
-				login.Login.ItemUsername = patch.Username
+				l.ItemUsername = patch.Username
 			}
 			if patch.Password != "" {
-				login.Login.Password = patch.Password
+				l.Password = patch.Password
 			}
 			if patch.Email != "" {
-				login.Login.ItemEmail = patch.Email
+				l.ItemEmail = patch.Email
 			}
 			if patch.URL != "" {
-				login.Login.Urls = []string{patch.URL}
+				l.Urls = []string{patch.URL}
+			}
+			if patch.TOTP != "" {
+				l.TotpUri = patch.TOTP
+			}
+		case *pb.Content_CreditCard:
+			cc := content.CreditCard
+			if patch.Holder != "" {
+				cc.CardholderName = patch.Holder
+			}
+			if patch.Number != "" {
+				cc.Number = patch.Number
+			}
+			if patch.Expiry != "" {
+				cc.ExpirationDate = patch.Expiry
+			}
+			if patch.CVV != "" {
+				cc.VerificationNumber = patch.CVV
+			}
+			if patch.PIN != "" {
+				cc.Pin = patch.PIN
+			}
+		case *pb.Content_Wifi:
+			w := content.Wifi
+			if patch.SSID != "" {
+				w.Ssid = patch.SSID
+			}
+			if patch.Password != "" {
+				w.Password = patch.Password
+			}
+			if patch.WifiSecurity != "" {
+				w.Security = wifiSecurity(patch.WifiSecurity)
+			}
+		case *pb.Content_SshKey:
+			k := content.SshKey
+			if patch.PrivateKey != "" {
+				k.PrivateKey = patch.PrivateKey
+			}
+			if patch.PublicKey != "" {
+				k.PublicKey = patch.PublicKey
+			}
+		case *pb.Content_Identity:
+			idn := content.Identity
+			if patch.FullName != "" {
+				idn.FullName = patch.FullName
+			}
+			if patch.FirstName != "" {
+				idn.FirstName = patch.FirstName
+			}
+			if patch.LastName != "" {
+				idn.LastName = patch.LastName
+			}
+			if patch.Email != "" {
+				idn.Email = patch.Email
+			}
+			if patch.PhoneNumber != "" {
+				idn.PhoneNumber = patch.PhoneNumber
+			}
+			if patch.Organization != "" {
+				idn.Organization = patch.Organization
+			}
+			if patch.JobTitle != "" {
+				idn.JobTitle = patch.JobTitle
+			}
+			if patch.StreetAddress != "" {
+				idn.StreetAddress = patch.StreetAddress
+			}
+			if patch.City != "" {
+				idn.City = patch.City
+			}
+			if patch.PostalCode != "" {
+				idn.ZipOrPostalCode = patch.PostalCode
+			}
+			if patch.Country != "" {
+				idn.CountryOrRegion = patch.Country
+			}
+			if patch.Birthdate != "" {
+				idn.Birthdate = patch.Birthdate
+			}
+			if patch.Website != "" {
+				idn.Website = patch.Website
 			}
 		}
 	}
@@ -748,6 +1016,27 @@ func itemFromProto(it *pb.Item) *Item {
 	case *pb.Content_Wifi:
 		item.SSID = c.Wifi.Ssid
 		item.Password = c.Wifi.Password
+	case *pb.Content_SshKey:
+		item.PrivateKey = c.SshKey.PrivateKey
+		item.PublicKey = c.SshKey.PublicKey
+	case *pb.Content_Identity:
+		idn := c.Identity
+		item.FullName = idn.FullName
+		item.FirstName = idn.FirstName
+		item.LastName = idn.LastName
+		item.Email = idn.Email
+		item.Phone = idn.PhoneNumber
+		item.Organization = idn.Organization
+		item.JobTitle = idn.JobTitle
+		item.StreetAddress = idn.StreetAddress
+		item.City = idn.City
+		item.PostalCode = idn.ZipOrPostalCode
+		item.Country = idn.CountryOrRegion
+		item.Birthdate = idn.Birthdate
+		item.Website = idn.Website
+	}
+	for _, f := range it.ExtraFields {
+		item.Fields = append(item.Fields, extraFieldToItem(f))
 	}
 	return item
 }

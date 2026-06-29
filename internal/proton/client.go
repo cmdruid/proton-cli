@@ -141,6 +141,11 @@ type Request struct {
 	Query  url.Values
 	Body   any
 
+	// ContentType overrides the request Content-Type. Empty means
+	// application/json. Set it (e.g. multipart/form-data with a boundary) when
+	// Body is a pre-encoded []byte/io.Reader.
+	ContentType string
+
 	// Human-verification state (set by retry logic, not by most callers).
 	HVToken string
 	HVType  string
@@ -260,7 +265,11 @@ func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	r.Header.Set("Content-Type", "application/json")
+	if req.ContentType != "" {
+		r.Header.Set("Content-Type", req.ContentType)
+	} else {
+		r.Header.Set("Content-Type", "application/json")
+	}
 	r.Header.Set("x-pm-appversion", c.app)
 	if uid != "" {
 		r.Header.Set("x-pm-uid", uid)

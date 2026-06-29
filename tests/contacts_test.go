@@ -105,3 +105,40 @@ func TestContactsAmbiguous(t *testing.T) {
 		t.Errorf("expected exit 4 for ambiguous match, got %d", code)
 	}
 }
+
+func TestContactsMultiValue(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	name := testID() + "-mv"
+	e1 := testID() + "-1@example.com"
+	e2 := testID() + "-2@example.com"
+	cid := strings.TrimSpace(runOK(t, "contacts", "create", "--name", name,
+		"--email", e1, "--email", e2, "--phone", "+1234567890",
+		"--title", "CTO", "--birthday", "1990-01-31", "--address", "Vienna", "--url", "https://x.example"))
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", cid),
+		"contacts", "delete", "--", cid)
+
+	got := runOK(t, "contacts", "get", "--", cid)
+	assertContains(t, got, e1)
+	assertContains(t, got, e2)
+	assertContains(t, got, "CTO")
+	assertContains(t, got, "Vienna")
+}
+
+func TestContactsGroups(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	gname := testID() + "-group"
+	gid := strings.TrimSpace(runOK(t, "contacts", "groups", "create", "--name", gname, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete group: proton-cli contacts groups delete %s", gid),
+		"contacts", "groups", "delete", "--", gid)
+
+	cname := testID() + "-gc"
+	cid := strings.TrimSpace(runOK(t, "contacts", "create", "--name", cname, "--email", testID()+"@example.com"))
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", cid),
+		"contacts", "delete", "--", cid)
+
+	runOK(t, "contacts", "groups", "add", gid, cid)
+	assertContains(t, runOK(t, "contacts", "groups", "list"), gname)
+	runOK(t, "contacts", "groups", "remove", gid, cid)
+}

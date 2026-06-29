@@ -19,6 +19,9 @@ type UploadOptions struct {
 	Label     string
 	Quiet     bool
 	TotalHint int64
+	// Photo, when set, marks the committed revision as a photo (added to the
+	// commit body verbatim, e.g. {MainPhotoLinkID, CaptureTime, ContentHash}).
+	Photo map[string]any
 }
 
 func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string, r io.Reader, opts UploadOptions) error {
@@ -211,12 +214,16 @@ func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string
 	for i, link := range uploadResult.UploadLinks {
 		blockTokens[i] = map[string]any{"Index": blocks[i].Index, "Token": link.Token}
 	}
+	commit := map[string]any{
+		"BlockList": blockTokens, "State": 1,
+		"ManifestSignature": manifestSig, "SignatureAddress": dc.AddrEmail,
+	}
+	if opts.Photo != nil {
+		commit["Photo"] = opts.Photo
+	}
 	return s.C.Decode(ctx, proton.Request{
 		Method: "PUT", Path: fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", parent.ShareID, linkID, revisionID),
-		Body: map[string]any{
-			"BlockList": blockTokens, "State": 1,
-			"ManifestSignature": manifestSig, "SignatureAddress": dc.AddrEmail,
-		},
+		Body: commit,
 	}, nil)
 }
 

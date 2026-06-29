@@ -19,23 +19,45 @@ type Service struct{ C proton.Doer }
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
 type Contact struct {
-	ID    string   `json:"id"`
-	Name  string   `json:"name"`
-	Email string   `json:"email,omitempty"`
-	Phone string   `json:"phone,omitempty"`
-	Org   string   `json:"org,omitempty"`
-	Note  string   `json:"note,omitempty"`
-	Cards []string `json:"cards,omitempty"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Email    string   `json:"email,omitempty"`
+	Phone    string   `json:"phone,omitempty"`
+	Emails   []string `json:"emails,omitempty"`
+	Phones   []string `json:"phones,omitempty"`
+	Org      string   `json:"org,omitempty"`
+	Note     string   `json:"note,omitempty"`
+	Title    string   `json:"title,omitempty"`
+	Birthday string   `json:"birthday,omitempty"`
+	Address  string   `json:"address,omitempty"`
+	URL      string   `json:"url,omitempty"`
+	Cards    []string `json:"cards,omitempty"`
 
 	Signature pgp.VerifyResult `json:"signature,omitempty"`
 }
 
 type NewContact struct {
-	Name  string
-	Email string
-	Phone string
-	Note  string
-	Org   string
+	Name     string
+	Emails   []string
+	Phones   []string
+	Note     string
+	Org      string
+	Title    string
+	Birthday string
+	Address  string
+	URL      string
+}
+
+func hasEncryptedFields(nc NewContact) bool {
+	return len(nc.Phones) > 0 || nc.Note != "" || nc.Org != "" || nc.Title != "" ||
+		nc.Birthday != "" || nc.Address != "" || nc.URL != ""
+}
+
+func toVCardFields(nc NewContact) ical.VCardFields {
+	return ical.VCardFields{
+		Phones: nc.Phones, Note: nc.Note, Org: nc.Org, Title: nc.Title,
+		Birthday: nc.Birthday, Address: nc.Address, URL: nc.URL,
+	}
 }
 
 func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error) {
@@ -101,7 +123,14 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, ref string) (st
 	needle := strings.ToLower(ref)
 	var matches []Contact
 	for _, c := range contacts {
-		if strings.Contains(strings.ToLower(c.Name), needle) || strings.Contains(strings.ToLower(c.Email), needle) {
+		match := strings.Contains(strings.ToLower(c.Name), needle)
+		for _, e := range c.Emails {
+			if strings.Contains(strings.ToLower(e), needle) {
+				match = true
+				break
+			}
+		}
+		if match {
 			matches = append(matches, c)
 		}
 	}
@@ -119,21 +148,21 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, ref string) (st
 }
 
 func (s *Service) Create(ctx context.Context, u *keys.Unlocked, nc NewContact) (string, error) {
-	if nc.Name == "" && nc.Email == "" {
+	if nc.Name == "" && len(nc.Emails) == 0 {
 		return "", fmt.Errorf("name or email is required")
 	}
 	name := nc.Name
 	if name == "" {
-		name = nc.Email
+		name = nc.Emails[0]
 	}
-	signed := ical.SignedVCard(name, nc.Email, ical.ContactUID())
+	signed := ical.SignedVCard(name, nc.Emails, ical.ContactUID())
 	signedCard, err := pgp.SignCard(signed, u.UserKR)
 	if err != nil {
 		return "", err
 	}
 	cards := []any{signedCard}
-	if nc.Phone != "" || nc.Note != "" || nc.Org != "" {
-		enc := ical.EncryptedVCard(nc.Phone, nc.Note, nc.Org)
+	if hasEncryptedFields(nc) {
+		enc := ical.EncryptedVCard(toVCardFields(nc))
 		ec, err := pgp.EncryptAndSignCard(enc, u.UserKR, u.UserKR)
 		if err != nil {
 			return "", err
@@ -167,28 +196,32 @@ func (s *Service) Update(ctx context.Context, u *keys.Unlocked, id string, patch
 		return err
 	}
 	merged := NewContact{
-		Name:  firstNonEmpty(patch.Name, existing.Name),
-		Email: firstNonEmpty(patch.Email, existing.Email),
-		Phone: firstNonEmpty(patch.Phone, existing.Phone),
-		Note:  firstNonEmpty(patch.Note, existing.Note),
-		Org:   firstNonEmpty(patch.Org, existing.Org),
+		Name:     firstNonEmpty(patch.Name, existing.Name),
+		Emails:   pickSlice(patch.Emails, existing.Emails),
+		Phones:   pickSlice(patch.Phones, existing.Phones),
+		Note:     firstNonEmpty(patch.Note, existing.Note),
+		Org:      firstNonEmpty(patch.Org, existing.Org),
+		Title:    firstNonEmpty(patch.Title, existing.Title),
+		Birthday: firstNonEmpty(patch.Birthday, existing.Birthday),
+		Address:  firstNonEmpty(patch.Address, existing.Address),
+		URL:      firstNonEmpty(patch.URL, existing.URL),
 	}
 	uid := ical.Field(strings.Join(existing.Cards, "\n"), "UID")
 	if uid == "" {
 		uid = ical.ContactUID()
 	}
 	name := merged.Name
-	if name == "" {
-		name = merged.Email
+	if name == "" && len(merged.Emails) > 0 {
+		name = merged.Emails[0]
 	}
-	signed := ical.SignedVCard(name, merged.Email, uid)
+	signed := ical.SignedVCard(name, merged.Emails, uid)
 	signedCard, err := pgp.SignCard(signed, u.UserKR)
 	if err != nil {
 		return err
 	}
 	cards := []any{signedCard}
-	if merged.Phone != "" || merged.Note != "" || merged.Org != "" {
-		enc := ical.EncryptedVCard(merged.Phone, merged.Note, merged.Org)
+	if hasEncryptedFields(merged) {
+		enc := ical.EncryptedVCard(toVCardFields(merged))
 		ec, err := pgp.EncryptAndSignCard(enc, u.UserKR, u.UserKR)
 		if err != nil {
 			return err
@@ -202,20 +235,92 @@ func (s *Service) Delete(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/contacts/v4/contacts/delete", Body: map[string]any{"IDs": ids}}, nil)
 }
 
+// Group is a contact group (a Type-2 label).
+type Group struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+func (s *Service) GroupsList(ctx context.Context) ([]Group, error) {
+	var r struct {
+		Labels []struct{ ID, Name, Color string }
+	}
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/labels", Query: keys.Query("Type", "2")}, &r); err != nil {
+		return nil, err
+	}
+	out := make([]Group, 0, len(r.Labels))
+	for _, l := range r.Labels {
+		out = append(out, Group{ID: l.ID, Name: l.Name, Color: l.Color})
+	}
+	return out, nil
+}
+
+func (s *Service) GroupCreate(ctx context.Context, name, color string) (string, error) {
+	var r struct{ Label struct{ ID string } }
+	if err := s.C.Decode(ctx, proton.Request{
+		Method: "POST", Path: "/core/v4/labels",
+		Body: map[string]any{"Name": name, "Color": color, "Type": 2},
+	}, &r); err != nil {
+		return "", err
+	}
+	return r.Label.ID, nil
+}
+
+func (s *Service) GroupDelete(ctx context.Context, id string) error {
+	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/core/v4/labels/" + id}, nil)
+}
+
+// GroupAdd adds contacts to a group; GroupRemove removes them. Both operate on
+// whole contacts (all of a contact's emails join/leave the group).
+func (s *Service) GroupAdd(ctx context.Context, groupID string, contactIDs []string) error {
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/contacts/v4/contacts/label",
+		Body: map[string]any{"LabelID": groupID, "ContactIDs": contactIDs},
+	}, nil)
+}
+
+func (s *Service) GroupRemove(ctx context.Context, groupID string, contactIDs []string) error {
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/contacts/v4/contacts/unlabel",
+		Body: map[string]any{"LabelID": groupID, "ContactIDs": contactIDs},
+	}, nil)
+}
+
 func contactFromCards(id string, cards []string) Contact {
 	joined := strings.Join(cards, "\n")
-	return Contact{
-		ID:    id,
-		Name:  ical.Field(joined, "FN"),
-		Email: ical.Field(joined, "EMAIL"),
-		Phone: ical.Field(joined, "TEL"),
-		Org:   ical.Field(joined, "ORG"),
-		Note:  ical.Field(joined, "NOTE"),
+	emails := ical.Fields(joined, "EMAIL")
+	phones := ical.Fields(joined, "TEL")
+	c := Contact{
+		ID:       id,
+		Name:     ical.Field(joined, "FN"),
+		Emails:   emails,
+		Phones:   phones,
+		Org:      ical.Field(joined, "ORG"),
+		Note:     ical.Field(joined, "NOTE"),
+		Title:    ical.Field(joined, "TITLE"),
+		Birthday: ical.Field(joined, "BDAY"),
+		Address:  ical.Field(joined, "ADR"),
+		URL:      ical.Field(joined, "URL"),
 	}
+	if len(emails) > 0 {
+		c.Email = emails[0]
+	}
+	if len(phones) > 0 {
+		c.Phone = phones[0]
+	}
+	return c
 }
 
 func firstNonEmpty(a, b string) string {
 	if a != "" {
+		return a
+	}
+	return b
+}
+
+func pickSlice(a, b []string) []string {
+	if len(a) > 0 {
 		return a
 	}
 	return b

@@ -1,6 +1,44 @@
 package tests
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+func mailViewMode(t *testing.T) int {
+	t.Helper()
+	data := runJSON(t, "api", "GET", "/mail/v4/settings")
+	ms, ok := data["MailSettings"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("no MailSettings in response: %v", data)
+	}
+	vm, ok := ms["ViewMode"].(float64)
+	if !ok {
+		t.Fatalf("no ViewMode in MailSettings: %v", ms)
+	}
+	return int(vm)
+}
+
+func TestSettingsSet(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	orig := mailViewMode(t)
+	target := 0
+	if orig == 0 {
+		target = 1
+	}
+	cleanup(t, fmt.Sprintf("Restore mail ViewMode: proton-cli settings set view-mode %d", orig), func() error {
+		if _, _, code := run(t, "settings", "set", "view-mode", fmt.Sprintf("%d", orig)); code != 0 {
+			return fmt.Errorf("restore exit %d", code)
+		}
+		return nil
+	})
+
+	runOK(t, "settings", "set", "view-mode", fmt.Sprintf("%d", target))
+	if got := mailViewMode(t); got != target {
+		t.Errorf("ViewMode after set: got %d want %d", got, target)
+	}
+}
 
 func TestSettingsGet(t *testing.T) {
 	skipIfNoCredentials(t)

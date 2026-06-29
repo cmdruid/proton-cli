@@ -7,6 +7,7 @@ import (
 	"github.com/roman-16/proton-cli/internal/crypto/ical"
 	"github.com/roman-16/proton-cli/internal/render"
 	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
+	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
 	"github.com/roman-16/proton-cli/internal/view"
 	"github.com/spf13/cobra"
 )
@@ -46,6 +47,9 @@ func calendarsCmd() *cobra.Command {
 			if cName == "" {
 				return fmt.Errorf("--name is required")
 			}
+			if err := validateAccentColor(cColor); err != nil {
+				return err
+			}
 			if c.App.DryRun {
 				c.R().Info(fmt.Sprintf("dry-run: would create calendar %q", cName))
 				return nil
@@ -63,7 +67,7 @@ func calendarsCmd() *cobra.Command {
 		}),
 	}
 	create.Flags().StringVar(&cName, "name", "", "Calendar name")
-	create.Flags().StringVar(&cColor, "color", "#8080FF", "Calendar color (hex)")
+	create.Flags().StringVar(&cColor, "color", "#8080FF", "Calendar color (hex; must be a Proton accent color)")
 	c.AddCommand(create)
 
 	c.AddCommand(&cobra.Command{
@@ -89,6 +93,32 @@ func calendarsCmd() *cobra.Command {
 			return nil
 		}),
 	})
+
+	var renName, renColor string
+	rename := &cobra.Command{
+		Use: "rename CALENDAR_ID", Short: "Rename or recolor a calendar",
+		Args: cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+			if renName == "" && renColor == "" {
+				return fmt.Errorf("nothing to update: pass --name or --color")
+			}
+			if err := validateAccentColor(renColor); err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would update calendar %s", c.Args[0]))
+				return nil
+			}
+			if err := c.App.Calendar.CalendarRename(c.Ctx, c.U, c.Args[0], renName, renColor); err != nil {
+				return err
+			}
+			c.R().Success("Calendar updated.")
+			return nil
+		}),
+	}
+	rename.Flags().StringVar(&renName, "name", "", "New calendar name")
+	rename.Flags().StringVar(&renColor, "color", "", "New color (hex; must be a Proton accent color)")
+	c.AddCommand(rename)
 	return c
 }
 
@@ -178,6 +208,12 @@ func eventsCmd() *cobra.Command {
 			if ev.Location != "" {
 				_, _ = fmt.Fprintf(out, "Location: %s\n", ev.Location)
 			}
+			if ev.Description != "" {
+				_, _ = fmt.Fprintf(out, "Description: %s\n", ev.Description)
+			}
+			if ev.RRule != "" {
+				_, _ = fmt.Fprintf(out, "Recurrence: %s\n", ev.RRule)
+			}
 			_, _ = fmt.Fprintf(out, "ID:       %s\n", ev.ID)
 			_, _ = fmt.Fprintf(out, "Calendar: %s\n", ev.CalendarID)
 			if ev.Signature != "" {
@@ -187,7 +223,8 @@ func eventsCmd() *cobra.Command {
 		}),
 	})
 
-	var eCal, eTitle, eLocation, eStart, eDuration string
+	var eCal, eTitle, eLocation, eDescription, eStart, eDuration, eRRule string
+	var eReminders, eAttendees []string
 	var eAllDay bool
 	create := &cobra.Command{
 		Use: "create", Short: "Create an event",
@@ -216,26 +253,47 @@ func eventsCmd() *cobra.Command {
 				return fmt.Errorf("invalid --duration: %w", err)
 			}
 			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create event %q in calendar %s", eTitle, calID))
+				c.R().Info(fmt.Sprintf("dry-run: would create event %q in calendar %s with %d attendee(s)", eTitle, calID, len(eAttendees)))
 				return nil
 			}
-			id, err := c.App.Calendar.EventCreate(c.Ctx, u, calID, eTitle, eLocation, start, start.Add(dur), eAllDay)
+			res, err := c.App.Calendar.EventCreate(c.Ctx, u, calID, calsvc.EventInput{
+				Title: eTitle, Location: eLocation, Description: eDescription,
+				Start: start, End: start.Add(dur), AllDay: eAllDay,
+				RRule: eRRule, Reminders: eReminders, Attendees: eAttendees,
+			})
 			if err != nil {
 				return err
 			}
-			c.R().ID(id, fmt.Sprintf("Created event %q", eTitle))
+			if res.Invite != nil {
+				body := fmt.Sprintf("You have been invited to %q.\n\nThe calendar invitation is attached.", eTitle)
+				if err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
+					To:      res.Invite.Recipients,
+					Subject: res.Invite.Subject,
+					Body:    body,
+					InlineAttachments: []mailsvc.InlineAttachment{{
+						Filename: "invite.ics", MIMEType: "text/calendar; method=REQUEST", Data: []byte(res.Invite.ICS),
+					}},
+				}); err != nil {
+					c.R().Info(fmt.Sprintf("event created, but sending the invitation email to %d external attendee(s) failed: %v", len(res.Invite.Recipients), err))
+				}
+			}
+			c.R().ID(res.ID, fmt.Sprintf("Created event %q", eTitle))
 			return nil
 		}),
 	}
 	create.Flags().StringVar(&eCal, "calendar", "", "Calendar ID or name")
 	create.Flags().StringVar(&eTitle, "title", "", "Event title")
 	create.Flags().StringVar(&eLocation, "location", "", "Event location")
+	create.Flags().StringVar(&eDescription, "description", "", "Event description")
 	create.Flags().StringVar(&eStart, "start", "", "Start time (RFC3339 or YYYY-MM-DDTHH:MM)")
 	create.Flags().StringVar(&eDuration, "duration", "1h", "Duration")
 	create.Flags().BoolVar(&eAllDay, "all-day", false, "All-day event")
+	create.Flags().StringVar(&eRRule, "rrule", "", "Recurrence rule (iCal RRULE, e.g. FREQ=WEEKLY;COUNT=10)")
+	create.Flags().StringArrayVar(&eReminders, "remind", nil, "Reminder before start (e.g. 15m, 1h, 1d; repeatable)")
+	create.Flags().StringArrayVar(&eAttendees, "attendee", nil, "Attendee email; Proton users are added directly, external users are emailed an invite (repeatable)")
 	c.AddCommand(create)
 
-	var uTitle, uLocation, uStart, uDuration string
+	var uTitle, uLocation, uDescription, uStart, uDuration string
 	update := &cobra.Command{
 		Use: "update CALENDAR_ID EVENT_ID", Short: "Update an event",
 		Args: cobra.ExactArgs(2),
@@ -263,7 +321,7 @@ func eventsCmd() *cobra.Command {
 				c.R().Info("dry-run: would update event")
 				return nil
 			}
-			if err := c.App.Calendar.EventUpdate(c.Ctx, u, c.Args[0], c.Args[1], uTitle, uLocation, start, end); err != nil {
+			if err := c.App.Calendar.EventUpdate(c.Ctx, u, c.Args[0], c.Args[1], uTitle, uLocation, uDescription, start, end); err != nil {
 				return err
 			}
 			c.R().Success("Event updated.")
@@ -272,6 +330,7 @@ func eventsCmd() *cobra.Command {
 	}
 	update.Flags().StringVar(&uTitle, "title", "", "New title")
 	update.Flags().StringVar(&uLocation, "location", "", "New location")
+	update.Flags().StringVar(&uDescription, "description", "", "New description")
 	update.Flags().StringVar(&uStart, "start", "", "New start time")
 	update.Flags().StringVar(&uDuration, "duration", "", "New duration")
 	c.AddCommand(update)

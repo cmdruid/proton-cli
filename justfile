@@ -22,7 +22,7 @@ test-unit:
 
 # Run unit + integration tests (requires PROTON_USER and PROTON_PASSWORD)
 test: test-unit
-    go test ./tests/ -v -count=1 -timeout 20m
+    go test ./tests/ -v -count=1 -timeout 30m
 
 # Run a single test (or a `|`-separated regex of test names)
 test-one pattern:

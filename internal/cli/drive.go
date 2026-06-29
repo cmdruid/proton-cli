@@ -16,7 +16,7 @@ import (
 
 func newDriveCmd() *cobra.Command {
 	c := &cobra.Command{Use: "drive", Short: "Drive operations"}
-	c.AddCommand(driveItemsCmd(), driveFoldersCmd(), driveTrashCmd(), driveShareCmd(), driveInvitationsCmd())
+	c.AddCommand(driveItemsCmd(), driveFoldersCmd(), driveTrashCmd(), driveShareCmd(), driveInvitationsCmd(), drivePhotosCmd())
 	return c
 }
 
@@ -39,7 +39,7 @@ func driveTypeLabel(t int) string {
 
 func driveItemsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "items", Short: "Manage files and folders"}
-	c.AddCommand(itemsListCmd(), itemsInfoCmd(), itemsUploadCmd(), itemsDownloadCmd(), itemsRenameCmd(), itemsMoveCmd(), itemsDeleteCmd())
+	c.AddCommand(itemsListCmd(), itemsInfoCmd(), itemsUploadCmd(), itemsDownloadCmd(), itemsRenameCmd(), itemsMoveCmd(), itemsCopyCmd(), itemsDeleteCmd(), itemsRevisionsCmd())
 	return c
 }
 
@@ -318,6 +318,87 @@ func itemsMoveCmd() *cobra.Command {
 				return err
 			}
 			c.R().Success(fmt.Sprintf("Moved %s → %s", c.Args[0], c.Args[1]))
+			return nil
+		}),
+	}
+}
+
+func revisionState(state int) string {
+	switch state {
+	case 0:
+		return "draft"
+	case 1:
+		return "active"
+	case 2:
+		return "inactive"
+	}
+	return "unknown"
+}
+
+func itemsRevisionsCmd() *cobra.Command {
+	c := &cobra.Command{Use: "revisions", Short: "List and restore file revisions"}
+	c.AddCommand(&cobra.Command{
+		Use: "list PATH", Short: "List a file's revisions",
+		Args: cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+			dc, err := driveCtx(c)
+			if err != nil {
+				return err
+			}
+			revs, err := c.App.Drive.RevisionsList(c.Ctx, dc, c.Args[0])
+			if err != nil {
+				return err
+			}
+			return view.Render(c.R(), c.short(), c.App.IDCache, view.List[drivesvc.Revision]{
+				Columns: []view.Column[drivesvc.Revision]{
+					{Header: "REVISION_ID", ID: true, Cell: func(r drivesvc.Revision) string { return r.ID }},
+					{Header: "STATE", Cell: func(r drivesvc.Revision) string { return revisionState(r.State) }},
+					{Header: "SIZE", Cell: func(r drivesvc.Revision) string { return render.Size(r.Size) }},
+					{Header: "CREATED", Cell: func(r drivesvc.Revision) string { return render.Time(r.CreateTime) }},
+				},
+				CacheIDs: func(r drivesvc.Revision) []string { return []string{r.ID} },
+			}, revs)
+		}),
+	})
+	c.AddCommand(&cobra.Command{
+		Use: "restore PATH REVISION_ID", Short: "Restore a file to an earlier revision",
+		Args: cobra.ExactArgs(2),
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+			dc, err := driveCtx(c)
+			if err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would restore %s to revision %s", c.Args[0], c.Args[1]))
+				return nil
+			}
+			if err := c.App.Drive.RevisionRestore(c.Ctx, dc, c.Args[0], c.Args[1]); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Restored %s to revision %s", c.Args[0], c.Args[1]))
+			return nil
+		}),
+	})
+	return c
+}
+
+func itemsCopyCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "copy SRC DEST_FOLDER", Short: "Copy a file into another folder",
+		Args: cobra.ExactArgs(2),
+		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+			dc, err := driveCtx(c)
+			if err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would copy %s → %s", c.Args[0], c.Args[1]))
+				return nil
+			}
+			if err := c.App.Drive.Copy(c.Ctx, dc, c.Args[0], c.Args[1]); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Copied %s → %s", c.Args[0], c.Args[1]))
 			return nil
 		}),
 	}

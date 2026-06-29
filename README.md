@@ -91,6 +91,11 @@ proton-cli mail messages read --include-inline REF         # also surface signat
 proton-cli mail messages read --format text REF            # text|html|raw (footer only in text mode)
 proton-cli mail messages read --body-only REF > body.txt   # body only, no header, no footer
 proton-cli mail messages send --to "to@ex.com" --subject "Hi" --body "Hello"
+proton-cli mail messages send --to a@ex.com --to b@ex.com --cc c@ex.com --bcc d@ex.com --subject Hi --body Hello
+proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hello</b>" --html
+proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --attach ./report.pdf --attach ./img.png
+proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --send-at 2026-05-01T09:00   # schedule
+proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --expires 7d                # self-destruct
 echo "body" | proton-cli mail messages send --to foo --subject bar --body -
 proton-cli mail messages trash REF...
 proton-cli mail messages delete REF...                     # permanent
@@ -143,12 +148,15 @@ proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID -                #
 proton-cli mail labels list
 proton-cli mail labels create --name "Important" --color "#8080FF"
 proton-cli mail labels create --name "Projects" --folder --color "#1DA583"
+proton-cli mail labels create --name "Subfolder" --folder --parent PARENT_LABEL_ID
+proton-cli mail labels update LABEL_ID --name "Renamed" --color "#DB60D6"
 proton-cli mail labels delete LABEL_ID
 
 # Filters
 proton-cli mail filters list
 proton-cli mail filters create --name "Archive invoices" \
   --sieve 'require ["fileinto"]; if header :contains "Subject" "invoice" { fileinto "Archive"; }'
+proton-cli mail filters update FILTER_ID --name "Renamed" --sieve '...'
 proton-cli mail filters enable FILTER_ID
 proton-cli mail filters disable FILTER_ID
 proton-cli mail filters delete FILTER_ID
@@ -173,9 +181,12 @@ proton-cli drive items download /Photos/pic.jpg            # to stdout
 proton-cli drive items download /Photos/pic.jpg -          # to stdout (explicit)
 proton-cli drive items rename /Documents/old.txt new.txt
 proton-cli drive items move /Documents/report.pdf /Archive
+proton-cli drive items copy /Documents/report.pdf /Archive  # copy into another folder
 proton-cli drive items delete /Documents/old-report.pdf
 proton-cli drive items delete --permanent /Documents/secret.txt
 proton-cli drive items info /Documents/report.pdf          # type, size, checksum, sharing
+proton-cli drive items revisions list /Documents/report.pdf
+proton-cli drive items revisions restore /Documents/report.pdf REVISION_ID
 
 # Batch filters
 proton-cli drive items delete --pattern "*.tmp" --recursive --scope /
@@ -206,7 +217,22 @@ proton-cli drive invitations reject INVITATION_ID
 # Trash
 proton-cli drive trash list
 proton-cli drive trash restore LINK_ID LINK_ID2
-proton-cli drive trash empty
+proton-cli drive trash empty                               # empties trash across all volumes
+
+# Photos
+proton-cli drive photos list
+proton-cli drive photos download PHOTO_LINK_ID              # into current dir, original name
+proton-cli drive photos download PHOTO_LINK_ID --out ./pics/
+proton-cli drive photos upload ./IMG_0001.jpg
+proton-cli drive photos delete PHOTO_LINK_ID...            # move to trash
+proton-cli drive photos delete --permanent PHOTO_LINK_ID...  # purge
+proton-cli drive photos albums list
+proton-cli drive photos albums create --name "Holiday"
+proton-cli drive photos albums items ALBUM_LINK_ID
+proton-cli drive photos albums add ALBUM_LINK_ID PHOTO_LINK_ID...
+proton-cli drive photos albums remove ALBUM_LINK_ID PHOTO_LINK_ID...
+proton-cli drive photos albums delete ALBUM_LINK_ID
+proton-cli drive photos tags remove PHOTO_LINK_ID TAG...   # TAG is an integer tag id
 ```
 
 ### Calendar
@@ -215,6 +241,7 @@ proton-cli drive trash empty
 # Calendars
 proton-cli calendar calendars list
 proton-cli calendar calendars create --name "Work" --color "#8080FF"
+proton-cli calendar calendars rename CALENDAR_ID --name "Personal" --color "#DB60D6"
 proton-cli calendar calendars delete CALENDAR_ID           # requires password
 
 # Events
@@ -224,8 +251,12 @@ proton-cli calendar events list --calendar "Work"
 proton-cli calendar events get CALENDAR_ID EVENT_ID
 proton-cli calendar events get "Meeting"                   # search by title
 proton-cli calendar events create \
-  --title "Meeting" --location "Vienna" \
+  --title "Meeting" --location "Vienna" --description "Quarterly sync" \
   --start "2026-04-16T14:00" --duration 1h
+proton-cli calendar events create --title "Standup" --start 2026-04-16T09:00 \
+  --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h        # recurrence + reminders
+proton-cli calendar events create --title "Review" --start 2026-04-16T14:00 \
+  --attendee alice@proton.me --attendee bob@example.com         # Proton users added directly; external ones emailed an invite
 proton-cli calendar events update CALENDAR_ID EVENT_ID --title "Updated"
 proton-cli calendar events delete CALENDAR_ID EVENT_ID
 proton-cli calendar events delete "Meeting"                # search by title
@@ -236,9 +267,18 @@ proton-cli calendar events delete "Meeting"                # search by title
 ```bash
 proton-cli contacts list
 proton-cli contacts get REF                                # ID or search
-proton-cli contacts create --name "John Doe" --email "john@example.com" --phone "+1234567890"
+proton-cli contacts create --name "John Doe" --email john@example.com --phone "+1234567890"
+proton-cli contacts create --name "Jane" --email a@ex.com --email b@ex.com \
+  --phone "+123" --title "CTO" --birthday 1990-01-01 --address "Vienna" --url https://jane.example
 proton-cli contacts update --email "new@example.com" REF
 proton-cli contacts delete REF
+
+# Contact groups
+proton-cli contacts groups list
+proton-cli contacts groups create --name "Team" --color "#8080FF"
+proton-cli contacts groups add GROUP_ID REF...             # add contacts to a group
+proton-cli contacts groups remove GROUP_ID REF...
+proton-cli contacts groups delete GROUP_ID
 ```
 
 ### Pass
@@ -249,10 +289,15 @@ proton-cli pass items list
 proton-cli pass items list --vault "Work"
 proton-cli pass items get SHARE_ID ITEM_ID
 proton-cli pass items get "github.com"                     # search
-proton-cli pass items create --type login --name "GitHub" --username me --password secret --url github.com
+proton-cli pass items create --type login --name "GitHub" --username me --password secret --url github.com --totp "otpauth://..."
 proton-cli pass items create --type note --name "My Note" --note "Some text"
 proton-cli pass items create --type card --name "Visa" --holder "Roman" --number "4111..." --expiry "2028-12"
-proton-cli pass items edit REF --password "new-secret"
+proton-cli pass items create --type wifi --name "Home" --ssid MyNet --password pw --security WPA2
+proton-cli pass items create --type ssh_key --name "laptop" --public-key "ssh-ed25519 ..." --private-key "$(cat id_ed25519)"
+proton-cli pass items create --type identity --name "Me" --full-name "Jane Roe" --email jane@ex.com --phone +123 --organization Acme
+proton-cli pass items create --type custom --name "Server" --field "Host=1.2.3.4" --hidden "Root PW=secret"
+proton-cli pass items create --type login --name X --field "Recovery=abc" --hidden "PIN=1234"  # custom fields on any type
+proton-cli pass items edit REF --password "new-secret"                  # any field of the item's type
 proton-cli pass items trash REF
 proton-cli pass items restore REF
 proton-cli pass items delete REF
@@ -265,6 +310,7 @@ proton-cli pass items delete --vault "Temporary" --all
 # Vaults
 proton-cli pass vaults list
 proton-cli pass vaults create --name "Work"
+proton-cli pass vaults rename SHARE_ID --name "Personal"
 proton-cli pass vaults delete SHARE_ID
 
 # Aliases
@@ -275,8 +321,12 @@ proton-cli pass alias create --prefix my-alias --mailbox my-mailbox@proton.me
 ### Settings
 
 ```bash
-proton-cli settings get      # account settings
-proton-cli settings mail     # mail settings
+proton-cli settings get          # account settings
+proton-cli settings mail         # mail settings
+proton-cli settings set          # list the writable mail-setting keys
+proton-cli settings set view-mode 1          # 0=conversations, 1=messages
+proton-cli settings set draft-type text/html
+proton-cli settings set hide-remote-images 1
 ```
 
 ### Raw API
@@ -384,6 +434,17 @@ Proton's anti-bot may demand a CAPTCHA at login. proton-cli opens a small webvie
 Linux desktop needs `libwebkit2gtk-4.1` + `libgtk-3` installed: macOS / Windows: nothing to install (system WebKit / WebView2).
 
 **Headless** (server, container, no GUI): the webview can't run. proton-cli exits with an error - there is no way to solve the CAPTCHA from this environment. Run the command on a desktop machine instead.
+
+## Limitations
+
+A few constraints are inherent to Proton's design or platform rather than missing features:
+
+- **Colors** — labels, folders, calendars and contact groups accept only Proton's 20 fixed accent colors; the CLI validates `--color` and lists the allowed values on error.
+- **Calendar deletion** — `calendar calendars delete` is password-scoped and needs `PROTON_PASSWORD`.
+- **CAPTCHA** — can't be solved in a headless environment, and `go install` builds don't embed the helper (see [Human Verification](#human-verification-captcha)).
+- **External mail encryption** — `mail messages send` encrypts to Proton recipients and sends cleartext (TLS) to external ones; external-PGP and encrypted-for-outside (password) sending aren't supported. Attachments and calendar invites to external recipients do work.
+
+See [`docs/limitations.md`](docs/limitations.md) for the full list, including features not yet implemented.
 
 ## API Reference
 

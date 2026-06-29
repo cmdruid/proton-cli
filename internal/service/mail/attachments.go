@@ -1,9 +1,14 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"mime"
+	"mime/multipart"
+	"os"
+	"path/filepath"
 	"sort"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
@@ -112,4 +117,137 @@ func (s *Service) AttachmentDownload(ctx context.Context, u *keys.Unlocked, msgI
 		return nil, "", fmt.Errorf("decrypt attachment: %w", err)
 	}
 	return dec.GetBinary(), name, nil
+}
+
+// InlineAttachment is an in-memory attachment supplied by a caller (e.g. a
+// calendar ICS invitation) rather than read from disk.
+type InlineAttachment struct {
+	Filename string
+	MIMEType string
+	Data     []byte
+}
+
+// uploadedAttachment couples a server attachment ID with the session key its
+// data packet was encrypted under, so the key can be re-wrapped per recipient
+// at send time.
+type uploadedAttachment struct {
+	ID         string
+	SessionKey *pgp.SessionKey
+}
+
+// uploadAttachment reads a file and uploads it as an encrypted attachment.
+func (s *Service) uploadAttachment(ctx context.Context, addrKR *pgp.KeyRing, messageID, path string) (*uploadedAttachment, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	mimeType := mime.TypeByExtension(filepath.Ext(path))
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	return s.uploadAttachmentData(ctx, addrKR, messageID, filepath.Base(path), mimeType, data)
+}
+
+// uploadAttachmentData encrypts in-memory data with a fresh session key (key
+// packet wrapped to the draft address key), detached-signs it, and uploads it
+// as a multipart form against the draft message.
+func (s *Service) uploadAttachmentData(ctx context.Context, addrKR *pgp.KeyRing, messageID, filename, mimeType string, data []byte) (*uploadedAttachment, error) {
+	msg := pgp.NewPlainMessage(data)
+
+	sk, err := pgp.GenerateSessionKey()
+	if err != nil {
+		return nil, err
+	}
+	dataPacket, err := sk.Encrypt(msg)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt attachment data: %w", err)
+	}
+	keyPacket, err := addrKR.EncryptSessionKey(sk)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt attachment key: %w", err)
+	}
+	sig, err := addrKR.SignDetached(msg)
+	if err != nil {
+		return nil, fmt.Errorf("sign attachment: %w", err)
+	}
+
+	body, contentType, err := buildAttachmentForm(map[string]string{
+		"Filename":  filename,
+		"MessageID": messageID,
+		"ContentID": "",
+		"MIMEType":  mimeType,
+	}, map[string][]byte{
+		"KeyPackets": keyPacket,
+		"DataPacket": dataPacket,
+		"Signature":  sig.GetBinary(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var res struct {
+		Attachment struct{ ID string }
+	}
+	if err := s.C.Decode(ctx, proton.Request{
+		Method: "POST", Path: "/mail/v4/attachments", Body: body, ContentType: contentType,
+	}, &res); err != nil {
+		return nil, fmt.Errorf("upload attachment %s: %w", filename, err)
+	}
+	return &uploadedAttachment{ID: res.Attachment.ID, SessionKey: sk}, nil
+}
+
+func buildAttachmentForm(fields map[string]string, files map[string][]byte) (body []byte, contentType string, err error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := w.WriteField(k, v); err != nil {
+			return nil, "", err
+		}
+	}
+	for name, data := range files {
+		part, err := w.CreateFormFile(name, name)
+		if err != nil {
+			return nil, "", err
+		}
+		if _, err := part.Write(data); err != nil {
+			return nil, "", err
+		}
+	}
+	if err := w.Close(); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), w.FormDataContentType(), nil
+}
+
+// attachmentKeyPackets wraps each attachment session key to an internal
+// recipient's key ring (Type-1 per-recipient packets).
+func attachmentKeyPackets(recKR *pgp.KeyRing, atts []*uploadedAttachment) (map[string]string, error) {
+	if len(atts) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(atts))
+	for _, a := range atts {
+		kp, err := recKR.EncryptSessionKey(a.SessionKey)
+		if err != nil {
+			return nil, err
+		}
+		out[a.ID] = base64.StdEncoding.EncodeToString(kp)
+	}
+	return out, nil
+}
+
+// attachmentCleartextKeys exposes raw attachment session keys for external
+// (Type-4 cleartext) packages.
+func attachmentCleartextKeys(atts []*uploadedAttachment) map[string]any {
+	if len(atts) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(atts))
+	for _, a := range atts {
+		out[a.ID] = map[string]any{
+			"Key":       base64.StdEncoding.EncodeToString(a.SessionKey.Key),
+			"Algorithm": a.SessionKey.Algo,
+		}
+	}
+	return out
 }

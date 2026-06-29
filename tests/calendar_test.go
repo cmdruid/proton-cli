@@ -156,3 +156,107 @@ func TestCalendarEventsNotFound(t *testing.T) {
 		t.Errorf("expected exit 3 for unknown event, got %d", code)
 	}
 }
+
+func firstCalendarID(t *testing.T) string {
+	t.Helper()
+	cals := runJSONArray(t, "calendar", "calendars", "list")
+	if len(cals) == 0 {
+		t.Skip("no calendars on this account")
+	}
+	return cals[0].(map[string]interface{})["id"].(string)
+}
+
+func TestCalendarEventRecurrenceAndDescription(t *testing.T) {
+	skipIfNoCredentials(t)
+	calID := firstCalendarID(t)
+
+	title := testID() + "-evt"
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", title,
+		"--description", "quarterly sync", "--start", "2026-08-16T14:00", "--duration", "1h",
+		"--rrule", "FREQ=WEEKLY;COUNT=5", "--remind", "15m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
+		"calendar", "events", "delete", calID, eventID)
+
+	got := runOK(t, "calendar", "events", "get", calID, eventID)
+	assertContains(t, got, "quarterly sync")
+	assertContains(t, got, "FREQ=WEEKLY")
+}
+
+func TestCalendarEventReminderNotification(t *testing.T) {
+	skipIfNoCredentials(t)
+	calID := firstCalendarID(t)
+
+	title := testID() + "-remind"
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", title,
+		"--start", "2026-09-01T09:00", "--duration", "30m", "--remind", "15m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
+		"calendar", "events", "delete", calID, eventID)
+
+	data := runJSON(t, "api", "GET", "/calendar/v1/"+calID+"/events/"+eventID)
+	ev, _ := data["Event"].(map[string]interface{})
+	notifs, _ := ev["Notifications"].([]interface{})
+	found := false
+	for _, n := range notifs {
+		if m, ok := n.(map[string]interface{}); ok {
+			if trig, _ := m["Trigger"].(string); trig == "-PT15M" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected a -PT15M notification on the event, got: %v", notifs)
+	}
+}
+
+func TestCalendarEventWithProtonAttendee(t *testing.T) {
+	skipIfNoCredentials(t)
+	calID := firstCalendarID(t)
+
+	title := testID() + "-attendee"
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", title,
+		"--start", "2026-08-17T10:00", "--duration", "30m",
+		"--attendee", selfEmail()))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
+		"calendar", "events", "delete", calID, eventID)
+
+	if !looksLikeID(eventID) {
+		t.Errorf("expected an event ID on stdout, got %q", eventID)
+	}
+	// The server accepted the encrypted attendee parts; the event must read back.
+	runOK(t, "calendar", "events", "get", calID, eventID)
+}
+
+func TestCalendarCalendarsRename(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	name := testID() + "-cal"
+	calID := strings.TrimSpace(runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete %s", calID),
+		"calendar", "calendars", "delete", calID)
+
+	newName := name + "-renamed"
+	runOK(t, "calendar", "calendars", "rename", "--name", newName, "--color", "#DB60D6", calID)
+	assertContains(t, runOK(t, "calendar", "calendars", "list"), newName)
+}
+
+// TestCalendarCreateUsable proves a freshly created calendar is provisioned
+// with keys (setupCalendar) by creating an event in it.
+func TestCalendarCreateUsable(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	name := testID() + "-usable"
+	calID := strings.TrimSpace(runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete %s", calID),
+		"calendar", "calendars", "delete", calID)
+
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", name+"-evt",
+		"--start", "2026-08-20T10:00", "--duration", "1h"))
+	if !looksLikeID(eventID) {
+		t.Errorf("expected event ID on stdout, got %q", eventID)
+	}
+	assertContains(t, runOK(t, "calendar", "events", "get", calID, eventID), name+"-evt")
+}

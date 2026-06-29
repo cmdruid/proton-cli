@@ -178,4 +178,4 @@ Keeping `--` in those strings is harmless but unnecessary.
 - `calendar calendars delete` requires `PROTON_PASSWORD` for the password-scope unlock - works in tests because the env var is set.
 - `drive trash empty` may not clear items from non-default volumes (e.g. Photos share).
 - Proton only allows specific hex colors for labels and calendars (e.g. `#8080FF`, `#3CBB3A`) - see `ACCENT_COLORS` in the WebClients source.
-- Tests run ~8 minutes total due to API latency and mail-delivery waits.
+- The full suite runs ~20-25 minutes due to API latency and mail-delivery waits (`just test` uses a 30m timeout).

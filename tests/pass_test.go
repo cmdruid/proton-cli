@@ -197,3 +197,60 @@ func TestPassBatchTrashRequiresInput(t *testing.T) {
 	}
 	assertContains(t, stderr, "no items selected")
 }
+
+func TestPassItemTypesAndFields(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	// Identity with core fields plus custom text/hidden fields.
+	idName := testID() + "-identity"
+	idRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "identity",
+		"--name", idName, "--full-name", "Jane Roe", "--email", "jane@example.com",
+		"--organization", "Acme", "--field", "Note=hello-field", "--hidden", "PIN=4321"))
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", idRef),
+		"pass", "items", "delete", "--", idRef)
+	gotID := runOK(t, "pass", "items", "get", "--", idRef)
+	assertContains(t, gotID, "Jane Roe")
+	assertContains(t, gotID, "Acme")
+	assertContains(t, gotID, "hello-field")
+
+	// Wi-Fi.
+	wifiRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "wifi",
+		"--name", testID()+"-wifi", "--ssid", "MyTestNet", "--password", "pw", "--security", "WPA2"))
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", wifiRef),
+		"pass", "items", "delete", "--", wifiRef)
+	assertContains(t, runOK(t, "pass", "items", "get", "--", wifiRef), "MyTestNet")
+
+	// SSH key.
+	sshRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "ssh_key",
+		"--name", testID()+"-ssh", "--public-key", "ssh-ed25519 AAAATESTKEY", "--private-key", "PRIVATE-TEST"))
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", sshRef),
+		"pass", "items", "delete", "--", sshRef)
+	assertContains(t, runOK(t, "pass", "items", "get", "--", sshRef), "ssh-ed25519 AAAATESTKEY")
+}
+
+func TestPassVaultRename(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	name := testID() + "-vault"
+	sid := strings.TrimSpace(runOK(t, "pass", "vaults", "create", "--name", name))
+	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete %s", sid),
+		"pass", "vaults", "delete", "--", sid)
+
+	newName := name + "-renamed"
+	runOK(t, "pass", "vaults", "rename", "--name", newName, sid)
+	assertContains(t, runOK(t, "pass", "vaults", "list"), newName)
+}
+
+func TestPassLoginTOTPRoundTrips(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	name := testID() + "-totp"
+	secret := "JBSWY3DPEHPK3PXP"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "login",
+		"--name", name, "--username", "me@example.com",
+		"--totp", "otpauth://totp/Example:me?secret="+secret+"&issuer=Example"))
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", ref),
+		"pass", "items", "delete", "--", ref)
+
+	assertContains(t, runOK(t, "pass", "items", "get", "--", ref), secret)
+}

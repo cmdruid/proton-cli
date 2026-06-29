@@ -210,6 +210,55 @@ func (s *Service) Move(ctx context.Context, dc *Context, sourcePath, destPath st
 	}, nil)
 }
 
+// Copy duplicates a file into destPath. The node passphrase and name are
+// re-encrypted to the destination folder's node key (the content is copied
+// server-side); the source is left in place.
+func (s *Service) Copy(ctx context.Context, dc *Context, sourcePath, destPath string) error {
+	src, err := s.ResolvePath(ctx, dc, sourcePath)
+	if err != nil {
+		return fmt.Errorf("source not found: %w", err)
+	}
+	dst, err := s.ResolvePath(ctx, dc, destPath)
+	if err != nil {
+		return fmt.Errorf("destination not found: %w", err)
+	}
+	if !dst.IsFolder {
+		return fmt.Errorf("%s is not a folder", destPath)
+	}
+	srcLink, err := s.getLink(ctx, src.ShareID, src.LinkID)
+	if err != nil {
+		return err
+	}
+	dstLink, err := s.getLink(ctx, dst.ShareID, dst.LinkID)
+	if err != nil {
+		return err
+	}
+	hk, err := hashKeyOf(dstLink, dst.NodeKR)
+	if err != nil {
+		return err
+	}
+	newHash, err := lookupHash(strings.ToLower(src.Name), hk)
+	if err != nil {
+		return err
+	}
+	encName, err := reEncryptName(srcLink.Name, src.Name, src.ParentKR, dst.NodeKR, dc.AddrKR)
+	if err != nil {
+		return err
+	}
+	newPass, _, err := reEncryptNodePassphrase(srcLink, src.ParentKR, dst.NodeKR, dc.AddrKR)
+	if err != nil {
+		return fmt.Errorf("re-encrypt passphrase: %w", err)
+	}
+	return s.C.Decode(ctx, proton.Request{
+		Method: "POST", Path: fmt.Sprintf("/drive/volumes/%s/links/%s/copy", dc.VolumeID, src.LinkID),
+		Body: map[string]any{
+			"Name": encName, "Hash": newHash, "NodePassphrase": newPass,
+			"TargetVolumeID": dc.VolumeID, "TargetParentLinkID": dst.LinkID,
+			"NameSignatureEmail": dc.AddrEmail,
+		},
+	}, nil)
+}
+
 func (s *Service) Delete(ctx context.Context, dc *Context, path string, permanent bool) error {
 	res, err := s.ResolvePath(ctx, dc, path)
 	if err != nil {

@@ -6,12 +6,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ── list ──
@@ -456,4 +459,166 @@ func TestDriveFoldersCreate(t *testing.T) {
 	if !found {
 		t.Errorf("folder %s not in root listing", folder)
 	}
+}
+
+func TestDriveItemsCopy(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	base := "/" + testID() + "-copy-src"
+	dest := "/" + testID() + "-copy-dst"
+	runOK(t, "drive", "folders", "create", base)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", base),
+		"drive", "items", "delete", "--permanent", base)
+	runOK(t, "drive", "folders", "create", dest)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", dest),
+		"drive", "items", "delete", "--permanent", dest)
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "f.txt")
+	if err := os.WriteFile(src, []byte("copy me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runOK(t, "drive", "items", "upload", src, base)
+
+	runOK(t, "drive", "items", "copy", base+"/f.txt", dest)
+	assertContains(t, runOK(t, "drive", "items", "list", dest), "f.txt")
+
+	out := filepath.Join(dir, "out.txt")
+	runOK(t, "drive", "items", "download", dest+"/f.txt", out)
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read copied file: %v", err)
+	}
+	if string(got) != "copy me" {
+		t.Errorf("copy content mismatch: got %q want %q", got, "copy me")
+	}
+}
+
+func TestDriveItemsRevisions(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	folder := "/" + testID() + "-rev"
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", "--permanent", folder)
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "r.txt")
+	if err := os.WriteFile(src, []byte("v1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runOK(t, "drive", "items", "upload", src, folder)
+
+	out := runOK(t, "drive", "items", "revisions", "list", folder+"/r.txt")
+	assertContains(t, out, "active")
+}
+
+func writePNG(t *testing.T, path string) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func photoLinkIDs(t *testing.T) map[string]bool {
+	t.Helper()
+	set := map[string]bool{}
+	for _, p := range runJSONArray(t, "drive", "photos", "list") {
+		if id, ok := p.(map[string]interface{})["link_id"].(string); ok {
+			set[id] = true
+		}
+	}
+	return set
+}
+
+func TestDrivePhotosWriteLifecycle(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	if _, stderr, code := run(t, "drive", "photos", "list"); code != 0 {
+		if strings.Contains(stderr, "photos") {
+			t.Skip("no photos share on this account")
+		}
+		t.Fatalf("photos list failed: %s", truncateOutput(stderr))
+	}
+
+	before := photoLinkIDs(t)
+
+	dir := t.TempDir()
+	img := filepath.Join(dir, testID()+".png")
+	writePNG(t, img)
+	runOK(t, "drive", "photos", "upload", img)
+
+	// Identify the uploaded photo as the new entry in the listing.
+	var photoID string
+	for attempt := 0; attempt < 8 && photoID == ""; attempt++ {
+		time.Sleep(2 * time.Second)
+		for id := range photoLinkIDs(t) {
+			if !before[id] {
+				photoID = id
+				break
+			}
+		}
+	}
+	if photoID == "" {
+		t.Fatal("uploaded photo did not appear in the listing")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete photo: proton-cli drive photos delete --permanent %s", photoID),
+		"drive", "photos", "delete", "--permanent", "--", photoID)
+
+	// Create an album; identify it as the new entry in the listing.
+	albumsBefore := map[string]bool{}
+	for _, a := range runJSONArray(t, "drive", "photos", "albums", "list") {
+		albumsBefore[a.(map[string]interface{})["link_id"].(string)] = true
+	}
+	albumName := testID() + "-album"
+	runOK(t, "drive", "photos", "albums", "create", "--name", albumName)
+	var albumID, albumNameSeen string
+	for _, a := range runJSONArray(t, "drive", "photos", "albums", "list") {
+		m := a.(map[string]interface{})
+		id := m["link_id"].(string)
+		if !albumsBefore[id] {
+			albumID = id
+			albumNameSeen, _ = m["name"].(string)
+		}
+	}
+	if albumID == "" {
+		t.Fatal("created album not found in listing")
+	}
+	if albumNameSeen != albumName {
+		t.Errorf("album name: got %q want %q", albumNameSeen, albumName)
+	}
+	cleanupRun(t, fmt.Sprintf("Delete album: proton-cli drive photos albums delete %s", albumID),
+		"drive", "photos", "albums", "delete", "--", albumID)
+
+	// Add the photo to the album (node-passphrase re-wrap), verify, remove.
+	runOK(t, "drive", "photos", "albums", "add", albumID, photoID)
+	found := false
+	for _, it := range runJSONArray(t, "drive", "photos", "albums", "items", albumID) {
+		if it.(map[string]interface{})["link_id"] == photoID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("photo %s not found in album items", photoID)
+	}
+	runOK(t, "drive", "photos", "albums", "remove", albumID, photoID)
+}
+
+func TestDrivePhotosRead(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	_, stderr, code := run(t, "drive", "photos", "list")
+	if code != 0 {
+		if strings.Contains(stderr, "photos") {
+			t.Skip("no photos share on this account")
+		}
+		t.Fatalf("photos list failed (exit %d): %s", code, truncateOutput(stderr))
+	}
+	// Albums listing exercises the same photos-share bootstrap + name decryption.
+	runOK(t, "drive", "photos", "albums", "list")
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/render"
 )
@@ -28,14 +29,20 @@ func (s *Service) Download(ctx context.Context, dc *Context, path string, w io.W
 	if err != nil {
 		return err
 	}
+	return s.downloadFile(ctx, res.ShareID, link, res.NodeKR, w, opts)
+}
+
+// downloadFile streams and decrypts the active revision of a file link whose
+// node key ring (nodeKR) has already been unwrapped.
+func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, nodeKR *pgp.KeyRing, w io.Writer, opts DownloadOptions) error {
 	if link.FileProperties == nil {
-		return fmt.Errorf("%s: no file properties", path)
+		return fmt.Errorf("%s: no file properties", link.LinkID)
 	}
 	kp, err := base64.StdEncoding.DecodeString(link.FileProperties.ContentKeyPacket)
 	if err != nil {
 		return err
 	}
-	sk, err := res.NodeKR.DecryptSessionKey(kp)
+	sk, err := nodeKR.DecryptSessionKey(kp)
 	if err != nil {
 		return fmt.Errorf("get file session key: %w", err)
 	}
@@ -52,7 +59,7 @@ func (s *Service) Download(ctx context.Context, dc *Context, path string, w io.W
 	}
 	q := proton.Request{
 		Method: "GET",
-		Path:   fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", res.ShareID, res.LinkID, link.FileProperties.ActiveRevision.ID),
+		Path:   fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", shareID, link.LinkID, link.FileProperties.ActiveRevision.ID),
 	}
 	q.Query = make(map[string][]string)
 	q.Query.Set("FromBlockIndex", "1")

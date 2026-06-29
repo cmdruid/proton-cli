@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/roman-16/proton-cli/internal/crypto/ical"
 	"github.com/roman-16/proton-cli/internal/render"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
 	"github.com/roman-16/proton-cli/internal/view"
@@ -177,12 +178,14 @@ func msgReadCmd() *cobra.Command {
 }
 
 func msgSendCmd() *cobra.Command {
-	var to, subject, body string
+	var to, cc, bcc, attach []string
+	var subject, body, sendAt, expires string
+	var html bool
 	c := &cobra.Command{
 		Use: "send", Short: "Send a message",
 		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
-			if to == "" {
-				return fmt.Errorf("--to is required")
+			if len(to)+len(cc)+len(bcc) == 0 {
+				return fmt.Errorf("at least one recipient is required (--to, --cc, or --bcc)")
 			}
 			if subject == "" {
 				return fmt.Errorf("--subject is required")
@@ -197,24 +200,50 @@ func msgSendCmd() *cobra.Command {
 			if body == "" {
 				return fmt.Errorf("--body is required (use - for stdin)")
 			}
+			for _, p := range attach {
+				if _, err := os.Stat(p); err != nil {
+					return fmt.Errorf("attachment %s: %w", p, err)
+				}
+			}
 			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would send to %s subject %q (%d bytes)", to, subject, len(body)))
+				c.R().Info(fmt.Sprintf("dry-run: would send to %d recipient(s) subject %q (%d bytes, %d attachment(s))", len(to)+len(cc)+len(bcc), subject, len(body), len(attach)))
 				return nil
+			}
+			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach}
+			if sendAt != "" {
+				t, err := ical.ParseTime(sendAt)
+				if err != nil {
+					return fmt.Errorf("invalid --send-at: %w", err)
+				}
+				opts.DeliveryTime = t.Unix()
+			}
+			if expires != "" {
+				d, err := render.ParseDuration(expires)
+				if err != nil {
+					return fmt.Errorf("invalid --expires: %w", err)
+				}
+				opts.ExpiresInSeconds = int(d.Seconds())
 			}
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
 			}
-			if err := c.App.Mail.Send(c.Ctx, u, to, subject, body); err != nil {
+			if err := c.App.Mail.Send(c.Ctx, u, opts); err != nil {
 				return err
 			}
 			c.R().Success("Message sent.")
 			return nil
 		}),
 	}
-	c.Flags().StringVar(&to, "to", "", "Recipient email")
+	c.Flags().StringArrayVar(&to, "to", nil, "Recipient email (repeatable)")
+	c.Flags().StringArrayVar(&cc, "cc", nil, "CC recipient (repeatable)")
+	c.Flags().StringArrayVar(&bcc, "bcc", nil, "BCC recipient (repeatable)")
 	c.Flags().StringVar(&subject, "subject", "", "Subject")
 	c.Flags().StringVar(&body, "body", "", "Message body (use - for stdin)")
+	c.Flags().BoolVar(&html, "html", false, "Send the body as text/html instead of text/plain")
+	c.Flags().StringVar(&sendAt, "send-at", "", "Schedule delivery (RFC3339 or YYYY-MM-DDTHH:MM)")
+	c.Flags().StringVar(&expires, "expires", "", "Self-destruct after DURATION (e.g. 7d, 24h)")
+	c.Flags().StringArrayVar(&attach, "attach", nil, "File to attach (repeatable)")
 	return c
 }
 

@@ -6,6 +6,55 @@ import (
 	"time"
 )
 
+func TestAttendeesVEVENTEmitsTokenedAttendeeLines(t *testing.T) {
+	out := AttendeesVEVENT("uid-123", []Attendee{
+		{Email: "alice@proton.me", Token: "tok-alice"},
+		{Email: "bob@example.com", Token: "tok-bob"},
+	})
+	for _, want := range []string{
+		"BEGIN:VEVENT",
+		"UID:uid-123",
+		"ATTENDEE;CN=alice@proton.me;ROLE=REQ-PARTICIPANT;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;X-PM-TOKEN=tok-alice:mailto:alice@proton.me",
+		"ATTENDEE;CN=bob@example.com;ROLE=REQ-PARTICIPANT;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;X-PM-TOKEN=tok-bob:mailto:bob@example.com",
+		"END:VEVENT",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("AttendeesVEVENT missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestInviteICSIsAMethodRequestInvitation(t *testing.T) {
+	start := time.Date(2026, 8, 16, 14, 0, 0, 0, time.UTC)
+	out := InviteICS("uid-9", "Quarterly Sync", "Vienna", "agenda items", start, start.Add(time.Hour), false,
+		"organizer@proton.me", []Attendee{{Email: "alice@proton.me", Token: "tok-1"}})
+	for _, want := range []string{
+		"BEGIN:VCALENDAR", "METHOD:REQUEST",
+		"BEGIN:VEVENT", "UID:uid-9",
+		"DTSTART:20260816T140000Z", "DTEND:20260816T150000Z",
+		"SUMMARY:Quarterly Sync", "LOCATION:Vienna", "DESCRIPTION:agenda items",
+		"ORGANIZER;CN=organizer@proton.me:mailto:organizer@proton.me",
+		"X-PM-TOKEN=tok-1:mailto:alice@proton.me",
+		"END:VEVENT", "END:VCALENDAR",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("InviteICS missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestSignedVEVENTOrganizerLine(t *testing.T) {
+	start := time.Date(2026, 8, 16, 14, 0, 0, 0, time.UTC)
+	withOrg := SignedVEVENT("uid", start, start.Add(time.Hour), false, 0, "", "me@proton.me")
+	if !strings.Contains(withOrg, "ORGANIZER;CN=me@proton.me:mailto:me@proton.me") {
+		t.Errorf("expected ORGANIZER line, got:\n%s", withOrg)
+	}
+	noOrg := SignedVEVENT("uid", start, start.Add(time.Hour), false, 0, "", "")
+	if strings.Contains(noOrg, "ORGANIZER") {
+		t.Errorf("expected no ORGANIZER line when organizer empty, got:\n%s", noOrg)
+	}
+}
+
 func TestField(t *testing.T) {
 	text := strings.Join([]string{
 		"BEGIN:VCARD",
@@ -67,7 +116,7 @@ func TestParseTimeLocal(t *testing.T) {
 func TestSignedVEVENT(t *testing.T) {
 	start := time.Date(2026, 4, 16, 14, 0, 0, 0, time.UTC)
 	end := start.Add(time.Hour)
-	out := SignedVEVENT("uid-123", start, end, false, 0)
+	out := SignedVEVENT("uid-123", start, end, false, 0, "", "")
 	for _, want := range []string{"BEGIN:VEVENT", "UID:uid-123", "DTSTART:20260416T140000Z", "DTEND:20260416T150000Z", "SEQUENCE:0", "END:VEVENT"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("SignedVEVENT missing %q in:\n%s", want, out)
@@ -77,51 +126,79 @@ func TestSignedVEVENT(t *testing.T) {
 
 func TestSignedVEVENTAllDay(t *testing.T) {
 	start := time.Date(2026, 4, 16, 0, 0, 0, 0, time.UTC)
-	out := SignedVEVENT("uid", start, start.AddDate(0, 0, 1), true, 1)
+	out := SignedVEVENT("uid", start, start.AddDate(0, 0, 1), true, 1, "FREQ=DAILY", "")
 	if !strings.Contains(out, "DTSTART;VALUE=DATE:20260416") {
 		t.Errorf("all-day event should use VALUE=DATE DTSTART, got:\n%s", out)
 	}
 	if !strings.Contains(out, "SEQUENCE:1") {
 		t.Errorf("expected SEQUENCE:1, got:\n%s", out)
 	}
+	if !strings.Contains(out, "RRULE:FREQ=DAILY") {
+		t.Errorf("expected RRULE line, got:\n%s", out)
+	}
 }
 
 func TestEncryptedVEVENT(t *testing.T) {
-	withLoc := EncryptedVEVENT("Meeting", "Vienna")
-	if !strings.Contains(withLoc, "SUMMARY:Meeting") || !strings.Contains(withLoc, "LOCATION:Vienna") {
-		t.Errorf("expected SUMMARY+LOCATION, got:\n%s", withLoc)
+	full := EncryptedVEVENT("Meeting", "Vienna", "Quarterly sync")
+	for _, want := range []string{"SUMMARY:Meeting", "LOCATION:Vienna", "DESCRIPTION:Quarterly sync"} {
+		if !strings.Contains(full, want) {
+			t.Errorf("expected %q, got:\n%s", want, full)
+		}
 	}
-	noLoc := EncryptedVEVENT("Solo", "")
-	if strings.Contains(noLoc, "LOCATION:") {
-		t.Errorf("empty location should be omitted, got:\n%s", noLoc)
+	bare := EncryptedVEVENT("Solo", "", "")
+	if strings.Contains(bare, "LOCATION:") {
+		t.Errorf("empty location should be omitted, got:\n%s", bare)
+	}
+	if strings.Contains(bare, "DESCRIPTION:") {
+		t.Errorf("empty description should be omitted, got:\n%s", bare)
 	}
 }
 
 func TestSignedVCard(t *testing.T) {
-	withEmail := SignedVCard("John", "john@x.com", "uid-1")
-	for _, want := range []string{"FN:John", "UID:uid-1", "EMAIL;PREF=1:john@x.com"} {
-		if !strings.Contains(withEmail, want) {
-			t.Errorf("SignedVCard missing %q in:\n%s", want, withEmail)
+	withEmails := SignedVCard("John", []string{"john@x.com", "j2@x.com"}, "uid-1")
+	for _, want := range []string{"FN:John", "UID:uid-1", "item1.EMAIL;PREF=1:john@x.com", "item2.EMAIL;PREF=2:j2@x.com"} {
+		if !strings.Contains(withEmails, want) {
+			t.Errorf("SignedVCard missing %q in:\n%s", want, withEmails)
 		}
 	}
-	noEmail := SignedVCard("John", "", "uid-1")
+	noEmail := SignedVCard("John", nil, "uid-1")
 	if strings.Contains(noEmail, "EMAIL") {
 		t.Errorf("empty email should be omitted, got:\n%s", noEmail)
 	}
 }
 
 func TestEncryptedVCard(t *testing.T) {
-	full := EncryptedVCard("+123", "a note", "ACME")
-	for _, want := range []string{"TEL;PREF=1:+123", "NOTE:a note", "ORG:ACME"} {
+	full := EncryptedVCard(VCardFields{Phones: []string{"+123", "+456"}, Note: "a note", Org: "ACME", Title: "CTO", Birthday: "1990-01-02", Address: "1 St", URL: "https://x"})
+	for _, want := range []string{"TEL;PREF=1:+123", "TEL;PREF=2:+456", "NOTE:a note", "ORG:ACME", "TITLE:CTO", "BDAY:1990-01-02", "ADR:1 St", "URL:https://x"} {
 		if !strings.Contains(full, want) {
 			t.Errorf("EncryptedVCard missing %q in:\n%s", want, full)
 		}
 	}
-	empty := EncryptedVCard("", "", "")
-	for _, bad := range []string{"TEL", "NOTE", "ORG"} {
+	empty := EncryptedVCard(VCardFields{})
+	for _, bad := range []string{"TEL", "NOTE", "ORG", "TITLE", "BDAY", "ADR", "URL"} {
 		if strings.Contains(empty, bad) {
 			t.Errorf("empty fields should be omitted, got %q in:\n%s", bad, empty)
 		}
+	}
+}
+
+func TestFields(t *testing.T) {
+	text := strings.Join([]string{
+		"item1.EMAIL;PREF=1:a@x.com",
+		"item2.EMAIL;PREF=2:b@x.com",
+		"TEL;PREF=1:+1",
+		"TEL;PREF=2:+2",
+	}, "\n")
+	emails := Fields(text, "EMAIL")
+	if len(emails) != 2 || emails[0] != "a@x.com" || emails[1] != "b@x.com" {
+		t.Errorf("Fields(EMAIL) = %v", emails)
+	}
+	phones := Fields(text, "TEL")
+	if len(phones) != 2 || phones[0] != "+1" || phones[1] != "+2" {
+		t.Errorf("Fields(TEL) = %v", phones)
+	}
+	if got := Fields(text, "ORG"); len(got) != 0 {
+		t.Errorf("Fields(ORG) = %v, want empty", got)
 	}
 }
 

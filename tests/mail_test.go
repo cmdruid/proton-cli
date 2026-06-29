@@ -1364,3 +1364,203 @@ func keysOf(m map[string]interface{}) []string {
 func looksLikeID(s string) bool {
 	return len(s) > 60 && strings.HasSuffix(s, "==")
 }
+
+// findMessage polls a folder for a message with the given subject.
+func findMessage(t *testing.T, folder, subject string) string {
+	t.Helper()
+	for attempt := 0; attempt < 12; attempt++ {
+		time.Sleep(2 * time.Second)
+		data := runJSON(t, "mail", "messages", "list", "--folder", folder, "--page-size", "20")
+		messages, _ := data["messages"].([]interface{})
+		for _, m := range messages {
+			msg := m.(map[string]interface{})
+			if s, _ := msg["subject"].(string); s == subject {
+				if id, _ := msg["id"].(string); id != "" {
+					return id
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func TestMailSendWithAttachment(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	subject := testID() + "-attach"
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	content := "attachment body for " + subject
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runOK(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject,
+		"--body", "see attached", "--attach", path)
+
+	if sentID := findMessage(t, "sent", subject); sentID != "" {
+		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton-cli mail messages delete %s", sentID),
+			"mail", "messages", "delete", "--", sentID)
+	}
+	inboxID := findMessage(t, "inbox", subject)
+	if inboxID == "" {
+		t.Fatal("attachment mail did not arrive in inbox")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton-cli mail messages delete %s", inboxID),
+		"mail", "messages", "delete", "--", inboxID)
+
+	// The attachment must be listed and decrypt back to the original bytes.
+	atts := runOK(t, "mail", "attachments", "list", inboxID)
+	assertContains(t, atts, "note.txt")
+
+	dlDir := filepath.Join(dir, "dl")
+	if err := os.MkdirAll(dlDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runOK(t, "mail", "attachments", "download", inboxID, "--all", "--output-dir", dlDir)
+	got, err := os.ReadFile(filepath.Join(dlDir, "note.txt"))
+	if err != nil {
+		t.Fatalf("read downloaded attachment: %v", err)
+	}
+	if string(got) != content {
+		t.Errorf("attachment round-trip mismatch: got %q want %q", got, content)
+	}
+}
+
+func TestMailLabelsUpdate(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	name := testID() + "-label"
+	id := strings.TrimSpace(runOK(t, "mail", "labels", "create", "--name", name, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail labels delete %s", id),
+		"mail", "labels", "delete", "--", id)
+
+	newName := name + "-renamed"
+	runOK(t, "mail", "labels", "update", "--name", newName, "--color", "#DB60D6", id)
+	assertContains(t, runOK(t, "mail", "labels", "list"), newName)
+}
+
+func TestMailFiltersUpdate(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	name := testID() + "-filter"
+	sieve := `require ["fileinto"]; if header :contains "Subject" "` + name + `" { fileinto "Archive"; }`
+	id := strings.TrimSpace(runOK(t, "mail", "filters", "create", "--name", name, "--sieve", sieve))
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail filters delete %s", id),
+		"mail", "filters", "delete", "--", id)
+
+	newName := name + "-renamed"
+	runOK(t, "mail", "filters", "update", "--name", newName, id)
+	assertContains(t, runOK(t, "mail", "filters", "list"), newName)
+}
+
+func TestMailSendHTMLSetsHTMLMimeType(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	subject := testID() + "-html"
+	runOK(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject,
+		"--body", "<p>Hello <b>world</b></p>", "--html")
+
+	if sentID := findMessage(t, "sent", subject); sentID != "" {
+		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton-cli mail messages delete %s", sentID),
+			"mail", "messages", "delete", "--", sentID)
+	}
+	inboxID := findMessage(t, "inbox", subject)
+	if inboxID == "" {
+		t.Fatal("HTML mail did not arrive in inbox")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton-cli mail messages delete %s", inboxID),
+		"mail", "messages", "delete", "--", inboxID)
+
+	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+inboxID)
+	msg, ok := data["Message"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("no Message in response: %v", data)
+	}
+	if mt, _ := msg["MIMEType"].(string); mt != "text/html" {
+		t.Errorf("received MIMEType = %q, want text/html", mt)
+	}
+}
+
+func TestMailSendScheduledHasFutureDeliveryTime(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	subject := testID() + "-sendat"
+	sendAt := time.Now().Add(3 * time.Hour)
+	runOK(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject,
+		"--body", "scheduled via --send-at", "--send-at", sendAt.Format("2006-01-02T15:04"))
+
+	id := findMessage(t, "all", subject)
+	if id == "" {
+		t.Fatal("scheduled message not found in all-mail")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete scheduled mail: proton-cli mail messages delete %s", id),
+		"mail", "messages", "delete", "--", id)
+
+	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+id)
+	msg, _ := data["Message"].(map[string]interface{})
+	msgTime, _ := msg["Time"].(float64)
+	// A scheduled message carries its future delivery time; an immediate send
+	// would be ~now.
+	if int64(msgTime) <= time.Now().Add(time.Hour).Unix() {
+		t.Errorf("scheduled Time = %d, expected a future delivery time near %d", int64(msgTime), sendAt.Unix())
+	}
+}
+
+func TestMailSendExpiringHasExpirationTime(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	subject := testID() + "-expires"
+	runOK(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject,
+		"--body", "self-destructs via --expires", "--expires", "1d")
+
+	if sentID := findMessage(t, "sent", subject); sentID != "" {
+		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton-cli mail messages delete %s", sentID),
+			"mail", "messages", "delete", "--", sentID)
+	}
+	inboxID := findMessage(t, "inbox", subject)
+	if inboxID == "" {
+		t.Fatal("expiring message not delivered")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton-cli mail messages delete %s", inboxID),
+		"mail", "messages", "delete", "--", inboxID)
+
+	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+inboxID)
+	msg, _ := data["Message"].(map[string]interface{})
+	exp, _ := msg["ExpirationTime"].(float64)
+	now := time.Now().Unix()
+	if int64(exp) <= now {
+		t.Errorf("ExpirationTime = %d, expected a future expiry near %d", int64(exp), now+86400)
+	}
+}
+
+func TestMailLabelsNestedFolderReportsParent(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	parentName := testID() + "-parent"
+	parentID := strings.TrimSpace(runOK(t, "mail", "labels", "create", "--name", parentName, "--folder", "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton-cli mail labels delete %s", parentID),
+		"mail", "labels", "delete", "--", parentID)
+
+	childName := testID() + "-child"
+	childID := strings.TrimSpace(runOK(t, "mail", "labels", "create", "--name", childName, "--folder", "--parent", parentID, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete child folder: proton-cli mail labels delete %s", childID),
+		"mail", "labels", "delete", "--", childID)
+
+	data := runJSON(t, "api", "GET", "/core/v4/labels", "--query", "Type=3")
+	labels, _ := data["Labels"].([]interface{})
+	var gotParent string
+	for _, l := range labels {
+		m := l.(map[string]interface{})
+		if m["Name"] == childName {
+			gotParent, _ = m["ParentID"].(string)
+		}
+	}
+	if gotParent != parentID {
+		t.Errorf("child folder ParentID = %q, want %q", gotParent, parentID)
+	}
+}

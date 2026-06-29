@@ -42,10 +42,36 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked) (*Context, erro
 	if len(r.Volumes) == 0 {
 		return nil, fmt.Errorf("no volumes found")
 	}
-	shareID := r.Volumes[0].Share.ShareID
-	rootLink := r.Volumes[0].Share.LinkID
-	volumeID := r.Volumes[0].VolumeID
+	return s.unlockShare(ctx, u, r.Volumes[0].Share.ShareID, r.Volumes[0].Share.LinkID, r.Volumes[0].VolumeID)
+}
 
+// ResolvePhotos resolves the dedicated photos share (ShareType 4) and unwraps
+// its keys, parallel to Resolve for the main volume.
+func (s *Service) ResolvePhotos(ctx context.Context, u *keys.Unlocked) (*Context, error) {
+	var r struct {
+		Shares []struct {
+			ShareID  string
+			LinkID   string
+			VolumeID string
+			Type     int
+			State    int
+			Locked   bool
+		}
+	}
+	q := url.Values{}
+	q.Set("ShowAll", "1")
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/shares", Query: q}, &r); err != nil {
+		return nil, err
+	}
+	for _, sh := range r.Shares {
+		if sh.Type == 4 && !sh.Locked {
+			return s.unlockShare(ctx, u, sh.ShareID, sh.LinkID, sh.VolumeID)
+		}
+	}
+	return nil, &errs.NotFound{Kind: "photos share"}
+}
+
+func (s *Service) unlockShare(ctx context.Context, u *keys.Unlocked, shareID, rootLink, volumeID string) (*Context, error) {
 	var sh struct {
 		AddressID           string
 		Key                 string
@@ -116,6 +142,7 @@ type Link struct {
 	ShareIDs                []string
 	ShareUrls               []struct{ ShareURLID string }
 	FolderProperties        *struct{ NodeHashKey string }
+	AlbumProperties         *struct{ NodeHashKey string }
 	FileProperties          *struct {
 		ContentKeyPacket string
 		ActiveRevision   struct{ ID string }

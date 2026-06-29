@@ -142,10 +142,18 @@ func reEncryptNodePassphrase(l *Link, oldKR, newKR, addrKR *pgp.KeyRing) (string
 }
 
 func hashKeyOf(l *Link, nodeKR *pgp.KeyRing) ([]byte, error) {
-	if l.FolderProperties == nil || l.FolderProperties.NodeHashKey == "" {
+	// Folders carry the hash key in FolderProperties; photo albums carry it in
+	// AlbumProperties.
+	armored := ""
+	if l.AlbumProperties != nil && l.AlbumProperties.NodeHashKey != "" {
+		armored = l.AlbumProperties.NodeHashKey
+	} else if l.FolderProperties != nil && l.FolderProperties.NodeHashKey != "" {
+		armored = l.FolderProperties.NodeHashKey
+	}
+	if armored == "" {
 		return nil, fmt.Errorf("link has no hash key")
 	}
-	msg, err := pgp.NewPGPMessageFromArmored(l.FolderProperties.NodeHashKey)
+	msg, err := pgp.NewPGPMessageFromArmored(armored)
 	if err != nil {
 		return nil, err
 	}

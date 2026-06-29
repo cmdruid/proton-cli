@@ -11,8 +11,108 @@ import (
 
 func newContactsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "contacts", Short: "Contact operations"}
-	c.AddCommand(contactsListCmd(), contactsGetCmd(), contactsCreateCmd(), contactsUpdateCmd(), contactsDeleteCmd())
+	c.AddCommand(contactsListCmd(), contactsGetCmd(), contactsCreateCmd(), contactsUpdateCmd(), contactsDeleteCmd(), contactsGroupsCmd())
 	return c
+}
+
+func contactsGroupsCmd() *cobra.Command {
+	c := &cobra.Command{Use: "groups", Short: "Manage contact groups"}
+
+	c.AddCommand(&cobra.Command{
+		Use: "list", Short: "List contact groups",
+		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+			groups, err := c.App.Contacts.GroupsList(c.Ctx)
+			if err != nil {
+				return err
+			}
+			return view.Render(c.R(), c.short(), c.App.IDCache, view.List[ctsvc.Group]{
+				Columns: []view.Column[ctsvc.Group]{
+					{Header: "ID", ID: true, Cell: func(g ctsvc.Group) string { return g.ID }},
+					{Header: "NAME", Cell: func(g ctsvc.Group) string { return g.Name }},
+					{Header: "COLOR", Cell: func(g ctsvc.Group) string { return g.Color }},
+				},
+				CacheIDs: func(g ctsvc.Group) []string { return []string{g.ID} },
+			}, groups)
+		}),
+	})
+
+	var gName, gColor string
+	create := &cobra.Command{
+		Use: "create", Short: "Create a contact group",
+		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+			if gName == "" {
+				return fmt.Errorf("--name is required")
+			}
+			if err := validateAccentColor(gColor); err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would create group %q", gName))
+				return nil
+			}
+			id, err := c.App.Contacts.GroupCreate(c.Ctx, gName, gColor)
+			if err != nil {
+				return err
+			}
+			c.R().ID(id, fmt.Sprintf("Created group %q", gName))
+			return nil
+		}),
+	}
+	create.Flags().StringVar(&gName, "name", "", "Group name")
+	create.Flags().StringVar(&gColor, "color", "#8080FF", "Group color (hex; must be a Proton accent color)")
+	c.AddCommand(create)
+
+	c.AddCommand(&cobra.Command{
+		Use: "delete GROUP_ID", Short: "Delete a contact group",
+		Args: cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would delete group %s", c.Args[0]))
+				return nil
+			}
+			if err := c.App.Contacts.GroupDelete(c.Ctx, c.Args[0]); err != nil {
+				return err
+			}
+			c.R().Success("Group deleted.")
+			return nil
+		}),
+	})
+
+	c.AddCommand(contactsGroupMembersCmd("add", "Add contacts to a group", func(c *Ctx, gid string, ids []string) error {
+		return c.App.Contacts.GroupAdd(c.Ctx, gid, ids)
+	}, "Added %d contact(s) to group."))
+	c.AddCommand(contactsGroupMembersCmd("remove", "Remove contacts from a group", func(c *Ctx, gid string, ids []string) error {
+		return c.App.Contacts.GroupRemove(c.Ctx, gid, ids)
+	}, "Removed %d contact(s) from group."))
+
+	return c
+}
+
+func contactsGroupMembersCmd(use, short string, fn func(*Ctx, string, []string) error, successFmt string) *cobra.Command {
+	return &cobra.Command{
+		Use: use + " GROUP_ID CONTACT_REF...", Short: short,
+		Args: cobra.MinimumNArgs(2),
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+			groupID := c.Args[0]
+			ids := make([]string, 0, len(c.Args)-1)
+			for _, ref := range c.Args[1:] {
+				id, err := c.App.Contacts.Resolve(c.Ctx, c.U, ref)
+				if err != nil {
+					return err
+				}
+				ids = append(ids, id)
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would %s %d contact(s)", use, len(ids)))
+				return nil
+			}
+			if err := fn(c, groupID, ids); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf(successFmt, len(ids)))
+			return nil
+		}),
+	}
 }
 
 func contactsListCmd() *cobra.Command {
@@ -57,14 +157,26 @@ func contactsGetCmd() *cobra.Command {
 			if ct.Name != "" {
 				_, _ = fmt.Fprintf(out, "Name:  %s\n", ct.Name)
 			}
-			if ct.Email != "" {
-				_, _ = fmt.Fprintf(out, "Email: %s\n", ct.Email)
+			for _, e := range ct.Emails {
+				_, _ = fmt.Fprintf(out, "Email: %s\n", e)
 			}
-			if ct.Phone != "" {
-				_, _ = fmt.Fprintf(out, "Phone: %s\n", ct.Phone)
+			for _, p := range ct.Phones {
+				_, _ = fmt.Fprintf(out, "Phone: %s\n", p)
 			}
 			if ct.Org != "" {
 				_, _ = fmt.Fprintf(out, "Org:   %s\n", ct.Org)
+			}
+			if ct.Title != "" {
+				_, _ = fmt.Fprintf(out, "Title: %s\n", ct.Title)
+			}
+			if ct.Birthday != "" {
+				_, _ = fmt.Fprintf(out, "Bday:  %s\n", ct.Birthday)
+			}
+			if ct.Address != "" {
+				_, _ = fmt.Fprintf(out, "Addr:  %s\n", ct.Address)
+			}
+			if ct.URL != "" {
+				_, _ = fmt.Fprintf(out, "URL:   %s\n", ct.URL)
 			}
 			if ct.Note != "" {
 				_, _ = fmt.Fprintf(out, "Note:  %s\n", ct.Note)
@@ -95,9 +207,13 @@ func contactsCreateCmd() *cobra.Command {
 		}),
 	}
 	c.Flags().StringVar(&nc.Name, "name", "", "Contact name")
-	c.Flags().StringVar(&nc.Email, "email", "", "Contact email")
-	c.Flags().StringVar(&nc.Phone, "phone", "", "Contact phone")
+	c.Flags().StringArrayVar(&nc.Emails, "email", nil, "Contact email (repeatable)")
+	c.Flags().StringArrayVar(&nc.Phones, "phone", nil, "Contact phone (repeatable)")
 	c.Flags().StringVar(&nc.Org, "org", "", "Contact organization")
+	c.Flags().StringVar(&nc.Title, "title", "", "Job title")
+	c.Flags().StringVar(&nc.Birthday, "birthday", "", "Birthday (e.g. 1990-01-31)")
+	c.Flags().StringVar(&nc.Address, "address", "", "Postal address")
+	c.Flags().StringVar(&nc.URL, "url", "", "Website URL")
 	c.Flags().StringVar(&nc.Note, "note", "", "Contact note")
 	return c
 }
@@ -124,9 +240,13 @@ func contactsUpdateCmd() *cobra.Command {
 		}),
 	}
 	c.Flags().StringVar(&nc.Name, "name", "", "New name")
-	c.Flags().StringVar(&nc.Email, "email", "", "New email")
-	c.Flags().StringVar(&nc.Phone, "phone", "", "New phone")
+	c.Flags().StringArrayVar(&nc.Emails, "email", nil, "New email(s) (repeatable; replaces existing)")
+	c.Flags().StringArrayVar(&nc.Phones, "phone", nil, "New phone(s) (repeatable; replaces existing)")
 	c.Flags().StringVar(&nc.Org, "org", "", "New organization")
+	c.Flags().StringVar(&nc.Title, "title", "", "New job title")
+	c.Flags().StringVar(&nc.Birthday, "birthday", "", "New birthday")
+	c.Flags().StringVar(&nc.Address, "address", "", "New postal address")
+	c.Flags().StringVar(&nc.URL, "url", "", "New website URL")
 	c.Flags().StringVar(&nc.Note, "note", "", "New note")
 	return c
 }

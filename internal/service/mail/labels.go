@@ -41,19 +41,36 @@ func (s *Service) LabelsList(ctx context.Context) ([]Label, []Label, error) {
 	return ll, ff, nil
 }
 
-func (s *Service) LabelCreate(ctx context.Context, name, color string, isFolder bool) (string, error) {
+func (s *Service) LabelCreate(ctx context.Context, name, color string, isFolder bool, parentID string) (string, error) {
 	t := 1
 	if isFolder {
 		t = 3
 	}
+	body := map[string]any{"Name": name, "Color": color, "Type": t}
+	if parentID != "" {
+		body["ParentID"] = parentID
+	}
 	var r struct{ Label struct{ ID string } }
-	if err := s.C.Decode(ctx, proton.Request{
-		Method: "POST", Path: "/core/v4/labels",
-		Body: map[string]any{"Name": name, "Color": color, "Type": t},
-	}, &r); err != nil {
+	if err := s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/core/v4/labels", Body: body}, &r); err != nil {
 		return "", err
 	}
 	return r.Label.ID, nil
+}
+
+// LabelUpdate changes a label/folder's name, color and/or parent. Empty fields
+// are left unchanged.
+func (s *Service) LabelUpdate(ctx context.Context, id, name, color, parentID string) error {
+	body := map[string]any{}
+	if name != "" {
+		body["Name"] = name
+	}
+	if color != "" {
+		body["Color"] = color
+	}
+	if parentID != "" {
+		body["ParentID"] = parentID
+	}
+	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/core/v4/labels/" + id, Body: body}, nil)
 }
 
 func (s *Service) LabelDelete(ctx context.Context, ids []string) error {
@@ -84,6 +101,30 @@ func (s *Service) FilterCreate(ctx context.Context, name, sieve string, status i
 		return "", err
 	}
 	return r.Filter.ID, nil
+}
+
+// FilterUpdate changes a filter's name and/or sieve script, preserving its
+// current enabled/disabled status (use FilterEnable/FilterDisable for that).
+func (s *Service) FilterUpdate(ctx context.Context, id, name, sieve string) error {
+	var cur struct {
+		Filter struct {
+			Name, Sieve     string
+			Version, Status int
+		}
+	}
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/filters/" + id}, &cur); err != nil {
+		return err
+	}
+	if name == "" {
+		name = cur.Filter.Name
+	}
+	if sieve == "" {
+		sieve = cur.Filter.Sieve
+	}
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/mail/v4/filters/" + id,
+		Body: map[string]any{"Name": name, "Sieve": sieve, "Version": 2, "Status": cur.Filter.Status},
+	}, nil)
 }
 
 func (s *Service) FilterDelete(ctx context.Context, id string) error {
