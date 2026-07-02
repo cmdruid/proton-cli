@@ -42,7 +42,12 @@ func buildMIMEMessage(body, mimeType string, atts []preparedAttachment) (string,
 		h := textproto.MIMEHeader{}
 		h.Set("Content-Type", fmt.Sprintf("%s; name=%q", ct, a.Filename))
 		h.Set("Content-Transfer-Encoding", "base64")
-		h.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", a.Filename))
+		if a.ContentID != "" {
+			h.Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", a.Filename))
+			h.Set("Content-ID", "<"+a.ContentID+">")
+		} else {
+			h.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", a.Filename))
+		}
 		p, err := w.CreatePart(h)
 		if err != nil {
 			return "", err

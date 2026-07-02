@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -192,9 +193,8 @@ func TestMailSearchFromKeywordSuppressesHint(t *testing.T) {
 
 func TestMailSearchFromHitsNoHint(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-from-hint"
-	sendTestMail(t, subject)
-	// Self-mail: --from selfEmail() should match. May take a beat to index.
+	plainMail(t) // ensure a delivered self-mail exists and is indexed
+	// --from selfEmail() should match. May take a beat to index.
 	var stderr string
 	for attempt := 0; attempt < 8; attempt++ {
 		_, s := runOKStderr(t, "mail", "messages", "search",
@@ -233,8 +233,7 @@ func TestMailConversationsSearchFromZeroResultsHint(t *testing.T) {
 
 func TestMailMessagesSendAndReadText(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-send-read"
-	msgID := sendTestMail(t, subject)
+	msgID, _, subject := plainMail(t)
 
 	// Default --format text: human-readable, fields on stderr-safe stdout
 	stdout := runOK(t, "mail", "messages", "read", "--", msgID)
@@ -247,8 +246,7 @@ func TestMailMessagesSendAndReadText(t *testing.T) {
 
 func TestMailMessagesReadByRef(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-ref"
-	sendTestMail(t, subject)
+	_, _, subject := plainMail(t)
 
 	// Proton's search index is populated asynchronously, so the message may
 	// show up in list (used by sendTestMail) a few seconds before it shows up
@@ -274,8 +272,7 @@ func TestMailMessagesReadByRef(t *testing.T) {
 
 func TestMailMessagesReadFormatRaw(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-raw"
-	msgID := sendTestMail(t, subject)
+	msgID, _, subject := plainMail(t)
 
 	stdout := runOK(t, "mail", "messages", "read", "--format", "raw", "--", msgID)
 	assertContains(t, stdout, subject)
@@ -283,8 +280,7 @@ func TestMailMessagesReadFormatRaw(t *testing.T) {
 
 func TestMailMessagesReadFormatInvalid(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-badfmt"
-	msgID := sendTestMail(t, subject)
+	msgID, _, _ := plainMail(t)
 
 	_, stderr, code := run(t, "mail", "messages", "read", "--format", "wut", "--", msgID)
 	if code == 0 {
@@ -448,31 +444,32 @@ func TestMailConversationsListJSONShape(t *testing.T) {
 
 // findConversationFor returns the conversation ID containing the given
 // message ID by scanning the inbox via list. Skips on miss.
+var (
+	convCacheMu sync.Mutex
+	convCache   = map[string]string{}
+)
+
 func findConversationFor(t *testing.T, msgID string) string {
 	t.Helper()
-	// /mail/v4/conversations?ID=<msgID> doesn't work; fall back to fetching
-	// the message via the api escape hatch and reading ConversationID.
-	stdout := runOK(t, "api", "GET", "/mail/v4/messages/"+msgID)
-	var v map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &v); err != nil {
-		t.Fatalf("api GET message: %v", err)
+	convCacheMu.Lock()
+	cached, ok := convCache[msgID]
+	convCacheMu.Unlock()
+	if ok {
+		return cached
 	}
-	m, _ := v["Message"].(map[string]interface{})
-	if m == nil {
-		t.Skip("could not extract message envelope from api response")
-	}
-	convID, _ := m["ConversationID"].(string)
+	convID := conversationIDOf(msgID)
 	if convID == "" {
 		t.Skip("message has no ConversationID")
 	}
+	convCacheMu.Lock()
+	convCache[msgID] = convID
+	convCacheMu.Unlock()
 	return convID
 }
 
 func TestMailConversationsRead(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-conv-read"
-	msgID := sendTestMail(t, subject)
-	convID := findConversationFor(t, msgID)
+	_, convID, subject := plainMail(t)
 
 	stdout := runOK(t, "mail", "conversations", "read", "--", convID)
 	assertContains(t, stdout, subject)
@@ -483,9 +480,7 @@ func TestMailConversationsRead(t *testing.T) {
 
 func TestMailMessagesReadConvIDRedirects(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-redir-msg"
-	msgID := sendTestMail(t, subject)
-	convID := findConversationFor(t, msgID)
+	_, convID, _ := plainMail(t)
 
 	_, stderr, code := run(t, "mail", "messages", "read", "--", convID)
 	if code != 3 {
@@ -498,8 +493,7 @@ func TestMailMessagesReadConvIDRedirects(t *testing.T) {
 
 func TestMailConversationsReadMsgIDRedirects(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-redir-conv"
-	msgID := sendTestMail(t, subject)
+	msgID, _, _ := plainMail(t)
 
 	_, stderr, code := run(t, "mail", "conversations", "read", "--", msgID)
 	if code != 3 {
@@ -538,37 +532,13 @@ func TestMailConversationsTrashRoundTrip(t *testing.T) {
 
 func TestMailAttachmentsListAndDownload(t *testing.T) {
 	skipIfNoCredentials(t)
-
-	// Find any message with an attachment.
-	data := runJSON(t, "mail", "messages", "list", "--page-size", "50")
-	msgs := data["messages"].([]interface{})
-	var msgID string
-	for _, m := range msgs {
-		msg := m.(map[string]interface{})
-		if num, ok := msg["num_attachments"].(float64); ok && num > 0 {
-			msgID = msg["id"].(string)
-			break
-		}
-	}
-	if msgID == "" {
-		t.Skip("no messages with attachments found in last 50 inbox items")
-	}
+	msgID, attID, attName := findMessageWithAttachment(t)
 
 	// List
 	stdout := runOK(t, "mail", "attachments", "list", msgID)
 	assertContains(t, stdout, "NAME")
 
 	// Download to tempdir
-	attsRaw := runOK(t, "mail", "attachments", "list", msgID, "--output", "json")
-	var atts []map[string]interface{}
-	if err := json.Unmarshal([]byte(attsRaw), &atts); err != nil {
-		t.Fatalf("failed to parse attachments JSON: %v", err)
-	}
-	if len(atts) == 0 {
-		t.Skip("no attachments after decryption")
-	}
-	attID := atts[0]["id"].(string)
-	attName, _ := atts[0]["name"].(string)
 	out := filepath.Join(t.TempDir(), "att")
 	runOK(t, "mail", "attachments", "download", msgID, attID, out)
 
@@ -581,33 +551,11 @@ func TestMailAttachmentsListAndDownload(t *testing.T) {
 	}
 }
 
-// findMessageWithAttachment scans the inbox for a message with at least one
-// attachment and returns (msgID, attID, attName). Skips the test on miss.
+// findMessageWithAttachment returns a shared, delivered self-mail carrying one
+// attachment (created once per suite), plus that attachment's ID and name.
 func findMessageWithAttachment(t *testing.T) (msgID, attID, attName string) {
 	t.Helper()
-	data := runJSON(t, "mail", "messages", "list", "--page-size", "50")
-	msgs := data["messages"].([]interface{})
-	for _, m := range msgs {
-		mm := m.(map[string]interface{})
-		if n, ok := mm["num_attachments"].(float64); ok && n > 0 {
-			msgID = mm["id"].(string)
-			break
-		}
-	}
-	if msgID == "" {
-		t.Skip("no messages with attachments in last 50 inbox items")
-	}
-	attsRaw := runOK(t, "mail", "attachments", "list", msgID, "--output", "json")
-	var atts []map[string]interface{}
-	if err := json.Unmarshal([]byte(attsRaw), &atts); err != nil {
-		t.Fatalf("parse attachments JSON: %v", err)
-	}
-	if len(atts) == 0 {
-		t.Skip("no attachments after decryption")
-	}
-	attID = atts[0]["id"].(string)
-	attName, _ = atts[0]["name"].(string)
-	return msgID, attID, attName
+	return sharedAttachment(t)
 }
 
 func TestMailAttachmentsDownloadCollisionAutoSuffix(t *testing.T) {
@@ -733,38 +681,12 @@ func TestMailAttachmentsDownloadOutputDirAutoCreates(t *testing.T) {
 // findMessageWithMixedAttachments scans the inbox for a message that has at
 // least one inline AND one non-inline attachment. Skips the test if no such
 // message exists in the last 50 inbox items.
+// findMessageWithMixedAttachments returns a shared, delivered self-mail with
+// one inline image and one regular attachment (created once per suite via
+// `--attach-inline`), so the inline-filter tests run for real.
 func findMessageWithMixedAttachments(t *testing.T) (msgID string) {
 	t.Helper()
-	data := runJSON(t, "mail", "messages", "list", "--page-size", "50")
-	msgs := data["messages"].([]interface{})
-	for _, m := range msgs {
-		mm := m.(map[string]interface{})
-		n, _ := mm["num_attachments"].(float64)
-		if n < 2 {
-			continue
-		}
-		id := mm["id"].(string)
-		raw := runOK(t, "mail", "attachments", "list", id,
-			"--include-inline", "--output", "json")
-		var atts []map[string]interface{}
-		if err := json.Unmarshal([]byte(raw), &atts); err != nil {
-			continue
-		}
-		hasInline, hasReal := false, false
-		for _, a := range atts {
-			switch a["disposition"].(string) {
-			case "inline":
-				hasInline = true
-			default:
-				hasReal = true
-			}
-		}
-		if hasInline && hasReal {
-			return id
-		}
-	}
-	t.Skip("no message with mixed inline/attachment dispositions found")
-	return ""
+	return sharedMixedAttachment(t)
 }
 
 func TestMailAttachmentsListFiltersInline(t *testing.T) {
@@ -876,33 +798,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 
 func TestMailMessagesReadStripQuotesPlaintext(t *testing.T) {
 	skipIfNoCredentials(t)
-	// Self-mail with the canonical "On X, <a@b> wrote:" + "> ..." reply
-	// shape baked into the body. sendTestMail uses --body, plain text by
-	// default. We can't easily craft this through the CLI because the body
-	// is one --body argument and the canonical pattern needs newlines.
-	subject := testID() + "-strip-quotes"
-	body := "My new note.\n\nOn Tue, 24 Sep 2024, Sender <a@b.com> wrote:\n\n> ancient quoted text\n> that should disappear\n"
-	runOK(t, "mail", "messages", "send",
-		"--to", selfEmail(), "--subject", subject, "--body", body)
-
-	// Find the inbox copy.
-	var msgID string
-	for attempt := 0; attempt < 10 && msgID == ""; attempt++ {
-		time.Sleep(2 * time.Second)
-		data := runJSON(t, "mail", "messages", "list", "--folder", "inbox", "--page-size", "20")
-		for _, m := range data["messages"].([]interface{}) {
-			mm := m.(map[string]interface{})
-			if s, _ := mm["subject"].(string); s == subject {
-				msgID, _ = mm["id"].(string)
-				break
-			}
-		}
-	}
-	if msgID == "" {
-		t.Skip("self-mail did not arrive in inbox in time")
-	}
-	cleanupRun(t, "Delete inbox: proton-cli mail messages delete -- "+msgID,
-		"mail", "messages", "delete", "--", msgID)
+	msgID, _ := quotedMail(t)
 
 	default1 := runOK(t, "mail", "messages", "read", msgID)
 	if !strings.Contains(default1, "ancient quoted text") {
@@ -920,8 +816,7 @@ func TestMailMessagesReadStripQuotesPlaintext(t *testing.T) {
 
 func TestMailMessagesReadStripQuotesNoFalsePositive(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-strip-no-quote"
-	msgID := sendTestMail(t, subject)
+	msgID, _, _ := plainMail(t)
 
 	default1 := runOK(t, "mail", "messages", "read", msgID)
 	stripped := runOK(t, "mail", "messages", "read", "--strip-quotes", msgID)
@@ -933,9 +828,7 @@ func TestMailMessagesReadStripQuotesNoFalsePositive(t *testing.T) {
 
 func TestMailConversationsReadSummary(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-summary"
-	msgID := sendTestMail(t, subject)
-	convID := findConversationFor(t, msgID)
+	_, convID, _ := plainMail(t)
 
 	data := runJSON(t, "--full-ids", "mail", "conversations", "read", convID)
 	// Use the JSON shape to determine the expected message count.
@@ -981,9 +874,7 @@ func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
 
 func TestMailConversationsReadStripQuotesKeepsLayout(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-conv-strip"
-	msgID := sendTestMail(t, subject)
-	convID := findConversationFor(t, msgID)
+	_, convID, _ := plainMail(t)
 
 	stdout := runOK(t, "mail", "conversations", "read", "--strip-quotes", convID)
 	// Layout should still have per-message dividers + headers.
@@ -999,8 +890,7 @@ func TestMailConversationsReadStripQuotesKeepsLayout(t *testing.T) {
 
 func TestMailMessagesReadBodyOnly(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-body-only"
-	msgID := sendTestMail(t, subject)
+	msgID, _, subject := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "read", "--body-only", msgID)
 	for _, marker := range []string{"Subject:", "From:", "To:", "ID:", "---", "Attachments ("} {
 		if strings.Contains(stdout, marker) {
@@ -1015,8 +905,7 @@ func TestMailMessagesReadBodyOnly(t *testing.T) {
 
 func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-fmt-html"
-	msgID := sendTestMail(t, subject)
+	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "read", "--format", "html", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
 		t.Errorf("--format html must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
@@ -1030,8 +919,7 @@ func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
 
 func TestMailMessagesReadFormatRawNoHeader(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-fmt-raw"
-	msgID := sendTestMail(t, subject)
+	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "read", "--format", "raw", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
 		t.Errorf("--format raw must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
@@ -1040,8 +928,7 @@ func TestMailMessagesReadFormatRawNoHeader(t *testing.T) {
 
 func TestMailMessagesReadDefaultStillHasHeader(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-default"
-	msgID := sendTestMail(t, subject)
+	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "read", msgID)
 	assertContains(t, stdout, "Subject:")
 	assertContains(t, stdout, "From:")
@@ -1049,9 +936,7 @@ func TestMailMessagesReadDefaultStillHasHeader(t *testing.T) {
 
 func TestMailConversationsReadBodyOnly(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-conv-body"
-	msgID := sendTestMail(t, subject)
-	convID := findConversationFor(t, msgID)
+	_, convID, subject := plainMail(t)
 
 	stdout := runOK(t, "mail", "conversations", "read", "--body-only", convID)
 	for _, marker := range []string{
@@ -1090,8 +975,7 @@ func TestMailMessagesReadShowsAttachments(t *testing.T) {
 
 func TestMailMessagesReadNoAttachmentsNoFooter(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-no-atts"
-	msgID := sendTestMail(t, subject)
+	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "read", msgID)
 	if strings.Contains(stdout, "---") {
 		t.Errorf("unexpected '---' separator on no-attachments message:\n%s", truncateOutput(stdout))
@@ -1368,20 +1252,12 @@ func looksLikeID(s string) bool {
 // findMessage polls a folder for a message with the given subject.
 func findMessage(t *testing.T, folder, subject string) string {
 	t.Helper()
-	for attempt := 0; attempt < 12; attempt++ {
-		time.Sleep(2 * time.Second)
-		data := runJSON(t, "mail", "messages", "list", "--folder", folder, "--page-size", "20")
-		messages, _ := data["messages"].([]interface{})
-		for _, m := range messages {
-			msg := m.(map[string]interface{})
-			if s, _ := msg["subject"].(string); s == subject {
-				if id, _ := msg["id"].(string); id != "" {
-					return id
-				}
-			}
-		}
-	}
-	return ""
+	var id string
+	waitFor(25*time.Second, 750*time.Millisecond, func() bool {
+		id = messageIDInFolder(folder, subject)
+		return id != ""
+	})
+	return id
 }
 
 func TestMailSendWithAttachment(t *testing.T) {
@@ -1541,22 +1417,22 @@ func TestMailSendExpiringHasExpirationTime(t *testing.T) {
 func TestMailSendEncryptedForOutsideDryRun(t *testing.T) {
 	skipIfNoCredentials(t)
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
-		"--to", "eo-"+testID()+"@example.com", "--subject", testID()+"-eo-dry",
+		"--to", externalRecipient, "--subject", testID()+"-eo-dry",
 		"--body", "secret", "--eo-password", "hunter2", "--eo-password-hint", "the usual")
 	assertContains(t, stderr, "dry-run")
 }
 
 // TestMailSendEncryptedForOutside exercises the encrypted-for-outside (password)
-// send path end to end. It targets an external example.com address, so a
-// non-zero exit here means either an EO-packaging regression or a server-side
-// address policy - both worth investigating.
+// send path end to end. It delivers to a real external (non-Proton) mailbox -
+// the GMX alt, per tests/AGENTS.md - so a non-zero exit means either an
+// EO-packaging regression or a server-side address policy. (Sending to a fake
+// @example.com address instead would bounce with a MAILER-DAEMON return.)
 func TestMailSendEncryptedForOutside(t *testing.T) {
 	skipIfNoCredentials(t)
 	subject := testID() + "-eo-real"
-	ext := "eo-" + testID() + "@example.com"
 
 	runOK(t, "mail", "messages", "send",
-		"--to", ext, "--subject", subject, "--body", "encrypted outside body",
+		"--to", externalRecipient, "--subject", subject, "--body", "encrypted outside body",
 		"--eo-password", "hunter2", "--eo-password-hint", "the usual")
 
 	sentID := findMessage(t, "sent", subject)

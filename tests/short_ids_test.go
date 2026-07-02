@@ -152,8 +152,7 @@ func TestShortIDCacheFilePopulated(t *testing.T) {
 
 func TestShortIDRoundTripMail(t *testing.T) {
 	skipIfNoCredentials(t)
-	subject := testID() + "-shortid-rt"
-	msgID := sendTestMail(t, subject)
+	msgID, _, subject := plainMail(t)
 
 	// Run a list command so the cache learns the ID.
 	runOK(t, "mail", "messages", "list", "--page-size", "20")

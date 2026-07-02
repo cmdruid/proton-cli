@@ -59,6 +59,9 @@ type SendOptions struct {
 	HTML    bool
 	// Attachments are local file paths to encrypt and attach.
 	Attachments []string
+	// InlineAttach are local image file paths embedded in the HTML body via a
+	// generated Content-ID (disposition "inline"); requires HTML.
+	InlineAttach []string
 	// InlineAttachments are in-memory attachments (e.g. a generated ICS).
 	InlineAttachments []InlineAttachment
 	// DeliveryTime, when > 0, schedules the send for that absolute Unix time.
@@ -147,6 +150,13 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 		mimeType = "text/html"
 	}
 
+	// Inline images assign a Content-ID and append a cid: reference to the body,
+	// so this must happen before the draft body is encrypted below.
+	inlinePrepared, err := prepareInlineImages(&opts, senderEmail)
+	if err != nil {
+		return err
+	}
+
 	encDraft, err := addrKR.Encrypt(pgp.NewPlainMessageFromString(opts.Body), addrKR)
 	if err != nil {
 		return fmt.Errorf("encrypt draft: %w", err)
@@ -185,9 +195,10 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 		cleanup()
 		return err
 	}
+	prepared = append(prepared, inlinePrepared...)
 	var atts []*uploadedAttachment
 	for _, p := range prepared {
-		a, err := s.uploadAttachmentData(ctx, addrKR, messageID, p.Filename, p.MIMEType, p.Data)
+		a, err := s.uploadAttachmentData(ctx, addrKR, messageID, p.Filename, p.MIMEType, p.ContentID, p.Data)
 		if err != nil {
 			cleanup()
 			return err

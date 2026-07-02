@@ -148,77 +148,64 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 	}
 }
 
-func TestDriveItemsDownloadOverwriteRefused(t *testing.T) {
+// TestDriveItemsDownloadBehaviors exercises the three download-destination
+// behaviors (refuse-on-collision, --force overwrite, stdout default) against a
+// single folder + uploads created once, rather than one folder+upload per
+// behavior. Subtests keep per-behavior reporting.
+func TestDriveItemsDownloadBehaviors(t *testing.T) {
 	skipIfNoCredentials(t)
-	folder := "/" + testID() + "-overwrite"
+	folder := "/" + testID() + "-dl"
 	tmp := t.TempDir()
-	src := filepath.Join(tmp, "a.txt")
-	_ = os.WriteFile(src, []byte("original-cloud"), 0644)
-
+	aSrc := filepath.Join(tmp, "a.txt")
+	pSrc := filepath.Join(tmp, "p.txt")
+	if err := os.WriteFile(aSrc, []byte("cloud-content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pSrc, []byte("stdoutpayload"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
 		"drive", "items", "delete", "--permanent", folder)
-	runOK(t, "drive", "items", "upload", src, folder)
+	runOK(t, "drive", "items", "upload", aSrc, folder)
+	runOK(t, "drive", "items", "upload", pSrc, folder)
 
-	dest := filepath.Join(tmp, "out.txt")
-	if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	t.Run("overwrite refused without --force", func(t *testing.T) {
+		dest := filepath.Join(t.TempDir(), "out.txt")
+		if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		_, stderr, code := run(t, "drive", "items", "download", folder+"/a.txt", dest)
+		if code == 0 {
+			t.Error("expected non-zero exit when destination exists without --force")
+		}
+		if !strings.Contains(stderr, "exists") {
+			t.Errorf("expected stderr to mention 'exists', got: %s", stderr)
+		}
+		if data, _ := os.ReadFile(dest); string(data) != "local-existing" {
+			t.Errorf("local file should be untouched, got: %q", string(data))
+		}
+	})
 
-	_, stderr, code := run(t, "drive", "items", "download", folder+"/a.txt", dest)
-	if code == 0 {
-		t.Error("expected non-zero exit when destination exists without --force")
-	}
-	if !strings.Contains(stderr, "exists") {
-		t.Errorf("expected stderr to mention 'exists', got: %s", stderr)
-	}
-	if data, _ := os.ReadFile(dest); string(data) != "local-existing" {
-		t.Errorf("local file should be untouched, got: %q", string(data))
-	}
-}
+	t.Run("--force overwrites", func(t *testing.T) {
+		dest := filepath.Join(t.TempDir(), "out.txt")
+		if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		runOK(t, "drive", "items", "download", "--force", folder+"/a.txt", dest)
+		data, err := os.ReadFile(dest)
+		if err != nil {
+			t.Fatalf("read after force: %v", err)
+		}
+		if string(data) != "cloud-content" {
+			t.Errorf("--force did not overwrite, got: %q", string(data))
+		}
+	})
 
-func TestDriveItemsDownloadForce(t *testing.T) {
-	skipIfNoCredentials(t)
-	folder := "/" + testID() + "-force"
-	tmp := t.TempDir()
-	src := filepath.Join(tmp, "a.txt")
-	_ = os.WriteFile(src, []byte("new-cloud-content"), 0644)
-
-	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
-		"drive", "items", "delete", "--permanent", folder)
-	runOK(t, "drive", "items", "upload", src, folder)
-
-	dest := filepath.Join(tmp, "out.txt")
-	if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	runOK(t, "drive", "items", "download", "--force", folder+"/a.txt", dest)
-	data, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("read after force: %v", err)
-	}
-	if string(data) != "new-cloud-content" {
-		t.Errorf("--force did not overwrite, got: %q", string(data))
-	}
-}
-
-func TestDriveItemsDownloadToStdoutNoArg(t *testing.T) {
-	skipIfNoCredentials(t)
-	folder := "/" + testID() + "-stdout"
-	tmp := t.TempDir()
-	src := filepath.Join(tmp, "p.txt")
-	_ = os.WriteFile(src, []byte("stdoutpayload"), 0644)
-
-	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
-		"drive", "items", "delete", "--permanent", folder)
-	runOK(t, "drive", "items", "upload", src, folder)
-
-	// No DEST arg → stdout
-	stdout := runOK(t, "drive", "items", "download", folder+"/p.txt")
-	assertContains(t, stdout, "stdoutpayload")
+	t.Run("no DEST writes to stdout", func(t *testing.T) {
+		stdout := runOK(t, "drive", "items", "download", folder+"/p.txt")
+		assertContains(t, stdout, "stdoutpayload")
+	})
 }
 
 func TestDriveItemsUploadRecursive(t *testing.T) {
@@ -555,15 +542,15 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 
 	// Identify the uploaded photo as the new entry in the listing.
 	var photoID string
-	for attempt := 0; attempt < 8 && photoID == ""; attempt++ {
-		time.Sleep(2 * time.Second)
+	waitFor(20*time.Second, 1*time.Second, func() bool {
 		for id := range photoLinkIDs(t) {
 			if !before[id] {
 				photoID = id
-				break
+				return true
 			}
 		}
-	}
+		return false
+	})
 	if photoID == "" {
 		t.Fatal("uploaded photo did not appear in the listing")
 	}

@@ -48,8 +48,10 @@ tests/
 
 1. `TestMain` in `integration_test.go` builds the binary once into a temp directory.
 2. Each test calls the binary as a subprocess via `run()` / `runOK()` / `runJSON()`.
-3. The binary picks up `PROTON_USER` / `PROTON_PASSWORD` from the environment.
-4. Tests are sequential (no `t.Parallel()`) to avoid rate limits and shared-state conflicts.
+3. The binary picks up `PROTON_USER` / `PROTON_PASSWORD` from the environment; the session is persisted per profile and reused across invocations.
+4. Tests are **sequential** (no `t.Parallel()`) to avoid rate limits and shared-state conflicts.
+
+The cost of an integration test is almost entirely **network latency** - process spawn is ~4ms, but a single authenticated call is ~150-300ms and an unlock-requiring one ~0.5-1.7s. The dominant cost is tests sending a self-mail and polling for delivery. Two mechanisms below cut that: **shared fixtures** (send once, reuse) and **check-first polling**.
 
 ## Writing a Test
 
@@ -76,7 +78,8 @@ func TestDriveItemsFoo(t *testing.T) {
 ## Cleanup Rules
 
 - **Always register cleanup**, even for tests about deletion - the test might fail before reaching the delete step.
-- Use `cleanupRun()` for CLI commands, `cleanup()` for custom functions.
+- Use `cleanupRun()` for CLI commands, `cleanup()` for custom functions - both are `t.Cleanup`-based (per-test).
+- **Shared fixtures** (see below) outlive individual tests, so they register **suite-scoped** cleanup via `registerSuiteCleanup(desc, args...)`, which `TestMain` flushes after `m.Run()`. Never use `t.Cleanup` for a shared fixture - it would delete the fixture out from under other tests.
 - `t.Cleanup()` guarantees cleanup runs even on test failure.
 - Cleanup failures print a loud box with a copy-pasteable command the user can run manually:
 
@@ -106,9 +109,47 @@ func TestDriveItemsFoo(t *testing.T) {
 | `assertContains(t, stdout, substr)` | Assert stdout contains substring |
 | `assertNotContains(t, stdout, substr)` | Assert stdout does not contain substring |
 | `assertField(t, stdout, field, expected)` | Assert `Key: Value` line matches |
-| `sendTestMail(t, subject)` | Send a mail to self, register cleanup, return inbox ID |
+| `runArgs(stdin, args...)` | `t`-free runner (stdout, stderr, code, err); used by fixtures and suite cleanup |
+| `sendTestMail(t, subject)` | Send a mail to self, register per-test cleanup, return inbox ID. **Only for mutating / send-path tests** - read-only tests use a shared fixture |
+| `plainMail(t)` / `quotedMail(t)` / `sharedAttachment(t)` | Shared, delivered self-mail fixtures (see Performance section) |
+| `waitFor(timeout, interval, check)` | Poll `check` (checks first, then sleeps) until true or timeout |
+| `messageIDInFolder(folder, subject)` | `t`-free: first message ID in a folder matching subject, or `""` |
+| `registerSuiteCleanup(desc, args...)` | Queue a CLI cleanup to run once at suite teardown (for shared fixtures) |
 | `selfEmail()` | Return `PROTON_USER` |
 | `looksLikeID(s)` | Heuristic: Proton base64 IDs end in `==` |
+
+## Performance: shared fixtures & polling
+
+Most mail tests only need *some* readable message, not a freshly sent one. Sending and polling for delivery per test is the single biggest time sink, so read-only tests share a handful of messages created once per suite.
+
+### Shared fixtures (read-only tests)
+
+| Fixture accessor | What it gives you | Use for |
+|---|---|---|
+| `plainMail(t)` | `(msgID, convID, subject)` - a delivered self-mail with a plain body (no quote markers, no attachments) | reading, formats, body-only, redirects, summaries, search-hit |
+| `quotedMail(t)` | `(msgID, subject)` - body carries the canonical `On <date>, <name> <addr> wrote:` reply block | strip-quotes assertions |
+| `sharedAttachment(t)` (aka `findMessageWithAttachment(t)`) | `(msgID, attID, attName)` - a delivered mail with one non-inline attachment | attachment list/download/footer tests |
+| `sharedMixedAttachment(t)` (aka `findMessageWithMixedAttachments(t)`) | `msgID` - a delivered mail with one **inline** image + one regular attachment (sent via `--attach-inline`) | inline-vs-attachment disposition filter tests |
+
+They are created lazily under `sync.Once` on first use, so the send+deliver wait happens at most once per fixture per run, and they are safe to call from parallel tests.
+
+**Rule of thumb:**
+
+- **Read-only** test (never mutates its message) → use a shared fixture.
+- **Mutating** test (mark / star / move / trash) or a test of the **send path itself** (attachments, HTML, scheduled, expiring, EO) → send your own with `sendTestMail(t, subject)`.
+
+```go
+func TestMailMessagesReadBodyOnly(t *testing.T) {
+    skipIfNoCredentials(t)
+    msgID, _, subject := plainMail(t)    // shared, no send/poll
+    stdout := runOK(t, "mail", "messages", "read", "--body-only", msgID)
+    assertContains(t, stdout, subject)
+}
+```
+
+### Polling for delivery
+
+Use `waitFor(timeout, interval, check)` - it checks **before** the first sleep, so an already-true condition is free. Never write a `for { time.Sleep(2*time.Second); ... }` loop. `messageIDInFolder(folder, subject)` and `conversationIDOf(msgID)` are `t`-free lookups that pair well with `waitFor`.
 
 ## Conventions the tests rely on
 
@@ -185,4 +226,5 @@ Keeping `--` in those strings is harmless but unnecessary.
 - `calendar calendars delete` requires `PROTON_PASSWORD` for the password-scope unlock - works in tests because the env var is set.
 - `drive trash empty` may not clear items from non-default volumes (e.g. Photos share).
 - Proton only allows specific hex colors for labels and calendars (e.g. `#8080FF`, `#3CBB3A`) - see `ACCENT_COLORS` in the WebClients source.
-- The full suite runs ~20-25 minutes due to API latency and mail-delivery waits (`just test` uses a 30m timeout).
+- `just test` runs serially; expect ~8-12 minutes (down from ~17) after the shared-fixture and polling work (30m timeout).
+- Mail-delivery latency is inherent: a self-mail's inbox copy lands a few seconds after send. Amortize it with a shared fixture rather than paying it per test.

@@ -74,6 +74,38 @@ func TestBuildMIMEMessageNoAttachments(t *testing.T) {
 	}
 }
 
+// A part carrying a ContentID must be emitted inline (with a Content-ID header)
+// rather than as a downloadable attachment, so embedded images render in place
+// for external PGP/MIME recipients.
+func TestBuildMIMEMessageInlineDisposition(t *testing.T) {
+	out, err := buildMIMEMessage("<p>hi</p>", "text/html", []preparedAttachment{
+		{Filename: "pic.png", MIMEType: "image/png", Data: []byte("PNGDATA"), ContentID: "abc123@proton.me"},
+	})
+	if err != nil {
+		t.Fatalf("buildMIMEMessage: %v", err)
+	}
+	_, params, err := mime.ParseMediaType(topContentType(t, out))
+	if err != nil {
+		t.Fatalf("ParseMediaType: %v", err)
+	}
+	_, rest, _ := strings.Cut(out, "\r\n\r\n")
+	mr := multipart.NewReader(strings.NewReader(rest), params["boundary"])
+
+	if _, err := mr.NextPart(); err != nil {
+		t.Fatalf("read body part: %v", err)
+	}
+	inline, err := mr.NextPart()
+	if err != nil {
+		t.Fatalf("read inline part: %v", err)
+	}
+	if disp := inline.Header.Get("Content-Disposition"); !strings.HasPrefix(disp, "inline") {
+		t.Errorf("Content-Disposition = %q, want it to start with inline", disp)
+	}
+	if cid := inline.Header.Get("Content-Id"); cid != "<abc123@proton.me>" {
+		t.Errorf("Content-ID = %q, want <abc123@proton.me>", cid)
+	}
+}
+
 func TestWrapBase64BreaksAt76(t *testing.T) {
 	data := make([]byte, 200)
 	wrapped := string(wrapBase64(data))

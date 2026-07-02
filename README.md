@@ -215,6 +215,7 @@ proton-cli mail messages read --body-only REF > body.txt
 proton-cli mail messages send --to a@ex.com --cc c@ex.com --subject Hi --body Hello
 proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --html
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --attach ./report.pdf
+proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --html --attach-inline ./logo.png   # embed an image inline in the HTML body
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --send-at 2026-05-01T09:00
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --expires 7d
 proton-cli mail messages send --to bob@gmail.com --subject Hi --body secret --eo-password hunter2   # password-protect for non-Proton recipients

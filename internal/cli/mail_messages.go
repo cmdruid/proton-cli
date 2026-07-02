@@ -178,7 +178,7 @@ func msgReadCmd() *cobra.Command {
 }
 
 func msgSendCmd() *cobra.Command {
-	var to, cc, bcc, attach []string
+	var to, cc, bcc, attach, attachInline []string
 	var subject, body, sendAt, expires, eoPassword, eoPasswordHint string
 	var html bool
 	c := &cobra.Command{
@@ -205,11 +205,19 @@ func msgSendCmd() *cobra.Command {
 					return fmt.Errorf("attachment %s: %w", p, err)
 				}
 			}
+			for _, p := range attachInline {
+				if _, err := os.Stat(p); err != nil {
+					return fmt.Errorf("inline attachment %s: %w", p, err)
+				}
+			}
+			if len(attachInline) > 0 && !html {
+				return fmt.Errorf("--attach-inline requires --html (inline images need an HTML body)")
+			}
 			if c.App.DryRun {
 				c.R().Info(fmt.Sprintf("dry-run: would send to %d recipient(s) subject %q (%d bytes, %d attachment(s))", len(to)+len(cc)+len(bcc), subject, len(body), len(attach)))
 				return nil
 			}
-			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach, EOPassword: eoPassword, EOPasswordHint: eoPasswordHint}
+			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach, InlineAttach: attachInline, EOPassword: eoPassword, EOPasswordHint: eoPasswordHint}
 			if sendAt != "" {
 				t, err := ical.ParseTime(sendAt)
 				if err != nil {
@@ -244,6 +252,7 @@ func msgSendCmd() *cobra.Command {
 	c.Flags().StringVar(&sendAt, "send-at", "", "Schedule delivery (RFC3339 or YYYY-MM-DDTHH:MM)")
 	c.Flags().StringVar(&expires, "expires", "", "Self-destruct after DURATION (e.g. 7d, 24h)")
 	c.Flags().StringArrayVar(&attach, "attach", nil, "File to attach (repeatable)")
+	c.Flags().StringArrayVar(&attachInline, "attach-inline", nil, "Image embedded inline in the HTML body via Content-ID (repeatable; requires --html)")
 	c.Flags().StringVar(&eoPassword, "eo-password", "", "Password-protect the message for non-Proton recipients (Encrypted Outside; defaults to a 28-day expiry)")
 	c.Flags().StringVar(&eoPasswordHint, "eo-password-hint", "", "Optional hint shown to Encrypted Outside recipients")
 	return c

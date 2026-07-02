@@ -3,13 +3,16 @@ package mail
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"mime"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/crypto/keys"
@@ -137,11 +140,14 @@ type uploadedAttachment struct {
 
 // preparedAttachment is an attachment's raw bytes plus metadata, gathered once
 // so it can be both uploaded (for internal/EO/cleartext packages) and embedded
-// verbatim in a PGP/MIME body.
+// verbatim in a PGP/MIME body. A non-empty ContentID marks the part inline
+// (an image embedded in the HTML body via cid:), which Proton records as
+// disposition "inline".
 type preparedAttachment struct {
-	Filename string
-	MIMEType string
-	Data     []byte
+	Filename  string
+	MIMEType  string
+	Data      []byte
+	ContentID string
 }
 
 // prepareAttachments reads local files and normalizes inline attachments into a
@@ -169,10 +175,60 @@ func prepareAttachments(paths []string, inline []InlineAttachment) ([]preparedAt
 	return out, nil
 }
 
+// prepareInlineImages reads each inline image path, assigns it a Content-ID,
+// appends an <img src="cid:..."> reference to the (HTML) body so the image
+// renders in place, and returns the attachments to upload. Uploading with a
+// Content-ID is what makes Proton record the part as disposition "inline".
+// Inline images require an HTML body.
+func prepareInlineImages(opts *SendOptions, senderEmail string) ([]preparedAttachment, error) {
+	if len(opts.InlineAttach) == 0 {
+		return nil, nil
+	}
+	if !opts.HTML {
+		return nil, fmt.Errorf("--attach-inline requires --html (inline images need an HTML body)")
+	}
+	out := make([]preparedAttachment, 0, len(opts.InlineAttach))
+	var imgs strings.Builder
+	for _, path := range opts.InlineAttach {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		mimeType := mime.TypeByExtension(filepath.Ext(path))
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		cid, err := newContentID(senderEmail)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(&imgs, "<img src=%q alt=%q>", "cid:"+cid, filepath.Base(path))
+		out = append(out, preparedAttachment{
+			Filename: filepath.Base(path), MIMEType: mimeType, Data: data, ContentID: cid,
+		})
+	}
+	opts.Body += imgs.String()
+	return out, nil
+}
+
+// newContentID returns a Content-ID of the form <hex>@<sender-domain>, matching
+// the shape Proton's web client generates.
+func newContentID(senderEmail string) (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	domain := "proton.me"
+	if i := strings.LastIndex(senderEmail, "@"); i >= 0 && i+1 < len(senderEmail) {
+		domain = senderEmail[i+1:]
+	}
+	return hex.EncodeToString(b) + "@" + domain, nil
+}
+
 // uploadAttachmentData encrypts in-memory data with a fresh session key (key
 // packet wrapped to the draft address key), detached-signs it, and uploads it
 // as a multipart form against the draft message.
-func (s *Service) uploadAttachmentData(ctx context.Context, addrKR *pgp.KeyRing, messageID, filename, mimeType string, data []byte) (*uploadedAttachment, error) {
+func (s *Service) uploadAttachmentData(ctx context.Context, addrKR *pgp.KeyRing, messageID, filename, mimeType, contentID string, data []byte) (*uploadedAttachment, error) {
 	msg := pgp.NewPlainMessage(data)
 
 	sk, err := pgp.GenerateSessionKey()
@@ -195,7 +251,7 @@ func (s *Service) uploadAttachmentData(ctx context.Context, addrKR *pgp.KeyRing,
 	body, contentType, err := buildAttachmentForm(map[string]string{
 		"Filename":  filename,
 		"MessageID": messageID,
-		"ContentID": "",
+		"ContentID": contentID,
 		"MIMEType":  mimeType,
 	}, map[string][]byte{
 		"KeyPackets": keyPacket,
