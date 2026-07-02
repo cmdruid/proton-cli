@@ -18,6 +18,13 @@ just test-one TestDriveItemsMove
 
 Tests skip automatically if `PROTON_USER` and `PROTON_PASSWORD` are not set.
 
+## Test Alt Accounts
+
+Two secondary addresses are available as recipients when a test needs to send to someone other than the account under test:
+
+- **`protonalt.sessions986@proton.me`** - a Proton alt. Use it when the recipient must be a Proton address (e.g. drive sharing invitations). See the `testInvitee` constant in `drive_sharing_test.go`. Mail may also be sent to it.
+- **`rl00@gmx.at`** - a non-Proton (GMX) alt. Use it when a test needs to send to an external, non-Proton mailbox.
+
 ## Layout
 
 ```
