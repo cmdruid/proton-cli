@@ -314,7 +314,7 @@ components:
   # SWIPE_ACTION: -1=None, 0=Trash, 1=Spam, 2=Star, 3=Archive, 4=MarkAsRead, 5=LabelAs, 6=MoveTo
   # TelemetryAccountCancellationEvents: start_cancellation=startCancellation, cancel_page=cancelPage, cancel_modal=cancelModal, feedback_modal=feedbackModal, resubscribe_modal=resubscribeModal, dashboard_reactivate=dashboardReactivate, upsell_modal=upsellModal
   # TelemetryAccountCancellationFlowFeedbackEvents: start_cancellation=startCancellation, feedback_step=feedbackStep, second_step=secondStep, confirm_cancellation=confirmCancellation
-  # TelemetryAccountDashboardEvents: page_load=pageLoad
+  # TelemetryAccountDashboardEvents: page_load=pageLoad, cross_product_click=crossProductClick
   # TelemetryAccountOrganizationLogoUploadEvents: process_start=processStart, process_success=processSuccess, process_failure=processFailure
   # TelemetryAccountSecurityCheckupEvents: page_load=pageLoad, cohort_change.complete_recovery_multiple=completeRecoveryMultiple, cohort_change.complete_recovery_single=completeRecoverySingle, cohort_change.account_recovery_enabled=accountRecoveryEnabled, cohort_change.complete_recovery_sentinel=completeRecoverySentinel, cohort_change.sentinel_recommendations=sentinelRecommendations
   # TelemetryAccountSignupBasicEvents: flow_started=flow_started, account_created=account_created
@@ -5955,8 +5955,8 @@ paths:
   /core/v4/labels/{labelId}/seen:
     post:
       tags: [Core]
-      summary: Update Last Event I D
-      operationId: updateLastEventID
+      summary: Update Last Seen Event I D
+      operationId: updateLastSeenEventID
       parameters:
         - name: labelId
           in: path
@@ -5973,7 +5973,7 @@ paths:
                   type: string
       responses:
         "200":
-          description: Update Last Event I D
+          description: Update Last Seen Event I D
           content:
             application/json:
               schema:
@@ -16853,6 +16853,26 @@ paths:
       responses:
         "200":
           description: Update Mail Category View
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Code:
+                    type: integer
+  /mail/v4/settings/mail-category-view-counters-enabled:
+    put:
+      tags: [Mail]
+      summary: Update Mail Category View Counters Enabled
+      operationId: updateMailCategoryViewCountersEnabled
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Update Mail Category View Counters Enabled
           content:
             application/json:
               schema:
