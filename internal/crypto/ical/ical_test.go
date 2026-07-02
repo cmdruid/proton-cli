@@ -43,6 +43,55 @@ func TestInviteICSIsAMethodRequestInvitation(t *testing.T) {
 	}
 }
 
+func TestReplyICSEmitsMethodReplyAndPartstat(t *testing.T) {
+	start := time.Date(2026, 8, 16, 14, 0, 0, 0, time.UTC)
+	out := ReplyICS("uid-42", "Quarterly Sync", "Vienna", "organizer@proton.me",
+		"me@proton.me", "ACCEPTED", start, start.Add(time.Hour), false, false)
+	for _, want := range []string{
+		"BEGIN:VCALENDAR", "METHOD:REPLY",
+		"BEGIN:VEVENT", "UID:uid-42",
+		"DTSTART:20260816T140000Z", "DTEND:20260816T150000Z",
+		"SUMMARY:Quarterly Sync", "LOCATION:Vienna",
+		"ORGANIZER;CN=organizer@proton.me:mailto:organizer@proton.me",
+		"ATTENDEE;PARTSTAT=ACCEPTED:mailto:me@proton.me",
+		"SEQUENCE:0", "END:VEVENT", "END:VCALENDAR",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("ReplyICS missing %q in:\n%s", want, out)
+		}
+	}
+	// A non-token ATTENDEE line: the reply must not leak an X-PM-TOKEN.
+	if strings.Contains(out, "X-PM-TOKEN") {
+		t.Errorf("reply ATTENDEE should carry no X-PM-TOKEN, got:\n%s", out)
+	}
+}
+
+func TestReplyICSProtonReplyMarker(t *testing.T) {
+	start := time.Date(2026, 8, 16, 14, 0, 0, 0, time.UTC)
+	marker := "X-PM-PROTON-REPLY;TYPE=boolean:true"
+
+	with := ReplyICS("uid", "S", "", "o@proton.me", "me@proton.me", "DECLINED", start, start.Add(time.Hour), false, true)
+	if !strings.Contains(with, marker) {
+		t.Errorf("expected %q when protonReply=true, got:\n%s", marker, with)
+	}
+	if !strings.Contains(with, "ATTENDEE;PARTSTAT=DECLINED:mailto:me@proton.me") {
+		t.Errorf("expected declined PARTSTAT, got:\n%s", with)
+	}
+
+	without := ReplyICS("uid", "S", "", "o@proton.me", "me@proton.me", "TENTATIVE", start, start.Add(time.Hour), false, false)
+	if strings.Contains(without, marker) {
+		t.Errorf("expected no %q when protonReply=false, got:\n%s", marker, without)
+	}
+}
+
+func TestReplyICSAllDayUsesDateValue(t *testing.T) {
+	start := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	out := ReplyICS("uid", "S", "", "o@proton.me", "me@proton.me", "ACCEPTED", start, start.AddDate(0, 0, 1), true, false)
+	if !strings.Contains(out, "DTSTART;VALUE=DATE:20260816") {
+		t.Errorf("all-day reply should use VALUE=DATE DTSTART, got:\n%s", out)
+	}
+}
+
 func TestSignedVEVENTOrganizerLine(t *testing.T) {
 	start := time.Date(2026, 8, 16, 14, 0, 0, 0, time.UTC)
 	withOrg := SignedVEVENT("uid", start, start.Add(time.Hour), false, 0, "", "me@proton.me")

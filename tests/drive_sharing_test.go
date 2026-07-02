@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ── public links ──
@@ -236,4 +237,66 @@ func runOKStderr2(t *testing.T, args ...string) string {
 	t.Helper()
 	stdout, stderr := runOKStderr(t, args...)
 	return stdout + stderr
+}
+
+// ── incoming invitations: two-account accept round-trip ──
+//
+// Needs the "Proton Alt" second account (the `alt` profile): the primary shares
+// an item with the alt, the alt accepts the invitation, and the primary then
+// sees the alt as a member. Exercises the real accept crypto (session-key
+// unwrap + signature), which the single-account tests can only dry-run.
+
+func altInvitationIDs(t *testing.T) map[string]bool {
+	t.Helper()
+	set := map[string]bool{}
+	for _, i := range runJSONArray(t, alt("drive", "invitations", "list")...) {
+		if id, ok := i.(map[string]interface{})["invitation_id"].(string); ok {
+			set[id] = true
+		}
+	}
+	return set
+}
+
+func TestDriveShareInvitationRoundTrip(t *testing.T) {
+	skipIfNoAltCredentials(t)
+
+	folder := "/" + testID() + "-share-rt"
+	runOK(t, "drive", "folders", "create", folder)
+	// Permanent delete cascades the share + membership.
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", "--permanent", folder)
+
+	before := altInvitationIDs(t)
+
+	runOK(t, "drive", "share", "add", folder, altEmail(), "--edit")
+	cleanupRun(t, fmt.Sprintf("Revoke member: proton-cli drive share remove %s %s", folder, altEmail()),
+		"drive", "share", "remove", folder, altEmail())
+
+	// The alt sees the new pending invitation and accepts it.
+	var invID string
+	waitFor(45*time.Second, 3*time.Second, func() bool {
+		for id := range altInvitationIDs(t) {
+			if !before[id] {
+				invID = id
+				return true
+			}
+		}
+		return false
+	})
+	if invID == "" {
+		t.Fatal("alt did not receive the share invitation")
+	}
+	runOK(t, alt("drive", "invitations", "accept", invID)...)
+
+	// The primary now sees the alt as a member, not a pending invitee.
+	var members string
+	waitFor(30*time.Second, 3*time.Second, func() bool {
+		st := runJSON(t, "drive", "share", "status", folder)
+		ms, _ := st["members"].([]interface{})
+		members = fmt.Sprintf("%v", ms)
+		return strings.Contains(members, altEmail())
+	})
+	if !strings.Contains(members, altEmail()) {
+		t.Errorf("alt is not listed as a member after accepting; members=%s", members)
+	}
 }

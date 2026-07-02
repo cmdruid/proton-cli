@@ -173,6 +173,7 @@ func TestClassifyErrorBody_HV(t *testing.T) {
 	hv, apiErr := classifyErrorBody(http.StatusUnprocessableEntity, []byte(hvProtonBody))
 	if hv == nil {
 		t.Fatal("expected hv error, got nil")
+		return
 	}
 	if apiErr != nil {
 		t.Error("apiErr should be nil when hv is non-nil")

@@ -260,3 +260,159 @@ func TestCalendarCreateUsable(t *testing.T) {
 	}
 	assertContains(t, runOK(t, "calendar", "events", "get", calID, eventID), name+"-evt")
 }
+
+// ── events respond (RSVP) ──
+//
+// A full accept/decline round-trip needs a *second* Proton account to invite
+// this one (the harness can't act as the alt), so it's manual - same as
+// `drive invitations` accept/reject. These cover the branches reachable with
+// a single account: flag validation, dry-run, and the organizer rejection.
+
+func TestCalendarEventsRespondBadStatus(t *testing.T) {
+	skipIfNoCredentials(t)
+	// --status is validated before auth, so an invalid value is a clean exit 1.
+	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "maybe", "some-event-ref")
+	if code != 1 {
+		t.Errorf("expected exit 1 for invalid --status, got %d", code)
+	}
+	assertContains(t, stderr, "invalid --status")
+}
+
+func TestCalendarEventsRespondDryRun(t *testing.T) {
+	skipIfNoCredentials(t)
+	calID := firstCalendarID(t)
+	title := testID() + "-rsvp-dry"
+	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", title, "--start", start, "--duration", "30m",
+		"--attendee", selfEmail()))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
+		"calendar", "events", "delete", calID, eventID)
+
+	_, stderr := runOKStderr(t, "--dry-run", "calendar", "events", "respond",
+		"--status", "accept", calID, eventID)
+	assertContains(t, stderr, "dry-run")
+	// The event still reads back (no mutation happened).
+	assertContains(t, runOK(t, "calendar", "events", "get", calID, eventID), title)
+}
+
+func TestCalendarEventsRespondRejectsOrganizer(t *testing.T) {
+	skipIfNoCredentials(t)
+	calID := firstCalendarID(t)
+	title := testID() + "-rsvp-org"
+	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
+	// We create the event, so we are its organizer; RSVP must be refused.
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", title, "--start", start, "--duration", "30m",
+		"--attendee", selfEmail()))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
+		"calendar", "events", "delete", calID, eventID)
+
+	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "accept", calID, eventID)
+	if code != 1 {
+		t.Errorf("expected exit 1 responding to your own event, got %d (stderr: %s)", code, stderr)
+	}
+	assertContains(t, stderr, "organizer")
+}
+
+// ── events respond: two-account RSVP round-trip ──
+//
+// Needs the "Proton Alt" second account (the `alt` profile): the alt organizes
+// an event and invites the primary, the primary RSVPs, then we verify the
+// primary's partstat flipped and the organizer got the METHOD:REPLY email.
+
+func eventField(ev map[string]interface{}, key string) interface{} {
+	e, _ := ev["Event"].(map[string]interface{})
+	if e == nil {
+		return nil
+	}
+	return e[key]
+}
+
+func firstAttendeeStatus(ev map[string]interface{}) (int, bool) {
+	e, _ := ev["Event"].(map[string]interface{})
+	if e == nil {
+		return 0, false
+	}
+	ai, _ := e["AttendeesInfo"].(map[string]interface{})
+	if ai == nil {
+		return 0, false
+	}
+	atts, _ := ai["Attendees"].([]interface{})
+	if len(atts) == 0 {
+		return 0, false
+	}
+	a, _ := atts[0].(map[string]interface{})
+	s, ok := a["Status"].(float64)
+	return int(s), ok
+}
+
+func TestCalendarEventsRespondRoundTrip(t *testing.T) {
+	skipIfNoAltCredentials(t)
+
+	altCals := runJSONArray(t, alt("calendar", "calendars", "list")...)
+	if len(altCals) == 0 {
+		t.Skip("alt account has no calendars")
+	}
+	altCal := altCals[0].(map[string]interface{})["id"].(string)
+
+	title := testID() + "-rsvp-rt"
+	start := time.Now().Add(72 * time.Hour).Format("2006-01-02T15:04")
+	altEventID := strings.TrimSpace(runOK(t, alt("calendar", "events", "create",
+		"--calendar", altCal, "--title", title, "--start", start, "--duration", "30m",
+		"--attendee", selfEmail())...))
+	cleanupRun(t, fmt.Sprintf("Delete alt event: proton-cli --profile alt calendar events delete %s %s", altCal, altEventID),
+		alt("calendar", "events", "delete", altCal, altEventID)...)
+
+	uid, _ := eventField(runJSON(t, alt("api", "GET", "/calendar/v1/"+altCal+"/events/"+altEventID)...), "UID").(string)
+	if uid == "" {
+		t.Fatal("could not read the alt event UID")
+	}
+
+	// The Proton-to-Proton invite lands on the primary's calendar as a shared
+	// event (IsOrganizer=0). Find our copy by matching the UID.
+	primaryCal := firstCalendarID(t)
+	var primaryEventID string
+	waitFor(45*time.Second, 3*time.Second, func() bool {
+		evs := runJSONArray(t, "calendar", "events", "list", "--calendar", primaryCal,
+			"--start", time.Now().Format("2006-01-02"),
+			"--end", time.Now().Add(120*time.Hour).Format("2006-01-02"))
+		for _, e := range evs {
+			id := e.(map[string]interface{})["id"].(string)
+			ev := runJSON(t, "api", "GET", "/calendar/v1/"+primaryCal+"/events/"+id)
+			if u, _ := eventField(ev, "UID").(string); u == uid {
+				if org, _ := eventField(ev, "IsOrganizer").(float64); int(org) == 0 {
+					primaryEventID = id
+					return true
+				}
+			}
+		}
+		return false
+	})
+	if primaryEventID == "" {
+		t.Fatal("invitation did not appear on the primary's calendar")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete primary event copy: proton-cli calendar events delete %s %s", primaryCal, primaryEventID),
+		"calendar", "events", "delete", primaryCal, primaryEventID)
+
+	runOK(t, "calendar", "events", "respond", primaryCal, primaryEventID, "--status", "accept")
+
+	// The primary's own attendee record now shows ACCEPTED (ATTENDEE_STATUS_API 3).
+	got := runJSON(t, "api", "GET", "/calendar/v1/"+primaryCal+"/events/"+primaryEventID)
+	if status, ok := firstAttendeeStatus(got); !ok || status != 3 {
+		t.Errorf("primary attendee Status = %d (ok=%v), want 3 (accepted)", status, ok)
+	}
+
+	// The organizer (alt) receives the METHOD:REPLY email naming the title.
+	var replyID string
+	waitFor(45*time.Second, 3*time.Second, func() bool {
+		replyID = altMailContaining(t, selfEmail(), title)
+		return replyID != ""
+	})
+	if replyID == "" {
+		t.Error("alt did not receive the RSVP reply email")
+	} else {
+		cleanupRun(t, "Delete reply mail (alt): proton-cli --profile alt mail messages delete "+replyID,
+			alt("mail", "messages", "delete", replyID)...)
+	}
+}

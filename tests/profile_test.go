@@ -8,67 +8,48 @@ import (
 	"testing"
 )
 
-// TestProfileFromConfig writes a temporary config.toml with a `work` profile
-// that carries only the account `user`, runs a command with PROTON_USER
-// stripped (so the user must come from the profile) while PROTON_PASSWORD is
-// kept (the password is never read from config), and verifies credentials
-// resolve through the profile + env combination.
-func TestProfileFromConfig(t *testing.T) {
+// TestProfileFromEnv verifies that PROTON_PROFILE selects the active profile
+// (with no --profile flag) and that credentials resolve from the
+// profile-scoped PROTON_<PROFILE>_* env vars, falling back to the unscoped
+// PROTON_* vars. It also checks that a per-profile session file is created.
+func TestProfileFromEnv(t *testing.T) {
 	skipIfNoCredentials(t)
 
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		t.Fatalf("user config dir: %v", err)
 	}
-	cfgPath := filepath.Join(configDir, "proton-cli", "config.toml")
-	sessionDir := filepath.Join(configDir, "proton-cli", "sessions")
-
-	// Back up existing config + work session if any.
-	backupPath := ""
-	if _, err := os.Stat(cfgPath); err == nil {
-		backupPath = cfgPath + ".bak-" + testID()
-		if err := os.Rename(cfgPath, backupPath); err != nil {
-			t.Fatalf("back up config: %v", err)
-		}
-	}
-	workSession := filepath.Join(sessionDir, "work.json")
-	_ = os.Remove(workSession)
+	workSession := filepath.Join(configDir, "proton-cli", "sessions", "work.json")
 	workIDCache := filepath.Join(configDir, "proton-cli", "idcache", "work.json")
+	// Remove any cached work session so PROTON_WORK_USER is actually exercised;
+	// a live session would let Authenticate return before the user is read.
+	_ = os.Remove(workSession)
 	_ = os.Remove(workIDCache)
-
 	t.Cleanup(func() {
-		_ = os.Remove(cfgPath)
 		_ = os.Remove(workSession)
 		_ = os.Remove(workIDCache)
-		if backupPath != "" {
-			_ = os.Rename(backupPath, cfgPath)
-		}
 	})
 
-	_ = os.MkdirAll(filepath.Dir(cfgPath), 0700)
-	// Profiles hold non-secret wiring only; the password is never read from
-	// config, so it stays in the child env below.
-	cfg := "default_profile = \"default\"\n\n" +
-		"[profiles.work]\n" +
-		"user = \"" + os.Getenv("PROTON_USER") + "\"\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	// Strip PROTON_USER so the user must come from the profile; keep
-	// PROTON_PASSWORD/PROTON_TOTP since secrets resolve from env only.
-	cmd := exec.Command(binaryPath, "--profile", "work",
+	// Strip PROTON_USER so the account email must come from PROTON_WORK_USER;
+	// keep PROTON_PASSWORD (the password falls back to the unscoped var).
+	// PROTON_PROFILE selects the "work" profile without a --profile flag.
+	cmd := exec.Command(binaryPath,
 		"mail", "messages", "list", "--page-size", "1", "--output", "json")
-	cmd.Env = filterEnv(os.Environ(), "PROTON_USER")
+	env := filterEnv(os.Environ(), "PROTON_USER", "PROTON_PROFILE")
+	env = append(env,
+		"PROTON_PROFILE=work",
+		"PROTON_WORK_USER="+os.Getenv("PROTON_USER"),
+	)
+	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("profile run failed: %v\noutput: %s", err, string(out))
+		t.Fatalf("profile-from-env run failed: %v\noutput: %s", err, string(out))
 	}
 	if !strings.Contains(string(out), "\"messages\"") {
-		t.Errorf("unexpected output under --profile work:\n%s", truncateOutput(string(out)))
+		t.Errorf("unexpected output under PROTON_PROFILE=work:\n%s", truncateOutput(string(out)))
 	}
 
-	// Session file for `work` profile should now exist.
+	// The per-profile session file for "work" should now exist.
 	if _, err := os.Stat(workSession); err != nil {
 		t.Errorf("expected per-profile session file at %s: %v", workSession, err)
 	}
@@ -81,8 +62,6 @@ func TestProfileSessionSeparation(t *testing.T) {
 	configDir, _ := os.UserConfigDir()
 	sessionDir := filepath.Join(configDir, "proton-cli", "sessions")
 
-	// Must have at least default.json (from prior tests / the normal account).
-	// Not an error if missing - the test just describes structure.
 	entries, err := os.ReadDir(sessionDir)
 	if err != nil {
 		t.Skipf("session dir missing: %v", err)

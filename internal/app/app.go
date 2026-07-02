@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/roman-16/proton-cli/internal/config"
 	"github.com/roman-16/proton-cli/internal/crypto/keys"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -72,17 +71,13 @@ type Options struct {
 }
 
 func New(opts Options) (*App, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-	profileName, prof := cfg.Resolve(opts.Profile)
+	profileName := firstNonEmpty(opts.Profile, os.Getenv("PROTON_PROFILE"), "default")
 
-	user := firstNonEmpty(opts.User, os.Getenv("PROTON_USER"), prof.User)
-	password := firstNonEmpty(opts.Password, os.Getenv("PROTON_PASSWORD"))
-	totp := firstNonEmpty(opts.TOTP, os.Getenv("PROTON_TOTP"))
-	apiURL := firstNonEmpty(opts.APIURL, os.Getenv("PROTON_API_URL"), prof.APIURL)
-	appVer := firstNonEmpty(opts.AppVersion, os.Getenv("PROTON_APP_VERSION"), prof.AppVersion)
+	user := firstNonEmpty(opts.User, envForProfile(profileName, "USER"))
+	password := firstNonEmpty(opts.Password, envForProfile(profileName, "PASSWORD"))
+	totp := firstNonEmpty(opts.TOTP, envForProfile(profileName, "TOTP"))
+	apiURL := firstNonEmpty(opts.APIURL, envForProfile(profileName, "API_URL"))
+	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"))
 
 	r := render.New(opts.Output, os.Stdout, os.Stderr, opts.LogLevel, opts.Quiet)
 	c := proton.New(proton.Options{

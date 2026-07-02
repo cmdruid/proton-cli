@@ -232,6 +232,26 @@ func truncateOutput(s string) string {
 // selfEmail returns PROTON_USER.
 func selfEmail() string { return os.Getenv("PROTON_USER") }
 
+// altEmail returns the second account's address (PROTON_ALT_USER).
+func altEmail() string { return os.Getenv("PROTON_ALT_USER") }
+
+// skipIfNoAltCredentials skips tests that need the "Proton Alt" second account
+// (the `alt` profile). It requires the primary creds plus PROTON_ALT_USER /
+// PROTON_ALT_PASSWORD, which the CLI resolves as profile-scoped env.
+func skipIfNoAltCredentials(t *testing.T) {
+	t.Helper()
+	skipIfNoCredentials(t)
+	if os.Getenv("PROTON_ALT_USER") == "" || os.Getenv("PROTON_ALT_PASSWORD") == "" {
+		t.Skip("PROTON_ALT_USER and PROTON_ALT_PASSWORD not set (second account 'alt' profile)")
+	}
+}
+
+// alt prefixes CLI args with `--profile alt`, so the command runs as the second
+// account. Combine with any runner: runOK(t, alt("mail","addresses","list")...).
+func alt(args ...string) []string {
+	return append([]string{"--profile", "alt"}, args...)
+}
+
 // externalRecipient is the non-Proton (GMX) alt address, used by tests that
 // must deliver to a real external mailbox (see tests/AGENTS.md "Test Alt
 // Accounts"). Sending to a fake @example.com address instead bounces

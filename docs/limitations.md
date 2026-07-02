@@ -30,9 +30,6 @@ command on a desktop machine, or install a release binary, to get past a CAPTCHA
 
 ## Not yet implemented
 
-- **Attendee RSVP replies** — you can invite attendees to an event
-  (`calendar events create --attendee`), but replying to an invitation
-  (accept / tentative / decline) isn't implemented.
 - **Adding custom tags to photos** — the Favorites tag can be toggled with
   `drive photos favorite` / `unfavorite`, and any tag removed with
   `drive photos tags remove`, but the other classification tags (screenshots,

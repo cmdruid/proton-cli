@@ -139,7 +139,7 @@ If a prefix isn't in your local cache (e.g. copied from another machine), run th
 
 ## Configuration
 
-Credentials and connection settings resolve in this order: **flags override environment variables, which override profile values.**
+Credentials and connection settings resolve in this order: **a flag overrides the profile-scoped env var (`PROTON_<PROFILE>_X`), which overrides the plain env var (`PROTON_X`).** See [Profiles](#profiles-multi-account).
 
 ### Environment variables
 
@@ -153,26 +153,25 @@ Credentials and connection settings resolve in this order: **flags override envi
 
 ### Profiles (multi-account)
 
-Create `~/.config/proton-cli/config.toml`:
-
-```toml
-default_profile = "default"
-
-[profiles.default]
-user = "alice@proton.me"
-
-[profiles.work]
-user = "alice@company.com"
-api_url = "https://mail.proton.me/api"
-```
-
-Then:
+A profile is just a name. Each profile has its own session file (`~/.config/proton-cli/sessions/<profile>.json`) and its own set of profile-scoped environment variables. Select the active profile with the `--profile` flag or the `PROTON_PROFILE` environment variable (the flag wins; both fall back to `default`):
 
 ```bash
 proton-cli --profile work mail messages list
+# or make it the default for your shell session:
+export PROTON_PROFILE=work
+proton-cli mail messages list
 ```
 
-Each profile gets its own session file at `~/.config/proton-cli/sessions/<profile>.json`. Profiles hold non-secret wiring only (`user`, `api_url`, `app_version`) - your password and TOTP always come from `PROTON_PASSWORD` / `PROTON_TOTP` (or `--password` / `--totp`).
+For every setting, the active profile is consulted **scoped-first, then unscoped**: `PROTON_<PROFILE>_X` takes precedence over the plain `PROTON_X`. `<PROFILE>` is the profile name upper-cased, with any non-alphanumeric character replaced by `_` (so `work` becomes `WORK`, `my-work` becomes `MY_WORK`). This applies to every env-backed setting (`USER`, `PASSWORD`, `TOTP`, `API_URL`, `APP_VERSION`):
+
+```bash
+export PROTON_PROFILE=work
+export PROTON_WORK_USER=alice@company.com
+export PROTON_WORK_PASSWORD=work-password
+proton-cli mail messages list          # uses PROTON_WORK_*, falling back to PROTON_*
+```
+
+Only the per-profile session file is written to disk; all other wiring lives in flags and the environment.
 
 ## Usage
 
@@ -193,7 +192,7 @@ The examples below are representative, not exhaustive. Every command lists its f
 | `drive trash` | list, restore, empty |
 | `drive photos` | list, upload, download, delete, favorite, unfavorite, albums, tags |
 | `calendar calendars` | list, create, rename, delete |
-| `calendar events` | list, get, create, update, delete |
+| `calendar events` | list, get, create, update, respond, delete |
 | `contacts` | list, get, create, update, delete, groups |
 | `pass items` | list, get, create, edit, trash, restore, delete |
 | `pass vaults` | list, create, rename, delete |
@@ -353,6 +352,8 @@ proton-cli calendar events create --title "Standup" --start 2026-04-16T09:00 \
 proton-cli calendar events create --title "Review" --start 2026-04-16T14:00 \
   --attendee alice@proton.me --attendee bob@example.com         # externals get an emailed invite
 proton-cli calendar events update CALENDAR_ID EVENT_ID --title "Updated"
+proton-cli calendar events respond CALENDAR_ID EVENT_ID --status accept    # reply to an invitation (accept|tentative|decline)
+proton-cli calendar events respond "Meeting" --status decline              # by title; emails the organizer a REPLY
 proton-cli calendar events delete CALENDAR_ID EVENT_ID
 ```
 

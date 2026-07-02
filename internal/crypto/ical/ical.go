@@ -152,6 +152,39 @@ func InviteICS(uid, summary, location, description string, start, end time.Time,
 	return strings.Join(lines, "\r\n")
 }
 
+// ReplyICS builds a self-contained METHOD:REPLY VCALENDAR answering an
+// invitation. It carries the RFC-required fields plus a single ATTENDEE line
+// tagged with the responder's PARTSTAT (ACCEPTED/TENTATIVE/DECLINED), suitable
+// for emailing to the organizer as a text/calendar reply. protonReply adds the
+// X-PM-PROTON-REPLY marker Proton sets on Proton-to-Proton replies.
+func ReplyICS(uid, summary, location, organizer, attendeeEmail, partstat string, start, end time.Time, allDay, protonReply bool) string {
+	dtstamp := time.Now().UTC().Format("20060102T150405Z")
+	dtstart, dtend := eventDates(start, end, allDay)
+	lines := []string{
+		"BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//proton-cli//EN",
+		"METHOD:REPLY", "CALSCALE:GREGORIAN",
+		"BEGIN:VEVENT",
+		"UID:" + uid,
+		"DTSTAMP:" + dtstamp,
+		dtstart, dtend,
+	}
+	if summary != "" {
+		lines = append(lines, "SUMMARY:"+summary)
+	}
+	if location != "" {
+		lines = append(lines, "LOCATION:"+location)
+	}
+	if organizer != "" {
+		lines = append(lines, "ORGANIZER;CN="+organizer+":mailto:"+organizer)
+	}
+	if protonReply {
+		lines = append(lines, "X-PM-PROTON-REPLY;TYPE=boolean:true")
+	}
+	lines = append(lines, fmt.Sprintf("ATTENDEE;PARTSTAT=%s:mailto:%s", partstat, attendeeEmail))
+	lines = append(lines, "SEQUENCE:0", "END:VEVENT", "END:VCALENDAR")
+	return strings.Join(lines, "\r\n")
+}
+
 // EncryptedVEVENT builds the encrypted portion of a Proton calendar event
 // (Card Type 3: SUMMARY + optional LOCATION + optional DESCRIPTION).
 func EncryptedVEVENT(title, location, description string) string {

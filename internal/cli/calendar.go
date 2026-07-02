@@ -335,6 +335,57 @@ func eventsCmd() *cobra.Command {
 	update.Flags().StringVar(&uDuration, "duration", "", "New duration")
 	c.AddCommand(update)
 
+	var respStatus string
+	respond := &cobra.Command{
+		Use:   "respond {CALENDAR_ID EVENT_ID | TITLE}",
+		Short: "Reply to an invitation (--status accept|tentative|decline)",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			status, err := calsvc.StatusFromFlag(respStatus)
+			if err != nil {
+				return err
+			}
+			return run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+				u, err := c.App.Unlock(c.Ctx)
+				if err != nil {
+					return err
+				}
+				calID, eventID, err := c.App.Calendar.ResolveEvent(c.Ctx, u, c.Args)
+				if err != nil {
+					return err
+				}
+				if c.App.DryRun {
+					c.R().Info(fmt.Sprintf("dry-run: would respond %q to event %s in calendar %s", respStatus, eventID, calID))
+					return nil
+				}
+				res, err := c.App.Calendar.EventRespond(c.Ctx, u, calID, eventID, status)
+				if err != nil {
+					return err
+				}
+				if res.Reply != nil {
+					if err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
+						To:      res.Reply.Recipients,
+						Subject: res.Reply.Subject,
+						Body:    res.Reply.Body,
+						InlineAttachments: []mailsvc.InlineAttachment{{
+							Filename: "invite.ics", MIMEType: "text/calendar; method=REPLY", Data: []byte(res.Reply.ICS),
+						}},
+					}); err != nil {
+						c.R().Info(fmt.Sprintf("responded, but notifying the organizer by email failed: %v", err))
+					}
+				}
+				name := res.Title
+				if name == "" {
+					name = eventID
+				}
+				c.R().Success(fmt.Sprintf("Responded %q to %q", res.Status, name))
+				return nil
+			})(cmd, args)
+		},
+	}
+	respond.Flags().StringVar(&respStatus, "status", "", "Response: accept, tentative, or decline")
+	c.AddCommand(respond)
+
 	c.AddCommand(&cobra.Command{
 		Use: "delete {CALENDAR_ID EVENT_ID | TITLE}", Short: "Delete an event",
 		Args: cobra.RangeArgs(1, 2),

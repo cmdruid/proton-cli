@@ -3,7 +3,6 @@ module github.com/roman-16/proton-cli
 go 1.26.3
 
 require (
-	github.com/BurntSushi/toml v1.6.0
 	github.com/ProtonMail/go-srp v0.0.7
 	github.com/ProtonMail/gopenpgp/v2 v2.10.0
 	github.com/goccy/go-yaml v1.19.2

@@ -1477,3 +1477,58 @@ func TestMailLabelsNestedFolderReportsParent(t *testing.T) {
 		t.Errorf("child folder ParentID = %q, want %q", gotParent, parentID)
 	}
 }
+
+// ── cross-account delivery (internal E2EE) ──
+//
+// Needs the "Proton Alt" second account (the `alt` profile): the primary sends
+// to the alt, which decrypts the body and verifies the sender signature.
+
+// altMailContaining finds an inbox message on the alt account from `from` whose
+// decrypted body contains `needle`, returning its ID (or ""). Shared with the
+// calendar RSVP round-trip, which checks the organizer's reply email.
+func altMailContaining(t *testing.T, from, needle string) string {
+	t.Helper()
+	list := runJSON(t, alt("mail", "messages", "list", "--folder", "inbox", "--page-size", "20")...)
+	msgs, _ := list["messages"].([]interface{})
+	for _, m := range msgs {
+		mm := m.(map[string]interface{})
+		if addr, _ := mm["from_address"].(string); addr != from {
+			continue
+		}
+		id, _ := mm["id"].(string)
+		if body, _, code := run(t, alt("mail", "messages", "read", "--body-only", id)...); code == 0 && strings.Contains(body, needle) {
+			return id
+		}
+	}
+	return ""
+}
+
+func TestMailCrossAccountDelivery(t *testing.T) {
+	skipIfNoAltCredentials(t)
+
+	subject := testID() + "-x2acct"
+	body := "cross-account e2ee body for " + subject
+	runOK(t, "mail", "messages", "send", "--to", altEmail(), "--subject", subject, "--body", body)
+
+	if sentID := findMessage(t, "sent", subject); sentID != "" {
+		cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+sentID,
+			"mail", "messages", "delete", sentID)
+	}
+
+	// The alt receives it, decrypts the body, and the sender signature verifies
+	// (internal Proton-to-Proton mail is signed with the sender's address key).
+	var recvID string
+	waitFor(45*time.Second, 3*time.Second, func() bool {
+		recvID = altMailContaining(t, selfEmail(), body)
+		return recvID != ""
+	})
+	if recvID == "" {
+		t.Fatal("alt did not receive the cross-account mail")
+	}
+	cleanupRun(t, "Delete received mail (alt): proton-cli --profile alt mail messages delete "+recvID,
+		alt("mail", "messages", "delete", recvID)...)
+
+	read := runOK(t, alt("mail", "messages", "read", recvID)...)
+	assertContains(t, read, body)
+	assertField(t, read, "Sig:", "verified")
+}

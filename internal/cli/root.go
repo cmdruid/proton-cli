@@ -51,12 +51,12 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	pf := rootCmd.PersistentFlags()
-	pf.StringVar(&gFlags.profile, "profile", "", "config profile to use (default: default)")
-	pf.StringVar(&gFlags.user, "user", "", "Proton account email (env: PROTON_USER)")
-	pf.StringVar(&gFlags.password, "password", "", "Account password (env: PROTON_PASSWORD)")
-	pf.StringVar(&gFlags.totp, "totp", "", "TOTP 2FA code (env: PROTON_TOTP)")
-	pf.StringVar(&gFlags.apiURL, "api-url", "", "API base URL (env: PROTON_API_URL)")
-	pf.StringVar(&gFlags.appVersion, "app-version", "", "App version header (env: PROTON_APP_VERSION)")
+	pf.StringVar(&gFlags.profile, "profile", "", "profile to use (env: PROTON_PROFILE; default: default)")
+	pf.StringVar(&gFlags.user, "user", "", "Proton account email (env: PROTON_USER, or PROTON_<PROFILE>_USER)")
+	pf.StringVar(&gFlags.password, "password", "", "Account password (env: PROTON_PASSWORD, or PROTON_<PROFILE>_PASSWORD)")
+	pf.StringVar(&gFlags.totp, "totp", "", "TOTP 2FA code (env: PROTON_TOTP, or PROTON_<PROFILE>_TOTP)")
+	pf.StringVar(&gFlags.apiURL, "api-url", "", "API base URL (env: PROTON_API_URL, or PROTON_<PROFILE>_API_URL)")
+	pf.StringVar(&gFlags.appVersion, "app-version", "", "App version header (env: PROTON_APP_VERSION, or PROTON_<PROFILE>_APP_VERSION)")
 	pf.StringVar(&gFlags.output, "output", "text", "Output format: text, json, yaml")
 	pf.BoolVar(&gFlags.verbose, "verbose", false, "Enable debug logging")
 	pf.BoolVar(&gFlags.quiet, "quiet", false, "Suppress non-essential stderr output")

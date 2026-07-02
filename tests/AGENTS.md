@@ -22,8 +22,28 @@ Tests skip automatically if `PROTON_USER` and `PROTON_PASSWORD` are not set.
 
 Two secondary addresses are available as recipients when a test needs to send to someone other than the account under test:
 
-- **`protonalt.sessions986@proton.me`** - a Proton alt. Use it when the recipient must be a Proton address (e.g. drive sharing invitations). See the `testInvitee` constant in `drive_sharing_test.go`. Mail may also be sent to it.
+- **`protonalt.sessions986@proton.me`** ("Proton Alt") - a Proton alt. Use it when the recipient must be a Proton address (e.g. drive sharing invitations). See the `testInvitee` constant in `drive_sharing_test.go`. Mail may also be sent to it.
 - **`rl00@gmx.at`** - a non-Proton (GMX) alt. Use it when a test needs to send to an external, non-Proton mailbox.
+
+### The "Proton Alt" second account (`alt` profile)
+
+"Proton Alt" is also a **full second account** the tests can act *as*, not just send *to*. Use it whenever a scenario genuinely needs two Proton users - accepting a share invitation, receiving and reading mail, or organizing a calendar invite that the primary account RSVPs to.
+
+It's wired through the CLI's per-profile env handling: the `alt` profile reads `PROTON_ALT_USER` / `PROTON_ALT_PASSWORD` (profile-scoped `PROTON_<PROFILE>_X` beats plain `PROTON_X`), with its own session at `~/.config/proton-cli/sessions/alt.json`. Drive commands as the alt run with `--profile alt`:
+
+```go
+func TestSecondAccountFoo(t *testing.T) {
+    skipIfNoAltCredentials(t)                       // skips unless PROTON_ALT_USER/PASSWORD set
+    runOK(t, alt("mail", "addresses", "list")...)    // runs the CLI as the second account
+    // ... primary (default profile) and alt interact ...
+}
+```
+
+- `skipIfNoAltCredentials(t)` - skip unless both primary and `PROTON_ALT_*` creds are set.
+- `altEmail()` - the second account's address (`PROTON_ALT_USER`).
+- `alt(args...)` - prefixes `--profile alt`; combine with any runner, e.g. `runOK(t, alt(...)...)`, `runJSON(t, alt(...)...)`.
+
+Run order matters: the *primary* invites/sends, then the *alt* accepts/receives, then verify on whichever side the state landed. Register cleanup on **both** sides (each `alt(...)` mutation needs an `alt(...)` cleanup).
 
 ## Layout
 
@@ -38,7 +58,7 @@ tests/
 ├── pass_test.go             vaults, items, alias, batch filters
 ├── output_test.go           --output text / json / yaml
 ├── exit_codes_test.go       0 / 1 / 3 / 4 mapping
-├── profile_test.go          --profile + config.toml multi-account
+├── profile_test.go          --profile / PROTON_PROFILE multi-account
 ├── api_test.go              raw `api` escape hatch
 ├── dry_run_test.go          --dry-run does not mutate
 └── stdout_id_test.go        stdout=ID convention across creates
@@ -117,6 +137,9 @@ func TestDriveItemsFoo(t *testing.T) {
 | `registerSuiteCleanup(desc, args...)` | Queue a CLI cleanup to run once at suite teardown (for shared fixtures) |
 | `selfEmail()` | Return `PROTON_USER` |
 | `looksLikeID(s)` | Heuristic: Proton base64 IDs end in `==` |
+| `skipIfNoAltCredentials(t)` | Skip unless the `alt` second account (`PROTON_ALT_USER`/`PROTON_ALT_PASSWORD`) is configured |
+| `altEmail()` | Return `PROTON_ALT_USER` (the second account's address) |
+| `alt(args...)` | Prefix `--profile alt`; run a command as the second account, e.g. `runOK(t, alt(...)...)` |
 
 ## Performance: shared fixtures & polling
 
