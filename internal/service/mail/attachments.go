@@ -135,17 +135,38 @@ type uploadedAttachment struct {
 	SessionKey *pgp.SessionKey
 }
 
-// uploadAttachment reads a file and uploads it as an encrypted attachment.
-func (s *Service) uploadAttachment(ctx context.Context, addrKR *pgp.KeyRing, messageID, path string) (*uploadedAttachment, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
+// preparedAttachment is an attachment's raw bytes plus metadata, gathered once
+// so it can be both uploaded (for internal/EO/cleartext packages) and embedded
+// verbatim in a PGP/MIME body.
+type preparedAttachment struct {
+	Filename string
+	MIMEType string
+	Data     []byte
+}
+
+// prepareAttachments reads local files and normalizes inline attachments into a
+// single list, resolving the MIME type from the file extension when needed.
+func prepareAttachments(paths []string, inline []InlineAttachment) ([]preparedAttachment, error) {
+	out := make([]preparedAttachment, 0, len(paths)+len(inline))
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		mimeType := mime.TypeByExtension(filepath.Ext(path))
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		out = append(out, preparedAttachment{Filename: filepath.Base(path), MIMEType: mimeType, Data: data})
 	}
-	mimeType := mime.TypeByExtension(filepath.Ext(path))
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
+	for _, ia := range inline {
+		mimeType := ia.MIMEType
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		out = append(out, preparedAttachment{Filename: ia.Filename, MIMEType: mimeType, Data: ia.Data})
 	}
-	return s.uploadAttachmentData(ctx, addrKR, messageID, filepath.Base(path), mimeType, data)
+	return out, nil
 }
 
 // uploadAttachmentData encrypts in-memory data with a fresh session key (key
@@ -228,6 +249,23 @@ func attachmentKeyPackets(recKR *pgp.KeyRing, atts []*uploadedAttachment) (map[s
 	out := make(map[string]string, len(atts))
 	for _, a := range atts {
 		kp, err := recKR.EncryptSessionKey(a.SessionKey)
+		if err != nil {
+			return nil, err
+		}
+		out[a.ID] = base64.StdEncoding.EncodeToString(kp)
+	}
+	return out, nil
+}
+
+// attachmentPasswordKeyPackets wraps each attachment session key with the EO
+// password (symmetric packets), for encrypted-for-outside recipients.
+func attachmentPasswordKeyPackets(atts []*uploadedAttachment, password string) (map[string]string, error) {
+	if len(atts) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(atts))
+	for _, a := range atts {
+		kp, err := pgp.EncryptSessionKeyWithPassword(a.SessionKey, []byte(password))
 		if err != nil {
 			return nil, err
 		}

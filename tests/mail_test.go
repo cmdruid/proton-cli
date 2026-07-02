@@ -1538,6 +1538,43 @@ func TestMailSendExpiringHasExpirationTime(t *testing.T) {
 	}
 }
 
+func TestMailSendEncryptedForOutsideDryRun(t *testing.T) {
+	skipIfNoCredentials(t)
+	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
+		"--to", "eo-"+testID()+"@example.com", "--subject", testID()+"-eo-dry",
+		"--body", "secret", "--eo-password", "hunter2", "--eo-password-hint", "the usual")
+	assertContains(t, stderr, "dry-run")
+}
+
+// TestMailSendEncryptedForOutside exercises the encrypted-for-outside (password)
+// send path end to end. It targets an external example.com address, so a
+// non-zero exit here means either an EO-packaging regression or a server-side
+// address policy - both worth investigating.
+func TestMailSendEncryptedForOutside(t *testing.T) {
+	skipIfNoCredentials(t)
+	subject := testID() + "-eo-real"
+	ext := "eo-" + testID() + "@example.com"
+
+	runOK(t, "mail", "messages", "send",
+		"--to", ext, "--subject", subject, "--body", "encrypted outside body",
+		"--eo-password", "hunter2", "--eo-password-hint", "the usual")
+
+	sentID := findMessage(t, "sent", subject)
+	if sentID == "" {
+		t.Fatal("EO message did not appear in Sent")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete sent EO mail: proton-cli mail messages delete %s", sentID),
+		"mail", "messages", "delete", "--", sentID)
+
+	// EO always attaches an expiration (defaults to 28 days).
+	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+sentID)
+	msg, _ := data["Message"].(map[string]interface{})
+	exp, _ := msg["ExpirationTime"].(float64)
+	if int64(exp) <= time.Now().Unix() {
+		t.Errorf("EO ExpirationTime = %d, expected a future expiry (~28 days)", int64(exp))
+	}
+}
+
 func TestMailLabelsNestedFolderReportsParent(t *testing.T) {
 	skipIfNoCredentials(t)
 

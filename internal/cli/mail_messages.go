@@ -179,7 +179,7 @@ func msgReadCmd() *cobra.Command {
 
 func msgSendCmd() *cobra.Command {
 	var to, cc, bcc, attach []string
-	var subject, body, sendAt, expires string
+	var subject, body, sendAt, expires, eoPassword, eoPasswordHint string
 	var html bool
 	c := &cobra.Command{
 		Use: "send", Short: "Send a message",
@@ -209,7 +209,7 @@ func msgSendCmd() *cobra.Command {
 				c.R().Info(fmt.Sprintf("dry-run: would send to %d recipient(s) subject %q (%d bytes, %d attachment(s))", len(to)+len(cc)+len(bcc), subject, len(body), len(attach)))
 				return nil
 			}
-			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach}
+			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach, EOPassword: eoPassword, EOPasswordHint: eoPasswordHint}
 			if sendAt != "" {
 				t, err := ical.ParseTime(sendAt)
 				if err != nil {
@@ -244,6 +244,8 @@ func msgSendCmd() *cobra.Command {
 	c.Flags().StringVar(&sendAt, "send-at", "", "Schedule delivery (RFC3339 or YYYY-MM-DDTHH:MM)")
 	c.Flags().StringVar(&expires, "expires", "", "Self-destruct after DURATION (e.g. 7d, 24h)")
 	c.Flags().StringArrayVar(&attach, "attach", nil, "File to attach (repeatable)")
+	c.Flags().StringVar(&eoPassword, "eo-password", "", "Password-protect the message for non-Proton recipients (Encrypted Outside; defaults to a 28-day expiry)")
+	c.Flags().StringVar(&eoPasswordHint, "eo-password-hint", "", "Optional hint shown to Encrypted Outside recipients")
 	return c
 }
 

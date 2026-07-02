@@ -28,18 +28,6 @@ a small webview helper to solve it, but:
 See [Human Verification](../README.md#human-verification-captcha). Run the
 command on a desktop machine, or install a release binary, to get past a CAPTCHA.
 
-### Sending encrypted mail to non-Proton recipients
-
-`mail messages send` encrypts end-to-end to Proton recipients and sends
-cleartext (server-side TLS only) to external recipients — the default Proton
-behavior. It does **not** implement:
-
-- **External PGP** — encrypting to a recipient's own PGP/WKD key, or
-- **Encrypted-for-outside** — password-protected message links.
-
-Attachments and calendar invitations (a `METHOD:REQUEST` `.ics`) to external
-recipients do work.
-
 ## Not yet implemented
 
 - **Photos `favorite`** — Proton's favorite action copies a photo into a special
@@ -51,3 +39,7 @@ recipients do work.
 - **Adding calendar tags / new custom tags to photos** — only tag *removal*
   (`drive photos tags remove`) is supported; tags are otherwise assigned by
   Proton's automatic classification.
+- **Encrypting mail to a contact-pinned key.** `mail messages send` reaches
+  external recipients via `--eo-password` (Encrypted Outside) or a public key
+  Proton discovers automatically (WKD/keyserver); pinning a specific public key
+  in Contacts and encrypting to it isn't wired up yet.

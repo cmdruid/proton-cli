@@ -217,6 +217,7 @@ proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --h
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --attach ./report.pdf
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --send-at 2026-05-01T09:00
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --expires 7d
+proton-cli mail messages send --to bob@gmail.com --subject Hi --body secret --eo-password hunter2   # password-protect for non-Proton recipients
 echo "body" | proton-cli mail messages send --to foo --subject bar --body -
 proton-cli mail messages trash REF...
 proton-cli mail messages delete REF...                  # permanent
@@ -515,7 +516,7 @@ A few constraints are inherent to Proton's design or platform:
 - **Colors** - labels, folders, calendars, and contact groups accept only Proton's 20 fixed accent colors; the CLI validates `--color` and lists the allowed values on error.
 - **Calendar deletion** - `calendar calendars delete` is password-scoped and needs `PROTON_PASSWORD`.
 - **CAPTCHA** - can't be solved headlessly, and `go install` builds don't embed the helper (see [Human verification](#human-verification-captcha)).
-- **External mail encryption** - `mail messages send` encrypts to Proton recipients and sends cleartext (TLS) to external ones; external-PGP and password-protected sending aren't supported (attachments and calendar invites to external recipients do work).
+- **External mail encryption** - end-to-end encryption to a non-Proton recipient needs either `--eo-password` (a password-protected "Encrypted Outside" link) or a public PGP key Proton can discover for them (WKD/keyserver, used automatically); without either, external recipients receive cleartext over TLS, the default Proton behavior. Encrypting to a contact-pinned key isn't wired up yet.
 
 See [`docs/limitations.md`](docs/limitations.md) for the full list, including features not yet implemented.
 
