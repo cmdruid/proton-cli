@@ -191,7 +191,7 @@ The examples below are representative, not exhaustive. Every command lists its f
 | `drive share` | status, link, unlink, add, remove |
 | `drive invitations` | list, accept, reject |
 | `drive trash` | list, restore, empty |
-| `drive photos` | list, upload, download, delete, albums, tags |
+| `drive photos` | list, upload, download, delete, favorite, unfavorite, albums, tags |
 | `calendar calendars` | list, create, rename, delete |
 | `calendar events` | list, get, create, update, delete |
 | `contacts` | list, get, create, update, delete, groups |
@@ -317,9 +317,12 @@ proton-cli drive trash empty                            # across all volumes
 
 # Photos
 proton-cli drive photos list
+proton-cli drive photos list --favorites                # only favorited photos
 proton-cli drive photos upload ./IMG_0001.jpg
 proton-cli drive photos download PHOTO_LINK_ID --out ./pics/
 proton-cli drive photos delete PHOTO_LINK_ID...         # to trash (--permanent to purge)
+proton-cli drive photos favorite PHOTO_LINK_ID...       # mark as favorite (album-only photos are copied to your timeline)
+proton-cli drive photos unfavorite PHOTO_LINK_ID...     # remove from favorites
 proton-cli drive photos albums list
 proton-cli drive photos albums create --name "Holiday"
 proton-cli drive photos albums add ALBUM_LINK_ID PHOTO_LINK_ID...

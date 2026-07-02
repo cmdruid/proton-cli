@@ -596,6 +596,75 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 	runOK(t, "drive", "photos", "albums", "remove", albumID, photoID)
 }
 
+func photoInFavorites(t *testing.T, photoID string) bool {
+	t.Helper()
+	for _, p := range runJSONArray(t, "drive", "photos", "list", "--favorites") {
+		if p.(map[string]interface{})["link_id"] == photoID {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	if _, stderr, code := run(t, "drive", "photos", "list"); code != 0 {
+		if strings.Contains(stderr, "photos") {
+			t.Skip("no photos share on this account")
+		}
+		t.Fatalf("photos list failed: %s", truncateOutput(stderr))
+	}
+
+	before := photoLinkIDs(t)
+
+	dir := t.TempDir()
+	img := filepath.Join(dir, testID()+".png")
+	writePNG(t, img)
+	runOK(t, "drive", "photos", "upload", img)
+
+	var photoID string
+	waitFor(20*time.Second, 1*time.Second, func() bool {
+		for id := range photoLinkIDs(t) {
+			if !before[id] {
+				photoID = id
+				return true
+			}
+		}
+		return false
+	})
+	if photoID == "" {
+		t.Fatal("uploaded photo did not appear in the listing")
+	}
+	cleanupRun(t, fmt.Sprintf("Delete photo: proton-cli drive photos delete --permanent %s", photoID),
+		"drive", "photos", "delete", "--permanent", "--", photoID)
+
+	// --dry-run must not favorite.
+	_, stderr := runOKStderr(t, "--dry-run", "drive", "photos", "favorite", "--", photoID)
+	assertContains(t, stderr, "dry-run")
+	if photoInFavorites(t, photoID) {
+		t.Error("dry-run favorite should not actually favorite the photo")
+	}
+
+	// A freshly uploaded timeline photo is favorited in place (empty body).
+	runOK(t, "drive", "photos", "favorite", "--", photoID)
+	if !waitFor(20*time.Second, 1*time.Second, func() bool { return photoInFavorites(t, photoID) }) {
+		t.Error("photo did not appear under --favorites after favorite")
+	}
+
+	// --dry-run must not unfavorite either.
+	_, stderr = runOKStderr(t, "--dry-run", "drive", "photos", "unfavorite", "--", photoID)
+	assertContains(t, stderr, "dry-run")
+	if !photoInFavorites(t, photoID) {
+		t.Error("dry-run unfavorite should not actually remove the favorite")
+	}
+
+	runOK(t, "drive", "photos", "unfavorite", "--", photoID)
+	if !waitFor(20*time.Second, 1*time.Second, func() bool { return !photoInFavorites(t, photoID) }) {
+		t.Error("photo still under --favorites after unfavorite")
+	}
+}
+
 func TestDrivePhotosRead(t *testing.T) {
 	skipIfNoCredentials(t)
 

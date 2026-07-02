@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
@@ -30,6 +31,10 @@ type Album struct {
 
 const photosPageSize = 500
 
+// favoriteTag is PhotoTag.Favorites: favoriting a photo is adding this tag
+// (mirrors ACCENT-free PhotoTag enum in WebClients, Favorites = 0).
+const favoriteTag = 0
+
 // photosRoot fetches the photos share root link and unwraps its node key ring,
 // the parent for every photo and album.
 func (s *Service) photosRoot(ctx context.Context, dc *Context) (*Link, *pgp.KeyRing, error) {
@@ -45,12 +50,16 @@ func (s *Service) photosRoot(ctx context.Context, dc *Context) (*Link, *pgp.KeyR
 }
 
 // PhotosList returns all photos on the photos volume (paginated server-side).
-func (s *Service) PhotosList(ctx context.Context, dc *Context) ([]Photo, error) {
+// When favoritesOnly is set, the server filters to the Favorites tag.
+func (s *Service) PhotosList(ctx context.Context, dc *Context, favoritesOnly bool) ([]Photo, error) {
 	var out []Photo
 	lastID := ""
 	for {
 		q := proton.Request{Method: "GET", Path: fmt.Sprintf("/drive/volumes/%s/photos", dc.VolumeID)}
 		q.Query = map[string][]string{"PageSize": {fmt.Sprintf("%d", photosPageSize)}}
+		if favoritesOnly {
+			q.Query.Set("Tag", strconv.Itoa(favoriteTag))
+		}
 		if lastID != "" {
 			q.Query.Set("PreviousPageLastLinkID", lastID)
 		}
@@ -269,7 +278,7 @@ func (s *Service) AlbumAddPhotos(ctx context.Context, dc *Context, albumLinkID s
 	// The album-add payload requires each photo's ContentHash; reuse the photo's
 	// existing one (the web client's documented fallback).
 	contentHashes := map[string]string{}
-	photos, err := s.PhotosList(ctx, dc)
+	photos, err := s.PhotosList(ctx, dc, false)
 	if err != nil {
 		return err
 	}
@@ -361,4 +370,157 @@ func (s *Service) PhotoTagsRemove(ctx context.Context, dc *Context, linkID strin
 		Method: "DELETE", Path: fmt.Sprintf("/drive/photos/volumes/%s/links/%s/tags", dc.VolumeID, linkID),
 		Body: map[string]any{"Tags": tags},
 	}, nil)
+}
+
+// PhotosFavorite marks photos as favorite (PhotoTag.Favorites). A photo already
+// in the timeline (parent == photos root) is tagged in place with an empty
+// body. A photo that lives only in an album is copied into the timeline first:
+// its name and node passphrase are re-encrypted to the photos root (along with
+// any related burst/live photos) and sent as PhotoData, mirroring the web
+// client's favorite-with-copy flow. It returns how many photos were copied.
+func (s *Service) PhotosFavorite(ctx context.Context, dc *Context, linkIDs []string) (copied int, err error) {
+	root, rootKR, err := s.photosRoot(ctx, dc)
+	if err != nil {
+		return 0, err
+	}
+	rootHashKey, err := hashKeyOf(root, rootKR)
+	if err != nil {
+		return 0, err
+	}
+	for _, id := range linkIDs {
+		link, err := s.getLink(ctx, dc.ShareID, id)
+		if err != nil {
+			return copied, err
+		}
+		body := map[string]any{}
+		if link.ParentLinkID != root.LinkID {
+			pd, err := s.buildFavoritePhotoData(ctx, dc, link, rootKR, rootHashKey)
+			if err != nil {
+				return copied, fmt.Errorf("favorite %s: %w", id, err)
+			}
+			body = pd
+			copied++
+		}
+		if err := s.C.Decode(ctx, proton.Request{
+			Method: "POST", Path: fmt.Sprintf("/drive/photos/volumes/%s/links/%s/favorite", dc.VolumeID, id),
+			Body: body,
+		}, nil); err != nil {
+			return copied, err
+		}
+	}
+	return copied, nil
+}
+
+// PhotosUnfavorite removes the Favorites tag from photos (DELETE .../tags).
+func (s *Service) PhotosUnfavorite(ctx context.Context, dc *Context, linkIDs []string) error {
+	for _, id := range linkIDs {
+		if err := s.PhotoTagsRemove(ctx, dc, id, []int{favoriteTag}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// buildFavoritePhotoData builds the PhotoData body that copies an album-only
+// photo (and any related burst/live photos) into the timeline while favoriting
+// it: each photo's name and node passphrase are re-encrypted from its current
+// parent to the photos root.
+func (s *Service) buildFavoritePhotoData(ctx context.Context, dc *Context, link *Link, rootKR *pgp.KeyRing, rootHashKey []byte) (map[string]any, error) {
+	main, err := s.favoriteMovedParams(ctx, dc, link, rootKR, rootHashKey)
+	if err != nil {
+		return nil, err
+	}
+	related := []map[string]any{}
+	if link.FileProperties != nil {
+		for _, rid := range link.FileProperties.ActiveRevision.Photo.RelatedPhotosLinkIDs {
+			relatedLink, err := s.getLink(ctx, dc.ShareID, rid)
+			if err != nil {
+				return nil, err
+			}
+			rp, err := s.favoriteMovedParams(ctx, dc, relatedLink, rootKR, rootHashKey)
+			if err != nil {
+				return nil, fmt.Errorf("related photo %s: %w", rid, err)
+			}
+			rp["LinkID"] = rid
+			related = append(related, rp)
+		}
+	}
+	main["RelatedPhotos"] = related
+	return map[string]any{"PhotoData": main}, nil
+}
+
+// favoriteMovedParams re-encrypts a single photo's name + node passphrase from
+// its current parent to the photos root and returns the fields the favorite
+// endpoint's PhotoData expects.
+func (s *Service) favoriteMovedParams(ctx context.Context, dc *Context, link *Link, rootKR *pgp.KeyRing, rootHashKey []byte) (map[string]any, error) {
+	parentKR, err := s.photoParentKR(ctx, dc, link, rootKR)
+	if err != nil {
+		return nil, err
+	}
+	name, err := decryptName(link.Name, parentKR)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt photo name %s: %w", link.LinkID, err)
+	}
+	encName, err := reEncryptName(link.Name, name, parentKR, rootKR, dc.AddrKR)
+	if err != nil {
+		return nil, err
+	}
+	hash, err := lookupHash(strings.ToLower(name), rootHashKey)
+	if err != nil {
+		return nil, err
+	}
+	newPass, _, err := reEncryptNodePassphrase(link, parentKR, rootKR, dc.AddrKR)
+	if err != nil {
+		return nil, fmt.Errorf("re-encrypt passphrase %s: %w", link.LinkID, err)
+	}
+	contentHash, err := s.photoContentHash(link, parentKR, rootHashKey)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"Name": encName, "Hash": hash, "ContentHash": contentHash,
+		"NameSignatureEmail": dc.AddrEmail, "NodePassphrase": newPass,
+	}, nil
+}
+
+// photoParentKR returns the key ring that wraps a photo's node passphrase and
+// name. Timeline photos use the photos-root key ring; album-only photos use the
+// key ring of their parent album. Cross-volume (shared-album) photos, whose
+// parent lives in another share, surface a clear unsupported error.
+func (s *Service) photoParentKR(ctx context.Context, dc *Context, link *Link, rootKR *pgp.KeyRing) (*pgp.KeyRing, error) {
+	parentID := link.ParentLinkID
+	if parentID == "" && link.PhotoProperties != nil && len(link.PhotoProperties.Albums) > 0 {
+		parentID = link.PhotoProperties.Albums[0].AlbumLinkID
+	}
+	if parentID == "" || parentID == dc.RootLinkID {
+		return rootKR, nil
+	}
+	parentLink, err := s.getLink(ctx, dc.ShareID, parentID)
+	if err != nil {
+		return nil, fmt.Errorf("favoriting cross-volume/shared-album photos is not supported (parent %s): %w", parentID, err)
+	}
+	kr, err := unlockNode(parentLink, rootKR, dc.AddrKR)
+	if err != nil {
+		return nil, fmt.Errorf("favoriting cross-volume/shared-album photos is not supported (unlock parent %s): %w", parentID, err)
+	}
+	return kr, nil
+}
+
+// photoContentHash returns the photo's content hash (HMAC of its SHA-1 digest
+// under the photos-root hash key, used for duplicate detection). It prefers the
+// value the API already stores on the revision, falling back to recomputing it
+// from the node's XAttr SHA-1 digest.
+func (s *Service) photoContentHash(link *Link, parentKR *pgp.KeyRing, rootHashKey []byte) (string, error) {
+	if link.FileProperties != nil && link.FileProperties.ActiveRevision.Photo.ContentHash != "" {
+		return link.FileProperties.ActiveRevision.Photo.ContentHash, nil
+	}
+	nodeKR, err := unlockNode(link, parentKR, nil)
+	if err != nil {
+		return "", err
+	}
+	x, err := decryptXAttr(link.XAttr, nodeKR)
+	if err != nil || x.Common.Digests.SHA1 == "" {
+		return "", fmt.Errorf("photo %s has no content hash and no SHA-1 digest to recompute it", link.LinkID)
+	}
+	return lookupHash(x.Common.Digests.SHA1, rootHashKey)
 }

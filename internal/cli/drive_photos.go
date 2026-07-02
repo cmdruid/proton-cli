@@ -34,8 +34,56 @@ func photoTagsLabel(tags []int) string {
 
 func drivePhotosCmd() *cobra.Command {
 	c := &cobra.Command{Use: "photos", Short: "Photo library operations"}
-	c.AddCommand(photosListCmd(), photosDownloadCmd(), photosUploadCmd(), photosDeleteCmd(), photosAlbumsCmd(), photosTagsCmd())
+	c.AddCommand(photosListCmd(), photosDownloadCmd(), photosUploadCmd(), photosDeleteCmd(), photosFavoriteCmd(), photosUnfavoriteCmd(), photosAlbumsCmd(), photosTagsCmd())
 	return c
+}
+
+func photosFavoriteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "favorite PHOTO_LINK_ID...", Short: "Mark photos as favorite",
+		Args: cobra.MinimumNArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+			dc, err := drivePhotosCtx(c)
+			if err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would favorite %d photo(s)", len(c.Args)))
+				return nil
+			}
+			copied, err := c.App.Drive.PhotosFavorite(c.Ctx, dc, c.Args)
+			if err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Favorited %d photo(s).", len(c.Args)))
+			if copied > 0 {
+				c.R().Info(fmt.Sprintf("Note: %d photo(s) were copied into your timeline and favorited there.", copied))
+			}
+			return nil
+		}),
+	}
+}
+
+func photosUnfavoriteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "unfavorite PHOTO_LINK_ID...", Short: "Remove photos from favorites",
+		Args: cobra.MinimumNArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+			dc, err := drivePhotosCtx(c)
+			if err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would unfavorite %d photo(s)", len(c.Args)))
+				return nil
+			}
+			if err := c.App.Drive.PhotosUnfavorite(c.Ctx, dc, c.Args); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Unfavorited %d photo(s).", len(c.Args)))
+			return nil
+		}),
+	}
 }
 
 func photosDeleteCmd() *cobra.Command {
@@ -68,14 +116,15 @@ func photosDeleteCmd() *cobra.Command {
 }
 
 func photosListCmd() *cobra.Command {
-	return &cobra.Command{
+	var favorites bool
+	cmd := &cobra.Command{
 		Use: "list", Short: "List photos",
 		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			photos, err := c.App.Drive.PhotosList(c.Ctx, dc)
+			photos, err := c.App.Drive.PhotosList(c.Ctx, dc, favorites)
 			if err != nil {
 				return err
 			}
@@ -89,6 +138,8 @@ func photosListCmd() *cobra.Command {
 			}, photos)
 		}),
 	}
+	cmd.Flags().BoolVar(&favorites, "favorites", false, "Show only favorited photos")
+	return cmd
 }
 
 func photosDownloadCmd() *cobra.Command {

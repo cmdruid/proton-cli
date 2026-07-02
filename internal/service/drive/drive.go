@@ -143,9 +143,19 @@ type Link struct {
 	ShareUrls               []struct{ ShareURLID string }
 	FolderProperties        *struct{ NodeHashKey string }
 	AlbumProperties         *struct{ NodeHashKey string }
-	FileProperties          *struct {
+	PhotoProperties         *struct {
+		Albums []struct{ AlbumLinkID string }
+		Tags   []int
+	}
+	FileProperties *struct {
 		ContentKeyPacket string
-		ActiveRevision   struct{ ID string }
+		ActiveRevision   struct {
+			ID    string
+			Photo struct {
+				ContentHash          string
+				RelatedPhotosLinkIDs []string
+			}
+		}
 	}
 }
 

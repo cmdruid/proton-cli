@@ -30,15 +30,14 @@ command on a desktop machine, or install a release binary, to get past a CAPTCHA
 
 ## Not yet implemented
 
-- **Photos `favorite`** — Proton's favorite action copies a photo into a special
-  favorites album whose discovery/bootstrap isn't wired up yet. Use
-  `drive photos albums add` to organize photos in the meantime.
 - **Attendee RSVP replies** — you can invite attendees to an event
   (`calendar events create --attendee`), but replying to an invitation
   (accept / tentative / decline) isn't implemented.
-- **Adding calendar tags / new custom tags to photos** — only tag *removal*
-  (`drive photos tags remove`) is supported; tags are otherwise assigned by
-  Proton's automatic classification.
+- **Adding custom tags to photos** — the Favorites tag can be toggled with
+  `drive photos favorite` / `unfavorite`, and any tag removed with
+  `drive photos tags remove`, but the other classification tags (screenshots,
+  videos, selfies, …) are assigned only by Proton's automatic classification
+  and can't be added manually.
 - **Encrypting mail to a contact-pinned key.** `mail messages send` reaches
   external recipients via `--eo-password` (Encrypted Outside) or a public key
   Proton discovers automatically (WKD/keyserver); pinning a specific public key
