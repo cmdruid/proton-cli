@@ -21,20 +21,16 @@ func drivePhotosCtx(c *Ctx) (*drivesvc.Context, error) {
 	return c.App.Drive.ResolvePhotos(c.Ctx, u)
 }
 
-func photoTagsLabel(tags []int) string {
+func photoTagsLabel(tags []string) string {
 	if len(tags) == 0 {
 		return "-"
 	}
-	parts := make([]string, len(tags))
-	for i, t := range tags {
-		parts[i] = strconv.Itoa(t)
-	}
-	return strings.Join(parts, ",")
+	return strings.Join(tags, ",")
 }
 
 func drivePhotosCmd() *cobra.Command {
 	c := &cobra.Command{Use: "photos", Short: "Photo library operations"}
-	c.AddCommand(photosListCmd(), photosDownloadCmd(), photosUploadCmd(), photosDeleteCmd(), photosFavoriteCmd(), photosUnfavoriteCmd(), photosAlbumsCmd(), photosTagsCmd())
+	c.AddCommand(photosListCmd(), photosDownloadCmd(), photosUploadCmd(), photosDeleteCmd(), photosFavoriteCmd(), photosUnfavoriteCmd(), photosAlbumsCmd())
 	return c
 }
 
@@ -116,15 +112,23 @@ func photosDeleteCmd() *cobra.Command {
 }
 
 func photosListCmd() *cobra.Command {
-	var favorites bool
+	var tag string
 	cmd := &cobra.Command{
 		Use: "list", Short: "List photos",
 		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+			tagID, filter := 0, false
+			if tag != "" {
+				id, err := drivesvc.ParseTag(tag)
+				if err != nil {
+					return err
+				}
+				tagID, filter = id, true
+			}
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			photos, err := c.App.Drive.PhotosList(c.Ctx, dc, favorites)
+			photos, err := c.App.Drive.PhotosList(c.Ctx, dc, tagID, filter)
 			if err != nil {
 				return err
 			}
@@ -138,7 +142,7 @@ func photosListCmd() *cobra.Command {
 			}, photos)
 		}),
 	}
-	cmd.Flags().BoolVar(&favorites, "favorites", false, "Show only favorited photos")
+	cmd.Flags().StringVar(&tag, "tags", "", "Filter by tag: favorites, screenshots, videos, live-photos, motion-photos, selfies, portraits, bursts, panoramas, raw")
 	return cmd
 }
 
@@ -357,37 +361,5 @@ func photosAlbumsCmd() *cobra.Command {
 		}),
 	})
 
-	return c
-}
-
-func photosTagsCmd() *cobra.Command {
-	c := &cobra.Command{Use: "tags", Short: "Manage photo tags"}
-	c.AddCommand(&cobra.Command{
-		Use: "remove PHOTO_LINK_ID TAG...", Short: "Remove classification tags from a photo",
-		Args: cobra.MinimumNArgs(2),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
-			dc, err := drivePhotosCtx(c)
-			if err != nil {
-				return err
-			}
-			tags := make([]int, 0, len(c.Args)-1)
-			for _, a := range c.Args[1:] {
-				t, err := strconv.Atoi(a)
-				if err != nil {
-					return fmt.Errorf("tag must be an integer: %q", a)
-				}
-				tags = append(tags, t)
-			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would remove %d tag(s) from %s", len(tags), c.Args[0]))
-				return nil
-			}
-			if err := c.App.Drive.PhotoTagsRemove(c.Ctx, dc, c.Args[0], tags); err != nil {
-				return err
-			}
-			c.R().Success("Tags removed.")
-			return nil
-		}),
-	})
 	return c
 }

@@ -598,12 +598,33 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 
 func photoInFavorites(t *testing.T, photoID string) bool {
 	t.Helper()
-	for _, p := range runJSONArray(t, "drive", "photos", "list", "--favorites") {
+	for _, p := range runJSONArray(t, "drive", "photos", "list", "--tags", "favorites") {
 		if p.(map[string]interface{})["link_id"] == photoID {
 			return true
 		}
 	}
 	return false
+}
+
+// favoritePhotoTags returns the tag names JSON-listed for a favorited photo,
+// proving tags surface as names (e.g. "favorites") rather than raw ints.
+func favoritePhotoTags(t *testing.T, photoID string) []string {
+	t.Helper()
+	for _, p := range runJSONArray(t, "drive", "photos", "list", "--tags", "favorites") {
+		m := p.(map[string]interface{})
+		if m["link_id"] != photoID {
+			continue
+		}
+		raw, _ := m["tags"].([]interface{})
+		out := make([]string, 0, len(raw))
+		for _, tg := range raw {
+			if s, ok := tg.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
@@ -649,7 +670,23 @@ func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
 	// A freshly uploaded timeline photo is favorited in place (empty body).
 	runOK(t, "drive", "photos", "favorite", "--", photoID)
 	if !waitFor(20*time.Second, 1*time.Second, func() bool { return photoInFavorites(t, photoID) }) {
-		t.Error("photo did not appear under --favorites after favorite")
+		t.Error("photo did not appear under --tags favorites after favorite")
+	}
+	// Tags are surfaced by name, never as raw ints.
+	tags := favoritePhotoTags(t, photoID)
+	hasFav := false
+	for _, tg := range tags {
+		if tg == "favorites" {
+			hasFav = true
+		}
+	}
+	if !hasFav {
+		t.Errorf("favorited photo tags = %v, want to contain the name \"favorites\"", tags)
+	}
+	// Text mode (forced TTY) also renders the tag name, never a raw int.
+	ttyOut, _, _ := runWithEnv(t, map[string]string{"PROTON_CLI_FORCE_TTY": "1"}, "drive", "photos", "list", "--tags", "favorites")
+	if !strings.Contains(ttyOut, "favorites") {
+		t.Errorf("text-mode list --tags favorites should show the 'favorites' tag name; got:\n%s", truncateOutput(ttyOut))
 	}
 
 	// --dry-run must not unfavorite either.
@@ -661,7 +698,7 @@ func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
 
 	runOK(t, "drive", "photos", "unfavorite", "--", photoID)
 	if !waitFor(20*time.Second, 1*time.Second, func() bool { return !photoInFavorites(t, photoID) }) {
-		t.Error("photo still under --favorites after unfavorite")
+		t.Error("photo still under --tags favorites after unfavorite")
 	}
 }
 
@@ -677,4 +714,42 @@ func TestDrivePhotosRead(t *testing.T) {
 	}
 	// Albums listing exercises the same photos-share bootstrap + name decryption.
 	runOK(t, "drive", "photos", "albums", "list")
+}
+
+func TestDrivePhotosListTags(t *testing.T) {
+	skipIfNoCredentials(t)
+
+	// Tags are referenced by name only - an unknown name and an integer are
+	// both rejected (the CLI never accepts or leaks raw enum ints).
+	_, stderr, code := run(t, "drive", "photos", "list", "--tags", "bogus-"+testID())
+	if code == 0 {
+		t.Error("expected non-zero exit for an unknown --tags value")
+	}
+	assertContains(t, stderr, "unknown tag")
+	if _, _, code := run(t, "drive", "photos", "list", "--tags", "2"); code == 0 {
+		t.Error("expected non-zero exit for an integer --tags value (names only)")
+	}
+
+	// Filtering by a valid classification tag runs cleanly (result may be empty).
+	if _, stderr, code := run(t, "drive", "photos", "list", "--tags", "videos"); code != 0 {
+		if strings.Contains(stderr, "photos") {
+			t.Skip("no photos share on this account")
+		}
+		t.Fatalf("list --tags videos failed: %s", truncateOutput(stderr))
+	}
+}
+
+// TestDrivePhotosTagsSubcommandRemoved guards the deliberate scope decision:
+// the web UI exposes no add/remove-tag action, so neither do we. favorite /
+// unfavorite stay; the old `photos tags` subcommand is gone.
+func TestDrivePhotosTagsSubcommandRemoved(t *testing.T) {
+	skipIfNoCredentials(t)
+	help := runOK(t, "drive", "photos", "--help")
+	assertContains(t, help, "favorite")
+	assertContains(t, help, "unfavorite")
+	for _, line := range strings.Split(help, "\n") {
+		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == "tags" {
+			t.Errorf("photos should no longer expose a 'tags' subcommand:\n%s", help)
+		}
+	}
 }

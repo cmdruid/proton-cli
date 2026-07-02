@@ -8,6 +8,10 @@ This is an open-source CLI tool used by other people. All changes should conside
 - **User-facing quality** - README, help text, and error messages should be clear and helpful
 - **Distribution** - binaries are published as GitHub Releases via GoReleaser; users install by downloading a binary or via `go install`
 
+## Feature Scope
+
+proton-cli mirrors what the **Proton web clients let a user do**, not every endpoint the API exposes. If an action isn't something a user can do in the official web UI, don't add it to the CLI - even when a backend endpoint for it exists. Web-client parity beats API completeness.
+
 ## Quality Gates
 
 - **Always run `just lint` after making code changes** and fix everything before considering the work done. It runs `gofmt -w .` and `golangci-lint run ./...` (CGO-free, so no C compiler needed).

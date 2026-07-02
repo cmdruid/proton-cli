@@ -5,6 +5,7 @@
     "gopls": "latest",
     "golangci-lint": "latest",
     "nodejs": "26",
+    "npm-check-updates": "latest",
     "just": "latest",
     "protobuf": "latest",
     "pkg-config": "latest",

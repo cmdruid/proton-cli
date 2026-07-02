@@ -16,11 +16,11 @@ import (
 )
 
 type Photo struct {
-	LinkID      string `json:"link_id"`
-	CaptureTime int64  `json:"capture_time"`
-	Hash        string `json:"hash,omitempty"`
-	ContentHash string `json:"content_hash,omitempty"`
-	Tags        []int  `json:"tags,omitempty"`
+	LinkID      string   `json:"link_id"`
+	CaptureTime int64    `json:"capture_time"`
+	Hash        string   `json:"hash,omitempty"`
+	ContentHash string   `json:"content_hash,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
 type Album struct {
@@ -31,9 +31,67 @@ type Album struct {
 
 const photosPageSize = 500
 
-// favoriteTag is PhotoTag.Favorites: favoriting a photo is adding this tag
-// (mirrors ACCENT-free PhotoTag enum in WebClients, Favorites = 0).
+// photoTags maps the user-facing tag names to Proton's PhotoTag enum values
+// (packages/shared/lib/interfaces/drive/file.ts). Proton assigns tags 1-9
+// server-side by automatic classification; only Favorites (0) is user-
+// togglable, via the dedicated favorite endpoint.
+var photoTags = []struct {
+	name string
+	id   int
+}{
+	{"favorites", 0},
+	{"screenshots", 1},
+	{"videos", 2},
+	{"live-photos", 3},
+	{"motion-photos", 4},
+	{"selfies", 5},
+	{"portraits", 6},
+	{"bursts", 7},
+	{"panoramas", 8},
+	{"raw", 9},
+}
+
+// favoriteTag is PhotoTag.Favorites, the only user-togglable tag.
 const favoriteTag = 0
+
+// TagName returns the user-facing name for a PhotoTag id, falling back to the
+// decimal id for tags this build doesn't know so future backend tags still
+// render legibly.
+func TagName(id int) string {
+	for _, t := range photoTags {
+		if t.id == id {
+			return t.name
+		}
+	}
+	return strconv.Itoa(id)
+}
+
+// ParseTag resolves a user-supplied tag name to its PhotoTag id. Names only:
+// integer input is rejected so the CLI never leaks raw enum values.
+func ParseTag(name string) (int, error) {
+	for _, t := range photoTags {
+		if t.name == name {
+			return t.id, nil
+		}
+	}
+	names := make([]string, len(photoTags))
+	for i, t := range photoTags {
+		names[i] = t.name
+	}
+	return 0, fmt.Errorf("unknown tag %q; valid: %s", name, strings.Join(names, ", "))
+}
+
+// tagNames maps PhotoTag ids to their names for display and JSON output.
+func tagNames(ids []int) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = TagName(id)
+	}
+	return out
+}
 
 // photosRoot fetches the photos share root link and unwraps its node key ring,
 // the parent for every photo and album.
@@ -50,15 +108,15 @@ func (s *Service) photosRoot(ctx context.Context, dc *Context) (*Link, *pgp.KeyR
 }
 
 // PhotosList returns all photos on the photos volume (paginated server-side).
-// When favoritesOnly is set, the server filters to the Favorites tag.
-func (s *Service) PhotosList(ctx context.Context, dc *Context, favoritesOnly bool) ([]Photo, error) {
+// When filter is set, the server filters to the single PhotoTag id in tag.
+func (s *Service) PhotosList(ctx context.Context, dc *Context, tag int, filter bool) ([]Photo, error) {
 	var out []Photo
 	lastID := ""
 	for {
 		q := proton.Request{Method: "GET", Path: fmt.Sprintf("/drive/volumes/%s/photos", dc.VolumeID)}
 		q.Query = map[string][]string{"PageSize": {fmt.Sprintf("%d", photosPageSize)}}
-		if favoritesOnly {
-			q.Query.Set("Tag", strconv.Itoa(favoriteTag))
+		if filter {
+			q.Query.Set("Tag", strconv.Itoa(tag))
 		}
 		if lastID != "" {
 			q.Query.Set("PreviousPageLastLinkID", lastID)
@@ -76,7 +134,7 @@ func (s *Service) PhotosList(ctx context.Context, dc *Context, favoritesOnly boo
 			return nil, err
 		}
 		for _, p := range r.Photos {
-			out = append(out, Photo{LinkID: p.LinkID, CaptureTime: p.CaptureTime, Hash: p.Hash, ContentHash: p.ContentHash, Tags: p.Tags})
+			out = append(out, Photo{LinkID: p.LinkID, CaptureTime: p.CaptureTime, Hash: p.Hash, ContentHash: p.ContentHash, Tags: tagNames(p.Tags)})
 		}
 		if len(r.Photos) < photosPageSize {
 			break
@@ -139,7 +197,7 @@ func (s *Service) AlbumItems(ctx context.Context, dc *Context, albumLinkID strin
 			return nil, err
 		}
 		for _, p := range r.Photos {
-			out = append(out, Photo{LinkID: p.LinkID, CaptureTime: p.CaptureTime, Hash: p.Hash, Tags: p.Tags})
+			out = append(out, Photo{LinkID: p.LinkID, CaptureTime: p.CaptureTime, Hash: p.Hash, Tags: tagNames(p.Tags)})
 		}
 		if !r.More || r.AnchorID == "" {
 			break
@@ -278,7 +336,7 @@ func (s *Service) AlbumAddPhotos(ctx context.Context, dc *Context, albumLinkID s
 	// The album-add payload requires each photo's ContentHash; reuse the photo's
 	// existing one (the web client's documented fallback).
 	contentHashes := map[string]string{}
-	photos, err := s.PhotosList(ctx, dc, false)
+	photos, err := s.PhotosList(ctx, dc, 0, false)
 	if err != nil {
 		return err
 	}
