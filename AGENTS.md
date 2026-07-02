@@ -27,7 +27,7 @@ Tests are **integration tests** that run against the live Proton API. They requi
 
 ## Reference Source
 
-The Proton WebClients TypeScript source is available at `/tmp/proton-webclient-openapi/` (cloned from https://github.com/ProtonMail/WebClients). Use it as the primary reference for:
+The Proton WebClients TypeScript source is available at `/tmp/proton-cli-WebClients/` (cloned from https://github.com/ProtonMail/WebClients). Use it as the primary reference for:
 
 - API endpoint signatures, request/response shapes (`packages/shared/lib/api/`)
 - Encryption flows and key handling (`packages/shared/lib/keys/`, `packages/crypto/`)
@@ -36,5 +36,5 @@ The Proton WebClients TypeScript source is available at `/tmp/proton-webclient-o
 
 If the clone is missing or stale, run:
 ```bash
-cd /tmp && git clone --depth 1 --branch main https://github.com/ProtonMail/WebClients.git proton-webclient-openapi
+cd /tmp && git clone --depth 1 --branch main https://github.com/ProtonMail/WebClients.git proton-cli-WebClients
 ```

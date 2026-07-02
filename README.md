@@ -33,7 +33,7 @@ proton-cli implements the same authentication and encryption as the [Proton web 
 - **Drive** - upload/download (streaming and recursive), move, copy, revisions, public links, member sharing, trash, and photos.
 - **Calendar** - calendars and events, recurrence, reminders, and attendees.
 - **Pass** - vaults, items (login, note, card, wifi, ssh key, identity, custom), aliases, and TOTP.
-- **Contacts** - full CRUD plus contact groups.
+- **Contacts** - full CRUD, pinned encryption keys, and contact groups.
 - **Real E2EE** - SRP login and the full PGP key hierarchy, decrypting and signing exactly like the web client.
 - **Built for scripts** - `--output json`, meaningful exit codes, streaming I/O, and `stdout = new ID` on create.
 
@@ -193,7 +193,7 @@ The examples below are representative, not exhaustive. Every command lists its f
 | `drive photos` | list, upload, download, delete, favorite, unfavorite, albums |
 | `calendar calendars` | list, create, rename, delete |
 | `calendar events` | list, get, create, update, respond, delete |
-| `contacts` | list, get, create, update, delete, groups |
+| `contacts` | list, get, create, update, delete, pin-key, unpin-key, groups |
 | `pass items` | list, get, create, edit, trash, restore, delete |
 | `pass vaults` | list, create, rename, delete |
 | `pass alias` | options, create |
@@ -371,6 +371,11 @@ proton-cli contacts create --name "Jane" --email a@ex.com --email b@ex.com \
 proton-cli contacts update --email "new@example.com" REF
 proton-cli contacts delete REF
 
+# Pinned keys - encrypt mail to a specific PGP key you trust for a contact
+proton-cli contacts pin-key REF --key bob-pubkey.asc            # pin & auto-encrypt to it
+proton-cli contacts pin-key REF --email bob@ex.com --key -      # armored key from stdin; pick which email
+proton-cli contacts unpin-key REF
+
 # Contact groups
 proton-cli contacts groups list
 proton-cli contacts groups create --name "Team" --color "#8080FF"
@@ -521,7 +526,6 @@ A few constraints are inherent to Proton's design or platform:
 - **Colors** - labels, folders, calendars, and contact groups accept only Proton's 20 fixed accent colors; the CLI validates `--color` and lists the allowed values on error.
 - **Calendar deletion** - `calendar calendars delete` is password-scoped and needs `PROTON_PASSWORD`.
 - **CAPTCHA** - can't be solved headlessly, and `go install` builds don't embed the helper (see [Human verification](#human-verification-captcha)).
-- **External mail encryption** - end-to-end encryption to a non-Proton recipient needs either `--eo-password` (a password-protected "Encrypted Outside" link) or a public PGP key Proton can discover for them (WKD/keyserver, used automatically); without either, external recipients receive cleartext over TLS, the default Proton behavior. Encrypting to a contact-pinned key isn't wired up yet.
 
 See [`docs/limitations.md`](docs/limitations.md) for the full list, including features not yet implemented.
 

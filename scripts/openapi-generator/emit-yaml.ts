@@ -38,6 +38,14 @@ function emitHeader(lines: string[]): void {
   lines.push("      scheme: bearer");
   lines.push("      description: |");
   lines.push("        Requires headers: Authorization (Bearer token), x-pm-uid (session UID), x-pm-appversion.");
+  lines.push("  schemas:");
+  lines.push("    ApiResponse:");
+  lines.push("      type: object");
+  lines.push("      description: Standard Proton API JSON response envelope.");
+  lines.push("      properties:");
+  lines.push("        Code:");
+  lines.push("          type: integer");
+  lines.push("          description: Proton response code (1000/1001 indicate success).");
   lines.push("");
 }
 
@@ -123,11 +131,16 @@ function emitOperation(lines: string[], method: string, ep: Endpoint): void {
 
     if (ep.bodyParams.length > 0) {
       lines.push("              type: object");
+      const required = ep.bodyParams.filter((f) => !f.optional).map((f) => f.name);
+      if (required.length > 0) {
+        lines.push("              required:");
+        for (const name of required) lines.push(`                - ${name}`);
+      }
       lines.push("              properties:");
       for (const f of ep.bodyParams) {
         lines.push(`                ${f.name}:`);
         lines.push(`                  type: ${f.type}`);
-        if (f.optional) lines.push("                  nullable: true");
+        if (f.type === "array") lines.push("                  items: {}");
         if (f.description) lines.push(`                  description: ${esc(f.description)}`);
       }
     } else {
@@ -138,7 +151,7 @@ function emitOperation(lines: string[], method: string, ep: Endpoint): void {
   // Response
   lines.push("      responses:");
   lines.push('        "200":');
-  lines.push(`          description: ${camelToTitle(ep.name)}`);
+  lines.push("          description: Success");
   lines.push("          content:");
 
   const responseType = outputContentType(ep.outputType);
@@ -146,10 +159,7 @@ function emitOperation(lines: string[], method: string, ep: Endpoint): void {
   lines.push("              schema:");
 
   if (responseType === "application/json") {
-    lines.push("                type: object");
-    lines.push("                properties:");
-    lines.push("                  Code:");
-    lines.push("                    type: integer");
+    lines.push("                $ref: '#/components/schemas/ApiResponse'");
   } else if (responseType === "text/plain") {
     lines.push("                type: string");
   } else {
@@ -184,7 +194,11 @@ function outputContentType(output: string): string {
 }
 
 function camelToTitle(name: string): string {
-  return name.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()).trim();
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
 }
 
 function esc(s: string): string {

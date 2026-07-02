@@ -126,7 +126,7 @@ function buildEndpoint(name: string, obj: Node, fnNode: Node, declNode: Node): E
   if (!url || !method) return null;
 
   const normalizedUrl = normalizeUrl(url);
-  const pathParams = extractPathParams(url);
+  const pathParams = extractPathParams(normalizedUrl);
   const description = extractJsDoc(fnNode, declNode);
 
   const isPublic =

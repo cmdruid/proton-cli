@@ -13,8 +13,6 @@ import (
 // profile-scoped PROTON_<PROFILE>_* env vars, falling back to the unscoped
 // PROTON_* vars. It also checks that a per-profile session file is created.
 func TestProfileFromEnv(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		t.Fatalf("user config dir: %v", err)
@@ -58,7 +56,6 @@ func TestProfileFromEnv(t *testing.T) {
 // TestProfileSessionSeparation verifies default and work sessions live in
 // separate files so they don't clobber each other.
 func TestProfileSessionSeparation(t *testing.T) {
-	skipIfNoCredentials(t)
 	configDir, _ := os.UserConfigDir()
 	sessionDir := filepath.Join(configDir, "proton-cli", "sessions")
 

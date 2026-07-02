@@ -10,7 +10,6 @@ import (
 // ── --output json: field names use json tags (snake_case) ──
 
 func TestOutputJSONMailMessages(t *testing.T) {
-	skipIfNoCredentials(t)
 	data := runJSON(t, "mail", "messages", "list", "--page-size", "1")
 	if _, ok := data["messages"]; !ok {
 		t.Fatal("expected 'messages' key (json tag) in output")
@@ -21,7 +20,6 @@ func TestOutputJSONMailMessages(t *testing.T) {
 }
 
 func TestOutputJSONContacts(t *testing.T) {
-	skipIfNoCredentials(t)
 	contacts := runJSONArray(t, "contacts", "list")
 	if len(contacts) == 0 {
 		t.Skip("no contacts")
@@ -36,7 +34,6 @@ func TestOutputJSONContacts(t *testing.T) {
 // ── --output yaml: respects json tags, uses snake_case ──
 
 func TestOutputYAMLSnakeCase(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "mail", "messages", "list", "--page-size", "1", "--output", "yaml")
 	// Non-omitempty keys only; from_name drops out when the sender has no display name.
 	for _, want := range []string{"from_address", "num_attachments"} {
@@ -55,7 +52,6 @@ func TestOutputYAMLSnakeCase(t *testing.T) {
 // ── --output yaml: raw api path keeps integers as integers ──
 
 func TestOutputYAMLRawAPIKeepsIntegers(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "--output", "yaml", "api", "GET", "/core/v4/users")
 	// Code: 1000 (int) rather than 1000.0
 	intRe := regexp.MustCompile(`(?m)^Code:\s+\d+$`)
@@ -71,7 +67,6 @@ func TestOutputYAMLRawAPIKeepsIntegers(t *testing.T) {
 // ── --output text (default): human-readable ──
 
 func TestOutputTextIsDefault(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "mail", "messages", "list", "--page-size", "1")
 	// Table output has a separator line with ─ chars
 	if !strings.Contains(stdout, "─") {
@@ -86,7 +81,6 @@ func TestOutputTextIsDefault(t *testing.T) {
 // ── invalid --output is rejected ──
 
 func TestOutputUnknownFormat(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "--output", "xml", "mail", "messages", "list")
 	if code == 0 {
 		t.Error("expected non-zero exit for unknown --output")
@@ -97,7 +91,6 @@ func TestOutputUnknownFormat(t *testing.T) {
 // ── JSON output parses as valid JSON across many commands ──
 
 func TestOutputJSONParsesEverywhere(t *testing.T) {
-	skipIfNoCredentials(t)
 	cases := [][]string{
 		{"mail", "messages", "list", "--page-size", "1"},
 		{"mail", "labels", "list"},

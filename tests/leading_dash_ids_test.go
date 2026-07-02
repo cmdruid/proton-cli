@@ -29,8 +29,6 @@ func assertNotFlagParseError(t *testing.T, stderr string) {
 // not-found / invalid-id (exit 3 or 1) - that's fine; we only assert
 // that cobra doesn't reject the argument.
 func TestLeadingDashIDIsAccepted(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	cases := []struct {
 		name string
 		args []string
@@ -71,7 +69,6 @@ func TestLeadingDashIDIsAccepted(t *testing.T) {
 // works because preprocessArgs inserts `--` before the ID after flag parsing
 // has consumed `--format raw`.
 func TestLeadingDashIDWithFlagsBeforeParsesCleanly(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, _ := run(t, "mail", "messages", "read", "--format", "raw", dashedSyntheticID)
 	assertNotFlagParseError(t, stderr)
 }
@@ -82,7 +79,6 @@ func TestLeadingDashIDWithFlagsBeforeParsesCleanly(t *testing.T) {
 // rewrapFlagError catches cobra's "accepts N arg(s)" error and explains
 // the cause.
 func TestLeadingDashIDWithFlagsAfterErrors(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "mail", "messages", "read", dashedSyntheticID, "--format", "raw")
 	if code == 0 {
 		t.Errorf("expected non-zero exit, got 0; stderr=%s", stderr)

@@ -104,6 +104,100 @@ func TestSignedVEVENTOrganizerLine(t *testing.T) {
 	}
 }
 
+func TestEmailGroupAndGroupValues(t *testing.T) {
+	text := strings.Join([]string{
+		"BEGIN:VCARD",
+		"VERSION:4.0",
+		"FN:Bob",
+		"item1.EMAIL;PREF=1:bob@example.com",
+		"item1.KEY;PREF=2:data:application/pgp-keys;base64,SECOND",
+		"item1.KEY;PREF=1:data:application/pgp-keys;base64,FIRST",
+		"item1.X-PM-ENCRYPT:true",
+		"item2.EMAIL;PREF=1:other@example.com",
+		"item2.KEY;PREF=1:data:application/pgp-keys;base64,OTHER",
+		"END:VCARD",
+	}, "\r\n")
+
+	t.Run("EmailGroup matches case-insensitively", func(t *testing.T) {
+		if g := EmailGroup(text, "BOB@Example.com"); g != "item1" {
+			t.Errorf("EmailGroup(bob) = %q, want item1", g)
+		}
+		if g := EmailGroup(text, "other@example.com"); g != "item2" {
+			t.Errorf("EmailGroup(other) = %q, want item2", g)
+		}
+		if g := EmailGroup(text, "nobody@example.com"); g != "" {
+			t.Errorf("EmailGroup(nobody) = %q, want empty", g)
+		}
+	})
+
+	t.Run("GroupValues are PREF-ordered and group-scoped", func(t *testing.T) {
+		keys := GroupValues(text, "item1", "KEY")
+		if len(keys) != 2 {
+			t.Fatalf("item1 KEY count = %d, want 2", len(keys))
+		}
+		if !strings.HasSuffix(keys[0], "FIRST") || !strings.HasSuffix(keys[1], "SECOND") {
+			t.Errorf("KEY values not PREF-ordered: %v", keys)
+		}
+		if other := GroupValues(text, "item2", "KEY"); len(other) != 1 || !strings.HasSuffix(other[0], "OTHER") {
+			t.Errorf("item2 KEY = %v, want one OTHER", other)
+		}
+	})
+
+	t.Run("GroupValue returns first / empty", func(t *testing.T) {
+		if v := GroupValue(text, "item1", "X-PM-ENCRYPT"); v != "true" {
+			t.Errorf("X-PM-ENCRYPT = %q, want true", v)
+		}
+		if v := GroupValue(text, "item2", "X-PM-ENCRYPT"); v != "" {
+			t.Errorf("item2 X-PM-ENCRYPT = %q, want empty", v)
+		}
+	})
+}
+
+func TestSignedVCardModelRoundTrip(t *testing.T) {
+	enc := true
+	in := SignedContact{
+		Name: "Bob", UID: "uid-1",
+		Emails: []SignedEmail{
+			{
+				Address:   "bob@example.com",
+				KeyValues: []string{"data:application/pgp-keys;base64,AAAA", "data:application/pgp-keys;base64,BBBB"},
+				Encrypt:   &enc,
+				Scheme:    "pgp-mime",
+			},
+			{Address: "b2@example.com"},
+		},
+	}
+	text := BuildSignedVCard(in)
+
+	if !strings.Contains(text, "item1.KEY;PREF=1:data:application/pgp-keys;base64,AAAA") {
+		t.Errorf("first key not emitted with PREF=1:\n%s", text)
+	}
+	if !strings.Contains(text, "item1.X-PM-ENCRYPT:true") || !strings.Contains(text, "item1.X-PM-SCHEME:pgp-mime") {
+		t.Errorf("crypto flags not emitted:\n%s", text)
+	}
+
+	got := ParseSignedVCard(text)
+	if got.Name != "Bob" || got.UID != "uid-1" {
+		t.Errorf("name/uid round-trip: got %q / %q", got.Name, got.UID)
+	}
+	if len(got.Emails) != 2 {
+		t.Fatalf("emails round-trip: got %d, want 2", len(got.Emails))
+	}
+	first := got.FindEmail("BOB@example.com")
+	if first == nil {
+		t.Fatal("FindEmail did not match case-insensitively")
+	}
+	if len(first.KeyValues) != 2 || !strings.HasSuffix(first.KeyValues[0], "AAAA") {
+		t.Errorf("key round-trip: %v", first.KeyValues)
+	}
+	if first.Encrypt == nil || !*first.Encrypt {
+		t.Errorf("encrypt flag lost: %v", first.Encrypt)
+	}
+	if second := got.FindEmail("b2@example.com"); second == nil || len(second.KeyValues) != 0 {
+		t.Errorf("second email should have no keys: %+v", second)
+	}
+}
+
 func TestField(t *testing.T) {
 	text := strings.Join([]string{
 		"BEGIN:VCARD",

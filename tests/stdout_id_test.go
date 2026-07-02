@@ -26,7 +26,6 @@ func assertBareID(t *testing.T, stdout, where string) string {
 }
 
 func TestStdoutIDMailLabelCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-stid-label"
 	stdout, stderr := runOKStderr(t, "mail", "labels", "create",
 		"--name", name, "--color", "#8080FF")
@@ -39,7 +38,6 @@ func TestStdoutIDMailLabelCreate(t *testing.T) {
 }
 
 func TestStdoutIDMailFilterCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-stid-filter"
 	stdout, _ := runOKStderr(t, "mail", "filters", "create",
 		"--name", name,
@@ -50,7 +48,6 @@ func TestStdoutIDMailFilterCreate(t *testing.T) {
 }
 
 func TestStdoutIDCalendarCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-stid-cal"
 	stdout, _ := runOKStderr(t, "calendar", "calendars", "create",
 		"--name", name, "--color", "#8080FF")
@@ -60,7 +57,6 @@ func TestStdoutIDCalendarCreate(t *testing.T) {
 }
 
 func TestStdoutIDContactCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-stid-contact"
 	stdout, _ := runOKStderr(t, "contacts", "create",
 		"--name", name, "--email", "t@x.invalid")
@@ -70,7 +66,6 @@ func TestStdoutIDContactCreate(t *testing.T) {
 }
 
 func TestStdoutIDVaultCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-stid-vault"
 	stdout, _ := runOKStderr(t, "pass", "vaults", "create", "--name", name)
 	id := assertBareID(t, stdout, "vaults create")
@@ -79,7 +74,6 @@ func TestStdoutIDVaultCreate(t *testing.T) {
 }
 
 func TestStdoutIDPassItemCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-stid-item"
 	stdout, _ := runOKStderr(t, "pass", "items", "create",
 		"--type", "note", "--name", name, "--note", "x")
@@ -90,7 +84,6 @@ func TestStdoutIDPassItemCreate(t *testing.T) {
 }
 
 func TestStdoutIDCalendarEventCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	title := testID() + "-stid-event"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	stdout, _ := runOKStderr(t, "calendar", "events", "create",

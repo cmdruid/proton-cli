@@ -5,6 +5,8 @@ package ical
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -55,6 +57,100 @@ func Fields(text, name string) []string {
 		}
 	}
 	return out
+}
+
+// vcardLine is a parsed vCard content line: [group.]FIELD[;params]:value.
+type vcardLine struct {
+	group  string
+	field  string // upper-cased
+	params string
+	value  string
+}
+
+func parseVcardLine(raw string) (vcardLine, bool) {
+	line := strings.TrimSpace(raw)
+	colon := strings.Index(line, ":")
+	if colon < 0 {
+		return vcardLine{}, false
+	}
+	name, value := line[:colon], line[colon+1:]
+	field, params := name, ""
+	if semi := strings.Index(name, ";"); semi >= 0 {
+		field, params = name[:semi], name[semi+1:]
+	}
+	group := ""
+	if dot := strings.Index(field, "."); dot >= 0 {
+		group, field = field[:dot], field[dot+1:]
+	}
+	return vcardLine{group: group, field: strings.ToUpper(field), params: params, value: value}, true
+}
+
+func canonicalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// EmailGroup returns the vCard group (e.g. "item1") whose EMAIL property value
+// canonically matches email, or "" if none is found. Proton stores per-email
+// key properties (KEY, X-PM-*) under the same group as the matching email.
+func EmailGroup(text, email string) string {
+	want := canonicalizeEmail(email)
+	for _, raw := range strings.Split(text, "\n") {
+		l, ok := parseVcardLine(raw)
+		if !ok || l.field != "EMAIL" || l.group == "" {
+			continue
+		}
+		if canonicalizeEmail(l.value) == want {
+			return l.group
+		}
+	}
+	return ""
+}
+
+// GroupValues returns every value of field within group, ordered by the vCard
+// PREF parameter (ascending; properties without PREF keep document order,
+// after the prefixed ones).
+func GroupValues(text, group, field string) []string {
+	field = strings.ToUpper(field)
+	type pv struct {
+		pref int
+		val  string
+	}
+	var found []pv
+	for i, raw := range strings.Split(text, "\n") {
+		l, ok := parseVcardLine(raw)
+		if !ok || l.group != group || l.field != field {
+			continue
+		}
+		found = append(found, pv{pref: prefParam(l.params, i), val: l.value})
+	}
+	sort.SliceStable(found, func(a, b int) bool { return found[a].pref < found[b].pref })
+	out := make([]string, len(found))
+	for i, p := range found {
+		out[i] = p.val
+	}
+	return out
+}
+
+// GroupValue returns the first (highest-preference) value of field within
+// group, or "".
+func GroupValue(text, group, field string) string {
+	if vs := GroupValues(text, group, field); len(vs) > 0 {
+		return vs[0]
+	}
+	return ""
+}
+
+// prefParam extracts the numeric PREF= parameter, or a large fallback that
+// preserves document order for properties without one.
+func prefParam(params string, docIndex int) int {
+	for _, p := range strings.Split(params, ";") {
+		if strings.HasPrefix(strings.ToUpper(p), "PREF=") {
+			if n, err := strconv.Atoi(strings.TrimSpace(p[len("PREF="):])); err == nil {
+				return n
+			}
+		}
+	}
+	return 1_000_000 + docIndex
 }
 
 func EventUID() string {
@@ -221,6 +317,103 @@ func SignedVCard(name string, emails []string, uid string) string {
 	}
 	b.WriteString("END:VCARD")
 	return b.String()
+}
+
+// SignedEmail is one email entry in a Proton signed contact card, with any
+// pinned keys and per-email crypto flags stored under its group.
+type SignedEmail struct {
+	Address   string
+	KeyValues []string // raw vCard KEY property values, preference order
+	Encrypt   *bool
+	Sign      *bool
+	Scheme    string
+}
+
+// SignedContact is the subset of a Proton signed contact card proton-cli
+// models: name, UID, and per-email entries (including pinned keys).
+type SignedContact struct {
+	Name   string
+	UID    string
+	Emails []SignedEmail
+}
+
+// FindEmail returns the entry whose address canonically matches addr, or nil.
+func (c *SignedContact) FindEmail(addr string) *SignedEmail {
+	want := canonicalizeEmail(addr)
+	for i := range c.Emails {
+		if canonicalizeEmail(c.Emails[i].Address) == want {
+			return &c.Emails[i]
+		}
+	}
+	return nil
+}
+
+// ParseSignedVCard reads signed-card text into a SignedContact, capturing
+// per-email pinned keys and crypto flags by group.
+func ParseSignedVCard(text string) SignedContact {
+	out := SignedContact{Name: Field(text, "FN"), UID: Field(text, "UID")}
+	seen := map[string]bool{}
+	for _, raw := range strings.Split(text, "\n") {
+		l, ok := parseVcardLine(raw)
+		if !ok || l.field != "EMAIL" || l.group == "" || seen[l.group] {
+			continue
+		}
+		seen[l.group] = true
+		e := SignedEmail{
+			Address:   l.value,
+			KeyValues: GroupValues(text, l.group, "KEY"),
+			Scheme:    GroupValue(text, l.group, "X-PM-SCHEME"),
+		}
+		if v := GroupValue(text, l.group, "X-PM-ENCRYPT"); v != "" {
+			b := strings.EqualFold(strings.TrimSpace(v), "true")
+			e.Encrypt = &b
+		}
+		if v := GroupValue(text, l.group, "X-PM-SIGN"); v != "" {
+			b := strings.EqualFold(strings.TrimSpace(v), "true")
+			e.Sign = &b
+		}
+		out.Emails = append(out.Emails, e)
+	}
+	return out
+}
+
+// BuildSignedVCard serializes a SignedContact back to signed-card text,
+// emitting per-email EMAIL/KEY/X-PM-* properties grouped as item1..itemN.
+func BuildSignedVCard(c SignedContact) string {
+	var b strings.Builder
+	b.WriteString("BEGIN:VCARD\r\nVERSION:4.0\r\n")
+	b.WriteString("FN:" + c.Name + "\r\n")
+	b.WriteString("UID:" + c.UID + "\r\n")
+	n := 0
+	for _, e := range c.Emails {
+		if e.Address == "" {
+			continue
+		}
+		n++
+		group := fmt.Sprintf("item%d", n)
+		fmt.Fprintf(&b, "%s.EMAIL;PREF=%d:%s\r\n", group, n, e.Address)
+		for i, kv := range e.KeyValues {
+			fmt.Fprintf(&b, "%s.KEY;PREF=%d:%s\r\n", group, i+1, kv)
+		}
+		if e.Encrypt != nil {
+			fmt.Fprintf(&b, "%s.X-PM-ENCRYPT:%s\r\n", group, boolStr(*e.Encrypt))
+		}
+		if e.Sign != nil {
+			fmt.Fprintf(&b, "%s.X-PM-SIGN:%s\r\n", group, boolStr(*e.Sign))
+		}
+		if e.Scheme != "" {
+			fmt.Fprintf(&b, "%s.X-PM-SCHEME:%s\r\n", group, e.Scheme)
+		}
+	}
+	b.WriteString("END:VCARD")
+	return b.String()
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // VCardFields holds the encrypted-card contact properties.

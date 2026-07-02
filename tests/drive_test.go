@@ -20,13 +20,11 @@ import (
 // ── list ──
 
 func TestDriveItemsList(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "drive", "items", "list")
 	assertContains(t, stdout, "NAME")
 }
 
 func TestDriveItemsListJSONFieldNames(t *testing.T) {
-	skipIfNoCredentials(t)
 	data := runJSONArray(t, "drive", "items", "list")
 	if len(data) == 0 {
 		t.Skip("drive root is empty")
@@ -42,7 +40,6 @@ func TestDriveItemsListJSONFieldNames(t *testing.T) {
 // ── info ──
 
 func TestDriveItemsInfo(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-info"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "doc.txt")
@@ -77,7 +74,6 @@ func TestDriveItemsInfo(t *testing.T) {
 }
 
 func TestDriveItemsInfoFolder(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-infodir"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -92,7 +88,6 @@ func TestDriveItemsInfoFolder(t *testing.T) {
 // ── upload / download lifecycle ──
 
 func TestDriveItemsUploadDownload(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-upload"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "payload.txt")
@@ -116,7 +111,6 @@ func TestDriveItemsUploadDownload(t *testing.T) {
 }
 
 func TestDriveItemsUploadFromStdin(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-stdin"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -153,7 +147,6 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 // single folder + uploads created once, rather than one folder+upload per
 // behavior. Subtests keep per-behavior reporting.
 func TestDriveItemsDownloadBehaviors(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-dl"
 	tmp := t.TempDir()
 	aSrc := filepath.Join(tmp, "a.txt")
@@ -209,7 +202,6 @@ func TestDriveItemsDownloadBehaviors(t *testing.T) {
 }
 
 func TestDriveItemsUploadRecursive(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-rec"
 	tmp := t.TempDir()
 	tree := filepath.Join(tmp, "tree")
@@ -242,7 +234,6 @@ func TestDriveItemsUploadRecursive(t *testing.T) {
 }
 
 func TestDriveItemsUploadMultiBlock(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-big"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "big.bin")
@@ -274,7 +265,6 @@ func TestDriveItemsUploadMultiBlock(t *testing.T) {
 // ── rename / move (re-encryption) ──
 
 func TestDriveItemsRename(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-rn"
 	tmp := t.TempDir()
 	_ = os.WriteFile(filepath.Join(tmp, "orig.txt"), []byte("renameme"), 0644)
@@ -305,7 +295,6 @@ func TestDriveItemsRename(t *testing.T) {
 }
 
 func TestDriveItemsMove(t *testing.T) {
-	skipIfNoCredentials(t)
 	src := "/" + testID() + "-src"
 	dst := "/" + testID() + "-dst"
 	tmp := t.TempDir()
@@ -343,7 +332,6 @@ func TestDriveItemsMove(t *testing.T) {
 // ── delete + trash ──
 
 func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-trash"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Final delete: proton-cli drive items delete --permanent %s", folder),
@@ -387,7 +375,6 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 // ── batch filters (all dry-run) ──
 
 func TestDriveBatchDeletePatternDryRun(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-pat"
 	tmp := t.TempDir()
 	for _, n := range []string{"a.log", "b.log", "keep.txt"} {
@@ -409,7 +396,6 @@ func TestDriveBatchDeletePatternDryRun(t *testing.T) {
 }
 
 func TestDriveBatchDeleteRequiresInput(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "drive", "items", "delete")
 	if code == 0 {
 		t.Error("expected error when no PATH and no filter given")
@@ -418,7 +404,6 @@ func TestDriveBatchDeleteRequiresInput(t *testing.T) {
 }
 
 func TestDriveBatchDeleteAllRequiresScope(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "drive", "items", "delete", "--all")
 	if code == 0 {
 		t.Error("expected --all alone to be rejected")
@@ -429,7 +414,6 @@ func TestDriveBatchDeleteAllRequiresScope(t *testing.T) {
 // ── folders ──
 
 func TestDriveFoldersCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-folder"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -449,8 +433,6 @@ func TestDriveFoldersCreate(t *testing.T) {
 }
 
 func TestDriveItemsCopy(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	base := "/" + testID() + "-copy-src"
 	dest := "/" + testID() + "-copy-dst"
 	runOK(t, "drive", "folders", "create", base)
@@ -482,8 +464,6 @@ func TestDriveItemsCopy(t *testing.T) {
 }
 
 func TestDriveItemsRevisions(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	folder := "/" + testID() + "-rev"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -524,8 +504,6 @@ func photoLinkIDs(t *testing.T) map[string]bool {
 }
 
 func TestDrivePhotosWriteLifecycle(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	if _, stderr, code := run(t, "drive", "photos", "list"); code != 0 {
 		if strings.Contains(stderr, "photos") {
 			t.Skip("no photos share on this account")
@@ -628,8 +606,6 @@ func favoritePhotoTags(t *testing.T, photoID string) []string {
 }
 
 func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	if _, stderr, code := run(t, "drive", "photos", "list"); code != 0 {
 		if strings.Contains(stderr, "photos") {
 			t.Skip("no photos share on this account")
@@ -703,8 +679,6 @@ func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
 }
 
 func TestDrivePhotosRead(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	_, stderr, code := run(t, "drive", "photos", "list")
 	if code != 0 {
 		if strings.Contains(stderr, "photos") {
@@ -717,8 +691,6 @@ func TestDrivePhotosRead(t *testing.T) {
 }
 
 func TestDrivePhotosListTags(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	// Tags are referenced by name only - an unknown name and an integer are
 	// both rejected (the CLI never accepts or leaks raw enum ints).
 	_, stderr, code := run(t, "drive", "photos", "list", "--tags", "bogus-"+testID())
@@ -743,7 +715,6 @@ func TestDrivePhotosListTags(t *testing.T) {
 // the web UI exposes no add/remove-tag action, so neither do we. favorite /
 // unfavorite stay; the old `photos tags` subcommand is gone.
 func TestDrivePhotosTagsSubcommandRemoved(t *testing.T) {
-	skipIfNoCredentials(t)
 	help := runOK(t, "drive", "photos", "--help")
 	assertContains(t, help, "favorite")
 	assertContains(t, help, "unfavorite")

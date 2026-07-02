@@ -12,14 +12,16 @@ import (
 	"github.com/ProtonMail/gopenpgp/v2/helper"
 	"github.com/roman-16/proton-cli/internal/crypto/keys"
 	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/roman-16/proton-cli/internal/render"
 )
 
 // Proton send-package types (PACKAGE_TYPE).
 const (
-	pkgInternal = 1  // SEND_PM: E2EE to a Proton user
-	pkgEO       = 2  // SEND_EO: encrypted-for-outside (password link)
-	pkgClear    = 4  // SEND_CLEAR: cleartext (TLS only)
-	pkgPGPMIME  = 16 // SEND_PGP_MIME: encrypted to an external recipient's PGP key
+	pkgInternal  = 1  // SEND_PM: E2EE to a Proton user
+	pkgEO        = 2  // SEND_EO: encrypted-for-outside (password link)
+	pkgClear     = 4  // SEND_CLEAR: cleartext (TLS only)
+	pkgPGPInline = 8  // SEND_PGP_INLINE: PGP-Inline (plaintext body) to an external key
+	pkgPGPMIME   = 16 // SEND_PGP_MIME: encrypted to an external recipient's PGP key
 )
 
 const (
@@ -41,11 +43,21 @@ const (
 type sendScheme int
 
 const (
-	schemeInternal    sendScheme = iota // Proton user -> E2EE
-	schemeExternalPGP                   // external user with a usable PGP key -> PGP/MIME
-	schemeEO                            // external user + EO password -> password link
-	schemeClear                         // external user, no key, no password -> cleartext
+	schemeInternal       sendScheme = iota // Proton user -> E2EE
+	schemeExternalPGP                      // external user with a usable PGP key -> PGP/MIME
+	schemeExternalInline                   // external user with a pinned key preferring PGP-Inline
+	schemeEO                               // external user + EO password -> password link
+	schemeClear                            // external user, no key, no password -> cleartext
 )
+
+// externalScheme maps a pinned contact's x-pm-scheme to the send scheme for an
+// external recipient: PGP-Inline when requested, otherwise PGP/MIME.
+func externalScheme(pinScheme string) sendScheme {
+	if pinScheme == "pgp-inline" {
+		return schemeExternalInline
+	}
+	return schemeExternalPGP
+}
 
 // SendOptions describes a message to send. To/CC/BCC may each carry multiple
 // recipients; at least one across the three is required. HTML switches the body
@@ -74,6 +86,22 @@ type SendOptions struct {
 	EOPassword string
 	// EOPasswordHint is an optional hint shown to EO recipients.
 	EOPasswordHint string
+	// PinnedKeys carries contact-pinned encryption preferences per recipient
+	// email (as it appears in To/CC/BCC), resolved by the caller from Contacts.
+	// A recipient with a pinned key is encrypted to that key (see the web
+	// client's encryption-preferences flow); absent means "no pins".
+	PinnedKeys map[string]*PinnedRecipient
+}
+
+// PinnedRecipient is a recipient's contact-pinned encryption preferences,
+// resolved from Contacts. Presence of a pinned key defaults encryption ON
+// (unless Encrypt is explicitly false), matching the Proton web client.
+type PinnedRecipient struct {
+	ArmoredKeys       []string
+	Encrypt           *bool
+	Sign              *bool
+	Scheme            string
+	SignatureVerified bool
 }
 
 type apiPublicKey struct {
@@ -123,7 +151,7 @@ func classifyRecipient(resp keysAllResponse, eoPassword string) (sendScheme, str
 	return schemeClear, ""
 }
 
-func (s *Service) planRecipient(ctx context.Context, email, eoPassword string) (plannedRecipient, error) {
+func (s *Service) planRecipient(ctx context.Context, email, eoPassword string, pin *PinnedRecipient) (plannedRecipient, error) {
 	var resp keysAllResponse
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "GET", Path: "/core/v4/keys/all",
@@ -132,7 +160,78 @@ func (s *Service) planRecipient(ctx context.Context, email, eoPassword string) (
 		return plannedRecipient{}, err
 	}
 	scheme, armored := classifyRecipient(resp, eoPassword)
+	if pin != nil && len(pin.ArmoredKeys) > 0 && pinEncrypts(pin) {
+		return planPinnedRecipient(email, scheme, armored, pin)
+	}
 	return plannedRecipient{email: email, scheme: scheme, armoredKey: armored}, nil
+}
+
+// pinEncrypts reports whether the pinned config asks us to encrypt. Presence of
+// a pinned key defaults encryption ON (matching the web client); an explicit
+// x-pm-encrypt:false opts out.
+func pinEncrypts(pin *PinnedRecipient) bool {
+	return pin.Encrypt == nil || *pin.Encrypt
+}
+
+// validForSending mirrors the web client's getIsValidForSending: a key must be
+// encryption-capable and neither expired nor revoked.
+func validForSending(key *pgp.Key) bool {
+	return key.CanEncrypt() && !key.IsExpired() && !key.IsRevoked()
+}
+
+// planPinnedRecipient resolves a recipient's send scheme when their contact
+// pins a key, mirroring extractEncryptionPreferences:
+//   - internal / external-WKD: the recipient's primary API key must itself be
+//     pinned (same fingerprint); we then send to the pinned copy. A mismatch is
+//     the web client's PRIMARY_NOT_PINNED error.
+//   - external without a server/WKD key: encrypt (PGP/MIME) to the first valid
+//     pinned key.
+func planPinnedRecipient(email string, base sendScheme, apiArmored string, pin *PinnedRecipient) (plannedRecipient, error) {
+	if !pin.SignatureVerified {
+		return plannedRecipient{}, fmt.Errorf(
+			"contact signature for %s could not be verified; refusing to encrypt to an unverified pinned key", email)
+	}
+	type pinnedKey struct{ armored, fingerprint string }
+	var valid []pinnedKey
+	for _, a := range pin.ArmoredKeys {
+		key, err := pgp.NewKeyFromArmored(a)
+		if err != nil {
+			continue
+		}
+		if !validForSending(key) {
+			continue
+		}
+		valid = append(valid, pinnedKey{armored: a, fingerprint: key.GetFingerprint()})
+	}
+	if len(valid) == 0 {
+		return plannedRecipient{}, fmt.Errorf(
+			"no valid pinned key for %s (keys are expired, revoked, or not encryption-capable)", email)
+	}
+	switch base {
+	case schemeInternal, schemeExternalPGP:
+		primaryFingerprint := ""
+		if apiArmored != "" {
+			if k, err := pgp.NewKeyFromArmored(apiArmored); err == nil {
+				primaryFingerprint = k.GetFingerprint()
+			}
+		}
+		sendScheme := base
+		if base == schemeExternalPGP {
+			// A WKD external recipient may prefer PGP-Inline over PGP/MIME.
+			sendScheme = externalScheme(pin.Scheme)
+		}
+		for _, v := range valid {
+			if v.fingerprint == primaryFingerprint {
+				return plannedRecipient{email: email, scheme: sendScheme, armoredKey: v.armored}, nil
+			}
+		}
+		return plannedRecipient{}, fmt.Errorf(
+			"the pinned key(s) for %s do not match the recipient's current primary key; "+
+				"update the pinned key before sending", email)
+	default:
+		// External recipient with no server/WKD key: encrypt to the pinned key.
+		return plannedRecipient{email: email, scheme: externalScheme(pin.Scheme), armoredKey: valid[0].armored}, nil
+	}
 }
 
 // Send classifies each recipient and packages the message per scheme: internal
@@ -185,7 +284,9 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 	}
 	messageID := draft.Message.ID
 	cleanup := func() {
-		_, _ = s.C.Do(ctx, proton.Request{Method: "DELETE", Path: "/mail/v4/messages/delete", Body: map[string]any{"IDs": []string{messageID}}})
+		// The delete-messages endpoint is a PUT (see Delete); using DELETE here
+		// silently failed, leaking the draft whenever a send aborted.
+		_, _ = s.C.Do(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/delete", Body: map[string]any{"IDs": []string{messageID}}})
 	}
 
 	// Read attachment bytes once: they are uploaded (for internal/EO/clear
@@ -209,13 +310,15 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 	plans := make([]plannedRecipient, 0, len(opts.To)+len(opts.CC)+len(opts.BCC))
 	needBody, hasEO := false, false
 	for _, email := range dedupeRecipients(opts.To, opts.CC, opts.BCC) {
-		p, err := s.planRecipient(ctx, email, opts.EOPassword)
+		p, err := s.planRecipient(ctx, email, opts.EOPassword, opts.PinnedKeys[email])
 		if err != nil {
 			cleanup()
 			return err
 		}
 		plans = append(plans, p)
-		if p.scheme != schemeExternalPGP {
+		// PGP/MIME and PGP-Inline recipients each get their own body package;
+		// everything else shares the single internal/EO/clear body.
+		if p.scheme != schemeExternalPGP && p.scheme != schemeExternalInline {
 			needBody = true
 		}
 		if p.scheme == schemeEO {
@@ -243,6 +346,13 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 	}
 
 	if pkg, ok, err := s.buildPGPMIMEPackage(opts, prepared, plans, addrKR); err != nil {
+		cleanup()
+		return err
+	} else if ok {
+		packages = append(packages, pkg)
+	}
+
+	if pkg, ok, err := s.buildInlinePackage(opts, atts, plans, addrKR); err != nil {
 		cleanup()
 		return err
 	} else if ok {
@@ -361,6 +471,73 @@ func (s *Service) buildBodyPackages(mimeType string, opts SendOptions, atts []*u
 		packages = append(packages, clearPkg)
 	}
 	return packages, nil
+}
+
+// buildInlinePackage builds the SEND_PGP_INLINE package: a plaintext body
+// encrypted under a fresh session key, with the session key and each
+// attachment key wrapped to every inline recipient's pinned PGP key. Inline is
+// plaintext-only, so an HTML message body is flattened via HTMLToText. Returns
+// ok=false when no recipient uses PGP-Inline.
+func (s *Service) buildInlinePackage(opts SendOptions, atts []*uploadedAttachment, plans []plannedRecipient, addrKR *pgp.KeyRing) (map[string]any, bool, error) {
+	body := opts.Body
+	if opts.HTML {
+		body = render.HTMLToText(opts.Body)
+	}
+	addrs := map[string]any{}
+	var sessionKey *pgp.SessionKey
+	var bodyB64 string
+	for _, p := range plans {
+		if p.scheme != schemeExternalInline {
+			continue
+		}
+		if sessionKey == nil {
+			sk, err := pgp.GenerateSessionKey()
+			if err != nil {
+				return nil, false, err
+			}
+			enc, err := sk.EncryptAndSign(pgp.NewPlainMessageFromString(body), addrKR)
+			if err != nil {
+				return nil, false, err
+			}
+			sessionKey = sk
+			bodyB64 = base64.StdEncoding.EncodeToString(enc)
+		}
+		recKR, err := keyRingFromArmored(p.armoredKey)
+		if err != nil {
+			return nil, false, fmt.Errorf("parse recipient key for %s: %w", p.email, err)
+		}
+		recKP, err := recKR.EncryptSessionKey(sessionKey)
+		if err != nil {
+			return nil, false, err
+		}
+		addr := map[string]any{
+			"Type":          pkgPGPInline,
+			"BodyKeyPacket": base64.StdEncoding.EncodeToString(recKP),
+			"Signature":     0,
+		}
+		akp, err := attachmentKeyPackets(recKR, atts)
+		if err != nil {
+			return nil, false, err
+		}
+		if akp != nil {
+			addr["AttachmentKeyPackets"] = akp
+		}
+		addrs[p.email] = addr
+	}
+	if len(addrs) == 0 {
+		return nil, false, nil
+	}
+	bodyKP, err := addrKR.EncryptSessionKey(sessionKey)
+	if err != nil {
+		return nil, false, err
+	}
+	return map[string]any{
+		"Addresses":     addrs,
+		"MIMEType":      "text/plain",
+		"Type":          pkgPGPInline,
+		"Body":          bodyB64,
+		"BodyKeyPacket": base64.StdEncoding.EncodeToString(bodyKP),
+	}, true, nil
 }
 
 // buildPGPMIMEPackage builds the multipart/mixed MIME body (with embedded

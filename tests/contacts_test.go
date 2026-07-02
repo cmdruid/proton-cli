@@ -2,18 +2,166 @@ package tests
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	gopenpgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 )
 
+// writeGeneratedPubKey generates a throwaway key pair and writes its armored
+// public key to a temp .asc file, returning the path.
+func writeGeneratedPubKey(t *testing.T) string {
+	t.Helper()
+	key, err := gopenpgp.GenerateKey("pin-test", "pin@example.invalid", "x25519", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := key.GetArmoredPublicKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "key.asc")
+	if err := os.WriteFile(path, []byte(pub), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// signedCardData returns the cleartext Data of a contact's signed (Type-2)
+// card, fetched raw via the API. Pinned KEY properties live here.
+func signedCardData(t *testing.T, contactID string) string {
+	t.Helper()
+	data := runJSON(t, "api", "GET", "/contacts/v4/contacts/"+contactID)
+	contact, _ := data["Contact"].(map[string]interface{})
+	cards, _ := contact["Cards"].([]interface{})
+	for _, c := range cards {
+		m, _ := c.(map[string]interface{})
+		if tp, _ := m["Type"].(float64); int(tp) == 2 {
+			s, _ := m["Data"].(string)
+			return s
+		}
+	}
+	return ""
+}
+
+func TestContactsPinUnpinKey(t *testing.T) {
+	email := "pin-" + testID() + "@example.invalid"
+	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-pin", "--email", email))
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+		"contacts", "delete", "--", id)
+
+	runOK(t, "contacts", "pin-key", "--key", writeGeneratedPubKey(t), "--email", email, id)
+	if !strings.Contains(signedCardData(t, id), "KEY;") {
+		t.Error("expected a pinned KEY property in the signed card after pin-key")
+	}
+
+	runOK(t, "contacts", "unpin-key", "--email", email, id)
+	if strings.Contains(signedCardData(t, id), "KEY;") {
+		t.Error("KEY property should be gone after unpin-key")
+	}
+}
+
+func TestContactsUpdatePreservesPinnedKey(t *testing.T) {
+	email := "pin-" + testID() + "@example.invalid"
+	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-pin", "--email", email))
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+		"contacts", "delete", "--", id)
+
+	runOK(t, "contacts", "pin-key", "--key", writeGeneratedPubKey(t), "--email", email, id)
+	if !strings.Contains(signedCardData(t, id), "KEY;") {
+		t.Fatal("setup: pinned key missing after pin-key")
+	}
+
+	// An unrelated field update must not drop the pinned key.
+	runOK(t, "contacts", "update", "--title", "Boss", id)
+	if !strings.Contains(signedCardData(t, id), "KEY;") {
+		t.Error("contacts update dropped the pinned key")
+	}
+}
+
+// TestMailSendToPinnedContactStillDelivers pins the alt's real public key on a
+// contact and sends to it: a matching pin must not break E2EE delivery, and
+// the alt must still decrypt the body with a verified signature.
+func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
+	data := runJSON(t, "api", "GET", "/core/v4/keys/all", "--query", "Email="+altEmail(), "--query", "InternalOnly=0")
+	addr, _ := data["Address"].(map[string]interface{})
+	ks, _ := addr["Keys"].([]interface{})
+	if len(ks) == 0 {
+		t.Skip("no public key published for the alt account")
+	}
+	pub, _ := ks[0].(map[string]interface{})["PublicKey"].(string)
+	keyPath := filepath.Join(t.TempDir(), "alt.asc")
+	if err := os.WriteFile(keyPath, []byte(pub), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-altpin", "--email", altEmail()))
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+		"contacts", "delete", "--", id)
+	runOK(t, "contacts", "pin-key", "--key", keyPath, "--email", altEmail(), id)
+
+	subject := testID() + "-pinned-send"
+	body := "pinned-key body for " + subject
+	runOK(t, "mail", "messages", "send", "--to", altEmail(), "--subject", subject, "--body", body)
+	if sentID := findMessage(t, "sent", subject); sentID != "" {
+		cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+sentID,
+			"mail", "messages", "delete", sentID)
+	}
+
+	var recvID string
+	waitFor(45*time.Second, 3*time.Second, func() bool {
+		recvID = altMailContaining(t, selfEmail(), body)
+		return recvID != ""
+	})
+	if recvID == "" {
+		t.Fatal("alt did not receive the pinned-key mail")
+	}
+	cleanupRun(t, "Delete received mail (alt): proton-cli --profile alt mail messages delete "+recvID,
+		alt("mail", "messages", "delete", recvID)...)
+
+	read := runOK(t, alt("mail", "messages", "read", recvID)...)
+	assertContains(t, read, body)
+	assertField(t, read, "Sig:", "verified")
+}
+
+// TestMailSendPinnedMismatchRefused pins a wrong key on a contact for a Proton
+// recipient: the send must refuse (the recipient's primary key isn't among the
+// pinned keys) and must not leak the draft it created. The second assertion is
+// a regression guard for the send-abort cleanup, which used the wrong HTTP
+// method and silently leaked drafts on any aborted send.
+func TestMailSendPinnedMismatchRefused(t *testing.T) {
+	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-mismatch", "--email", altEmail()))
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+		"contacts", "delete", "--", id)
+	// A freshly generated key is a valid PGP key but not the alt's primary.
+	runOK(t, "contacts", "pin-key", "--key", writeGeneratedPubKey(t), "--email", altEmail(), id)
+
+	subject := testID() + "-mismatch"
+	_, stderr, code := run(t, "mail", "messages", "send", "--to", altEmail(), "--subject", subject, "--body", "nope")
+	if code != 1 {
+		t.Errorf("expected exit 1 on a pinned-key mismatch, got %d (stderr: %s)", code, stderr)
+	}
+	if !strings.Contains(stderr, "do not match") {
+		t.Errorf("expected a primary-not-pinned message, got: %s", stderr)
+	}
+
+	// The aborted send must not leave its draft behind.
+	if leaked := messageIDInFolder("drafts", subject); leaked != "" {
+		cleanupRun(t, "Delete leaked draft: proton-cli mail messages delete "+leaked,
+			"mail", "messages", "delete", leaked)
+		t.Errorf("aborted send leaked a draft into Drafts: %s", leaked)
+	}
+}
+
 func TestContactsList(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "contacts", "list")
 	assertContains(t, stdout, "NAME")
 }
 
 func TestContactsCRUD(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-contact"
 	email := "test+" + name + "@example.invalid"
 
@@ -45,7 +193,6 @@ func TestContactsCRUD(t *testing.T) {
 }
 
 func TestContactsGetByNameRef(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-refname"
 	stdout := runOK(t, "contacts", "create", "--name", name, "--email", "t@x.invalid")
 	id := strings.TrimSpace(stdout)
@@ -57,7 +204,6 @@ func TestContactsGetByNameRef(t *testing.T) {
 }
 
 func TestContactsGetByEmailRef(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-refmail"
 	email := "t+" + name + "@x.invalid"
 	stdout := runOK(t, "contacts", "create", "--name", name, "--email", email)
@@ -70,7 +216,6 @@ func TestContactsGetByEmailRef(t *testing.T) {
 }
 
 func TestContactsDeleteByRef(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-refdel"
 	runOK(t, "contacts", "create", "--name", name, "--email", "t@x.invalid")
 
@@ -82,7 +227,6 @@ func TestContactsDeleteByRef(t *testing.T) {
 }
 
 func TestContactsNotFound(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, _, code := run(t, "contacts", "get", "no-such-contact-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3 for unknown contact, got %d", code)
@@ -90,7 +234,6 @@ func TestContactsNotFound(t *testing.T) {
 }
 
 func TestContactsAmbiguous(t *testing.T) {
-	skipIfNoCredentials(t)
 	prefix := testID() + "-ambig"
 	for i := 0; i < 2; i++ {
 		stdout := runOK(t, "contacts", "create",
@@ -107,8 +250,6 @@ func TestContactsAmbiguous(t *testing.T) {
 }
 
 func TestContactsMultiValue(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	name := testID() + "-mv"
 	e1 := testID() + "-1@example.com"
 	e2 := testID() + "-2@example.com"
@@ -126,8 +267,6 @@ func TestContactsMultiValue(t *testing.T) {
 }
 
 func TestContactsGroups(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	gname := testID() + "-group"
 	gid := strings.TrimSpace(runOK(t, "contacts", "groups", "create", "--name", gname, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete group: proton-cli contacts groups delete %s", gid),

@@ -15,7 +15,7 @@ import { ensureRepo } from "./clone.js";
 import { parseAll } from "./parse.js";
 import { generateOpenAPI } from "./emit-yaml.js";
 
-const CLONE_DIR = "/tmp/proton-webclient-openapi";
+const CLONE_DIR = "/tmp/proton-cli-WebClients";
 
 async function main() {
   process.stderr.write("Ensuring ProtonMail/WebClients is up to date...\n");

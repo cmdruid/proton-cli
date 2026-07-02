@@ -9,13 +9,11 @@ import (
 // ── vaults ──
 
 func TestPassVaultsList(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "pass", "vaults", "list")
 	assertContains(t, stdout, "SHARE_ID")
 }
 
 func TestPassVaultsCRUD(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-vault"
 	stdout := runOK(t, "pass", "vaults", "create", "--name", name)
 	shareID := strings.TrimSpace(stdout)
@@ -32,7 +30,6 @@ func TestPassVaultsCRUD(t *testing.T) {
 // ── items: login ──
 
 func TestPassItemsCRUDLogin(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-login"
 	url := "https://" + name + ".example.invalid/"
 
@@ -64,7 +61,6 @@ func TestPassItemsCRUDLogin(t *testing.T) {
 // ── items: note ──
 
 func TestPassItemsCreateNote(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-note"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "note",
@@ -85,7 +81,6 @@ func TestPassItemsCreateNote(t *testing.T) {
 // ── items: card (checks PIN rendering) ──
 
 func TestPassItemsCreateCardShowsPIN(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-card"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "card",
@@ -113,7 +108,6 @@ func TestPassItemsCreateCardShowsPIN(t *testing.T) {
 // ── items: trash / restore / delete ──
 
 func TestPassItemsTrashRestoreDelete(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-trash"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "login", "--name", name,
@@ -139,7 +133,6 @@ func TestPassItemsTrashRestoreDelete(t *testing.T) {
 // ── items list with vault filter ──
 
 func TestPassItemsListVaultFilter(t *testing.T) {
-	skipIfNoCredentials(t)
 	vaults := runJSONArray(t, "pass", "vaults", "list")
 	if len(vaults) == 0 {
 		t.Skip("no vaults")
@@ -151,7 +144,6 @@ func TestPassItemsListVaultFilter(t *testing.T) {
 // ── alias options (read-only) ──
 
 func TestPassAliasOptions(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "pass", "alias", "options")
 	assertContains(t, stdout, "Suffixes")
 	assertContains(t, stdout, "Mailboxes")
@@ -160,7 +152,6 @@ func TestPassAliasOptions(t *testing.T) {
 // ── batch filters (all dry-run) ──
 
 func TestPassBatchTrashDryRunByType(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "--dry-run", "pass", "items", "trash", "--type", "note")
 	if code != 0 {
 		t.Fatalf("dry-run should succeed, got exit %d: %s", code, stderr)
@@ -169,7 +160,6 @@ func TestPassBatchTrashDryRunByType(t *testing.T) {
 }
 
 func TestPassBatchTrashDryRunOlderThanYear(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "--dry-run", "pass", "items", "trash",
 		"--older-than", "1y", "--type", "login")
 	if code != 0 {
@@ -180,7 +170,6 @@ func TestPassBatchTrashDryRunOlderThanYear(t *testing.T) {
 }
 
 func TestPassBatchTrashDurationUnitMonths(t *testing.T) {
-	skipIfNoCredentials(t)
 	// "6mo" must parse without error.
 	_, _, code := run(t, "--dry-run", "pass", "items", "trash",
 		"--older-than", "6mo", "--type", "login")
@@ -190,7 +179,6 @@ func TestPassBatchTrashDurationUnitMonths(t *testing.T) {
 }
 
 func TestPassBatchTrashRequiresInput(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "pass", "items", "trash")
 	if code == 0 {
 		t.Error("expected error when no REF and no filter given")
@@ -199,8 +187,6 @@ func TestPassBatchTrashRequiresInput(t *testing.T) {
 }
 
 func TestPassItemTypesAndFields(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	// Identity with core fields plus custom text/hidden fields.
 	idName := testID() + "-identity"
 	idRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "identity",
@@ -229,8 +215,6 @@ func TestPassItemTypesAndFields(t *testing.T) {
 }
 
 func TestPassVaultRename(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	name := testID() + "-vault"
 	sid := strings.TrimSpace(runOK(t, "pass", "vaults", "create", "--name", name))
 	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete %s", sid),
@@ -242,8 +226,6 @@ func TestPassVaultRename(t *testing.T) {
 }
 
 func TestPassLoginTOTPRoundTrips(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	name := testID() + "-totp"
 	secret := "JBSWY3DPEHPK3PXP"
 	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "login",

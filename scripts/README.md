@@ -12,7 +12,7 @@ npm install
 npm run generate-openapi
 ```
 
-This outputs `openapi.yaml` in the project root. First run clones the WebClients repo to `/tmp/proton-webclient-openapi` (~30 seconds). Subsequent runs pull updates (~1 second).
+This outputs `openapi.yaml` in the project root. First run clones the WebClients repo to `/tmp/proton-cli-WebClients` (~30 seconds). Subsequent runs pull updates (~1 second).
 
 ### What It Extracts
 

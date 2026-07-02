@@ -6,6 +6,12 @@ platform, and a short list of features **not yet implemented**.
 
 ## Inherent constraints
 
+### Colors are restricted to Proton's accent palette
+
+Labels, folders, calendars and contact groups accept only Proton's 20 fixed
+accent colors. The CLI validates `--color` and prints the allowed hex values on
+error; arbitrary colors are rejected by the API.
+
 ### Calendar deletion requires your password
 
 `calendar calendars delete` performs a password-scoped operation, so it needs
@@ -21,10 +27,3 @@ a small webview helper to solve it, but:
 
 See [Human Verification](../README.md#human-verification-captcha). Run the
 command on a desktop machine, or install a release binary, to get past a CAPTCHA.
-
-## Not yet implemented
-
-- **Encrypting mail to a contact-pinned key.** `mail messages send` reaches
-  external recipients via `--eo-password` (Encrypted Outside) or a public key
-  Proton discovers automatically (WKD/keyserver); pinning a specific public key
-  in Contacts and encrypting to it isn't wired up yet.

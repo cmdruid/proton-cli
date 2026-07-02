@@ -236,6 +236,27 @@ func msgSendCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Consult Contacts for pinned keys per recipient. A pinned key means
+			// we encrypt to it (E2EE / PGP-MIME) rather than sending cleartext.
+			for _, email := range dedupe(append(append(append([]string{}, to...), cc...), bcc...)) {
+				pin, err := c.App.Contacts.PinnedKeysFor(c.Ctx, u, email)
+				if err != nil {
+					return err
+				}
+				if pin == nil {
+					continue
+				}
+				if opts.PinnedKeys == nil {
+					opts.PinnedKeys = map[string]*mailsvc.PinnedRecipient{}
+				}
+				opts.PinnedKeys[email] = &mailsvc.PinnedRecipient{
+					ArmoredKeys:       pin.ArmoredKeys,
+					Encrypt:           pin.Encrypt,
+					Sign:              pin.Sign,
+					Scheme:            pin.Scheme,
+					SignatureVerified: pin.SignatureVerified,
+				}
+			}
 			if err := c.App.Mail.Send(c.Ctx, u, opts); err != nil {
 				return err
 			}

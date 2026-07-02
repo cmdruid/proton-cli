@@ -3,6 +3,7 @@ package mail
 import (
 	"encoding/base64"
 	"reflect"
+	"strings"
 	"testing"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
@@ -99,6 +100,98 @@ func resp(addressKeys, unverifiedKeys []apiPublicKey) keysAllResponse {
 	return r
 }
 
+func genArmoredPubKey(t *testing.T) (armored, fingerprint string) {
+	t.Helper()
+	key, err := pgp.GenerateKey("pin", "pin@example.invalid", "x25519", 0)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	armored, err = key.GetArmoredPublicKey()
+	if err != nil {
+		t.Fatalf("GetArmoredPublicKey: %v", err)
+	}
+	return armored, key.GetFingerprint()
+}
+
+func TestPinEncrypts(t *testing.T) {
+	no, yes := false, true
+	if !pinEncrypts(&PinnedRecipient{}) {
+		t.Error("nil Encrypt should default to true (pinned key present)")
+	}
+	if !pinEncrypts(&PinnedRecipient{Encrypt: &yes}) {
+		t.Error("explicit true should encrypt")
+	}
+	if pinEncrypts(&PinnedRecipient{Encrypt: &no}) {
+		t.Error("explicit false should opt out")
+	}
+}
+
+func TestPlanPinnedRecipient(t *testing.T) {
+	pubA, _ := genArmoredPubKey(t)
+	pubB, _ := genArmoredPubKey(t)
+
+	t.Run("external no server key encrypts to pinned key (PGP/MIME)", func(t *testing.T) {
+		pin := &PinnedRecipient{ArmoredKeys: []string{pubA}, SignatureVerified: true}
+		p, err := planPinnedRecipient("bob@ext.com", schemeClear, "", pin)
+		if err != nil {
+			t.Fatalf("planPinnedRecipient: %v", err)
+		}
+		if p.scheme != schemeExternalPGP {
+			t.Errorf("scheme = %d, want schemeExternalPGP", p.scheme)
+		}
+		if p.armoredKey != pubA {
+			t.Error("expected the pinned key to be used as the send key")
+		}
+	})
+
+	t.Run("pgp-inline scheme selects the inline path", func(t *testing.T) {
+		pin := &PinnedRecipient{ArmoredKeys: []string{pubA}, Scheme: "pgp-inline", SignatureVerified: true}
+		p, err := planPinnedRecipient("bob@ext.com", schemeClear, "", pin)
+		if err != nil {
+			t.Fatalf("planPinnedRecipient: %v", err)
+		}
+		if p.scheme != schemeExternalInline {
+			t.Errorf("scheme = %d, want schemeExternalInline", p.scheme)
+		}
+		if p.armoredKey != pubA {
+			t.Error("inline should still send to the pinned key")
+		}
+	})
+
+	t.Run("internal recipient uses pinned copy of the primary key", func(t *testing.T) {
+		// The primary API key is pinned (same key material), so we send to it.
+		pin := &PinnedRecipient{ArmoredKeys: []string{pubA}, SignatureVerified: true}
+		p, err := planPinnedRecipient("alice@proton.me", schemeInternal, pubA, pin)
+		if err != nil {
+			t.Fatalf("planPinnedRecipient: %v", err)
+		}
+		if p.scheme != schemeInternal || p.armoredKey != pubA {
+			t.Errorf("got scheme=%d key-match=%v, want internal + pinned copy", p.scheme, p.armoredKey == pubA)
+		}
+	})
+
+	t.Run("internal recipient whose primary key is not pinned errors", func(t *testing.T) {
+		pin := &PinnedRecipient{ArmoredKeys: []string{pubB}, SignatureVerified: true}
+		if _, err := planPinnedRecipient("alice@proton.me", schemeInternal, pubA, pin); err == nil {
+			t.Error("expected PRIMARY_NOT_PINNED-style error when the primary key is not pinned")
+		}
+	})
+
+	t.Run("unverified contact signature refuses to send", func(t *testing.T) {
+		pin := &PinnedRecipient{ArmoredKeys: []string{pubA}, SignatureVerified: false}
+		if _, err := planPinnedRecipient("bob@ext.com", schemeClear, "", pin); err == nil {
+			t.Error("expected an error for an unverified contact signature")
+		}
+	})
+
+	t.Run("no parseable pinned key errors", func(t *testing.T) {
+		pin := &PinnedRecipient{ArmoredKeys: []string{"not-a-key"}, SignatureVerified: true}
+		if _, err := planPinnedRecipient("bob@ext.com", schemeClear, "", pin); err == nil {
+			t.Error("expected an error when no pinned key is valid for sending")
+		}
+	})
+}
+
 func TestMailCapable(t *testing.T) {
 	if !mailCapable(3) {
 		t.Error("flags 3 (NOT_OBSOLETE|NOT_COMPROMISED) should be mail-capable")
@@ -149,6 +242,96 @@ func TestAttachmentPasswordKeyPacketsEmpty(t *testing.T) {
 	}
 	if out != nil {
 		t.Errorf("expected nil for no attachments, got %v", out)
+	}
+}
+
+func TestBuildInlinePackage(t *testing.T) {
+	recKey, err := pgp.GenerateKey("rec", "rec@ext.com", "x25519", 0)
+	if err != nil {
+		t.Fatalf("GenerateKey rec: %v", err)
+	}
+	recKR, err := pgp.NewKeyRing(recKey)
+	if err != nil {
+		t.Fatalf("NewKeyRing rec: %v", err)
+	}
+	recPub, err := recKey.GetArmoredPublicKey()
+	if err != nil {
+		t.Fatalf("armor rec: %v", err)
+	}
+	sndKey, err := pgp.GenerateKey("snd", "snd@proton.me", "x25519", 0)
+	if err != nil {
+		t.Fatalf("GenerateKey snd: %v", err)
+	}
+	sndKR, err := pgp.NewKeyRing(sndKey)
+	if err != nil {
+		t.Fatalf("NewKeyRing snd: %v", err)
+	}
+	attSK, err := pgp.GenerateSessionKey()
+	if err != nil {
+		t.Fatalf("attachment session key: %v", err)
+	}
+	atts := []*uploadedAttachment{{ID: "att-1", SessionKey: attSK}}
+
+	// HTML input must be flattened to plaintext for an inline recipient.
+	opts := SendOptions{Body: "<p>hello <b>world</b></p>", HTML: true}
+	plans := []plannedRecipient{{email: "bob@ext.com", scheme: schemeExternalInline, armoredKey: recPub}}
+
+	pkg, ok, err := New(nil).buildInlinePackage(opts, atts, plans, sndKR)
+	if err != nil {
+		t.Fatalf("buildInlinePackage: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected an inline package")
+	}
+	if pkg["Type"] != pkgPGPInline {
+		t.Errorf("package Type = %v, want %d", pkg["Type"], pkgPGPInline)
+	}
+	if pkg["MIMEType"] != "text/plain" {
+		t.Errorf("MIMEType = %v, want text/plain", pkg["MIMEType"])
+	}
+
+	addr := pkg["Addresses"].(map[string]any)["bob@ext.com"].(map[string]any)
+	if addr["Type"] != pkgPGPInline {
+		t.Errorf("address Type = %v, want %d", addr["Type"], pkgPGPInline)
+	}
+
+	// The body key packet is wrapped to the recipient: decrypt it, then the
+	// body, and confirm the recipient reads a flattened plaintext body.
+	recKP, err := base64.StdEncoding.DecodeString(addr["BodyKeyPacket"].(string))
+	if err != nil {
+		t.Fatalf("decode BodyKeyPacket: %v", err)
+	}
+	sk, err := recKR.DecryptSessionKey(recKP)
+	if err != nil {
+		t.Fatalf("recipient DecryptSessionKey: %v", err)
+	}
+	bodyData, err := base64.StdEncoding.DecodeString(pkg["Body"].(string))
+	if err != nil {
+		t.Fatalf("decode Body: %v", err)
+	}
+	dec, err := sk.Decrypt(bodyData)
+	if err != nil {
+		t.Fatalf("decrypt inline body: %v", err)
+	}
+	if got := dec.GetString(); !strings.Contains(got, "hello world") || strings.Contains(got, "<b>") {
+		t.Errorf("inline body should be flattened plaintext, got %q", got)
+	}
+
+	// The attachment session key is wrapped to the recipient as well.
+	akp, ok := addr["AttachmentKeyPackets"].(map[string]string)
+	if !ok {
+		t.Fatalf("AttachmentKeyPackets missing or wrong type: %T", addr["AttachmentKeyPackets"])
+	}
+	attKP, err := base64.StdEncoding.DecodeString(akp["att-1"])
+	if err != nil {
+		t.Fatalf("decode attachment key packet: %v", err)
+	}
+	gotAttSK, err := recKR.DecryptSessionKey(attKP)
+	if err != nil {
+		t.Fatalf("decrypt attachment session key: %v", err)
+	}
+	if !reflect.DeepEqual(gotAttSK.Key, attSK.Key) {
+		t.Error("attachment session key was not wrapped to the recipient")
 	}
 }
 

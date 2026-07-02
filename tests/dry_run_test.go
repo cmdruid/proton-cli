@@ -8,7 +8,6 @@ import (
 // --dry-run must never mutate state.
 
 func TestDryRunLabelCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-dryrun"
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "labels", "create",
 		"--name", name, "--color", "#8080FF")
@@ -21,7 +20,6 @@ func TestDryRunLabelCreate(t *testing.T) {
 }
 
 func TestDryRunFolderCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	path := "/" + testID() + "-dryrun"
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "folders", "create", path)
 	assertContains(t, stderr, "dry-run")
@@ -34,14 +32,12 @@ func TestDryRunFolderCreate(t *testing.T) {
 }
 
 func TestDryRunMailTrashBatch(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "trash",
 		"--unread", "--limit", "3")
 	assertContains(t, stderr, "dry-run")
 }
 
 func TestDryRunPassTrashBatch(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "--dry-run", "pass", "items", "trash", "--type", "note")
 	if code != 0 {
 		t.Fatalf("dry-run should succeed, got exit %d", code)
@@ -50,7 +46,6 @@ func TestDryRunPassTrashBatch(t *testing.T) {
 }
 
 func TestDryRunContactsCreate(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-dryrun-contact"
 	_, stderr := runOKStderr(t, "--dry-run", "contacts", "create",
 		"--name", name, "--email", "t@x.invalid")

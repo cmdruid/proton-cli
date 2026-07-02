@@ -16,13 +16,13 @@ just test
 just test-one TestDriveItemsMove
 ```
 
-Tests skip automatically if `PROTON_USER` and `PROTON_PASSWORD` are not set.
+The suite requires all four of `PROTON_USER`, `PROTON_PASSWORD`, `PROTON_ALT_USER`, and `PROTON_ALT_PASSWORD` (the primary account plus the `alt` second account).
 
 ## Test Alt Accounts
 
 Two secondary addresses are available as recipients when a test needs to send to someone other than the account under test:
 
-- **`protonalt.sessions986@proton.me`** ("Proton Alt") - a Proton alt. Use it when the recipient must be a Proton address (e.g. drive sharing invitations). See the `testInvitee` constant in `drive_sharing_test.go`. Mail may also be sent to it.
+- **`PROTON_ALT_USER`** ("Proton Alt") - a Proton alt address, read via the `altEmail()` helper. Use it when the recipient must be a Proton address (e.g. drive sharing invitations). Mail may also be sent to it.
 - **`rl00@gmx.at`** - a non-Proton (GMX) alt. Use it when a test needs to send to an external, non-Proton mailbox.
 
 ### The "Proton Alt" second account (`alt` profile)
@@ -33,14 +33,12 @@ It's wired through the CLI's per-profile env handling: the `alt` profile reads `
 
 ```go
 func TestSecondAccountFoo(t *testing.T) {
-    skipIfNoAltCredentials(t)                       // skips unless PROTON_ALT_USER/PASSWORD set
     runOK(t, alt("mail", "addresses", "list")...)    // runs the CLI as the second account
     // ... primary (default profile) and alt interact ...
 }
 ```
 
-- `skipIfNoAltCredentials(t)` - skip unless both primary and `PROTON_ALT_*` creds are set.
-- `altEmail()` - the second account's address (`PROTON_ALT_USER`).
+- `altEmail()` - the second account's address (`PROTON_ALT_USER`); always configured, since `TestMain` enforces the alt creds up front.
 - `alt(args...)` - prefixes `--profile alt`; combine with any runner, e.g. `runOK(t, alt(...)...)`, `runJSON(t, alt(...)...)`.
 
 Run order matters: the *primary* invites/sends, then the *alt* accepts/receives, then verify on whichever side the state landed. Register cleanup on **both** sides (each `alt(...)` mutation needs an `alt(...)` cleanup).
@@ -79,8 +77,6 @@ Follow **Arrange → Act → Assert**. Every test that creates data must registe
 
 ```go
 func TestDriveItemsFoo(t *testing.T) {
-    skipIfNoCredentials(t)
-
     // Arrange
     folder := "/" + testID() + "-foo"
     runOK(t, "drive", "folders", "create", folder)
@@ -116,7 +112,6 @@ func TestDriveItemsFoo(t *testing.T) {
 
 | Helper | Purpose |
 |---|---|
-| `skipIfNoCredentials(t)` | Skip test if env vars not set |
 | `run(t, args...)` | Run binary, return stdout/stderr/exitCode |
 | `runOK(t, args...)` | Run binary, fail test on non-zero exit, return stdout |
 | `runOKStderr(t, args...)` | Same as `runOK` but also returns stderr |
@@ -137,7 +132,6 @@ func TestDriveItemsFoo(t *testing.T) {
 | `registerSuiteCleanup(desc, args...)` | Queue a CLI cleanup to run once at suite teardown (for shared fixtures) |
 | `selfEmail()` | Return `PROTON_USER` |
 | `looksLikeID(s)` | Heuristic: Proton base64 IDs end in `==` |
-| `skipIfNoAltCredentials(t)` | Skip unless the `alt` second account (`PROTON_ALT_USER`/`PROTON_ALT_PASSWORD`) is configured |
 | `altEmail()` | Return `PROTON_ALT_USER` (the second account's address) |
 | `alt(args...)` | Prefix `--profile alt`; run a command as the second account, e.g. `runOK(t, alt(...)...)` |
 
@@ -163,7 +157,6 @@ They are created lazily under `sync.Once` on first use, so the send+deliver wait
 
 ```go
 func TestMailMessagesReadBodyOnly(t *testing.T) {
-    skipIfNoCredentials(t)
     msgID, _, subject := plainMail(t)    // shared, no send/poll
     stdout := runOK(t, "mail", "messages", "read", "--body-only", msgID)
     assertContains(t, stdout, subject)

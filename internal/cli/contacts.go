@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/roman-16/proton-cli/internal/render"
 	ctsvc "github.com/roman-16/proton-cli/internal/service/contacts"
@@ -11,7 +13,121 @@ import (
 
 func newContactsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "contacts", Short: "Contact operations"}
-	c.AddCommand(contactsListCmd(), contactsGetCmd(), contactsCreateCmd(), contactsUpdateCmd(), contactsDeleteCmd(), contactsGroupsCmd())
+	c.AddCommand(contactsListCmd(), contactsGetCmd(), contactsCreateCmd(), contactsUpdateCmd(), contactsDeleteCmd(), contactsPinKeyCmd(), contactsUnpinKeyCmd(), contactsGroupsCmd())
+	return c
+}
+
+func readArmoredKey(path string) (string, error) {
+	var (
+		data []byte
+		err  error
+	)
+	if path == "-" {
+		data, err = io.ReadAll(os.Stdin)
+	} else {
+		data, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// resolveContactEmail picks which of a contact's emails a key operation targets:
+// the --email flag if given, the sole email if there is one, else an error
+// asking the user to disambiguate.
+func resolveContactEmail(c *Ctx, id, emailFlag string) (string, error) {
+	if emailFlag != "" {
+		return emailFlag, nil
+	}
+	ct, err := c.App.Contacts.Get(c.Ctx, c.U, id)
+	if err != nil {
+		return "", err
+	}
+	switch len(ct.Emails) {
+	case 0:
+		return "", fmt.Errorf("contact has no email address; pass --email")
+	case 1:
+		return ct.Emails[0], nil
+	default:
+		return "", fmt.Errorf("contact has %d email addresses; pass --email to choose one", len(ct.Emails))
+	}
+}
+
+func contactsPinKeyCmd() *cobra.Command {
+	var keyPath, email, scheme string
+	var noEncrypt bool
+	c := &cobra.Command{
+		Use: "pin-key REF", Short: "Pin a public key to a contact so mail to them is encrypted to it",
+		Args: cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+			if keyPath == "" {
+				return fmt.Errorf("--key is required (armored public key file, or - for stdin)")
+			}
+			if scheme != "" && scheme != "pgp-mime" && scheme != "pgp-inline" {
+				return fmt.Errorf("invalid --scheme %q (use pgp-mime or pgp-inline)", scheme)
+			}
+			armored, err := readArmoredKey(keyPath)
+			if err != nil {
+				return err
+			}
+			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
+			if err != nil {
+				return err
+			}
+			target, err := resolveContactEmail(c, id, email)
+			if err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would pin a key for %s", target))
+				return nil
+			}
+			var enc *bool
+			if noEncrypt {
+				f := false
+				enc = &f
+			}
+			if err := c.App.Contacts.PinKey(c.Ctx, c.U, id, target, armored, enc, nil, scheme); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Pinned key for %s", target))
+			return nil
+		}),
+	}
+	c.Flags().StringVar(&keyPath, "key", "", "Armored public key file (- for stdin)")
+	c.Flags().StringVar(&email, "email", "", "Which of the contact's emails to pin the key to")
+	c.Flags().StringVar(&scheme, "scheme", "", "PGP scheme for external recipients: pgp-mime (default) or pgp-inline")
+	c.Flags().BoolVar(&noEncrypt, "no-encrypt", false, "Store the key but leave encryption disabled (x-pm-encrypt:false)")
+	return c
+}
+
+func contactsUnpinKeyCmd() *cobra.Command {
+	var email string
+	c := &cobra.Command{
+		Use: "unpin-key REF", Short: "Remove pinned key(s) from a contact",
+		Args: cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
+			if err != nil {
+				return err
+			}
+			target, err := resolveContactEmail(c, id, email)
+			if err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would remove pinned key(s) for %s", target))
+				return nil
+			}
+			if err := c.App.Contacts.UnpinKey(c.Ctx, c.U, id, target); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Removed pinned key(s) for %s", target))
+			return nil
+		}),
+	}
+	c.Flags().StringVar(&email, "email", "", "Which of the contact's emails to unpin")
 	return c
 }
 

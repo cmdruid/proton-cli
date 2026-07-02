@@ -26,7 +26,6 @@ func tokenOf(t *testing.T, url string) string {
 }
 
 func TestDriveShareLinkLifecycle(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-share"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -54,7 +53,6 @@ func TestDriveShareLinkLifecycle(t *testing.T) {
 // link 404s in a browser) if UrlPasswordSalt is not exactly 10 bytes, even
 // though creation and status both still succeed.
 func TestDriveShareLinkPublicHandshake(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-handshake"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -83,7 +81,6 @@ func TestDriveShareLinkPublicHandshake(t *testing.T) {
 }
 
 func TestDriveShareLinkIdempotent(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-idem"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -97,7 +94,6 @@ func TestDriveShareLinkIdempotent(t *testing.T) {
 }
 
 func TestDriveShareLinkExpires(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-exp"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -110,7 +106,6 @@ func TestDriveShareLinkExpires(t *testing.T) {
 }
 
 func TestDriveShareLinkPassword(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-pw"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -126,7 +121,6 @@ func TestDriveShareLinkPassword(t *testing.T) {
 }
 
 func TestDriveShareLinkDryRun(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-sharedry"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -142,7 +136,6 @@ func TestDriveShareLinkDryRun(t *testing.T) {
 // ── members ──
 
 func TestDriveShareAddNotProtonUser(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-member"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -158,7 +151,6 @@ func TestDriveShareAddNotProtonUser(t *testing.T) {
 }
 
 func TestDriveShareAddDryRun(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-memberdry"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -168,15 +160,10 @@ func TestDriveShareAddDryRun(t *testing.T) {
 	assertContains(t, stderr, "dry-run")
 }
 
-// testInvitee receives an immediately-cancelled invitation in the member
-// round-trip test.
-const testInvitee = "protonalt.sessions986@proton.me"
-
 // TestDriveShareMemberRoundTrip invites a real Proton address, verifies it shows
 // as pending, then revokes it.
 func TestDriveShareMemberRoundTrip(t *testing.T) {
-	skipIfNoCredentials(t)
-	invitee := testInvitee
+	invitee := altEmail()
 	folder := "/" + testID() + "-memberrt"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "m.txt")
@@ -199,7 +186,6 @@ func TestDriveShareMemberRoundTrip(t *testing.T) {
 }
 
 func TestDriveShareRemoveNotFound(t *testing.T) {
-	skipIfNoCredentials(t)
 	folder := "/" + testID() + "-rm"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -214,7 +200,6 @@ func TestDriveShareRemoveNotFound(t *testing.T) {
 // ── incoming invitations ──
 
 func TestDriveInvitationsList(t *testing.T) {
-	skipIfNoCredentials(t)
 	// Single-account runs can't produce an incoming invite, so only assert the
 	// command itself succeeds.
 	_, _, code := run(t, "drive", "invitations", "list")
@@ -224,7 +209,6 @@ func TestDriveInvitationsList(t *testing.T) {
 }
 
 func TestDriveInvitationsAcceptRejectDryRun(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "invitations", "accept", "some-invitation-id")
 	assertContains(t, stderr, "dry-run")
 	_, stderr = runOKStderr(t, "--dry-run", "drive", "invitations", "reject", "some-invitation-id")
@@ -258,8 +242,6 @@ func altInvitationIDs(t *testing.T) map[string]bool {
 }
 
 func TestDriveShareInvitationRoundTrip(t *testing.T) {
-	skipIfNoAltCredentials(t)
-
 	folder := "/" + testID() + "-share-rt"
 	runOK(t, "drive", "folders", "create", folder)
 	// Permanent delete cascades the share + membership.

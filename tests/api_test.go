@@ -10,7 +10,6 @@ import (
 // Raw api escape-hatch tests.
 
 func TestAPIGet(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "api", "GET", "/core/v4/users")
 	var v map[string]interface{}
 	if err := json.Unmarshal([]byte(stdout), &v); err != nil {
@@ -22,7 +21,6 @@ func TestAPIGet(t *testing.T) {
 }
 
 func TestAPIGetWithQuery(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "api", "GET", "/mail/v4/messages",
 		"--query", "Page=0", "--query", "PageSize=1")
 	var v map[string]interface{}
@@ -35,7 +33,6 @@ func TestAPIGetWithQuery(t *testing.T) {
 }
 
 func TestAPIPostDeleteRoundTrip(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-api"
 	body := fmt.Sprintf(`{"Name":%q,"Color":"#8080FF","Type":1}`, name)
 	stdout := runOK(t, "api", "POST", "/core/v4/labels", "--body", body)
@@ -68,7 +65,6 @@ func TestAPIPostDeleteRoundTrip(t *testing.T) {
 }
 
 func TestAPIInvalidJSONBody(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, stderr, code := run(t, "api", "POST", "/core/v4/labels", "--body", "{not json}")
 	if code == 0 {
 		t.Error("expected non-zero exit for invalid --body")
@@ -77,7 +73,6 @@ func TestAPIInvalidJSONBody(t *testing.T) {
 }
 
 func TestAPIQueryBadSyntax(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, _, code := run(t, "api", "GET", "/core/v4/users", "--query", "Noequalssign")
 	if code == 0 {
 		t.Error("expected non-zero exit for malformed --query")

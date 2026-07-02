@@ -10,14 +10,12 @@ import (
 // ── calendars ──
 
 func TestCalendarCalendarsList(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "calendar", "calendars", "list")
 	assertContains(t, stdout, "NAME")
 	assertContains(t, stdout, "COLOR")
 }
 
 func TestCalendarCalendarsListColorPopulated(t *testing.T) {
-	skipIfNoCredentials(t)
 	cals := runJSONArray(t, "calendar", "calendars", "list")
 	if len(cals) == 0 {
 		t.Skip("no calendars on account")
@@ -37,7 +35,6 @@ func TestCalendarCalendarsListColorPopulated(t *testing.T) {
 }
 
 func TestCalendarCalendarsCreateAndDelete(t *testing.T) {
-	skipIfNoCredentials(t)
 	name := testID() + "-cal"
 	stdout := runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF")
 	id := strings.TrimSpace(stdout)
@@ -55,13 +52,11 @@ func TestCalendarCalendarsCreateAndDelete(t *testing.T) {
 // ── events ──
 
 func TestCalendarEventsList(t *testing.T) {
-	skipIfNoCredentials(t)
 	stdout := runOK(t, "calendar", "events", "list", "--calendar", "Default")
 	_ = stdout // may be empty; only assert the command runs
 }
 
 func TestCalendarEventsCRUDByIDs(t *testing.T) {
-	skipIfNoCredentials(t)
 	title := testID() + "-event"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 
@@ -105,7 +100,6 @@ func TestCalendarEventsCRUDByIDs(t *testing.T) {
 }
 
 func TestCalendarEventsGetByTitleRef(t *testing.T) {
-	skipIfNoCredentials(t)
 	title := testID() + "-ref"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	idOut := runOK(t, "calendar", "events", "create",
@@ -132,7 +126,6 @@ func TestCalendarEventsGetByTitleRef(t *testing.T) {
 }
 
 func TestCalendarEventsDeleteByTitleRef(t *testing.T) {
-	skipIfNoCredentials(t)
 	title := testID() + "-refdel"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	runOK(t, "calendar", "events", "create",
@@ -150,7 +143,6 @@ func TestCalendarEventsDeleteByTitleRef(t *testing.T) {
 }
 
 func TestCalendarEventsNotFound(t *testing.T) {
-	skipIfNoCredentials(t)
 	_, _, code := run(t, "calendar", "events", "get", "no-such-event-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3 for unknown event, got %d", code)
@@ -167,7 +159,6 @@ func firstCalendarID(t *testing.T) string {
 }
 
 func TestCalendarEventRecurrenceAndDescription(t *testing.T) {
-	skipIfNoCredentials(t)
 	calID := firstCalendarID(t)
 
 	title := testID() + "-evt"
@@ -184,7 +175,6 @@ func TestCalendarEventRecurrenceAndDescription(t *testing.T) {
 }
 
 func TestCalendarEventReminderNotification(t *testing.T) {
-	skipIfNoCredentials(t)
 	calID := firstCalendarID(t)
 
 	title := testID() + "-remind"
@@ -211,7 +201,6 @@ func TestCalendarEventReminderNotification(t *testing.T) {
 }
 
 func TestCalendarEventWithProtonAttendee(t *testing.T) {
-	skipIfNoCredentials(t)
 	calID := firstCalendarID(t)
 
 	title := testID() + "-attendee"
@@ -230,8 +219,6 @@ func TestCalendarEventWithProtonAttendee(t *testing.T) {
 }
 
 func TestCalendarCalendarsRename(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	name := testID() + "-cal"
 	calID := strings.TrimSpace(runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete %s", calID),
@@ -245,8 +232,6 @@ func TestCalendarCalendarsRename(t *testing.T) {
 // TestCalendarCreateUsable proves a freshly created calendar is provisioned
 // with keys (setupCalendar) by creating an event in it.
 func TestCalendarCreateUsable(t *testing.T) {
-	skipIfNoCredentials(t)
-
 	name := testID() + "-usable"
 	calID := strings.TrimSpace(runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete %s", calID),
@@ -269,7 +254,6 @@ func TestCalendarCreateUsable(t *testing.T) {
 // a single account: flag validation, dry-run, and the organizer rejection.
 
 func TestCalendarEventsRespondBadStatus(t *testing.T) {
-	skipIfNoCredentials(t)
 	// --status is validated before auth, so an invalid value is a clean exit 1.
 	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "maybe", "some-event-ref")
 	if code != 1 {
@@ -279,7 +263,6 @@ func TestCalendarEventsRespondBadStatus(t *testing.T) {
 }
 
 func TestCalendarEventsRespondDryRun(t *testing.T) {
-	skipIfNoCredentials(t)
 	calID := firstCalendarID(t)
 	title := testID() + "-rsvp-dry"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
@@ -297,7 +280,6 @@ func TestCalendarEventsRespondDryRun(t *testing.T) {
 }
 
 func TestCalendarEventsRespondRejectsOrganizer(t *testing.T) {
-	skipIfNoCredentials(t)
 	calID := firstCalendarID(t)
 	title := testID() + "-rsvp-org"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
@@ -348,8 +330,6 @@ func firstAttendeeStatus(ev map[string]interface{}) (int, bool) {
 }
 
 func TestCalendarEventsRespondRoundTrip(t *testing.T) {
-	skipIfNoAltCredentials(t)
-
 	altCals := runJSONArray(t, alt("calendar", "calendars", "list")...)
 	if len(altCals) == 0 {
 		t.Skip("alt account has no calendars")

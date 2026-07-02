@@ -26,6 +26,8 @@ var binaryPath string
 // libwebkit2gtk-4.1-dev + pkg-config in the environment, which
 // `devbox shell` provides.
 func TestMain(m *testing.M) {
+	requireCredentials()
+
 	dir, err := os.MkdirTemp("", "proton-cli-test-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
@@ -61,10 +63,20 @@ func TestMain(m *testing.M) {
 
 // ── Credential gate ──
 
-func skipIfNoCredentials(t *testing.T) {
-	t.Helper()
-	if os.Getenv("PROTON_USER") == "" || os.Getenv("PROTON_PASSWORD") == "" {
-		t.Skip("PROTON_USER and PROTON_PASSWORD not set")
+// requireCredentials verifies both the primary and alt Proton accounts are
+// configured before any test runs, exiting instantly (ahead of the expensive
+// binary build) if either is incomplete. The whole suite needs both: most tests
+// act as the primary account and a handful drive the `alt` second account.
+func requireCredentials() {
+	var missing []string
+	for _, v := range []string{"PROTON_USER", "PROTON_PASSWORD", "PROTON_ALT_USER", "PROTON_ALT_PASSWORD"} {
+		if os.Getenv(v) == "" {
+			missing = append(missing, v)
+		}
+	}
+	if len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "integration tests require these env vars: %s\n", strings.Join(missing, ", "))
+		os.Exit(1)
 	}
 }
 
@@ -234,17 +246,6 @@ func selfEmail() string { return os.Getenv("PROTON_USER") }
 
 // altEmail returns the second account's address (PROTON_ALT_USER).
 func altEmail() string { return os.Getenv("PROTON_ALT_USER") }
-
-// skipIfNoAltCredentials skips tests that need the "Proton Alt" second account
-// (the `alt` profile). It requires the primary creds plus PROTON_ALT_USER /
-// PROTON_ALT_PASSWORD, which the CLI resolves as profile-scoped env.
-func skipIfNoAltCredentials(t *testing.T) {
-	t.Helper()
-	skipIfNoCredentials(t)
-	if os.Getenv("PROTON_ALT_USER") == "" || os.Getenv("PROTON_ALT_PASSWORD") == "" {
-		t.Skip("PROTON_ALT_USER and PROTON_ALT_PASSWORD not set (second account 'alt' profile)")
-	}
-}
 
 // alt prefixes CLI args with `--profile alt`, so the command runs as the second
 // account. Combine with any runner: runOK(t, alt("mail","addresses","list")...).
