@@ -38,6 +38,7 @@ func TestLeadingDashIDIsAccepted(t *testing.T) {
 		{"mail messages delete", []string{"mail", "messages", "delete", dashedSyntheticID}},
 		{"mail messages star", []string{"mail", "messages", "star", dashedSyntheticID}},
 		{"mail messages unstar", []string{"mail", "messages", "unstar", dashedSyntheticID}},
+		{"mail messages unschedule", []string{"mail", "messages", "unschedule", dashedSyntheticID}},
 		{"mail messages move", []string{"mail", "messages", "move", "--dest", "archive", dashedSyntheticID}},
 		{"mail messages mark read", []string{"mail", "messages", "mark", "read", dashedSyntheticID}},
 		{"mail conversations read", []string{"mail", "conversations", "read", dashedSyntheticID}},

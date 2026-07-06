@@ -45,25 +45,27 @@ func looksLikeID(s string) bool { return idcache.IsFullID(s) }
 // these directly; MailboxLabelIDs is built from the same constants so the two
 // can never drift.
 const (
-	labelInbox   = "0"
-	labelTrash   = "3"
-	labelSpam    = "4"
-	labelAllMail = "5"
-	labelArchive = "6"
-	labelSent    = "7"
-	labelDrafts  = "8"
-	labelStarred = "10"
+	labelInbox     = "0"
+	labelTrash     = "3"
+	labelSpam      = "4"
+	labelAllMail   = "5"
+	labelArchive   = "6"
+	labelSent      = "7"
+	labelDrafts    = "8"
+	labelStarred   = "10"
+	labelScheduled = "12"
 )
 
 var MailboxLabelIDs = map[string]string{
-	"inbox":   labelInbox,
-	"drafts":  labelDrafts,
-	"sent":    labelSent,
-	"trash":   labelTrash,
-	"spam":    labelSpam,
-	"archive": labelArchive,
-	"starred": labelStarred,
-	"all":     labelAllMail,
+	"inbox":     labelInbox,
+	"drafts":    labelDrafts,
+	"sent":      labelSent,
+	"trash":     labelTrash,
+	"spam":      labelSpam,
+	"archive":   labelArchive,
+	"starred":   labelStarred,
+	"scheduled": labelScheduled,
+	"all":       labelAllMail,
 }
 
 // ResolveFolder passes unknown names through unchanged, so a raw label ID
@@ -234,6 +236,29 @@ func (s *Service) Resolve(ctx context.Context, ref string) (string, error) {
 		cands = append(cands, errs.Candidate{ID: m.ID, Label: m.FromAddress + "  " + m.Subject})
 	}
 	return "", &errs.Ambiguous{Kind: "message", Ref: ref, Candidates: cands}
+}
+
+// ResolveScheduled mirrors Resolve but scopes the keyword search to the
+// Scheduled folder, so a REF can only resolve to an unschedulable message.
+func (s *Service) ResolveScheduled(ctx context.Context, ref string) (string, error) {
+	if looksLikeID(ref) {
+		return ref, nil
+	}
+	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: ref, Folder: "scheduled", Limit: 20})
+	if err != nil {
+		return "", err
+	}
+	switch len(msgs) {
+	case 0:
+		return "", &errs.NotFound{Kind: "scheduled message", Ref: ref}
+	case 1:
+		return msgs[0].ID, nil
+	}
+	cands := make([]errs.Candidate, 0, len(msgs))
+	for _, m := range msgs {
+		cands = append(cands, errs.Candidate{ID: m.ID, Label: m.FromAddress + "  " + m.Subject})
+	}
+	return "", &errs.Ambiguous{Kind: "scheduled message", Ref: ref, Candidates: cands}
 }
 
 func (s *Service) ResolveConversation(ctx context.Context, ref string) (string, error) {

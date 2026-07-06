@@ -162,7 +162,7 @@ components:
   # GENERATION_TYPE: WRITE_FULL_EMAIL=WRITE_FULL_EMAIL, SHORTEN=SHORTEN, PROOFREAD=PROOFREAD, EXPAND=EXPAND, FORMALIZE=FORMALIZE, FRIENDLY=FRIENDLY, CUSTOM_REFINE=CUSTOM_REFINE
   # GetActiveSessionType: 0=Switch, 1=AutoPick
   # GROUP_MEMBER_PERMISSIONS: 0=NONE, 1=SEND, 2=LEAVE, 4=OWNER, 8=OWNER_WITH_KEYS
-  # GROUP_MEMBER_STATE: 0=PENDING, 1=ACTIVE, 2=OUTDATED, 3=PAUSED, 4=REJECTED, 5=PENDING_ADMIN
+  # GROUP_MEMBER_STATE: 0=PENDING, 1=ACTIVE, 2=OUTDATED, 3=PAUSED, 4=REJECTED, 5=PENDING_ADMIN_APPROVAL
   # GROUP_MEMBER_TYPE: 0=INTERNAL, 1=EXTERNAL, 2=INTERNAL_TYPE_EXTERNAL
   # GROUP_MEMBERSHIP_STATUS: active=ACTIVE, unanswered=UNANSWERED
   # GroupFlags: 0=None, 1=System, 2=Drive, 4=Scim
@@ -322,7 +322,7 @@ components:
   # SWIPE_ACTION: -1=None, 0=Trash, 1=Spam, 2=Star, 3=Archive, 4=MarkAsRead, 5=LabelAs, 6=MoveTo
   # TelemetryAccountCancellationEvents: start_cancellation=startCancellation, cancel_page=cancelPage, cancel_modal=cancelModal, feedback_modal=feedbackModal, resubscribe_modal=resubscribeModal, dashboard_reactivate=dashboardReactivate, upsell_modal=upsellModal
   # TelemetryAccountCancellationFlowFeedbackEvents: start_cancellation=startCancellation, feedback_step=feedbackStep, second_step=secondStep, confirm_cancellation=confirmCancellation
-  # TelemetryAccountDashboardEvents: page_load=pageLoad, cross_product_click=crossProductClick
+  # TelemetryAccountDashboardEvents: page_load=pageLoad, cross_product_click=crossProductClick, feature_card_click=featureCardClick
   # TelemetryAccountOrganizationLogoUploadEvents: process_start=processStart, process_success=processSuccess, process_failure=processFailure
   # TelemetryAccountSecurityCheckupEvents: page_load=pageLoad, cohort_change.complete_recovery_multiple=completeRecoveryMultiple, cohort_change.complete_recovery_single=completeRecoverySingle, cohort_change.account_recovery_enabled=accountRecoveryEnabled, cohort_change.complete_recovery_sentinel=completeRecoverySentinel, cohort_change.sentinel_recommendations=sentinelRecommendations
   # TelemetryAccountSignupBasicEvents: flow_started=flow_started, account_created=account_created

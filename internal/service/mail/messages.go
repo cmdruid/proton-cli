@@ -257,6 +257,18 @@ func (s *Service) Trash(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": labelTrash, "IDs": ids}}, nil)
 }
 
+// Unschedule cancels the scheduled send for each message via cancel_send, which
+// pulls it out of the Scheduled queue and back to Drafts (the web client's
+// "Edit and reschedule" primitive). The message keeps its ID.
+func (s *Service) Unschedule(ctx context.Context, ids []string) error {
+	for _, id := range ids {
+		if err := s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/mail/v4/messages/" + id + "/cancel_send"}, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) Delete(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/delete", Body: map[string]any{"IDs": ids}}, nil)
 }

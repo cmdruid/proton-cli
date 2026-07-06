@@ -179,7 +179,7 @@ The examples below are representative, not exhaustive. Every command lists its f
 
 | Area | Subcommands |
 |---|---|
-| `mail messages` | list, search, read, send, trash, delete, move, mark, star, unstar |
+| `mail messages` | list, search, read, send, unschedule, trash, delete, move, mark, star, unstar |
 | `mail conversations` | list, search, read, trash, delete, move, mark, star, unstar, attachments |
 | `mail attachments` | list, download |
 | `mail labels` | list, create, update, delete |
@@ -216,6 +216,8 @@ proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --h
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --attach ./report.pdf
 proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --html --attach-inline ./logo.png   # embed an image inline in the HTML body
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --send-at 2026-05-01T09:00
+proton-cli mail messages list --folder scheduled          # queued scheduled sends
+proton-cli mail messages unschedule REF                   # cancel a scheduled send (moves it back to Drafts)
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --expires 7d
 proton-cli mail messages send --to bob@gmail.com --subject Hi --body secret --eo-password hunter2   # password-protect for non-Proton recipients
 echo "body" | proton-cli mail messages send --to foo --subject bar --body -

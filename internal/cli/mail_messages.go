@@ -17,7 +17,7 @@ import (
 
 func messagesCmd() *cobra.Command {
 	c := &cobra.Command{Use: "messages", Short: "Manage messages"}
-	c.AddCommand(msgListCmd(), msgSearchCmd(), msgReadCmd(), msgSendCmd(), msgTrashCmd(), msgDeleteCmd(), msgMoveCmd(), msgMarkCmd(), msgStarCmd(), msgUnstarCmd())
+	c.AddCommand(msgListCmd(), msgSearchCmd(), msgReadCmd(), msgSendCmd(), msgTrashCmd(), msgDeleteCmd(), msgMoveCmd(), msgMarkCmd(), msgStarCmd(), msgUnstarCmd(), msgUnscheduleCmd())
 	return c
 }
 
@@ -407,4 +407,66 @@ func msgUnstarCmd() *cobra.Command {
 
 func bulkMessageAction(f *msgFilter, successFmt, otherVerb string, do func(c *Ctx, ids []string) error) func(*cobra.Command, []string) error {
 	return bulkMailAction(collectMessageIDs, "message", f, successFmt, otherVerb, do)
+}
+
+func msgUnscheduleCmd() *cobra.Command {
+	var all bool
+	c := &cobra.Command{
+		Use:   "unschedule [REF...]",
+		Short: "Cancel a scheduled send (move the message back to Drafts)",
+		Long: "Cancel a scheduled send. The message stops being queued and moves\n" +
+			"back to Drafts, exactly like the web client's \"Edit and reschedule\".\n" +
+			"To change the time, unschedule it, then send again with --send-at.",
+		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+			ids, err := collectScheduledIDs(c, c.Args, all)
+			if err != nil {
+				return err
+			}
+			if c.App.DryRun {
+				c.R().Info(fmt.Sprintf("dry-run: would unschedule %d message(s)", len(ids)))
+				for _, id := range ids {
+					_, _ = fmt.Fprintln(c.R().Stderr, "  "+id)
+				}
+				return nil
+			}
+			if err := c.App.Mail.Unschedule(c.Ctx, ids); err != nil {
+				return err
+			}
+			c.R().Success(fmt.Sprintf("Unscheduled %d message(s); moved to Drafts.", len(ids)))
+			return nil
+		}),
+	}
+	c.Flags().BoolVar(&all, "all", false, "Unschedule every scheduled message")
+	return c
+}
+
+// collectScheduledIDs unions explicit REFs (resolved within the Scheduled
+// folder) with every scheduled message when --all is set. A bare invocation
+// with neither is rejected, so "unschedule" can never silently drain the queue.
+func collectScheduledIDs(c *Ctx, args []string, all bool) ([]string, error) {
+	if len(args) == 0 && !all {
+		return nil, fmt.Errorf("no messages selected: pass REF(s) or --all to unschedule every scheduled message")
+	}
+	var ids []string
+	for _, ref := range args {
+		expanded, err := resolvePrefix(c.App, ref)
+		if err != nil {
+			return nil, err
+		}
+		id, err := c.App.Mail.ResolveScheduled(c.Ctx, expanded)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if all {
+		msgs, _, err := c.App.Mail.List(c.Ctx, mailsvc.ListOptions{Folder: "scheduled", PageSize: 150})
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range msgs {
+			ids = append(ids, m.ID)
+		}
+	}
+	return dedupe(ids), nil
 }

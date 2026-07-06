@@ -1298,6 +1298,62 @@ func TestMailSendScheduledHasFutureDeliveryTime(t *testing.T) {
 	}
 }
 
+func TestMailMessagesUnschedule(t *testing.T) {
+	subject := testID() + "-unsched"
+	sendAt := time.Now().Add(3 * time.Hour)
+	runOK(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject,
+		"--body", "reschedule me", "--send-at", sendAt.Format("2006-01-02T15:04"))
+
+	// It lands in the Scheduled folder (proves the new `scheduled` alias).
+	var schedID string
+	waitFor(30*time.Second, 1*time.Second, func() bool {
+		schedID = messageIDInFolder("scheduled", subject)
+		return schedID != ""
+	})
+	if schedID == "" {
+		t.Fatal("scheduled message did not appear in the scheduled folder")
+	}
+	// cancel_send keeps the same message ID, so this cleanup covers both states.
+	cleanupRun(t, "Delete unscheduled draft: proton-cli mail messages delete "+schedID,
+		"mail", "messages", "delete", "--", schedID)
+
+	// Dry-run must not move it.
+	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "unschedule", "--", schedID)
+	assertContains(t, stderr, "dry-run")
+	if messageIDInFolder("scheduled", subject) == "" {
+		t.Error("dry-run should not unschedule the message")
+	}
+
+	// Real unschedule -> back to Drafts, gone from Scheduled.
+	runOK(t, "mail", "messages", "unschedule", "--", schedID)
+	var draftID string
+	waitFor(30*time.Second, 1*time.Second, func() bool {
+		draftID = messageIDInFolder("drafts", subject)
+		return draftID != ""
+	})
+	if draftID == "" {
+		t.Error("unscheduled message should appear in Drafts")
+	}
+	if messageIDInFolder("scheduled", subject) != "" {
+		t.Error("message should no longer be in Scheduled after unschedule")
+	}
+}
+
+func TestMailMessagesUnscheduleByAllDryRun(t *testing.T) {
+	// --all with --dry-run is safe: it previews without touching the queue.
+	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "unschedule", "--all")
+	assertContains(t, stderr, "dry-run")
+}
+
+func TestMailMessagesUnscheduleRequiresSelection(t *testing.T) {
+	_, stderr, code := run(t, "mail", "messages", "unschedule")
+	if code == 0 {
+		t.Error("expected error when no REF and no --all given")
+	}
+	assertContains(t, stderr, "no messages selected")
+}
+
 func TestMailSendExpiringHasExpirationTime(t *testing.T) {
 	subject := testID() + "-expires"
 	runOK(t, "mail", "messages", "send",

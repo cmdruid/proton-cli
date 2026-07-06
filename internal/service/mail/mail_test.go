@@ -2,11 +2,14 @@ package mail
 
 import (
 	"context"
+	"errors"
 	"net/url"
+	"strings"
 	"testing"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -73,6 +76,8 @@ func TestResolveFolder(t *testing.T) {
 		{"all", "5"},
 		{"starred", "10"},
 		{"Sent", "7"},
+		{"scheduled", "12"},
+		{"Scheduled", "12"},
 		{"some-custom-label-id==", "some-custom-label-id=="}, // passthrough
 	}
 	for _, tc := range tests {
@@ -224,6 +229,38 @@ func TestTrashHitsLabelEndpoint(t *testing.T) {
 	}
 	if got := bodyLabelID(t, f.last); got != labelTrash {
 		t.Errorf("Trash LabelID = %q, want %q", got, labelTrash)
+	}
+}
+
+func TestUnscheduleHitsCancelSendEndpoint(t *testing.T) {
+	f := &fakeDoer{}
+	s := New(f)
+	if err := s.Unschedule(context.Background(), []string{"a", "b"}); err != nil {
+		t.Fatalf("Unschedule: %v", err)
+	}
+	// The loop issues one POST per ID; the last captured request is for "b".
+	if f.last.Method != "POST" || f.last.Path != "/mail/v4/messages/b/cancel_send" {
+		t.Errorf("Unschedule issued %s %s, want POST /mail/v4/messages/b/cancel_send", f.last.Method, f.last.Path)
+	}
+}
+
+func TestResolveScheduledFullIDPassthrough(t *testing.T) {
+	full := strings.Repeat("a", 86) + "=="
+	got, err := New(&fakeDoer{}).ResolveScheduled(context.Background(), full)
+	if err != nil {
+		t.Fatalf("ResolveScheduled: %v", err)
+	}
+	if got != full {
+		t.Errorf("ResolveScheduled(full ID) = %q, want passthrough %q", got, full)
+	}
+}
+
+func TestResolveScheduledNotFound(t *testing.T) {
+	// fakeDoer.Decode ignores the out param, so Search yields zero messages.
+	_, err := New(&fakeDoer{}).ResolveScheduled(context.Background(), "no-such-subject")
+	var nf *errs.NotFound
+	if !errors.As(err, &nf) {
+		t.Errorf("ResolveScheduled(miss) err = %v, want *errs.NotFound", err)
 	}
 }
 
