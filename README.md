@@ -106,7 +106,7 @@ These apply across every command.
 - **Short IDs** - in an interactive terminal, list commands shorten Proton IDs to 8 characters. proton-cli caches the IDs you have seen at `~/.config/proton-cli/idcache/<profile>.json`, so you can paste an 8-char prefix into any command that takes an ID. Pipes, redirection, and `--output json|yaml` always emit full IDs. Pass `--full-ids` to disable shortening. See [Short IDs](#short-ids) below.
 - **Output** - `--output text|json|yaml` (default `text`). JSON/YAML use `snake_case` keys.
 - **Exit codes** - `0` success · `1` user error · `2` auth · `3` not-found · `4` conflict / ambiguous · `5` network / server · `130` cancelled.
-- **Create = ID on stdout** - creating commands print the new ID to stdout and `✓ …` to stderr, so `ID=$(proton-cli ... create ...)` works.
+- **Create = ID on stdout** - creating commands print the new ID to stdout and `✓ …` to stderr, so `ID=$(proton-cli ... create ...)` works. `mail messages send` follows suit: it prints the message ID, and scheduled sends confirm the resolved local time.
 - **Streaming I/O** - `-` means stdin (inputs) or stdout (outputs), e.g. `mail messages send --body -`, `drive items upload - /path`, `drive items download /path -`.
 - **Dry run** - `--dry-run` on any mutating command previews without applying.
 - **Cancellation** - `Ctrl+C` aborts in-flight operations.
@@ -215,7 +215,7 @@ proton-cli mail messages send --to a@ex.com --cc c@ex.com --subject Hi --body He
 proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --html
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --attach ./report.pdf
 proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --html --attach-inline ./logo.png   # embed an image inline in the HTML body
-proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --send-at 2026-05-01T09:00
+proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --send-at 2026-05-01T09:00   # local time; prints the message ID + confirms the schedule
 proton-cli mail messages list --folder scheduled          # queued scheduled sends
 proton-cli mail messages unschedule REF                   # cancel a scheduled send (moves it back to Drafts)
 proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --expires 7d
@@ -527,6 +527,7 @@ A few constraints are inherent to Proton's design or platform:
 
 - **Colors** - labels, folders, calendars, and contact groups accept only Proton's 20 fixed accent colors; the CLI validates `--color` and lists the allowed values on error.
 - **Calendar deletion** - `calendar calendars delete` is password-scoped and needs `PROTON_PASSWORD`.
+- **Search lag** - `search` and `list` read Proton's eventually-consistent server-side index; a just-sent or just-deleted message can take a few seconds to appear or disappear. Confirm a mutation by ID with `read` rather than re-searching a subject.
 - **CAPTCHA** - can't be solved headlessly, and `go install` builds don't embed the helper (see [Human verification](#human-verification-captcha)).
 
 See [`docs/limitations.md`](docs/limitations.md) for the full list, including features not yet implemented.

@@ -1298,6 +1298,63 @@ func TestMailSendScheduledHasFutureDeliveryTime(t *testing.T) {
 	}
 }
 
+func TestMailSendPrintsMessageID(t *testing.T) {
+	subject := testID() + "-sendid"
+	stdout, stderr := runOKStderr(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject, "--body", "id on stdout")
+	id := strings.TrimSpace(stdout)
+	if !looksLikeID(id) {
+		t.Fatalf("send stdout should be a bare message ID, got %q", stdout)
+	}
+	cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+id,
+		"mail", "messages", "delete", "--", id)
+	assertContains(t, stderr, "Message sent.")
+	// The returned ID resolves via read.
+	assertContains(t, runOK(t, "mail", "messages", "read", "--", id), subject)
+	// Clean the inbox copy too (distinct ID).
+	if inbox := findMessage(t, "inbox", subject); inbox != "" && inbox != id {
+		cleanupRun(t, "Delete inbox mail: proton-cli mail messages delete "+inbox,
+			"mail", "messages", "delete", "--", inbox)
+	}
+}
+
+func TestMailSendScheduledConfirmsAndReturnsID(t *testing.T) {
+	subject := testID() + "-schedconf"
+	sendAt := time.Now().Add(3 * time.Hour)
+	stdout, stderr := runOKStderr(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject,
+		"--body", "scheduled", "--send-at", sendAt.Format("2006-01-02T15:04"))
+	id := strings.TrimSpace(stdout)
+	if !looksLikeID(id) {
+		t.Fatalf("scheduled send stdout should be a bare message ID, got %q", stdout)
+	}
+	cleanupRun(t, "Delete scheduled mail: proton-cli mail messages delete "+id,
+		"mail", "messages", "delete", "--", id)
+	assertContains(t, stderr, "Scheduled for")
+	// The returned ID is exactly the Scheduled-folder entry.
+	var schedID string
+	waitFor(30*time.Second, 1*time.Second, func() bool {
+		schedID = messageIDInFolder("scheduled", subject)
+		return schedID != ""
+	})
+	if schedID != id {
+		t.Errorf("scheduled folder ID %q != send stdout ID %q", schedID, id)
+	}
+}
+
+func TestMailSendScheduledDryRunEchoesTime(t *testing.T) {
+	subject := testID() + "-scheddry"
+	sendAt := time.Now().Add(5 * time.Hour)
+	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject,
+		"--body", "x", "--send-at", sendAt.Format("2006-01-02T15:04"))
+	assertContains(t, stderr, "scheduled for")
+	assertContains(t, stderr, sendAt.Format("2006-01-02"))
+	if messageIDInFolder("scheduled", subject) != "" {
+		t.Error("dry-run should not create a scheduled message")
+	}
+}
+
 func TestMailMessagesUnschedule(t *testing.T) {
 	subject := testID() + "-unsched"
 	sendAt := time.Now().Add(3 * time.Hour)

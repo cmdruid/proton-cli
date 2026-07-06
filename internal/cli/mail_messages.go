@@ -213,25 +213,34 @@ func msgSendCmd() *cobra.Command {
 			if len(attachInline) > 0 && !html {
 				return fmt.Errorf("--attach-inline requires --html (inline images need an HTML body)")
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would send to %d recipient(s) subject %q (%d bytes, %d attachment(s))", len(to)+len(cc)+len(bcc), subject, len(body), len(attach)))
-				return nil
-			}
-			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach, InlineAttach: attachInline, EOPassword: eoPassword, EOPasswordHint: eoPasswordHint}
+			// Parse schedule/expiry before the dry-run check so a bad value is
+			// caught there too and the resolved time can be echoed.
+			var deliveryTime int64
+			var scheduledAt time.Time
 			if sendAt != "" {
 				t, err := ical.ParseTime(sendAt)
 				if err != nil {
 					return fmt.Errorf("invalid --send-at: %w", err)
 				}
-				opts.DeliveryTime = t.Unix()
+				scheduledAt, deliveryTime = t, t.Unix()
 			}
+			var expiresInSeconds int
 			if expires != "" {
 				d, err := render.ParseDuration(expires)
 				if err != nil {
 					return fmt.Errorf("invalid --expires: %w", err)
 				}
-				opts.ExpiresInSeconds = int(d.Seconds())
+				expiresInSeconds = int(d.Seconds())
 			}
+			if c.App.DryRun {
+				msg := fmt.Sprintf("dry-run: would send to %d recipient(s) subject %q (%d bytes, %d attachment(s))", len(to)+len(cc)+len(bcc), subject, len(body), len(attach))
+				if !scheduledAt.IsZero() {
+					msg += fmt.Sprintf("; scheduled for %s", scheduledAt.Format("2006-01-02 15:04:05 -07:00"))
+				}
+				c.R().Info(msg)
+				return nil
+			}
+			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach, InlineAttach: attachInline, EOPassword: eoPassword, EOPasswordHint: eoPasswordHint, DeliveryTime: deliveryTime, ExpiresInSeconds: expiresInSeconds}
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
@@ -257,10 +266,15 @@ func msgSendCmd() *cobra.Command {
 					SignatureVerified: pin.SignatureVerified,
 				}
 			}
-			if err := c.App.Mail.Send(c.Ctx, u, opts); err != nil {
+			id, err := c.App.Mail.Send(c.Ctx, u, opts)
+			if err != nil {
 				return err
 			}
-			c.R().Success("Message sent.")
+			if !scheduledAt.IsZero() {
+				c.R().ID(id, fmt.Sprintf("Scheduled for %s", scheduledAt.Format("2006-01-02 15:04:05 -07:00")))
+			} else {
+				c.R().ID(id, "Message sent.")
+			}
 			return nil
 		}),
 	}
@@ -270,7 +284,7 @@ func msgSendCmd() *cobra.Command {
 	c.Flags().StringVar(&subject, "subject", "", "Subject")
 	c.Flags().StringVar(&body, "body", "", "Message body (use - for stdin)")
 	c.Flags().BoolVar(&html, "html", false, "Send the body as text/html instead of text/plain")
-	c.Flags().StringVar(&sendAt, "send-at", "", "Schedule delivery (RFC3339 or YYYY-MM-DDTHH:MM)")
+	c.Flags().StringVar(&sendAt, "send-at", "", "Schedule delivery (RFC3339, or YYYY-MM-DDTHH:MM in the local system timezone)")
 	c.Flags().StringVar(&expires, "expires", "", "Self-destruct after DURATION (e.g. 7d, 24h)")
 	c.Flags().StringArrayVar(&attach, "attach", nil, "File to attach (repeatable)")
 	c.Flags().StringArrayVar(&attachInline, "attach-inline", nil, "Image embedded inline in the HTML body via Content-ID (repeatable; requires --html)")

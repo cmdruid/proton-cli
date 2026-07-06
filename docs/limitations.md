@@ -12,6 +12,12 @@ Labels, folders, calendars and contact groups accept only Proton's 20 fixed
 accent colors. The CLI validates `--color` and prints the allowed hex values on
 error; arbitrary colors are rejected by the API.
 
+### `search` and `list` are eventually consistent
+
+`search` and `list` read Proton's server-side index, not local state, and that index lags a few seconds behind a mutation: a message you just sent may not appear yet, and one you just deleted or unscheduled may still show up briefly. This is a property of Proton's backend - the same lag exists in the web client - so there is nothing for the CLI to cache or invalidate.
+
+To verify a mutation reliably, act on the message ID (which `send` and the create commands print on stdout) with `read`, rather than re-running `search` on a subject.
+
 ### Calendar deletion requires your password
 
 `calendar calendars delete` performs a password-scoped operation, so it needs

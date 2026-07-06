@@ -238,10 +238,10 @@ func planPinnedRecipient(email string, base sendScheme, apiArmored string, pin *
 // (E2EE), external-PGP (PGP/MIME), encrypted-for-outside (password link), or
 // cleartext. Internal/EO/cleartext recipients share one symmetric body; PGP/MIME
 // recipients get a separately encrypted MIME body with embedded attachments.
-func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) error {
+func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) (string, error) {
 	addrKR, _, senderEmail, err := u.FirstAddrKR()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	mimeType := "text/plain"
@@ -253,16 +253,16 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 	// so this must happen before the draft body is encrypted below.
 	inlinePrepared, err := prepareInlineImages(&opts, senderEmail)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	encDraft, err := addrKR.Encrypt(pgp.NewPlainMessageFromString(opts.Body), addrKR)
 	if err != nil {
-		return fmt.Errorf("encrypt draft: %w", err)
+		return "", fmt.Errorf("encrypt draft: %w", err)
 	}
 	armoredDraft, err := encDraft.GetArmored()
 	if err != nil {
-		return err
+		return "", err
 	}
 	var draft struct {
 		Code    int
@@ -280,7 +280,7 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 		},
 	}
 	if err := s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/mail/v4/messages", Body: draftBody}, &draft); err != nil {
-		return err
+		return "", err
 	}
 	messageID := draft.Message.ID
 	cleanup := func() {
@@ -294,7 +294,7 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 	prepared, err := prepareAttachments(opts.Attachments, opts.InlineAttachments)
 	if err != nil {
 		cleanup()
-		return err
+		return "", err
 	}
 	prepared = append(prepared, inlinePrepared...)
 	var atts []*uploadedAttachment
@@ -302,7 +302,7 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 		a, err := s.uploadAttachmentData(ctx, addrKR, messageID, p.Filename, p.MIMEType, p.ContentID, p.Data)
 		if err != nil {
 			cleanup()
-			return err
+			return "", err
 		}
 		atts = append(atts, a)
 	}
@@ -313,7 +313,7 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 		p, err := s.planRecipient(ctx, email, opts.EOPassword, opts.PinnedKeys[email])
 		if err != nil {
 			cleanup()
-			return err
+			return "", err
 		}
 		plans = append(plans, p)
 		// PGP/MIME and PGP-Inline recipients each get their own body package;
@@ -330,7 +330,7 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 	if hasEO {
 		if eoModulus, eoModulusID, err = s.fetchModulus(ctx); err != nil {
 			cleanup()
-			return err
+			return "", err
 		}
 	}
 
@@ -340,21 +340,21 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 		bodyPkgs, err := s.buildBodyPackages(mimeType, opts, atts, plans, addrKR, eoModulus, eoModulusID)
 		if err != nil {
 			cleanup()
-			return err
+			return "", err
 		}
 		packages = append(packages, bodyPkgs...)
 	}
 
 	if pkg, ok, err := s.buildPGPMIMEPackage(opts, prepared, plans, addrKR); err != nil {
 		cleanup()
-		return err
+		return "", err
 	} else if ok {
 		packages = append(packages, pkg)
 	}
 
 	if pkg, ok, err := s.buildInlinePackage(opts, atts, plans, addrKR); err != nil {
 		cleanup()
-		return err
+		return "", err
 	} else if ok {
 		packages = append(packages, pkg)
 	}
@@ -373,13 +373,13 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 	resp, err := s.C.Do(ctx, proton.Request{Method: "POST", Path: "/mail/v4/messages/" + messageID, Body: sendReq})
 	if err != nil {
 		cleanup()
-		return err
+		return "", err
 	}
 	if resp.Status >= 400 {
 		cleanup()
-		return fmt.Errorf("send failed: %s", string(resp.Body))
+		return "", fmt.Errorf("send failed: %s", string(resp.Body))
 	}
-	return nil
+	return messageID, nil
 }
 
 // buildBodyPackages encrypts the plaintext/HTML body once under a shared session

@@ -266,7 +266,7 @@ func eventsCmd() *cobra.Command {
 			}
 			if res.Invite != nil {
 				body := fmt.Sprintf("You have been invited to %q.\n\nThe calendar invitation is attached.", eTitle)
-				if err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
+				if _, err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
 					To:      res.Invite.Recipients,
 					Subject: res.Invite.Subject,
 					Body:    body,
@@ -363,7 +363,7 @@ func eventsCmd() *cobra.Command {
 					return err
 				}
 				if res.Reply != nil {
-					if err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
+					if _, err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
 						To:      res.Reply.Recipients,
 						Subject: res.Reply.Subject,
 						Body:    res.Reply.Body,
