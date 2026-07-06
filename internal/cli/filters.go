@@ -1,42 +1,6 @@
 package cli
 
-import (
-	"fmt"
-	"path/filepath"
-	"strconv"
-	"strings"
-)
-
-// parseSize parses a human byte size ("100KB", "5MB", "2GB", "1024"). K/M/G/T
-// are base 1024.
-func parseSize(s string) (int64, error) {
-	s = strings.TrimSpace(strings.ToUpper(s))
-	if s == "" {
-		return 0, fmt.Errorf("empty size")
-	}
-	mult := int64(1)
-	switch {
-	case strings.HasSuffix(s, "TB"), strings.HasSuffix(s, "T"):
-		mult = 1 << 40
-		s = strings.TrimSuffix(strings.TrimSuffix(s, "TB"), "T")
-	case strings.HasSuffix(s, "GB"), strings.HasSuffix(s, "G"):
-		mult = 1 << 30
-		s = strings.TrimSuffix(strings.TrimSuffix(s, "GB"), "G")
-	case strings.HasSuffix(s, "MB"), strings.HasSuffix(s, "M"):
-		mult = 1 << 20
-		s = strings.TrimSuffix(strings.TrimSuffix(s, "MB"), "M")
-	case strings.HasSuffix(s, "KB"), strings.HasSuffix(s, "K"):
-		mult = 1 << 10
-		s = strings.TrimSuffix(strings.TrimSuffix(s, "KB"), "K")
-	case strings.HasSuffix(s, "B"):
-		s = strings.TrimSuffix(s, "B")
-	}
-	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid size %q: %w", s, err)
-	}
-	return int64(f * float64(mult)), nil
-}
+import "path/filepath"
 
 // matchGlob reports whether name matches the shell-style glob. Empty matches all.
 func matchGlob(pattern, name string) bool {

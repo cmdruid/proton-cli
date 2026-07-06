@@ -25,6 +25,28 @@ type Session struct {
 	BaseURL       string `json:"base_url"`
 }
 
+// FromParts assembles a Session for persistence from a client's raw state. It
+// prefers the encrypted key blob and keeps a legacy cleartext key password only
+// until it has been migrated to a blob; it never writes new cleartext. This is
+// the sole place that owns the "which key field wins" rule, so the transport
+// client stays free of the persistence format.
+func FromParts(uid, acc, refresh, encKeyBlob, saltedKeyPass, appVersion, baseURL string) *Session {
+	s := &Session{
+		UID:          uid,
+		AccessToken:  acc,
+		RefreshToken: refresh,
+		AppVersion:   appVersion,
+		BaseURL:      baseURL,
+	}
+	switch {
+	case encKeyBlob != "":
+		s.EncKeyBlob = encKeyBlob
+	case saltedKeyPass != "":
+		s.SaltedKeyPass = saltedKeyPass
+	}
+	return s
+}
+
 // Dir returns ~/.config/proton-cli.
 func Dir() (string, error) {
 	configDir, err := os.UserConfigDir()

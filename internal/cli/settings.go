@@ -16,7 +16,7 @@ func newSettingsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use:   "get",
 		Short: "Show current account settings",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			resp, err := c.App.API.Do(c.Ctx, proton.Request{Method: "GET", Path: "/core/v4/settings"})
 			if err != nil {
 				return err
@@ -30,7 +30,7 @@ func newSettingsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use:   "mail",
 		Short: "Show mail settings",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			resp, err := c.App.API.Do(c.Ctx, proton.Request{Method: "GET", Path: "/mail/v4/settings"})
 			if err != nil {
 				return err
@@ -77,7 +77,7 @@ func settingsSetCmd() *cobra.Command {
 		Use:   "set [KEY VALUE]",
 		Short: "Update a mail setting (run with no args to list keys)",
 		Args:  cobra.MaximumNArgs(2),
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if len(c.Args) < 2 {
 				keys := make([]string, 0, len(mailSettingSpecs))
 				for k := range mailSettingSpecs {
@@ -106,8 +106,7 @@ func settingsSetCmd() *cobra.Command {
 			} else {
 				body = map[string]any{spec.field: val}
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would set %s = %s", key, val))
+			if c.dryRun("set %s = %s", key, val) {
 				return nil
 			}
 			if err := c.App.API.Decode(c.Ctx, proton.Request{Method: "PUT", Path: spec.path, Body: body}, nil); err != nil {
@@ -119,7 +118,7 @@ func settingsSetCmd() *cobra.Command {
 	}
 }
 
-func printSettingsText(c *Ctx, body []byte, renderer func(*Ctx, map[string]any)) error {
+func printSettingsText(c *Invocation, body []byte, renderer func(*Invocation, map[string]any)) error {
 	var m map[string]any
 	if err := json.Unmarshal(body, &m); err != nil {
 		return c.R().JSON(body)
@@ -128,7 +127,7 @@ func printSettingsText(c *Ctx, body []byte, renderer func(*Ctx, map[string]any))
 	return nil
 }
 
-func renderAccountSettings(c *Ctx, m map[string]any) {
+func renderAccountSettings(c *Invocation, m map[string]any) {
 	u, _ := m["UserSettings"].(map[string]any)
 	if u == nil {
 		_ = c.R().Object(m)
@@ -154,7 +153,7 @@ func renderAccountSettings(c *Ctx, m map[string]any) {
 	}
 }
 
-func renderMailSettings(c *Ctx, m map[string]any) {
+func renderMailSettings(c *Invocation, m map[string]any) {
 	ms, _ := m["MailSettings"].(map[string]any)
 	if ms == nil {
 		_ = c.R().Object(m)

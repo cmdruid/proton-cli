@@ -7,10 +7,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/render"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/roman-16/proton-cli/internal/view"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +28,7 @@ func attachmentsListCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "list MESSAGE_ID", Short: "List attachments of a message",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			atts, err := c.App.Mail.AttachmentsList(c.Ctx, c.Args[0], includeInline)
 			if err != nil {
 				return err
@@ -36,7 +36,7 @@ func attachmentsListCmd() *cobra.Command {
 			cols := []view.Column[mailsvc.Attachment]{
 				{Header: "ID", ID: true, Cell: func(a mailsvc.Attachment) string { return a.ID }},
 				{Header: "NAME", Cell: func(a mailsvc.Attachment) string { return a.Name }},
-				{Header: "SIZE", Cell: func(a mailsvc.Attachment) string { return render.Size(a.Size) }},
+				{Header: "SIZE", Cell: func(a mailsvc.Attachment) string { return units.Size(a.Size) }},
 				{Header: "TYPE", Cell: func(a mailsvc.Attachment) string { return a.MIMEType }},
 			}
 			if includeInline {
@@ -61,22 +61,19 @@ func attachmentDownloadCmd() *cobra.Command {
 	var output, outputDir string
 	var all, force, includeInline bool
 	c := &cobra.Command{
-		Use:   "download MESSAGE_ID [ATTACHMENT_ID] [OUTPUT_PATH]",
-		Short: "Download and decrypt attachment(s) (- for stdout, --all for every attachment)",
-		Args:  cobra.RangeArgs(1, 3),
+		Use:   "download MESSAGE_ID [ATTACHMENT_ID]",
+		Short: "Download and decrypt attachment(s) (--output - for stdout, --all for every attachment)",
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			msgID := args[0]
-			var attID, posPath string
-			switch len(args) {
-			case 2:
+			var attID string
+			if len(args) == 2 {
 				attID = args[1]
-			case 3:
-				attID, posPath = args[1], args[2]
 			}
-			if err := validateDownloadShape(attID, posPath, output, outputDir, all); err != nil {
+			if err := validateDownloadShape(attID, output, outputDir, all); err != nil {
 				return err
 			}
-			return run([]Step{stepAuth}, func(c *Ctx) error {
+			return run([]Step{stepAuth}, func(c *Invocation) error {
 				u, err := c.App.Unlock(c.Ctx)
 				if err != nil {
 					return err
@@ -90,7 +87,7 @@ func attachmentDownloadCmd() *cobra.Command {
 				if all {
 					return downloadAllAttachments(c, u, msgID, outputDir, force, includeInline)
 				}
-				return downloadOneAttachment(c, u, msgID, attID, posPath, output, outputDir, force)
+				return downloadOneAttachment(c, u, msgID, attID, output, outputDir, force)
 			})(cmd, args)
 		},
 	}
@@ -102,22 +99,13 @@ func attachmentDownloadCmd() *cobra.Command {
 	return c
 }
 
-func validateDownloadShape(idArg, posPath, output, outputDir string, all bool) error {
-	if posPath != "" && output != "" {
-		return fmt.Errorf("specify either positional path or --output, not both")
-	}
-	if posPath != "" && outputDir != "" {
-		return fmt.Errorf("positional path is incompatible with --output-dir")
-	}
+func validateDownloadShape(idArg, output, outputDir string, all bool) error {
 	if output != "" && outputDir != "" {
 		return fmt.Errorf("specify either --output or --output-dir, not both")
 	}
 	if all {
 		if idArg != "" {
 			return fmt.Errorf("--all does not take an ATTACHMENT_ID")
-		}
-		if posPath != "" {
-			return fmt.Errorf("--all requires --output-dir, not a positional path")
 		}
 		if output != "" {
 			if output == "-" {
@@ -135,16 +123,16 @@ func validateDownloadShape(idArg, posPath, output, outputDir string, all bool) e
 }
 
 // dispatchAttachmentBytes writes decrypted attachment bytes to the destination
-// implied by the (already-validated) posPath/output/outputDir flags. name is
-// the attachment's own filename, used for the stdout-less default and the
-// --output-dir path.
-func dispatchAttachmentBytes(c *Ctx, bin []byte, name, posPath, output, outputDir string, force bool) error {
+// implied by the (already-validated) --output / --output-dir flags, using the
+// shared download model: --output - is stdout, --output PATH errors on an
+// existing file, --output-dir DIR (and the flagless default) write the
+// attachment's own name into DIR / the current directory, auto-suffixing on
+// collision. name is the attachment's own filename.
+func dispatchAttachmentBytes(c *Invocation, bin []byte, name, output, outputDir string, force bool) error {
 	switch {
-	case posPath == "-" || output == "-":
+	case output == "-":
 		_, err := c.R().Stdout.Write(bin)
 		return err
-	case posPath != "":
-		return writeAttachment(c, bin, posPath, writeError, force)
 	case output != "":
 		return writeAttachment(c, bin, output, writeError, force)
 	case outputDir != "":
@@ -157,15 +145,15 @@ func dispatchAttachmentBytes(c *Ctx, bin []byte, name, posPath, output, outputDi
 	}
 }
 
-func downloadOneAttachment(c *Ctx, u *keys.Unlocked, msgID, attID, posPath, output, outputDir string, force bool) error {
+func downloadOneAttachment(c *Invocation, u *keys.Unlocked, msgID, attID, output, outputDir string, force bool) error {
 	bin, name, err := c.App.Mail.AttachmentDownload(c.Ctx, u, msgID, attID)
 	if err != nil {
 		return err
 	}
-	return dispatchAttachmentBytes(c, bin, name, posPath, output, outputDir, force)
+	return dispatchAttachmentBytes(c, bin, name, output, outputDir, force)
 }
 
-func downloadAllAttachments(c *Ctx, u *keys.Unlocked, msgID, outputDir string, force, includeInline bool) error {
+func downloadAllAttachments(c *Invocation, u *keys.Unlocked, msgID, outputDir string, force, includeInline bool) error {
 	atts, err := c.App.Mail.AttachmentsList(c.Ctx, msgID, includeInline)
 	if err != nil {
 		return err
@@ -190,7 +178,7 @@ func downloadAllAttachments(c *Ctx, u *keys.Unlocked, msgID, outputDir string, f
 	return nil
 }
 
-func writeAttachment(c *Ctx, data []byte, path string, mode writeMode, force bool) error {
+func writeAttachment(c *Invocation, data []byte, path string, mode writeMode, force bool) error {
 	if force {
 		mode = writeForce
 	}
@@ -226,7 +214,7 @@ func convAttachmentsListCmd() *cobra.Command {
 		Use:   "list CONVERSATION_ID",
 		Short: "List attachments across all messages in a conversation",
 		Args:  cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			atts, err := c.App.Mail.ConversationAttachmentsList(c.Ctx, c.Args[0], includeInline)
 			if err != nil {
 				return handleWrongTable(err, "attachments list")
@@ -234,7 +222,7 @@ func convAttachmentsListCmd() *cobra.Command {
 			cols := []view.Column[mailsvc.ConversationAttachment]{
 				{Header: "ID", ID: true, Cell: func(a mailsvc.ConversationAttachment) string { return a.ID }},
 				{Header: "NAME", Cell: func(a mailsvc.ConversationAttachment) string { return a.Name }},
-				{Header: "SIZE", Cell: func(a mailsvc.ConversationAttachment) string { return render.Size(a.Size) }},
+				{Header: "SIZE", Cell: func(a mailsvc.ConversationAttachment) string { return units.Size(a.Size) }},
 				{Header: "TYPE", Cell: func(a mailsvc.ConversationAttachment) string { return a.MIMEType }},
 				{Header: "MESSAGE_ID", ID: true, Cell: func(a mailsvc.ConversationAttachment) string { return a.MessageID }},
 			}
@@ -260,22 +248,19 @@ func convAttachmentDownloadCmd() *cobra.Command {
 	var output, outputDir string
 	var all, force, includeInline bool
 	c := &cobra.Command{
-		Use:   "download CONVERSATION_ID [ATTACHMENT_ID] [OUTPUT_PATH]",
+		Use:   "download CONVERSATION_ID [ATTACHMENT_ID]",
 		Short: "Download and decrypt attachment(s) from a conversation",
-		Args:  cobra.RangeArgs(1, 3),
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			convID := args[0]
-			var attID, posPath string
-			switch len(args) {
-			case 2:
+			var attID string
+			if len(args) == 2 {
 				attID = args[1]
-			case 3:
-				attID, posPath = args[1], args[2]
 			}
-			if err := validateDownloadShape(attID, posPath, output, outputDir, all); err != nil {
+			if err := validateDownloadShape(attID, output, outputDir, all); err != nil {
 				return err
 			}
-			return run([]Step{stepAuth}, func(c *Ctx) error {
+			return run([]Step{stepAuth}, func(c *Invocation) error {
 				u, err := c.App.Unlock(c.Ctx)
 				if err != nil {
 					return err
@@ -289,7 +274,7 @@ func convAttachmentDownloadCmd() *cobra.Command {
 				if all {
 					return downloadAllConvAttachments(c, u, convID, outputDir, force, includeInline)
 				}
-				return downloadOneConvAttachment(c, u, convID, attID, posPath, output, outputDir, force)
+				return downloadOneConvAttachment(c, u, convID, attID, output, outputDir, force)
 			})(cmd, args)
 		},
 	}
@@ -301,7 +286,7 @@ func convAttachmentDownloadCmd() *cobra.Command {
 	return c
 }
 
-func downloadOneConvAttachment(c *Ctx, u *keys.Unlocked, convID, attID, posPath, output, outputDir string, force bool) error {
+func downloadOneConvAttachment(c *Invocation, u *keys.Unlocked, convID, attID, output, outputDir string, force bool) error {
 	list, err := c.App.Mail.ConversationAttachmentsList(c.Ctx, convID, true)
 	if err != nil {
 		return handleWrongTable(err, "attachments download")
@@ -320,10 +305,10 @@ func downloadOneConvAttachment(c *Ctx, u *keys.Unlocked, convID, attID, posPath,
 	if err != nil {
 		return err
 	}
-	return dispatchAttachmentBytes(c, bin, name, posPath, output, outputDir, force)
+	return dispatchAttachmentBytes(c, bin, name, output, outputDir, force)
 }
 
-func downloadAllConvAttachments(c *Ctx, u *keys.Unlocked, convID, outputDir string, force, includeInline bool) error {
+func downloadAllConvAttachments(c *Invocation, u *keys.Unlocked, convID, outputDir string, force, includeInline bool) error {
 	list, err := c.App.Mail.ConversationAttachmentsList(c.Ctx, convID, includeInline)
 	if err != nil {
 		return handleWrongTable(err, "attachments download")
@@ -362,7 +347,7 @@ func renderAttachmentsFooter(atts []mailsvc.Attachment, includeInline bool) stri
 	sizes := make([]string, len(visible))
 	var maxName, maxSize int
 	for i, a := range visible {
-		sizes[i] = render.Size(a.Size)
+		sizes[i] = units.Size(a.Size)
 		if n := utf8.RuneCountInString(a.Name); n > maxName {
 			maxName = n
 		}

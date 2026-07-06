@@ -500,7 +500,7 @@ func TestMailAttachmentsListAndDownload(t *testing.T) {
 
 	// Download to tempdir
 	out := filepath.Join(t.TempDir(), "att")
-	runOK(t, "mail", "attachments", "download", msgID, attID, out)
+	runOK(t, "mail", "attachments", "download", msgID, attID, "--output", out)
 
 	info, err := os.Stat(out)
 	if err != nil {

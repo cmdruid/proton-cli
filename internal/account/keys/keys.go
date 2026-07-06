@@ -6,14 +6,12 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strings"
 
 	"github.com/ProtonMail/go-srp"
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/crypto/localkey"
+	"github.com/roman-16/proton-cli/internal/account/localkey"
 	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/session"
 )
 
 type Unlocked struct {
@@ -131,7 +129,7 @@ func wrapAndPersist(ctx context.Context, c *proton.Client, skp string) {
 		return
 	}
 	c.SetEncKeyBlob(blob)
-	_ = session.Save(c.Profile(), c.Session())
+	c.Persist()
 }
 
 // PrimaryAddrKR returns the key ring for the user's primary proton.me/pm.me
@@ -247,12 +245,4 @@ func decryptToken(tokenArm, sigArm string, kr *pgp.KeyRing) ([]byte, error) {
 		return nil, err
 	}
 	return dec.GetBinary(), nil
-}
-
-func Query(kv ...string) url.Values {
-	q := url.Values{}
-	for i := 0; i+1 < len(kv); i += 2 {
-		q.Set(kv[i], kv[i+1])
-	}
-	return q
 }

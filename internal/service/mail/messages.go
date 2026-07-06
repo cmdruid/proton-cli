@@ -7,7 +7,7 @@ import (
 	"time"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
@@ -210,7 +210,7 @@ func (s *Service) senderKeyRing(ctx context.Context, email string) *pgp.KeyRing 
 		}
 	}
 	var kr *pgp.KeyRing
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/keys/all", Query: keys.Query("Email", email)}, &r); err == nil {
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/keys/all", Query: proton.Query("Email", email)}, &r); err == nil {
 		if ring, err := pgp.NewKeyRing(nil); err == nil {
 			for _, k := range r.Address.Keys {
 				if key, err := pgp.NewKeyFromArmored(k.PublicKey); err == nil {

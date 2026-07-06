@@ -15,7 +15,7 @@ func labelsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "labels", Short: "Manage labels and folders"}
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List labels and folders",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			labels, folders, err := c.App.Mail.LabelsList(c.Ctx)
 			if err != nil {
 				return err
@@ -54,15 +54,14 @@ func labelsCmd() *cobra.Command {
 	var createFolder bool
 	createCmd := &cobra.Command{
 		Use: "create", Short: "Create a label or folder",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if createName == "" {
 				return fmt.Errorf("--name is required")
 			}
 			if err := validateAccentColor(createColor); err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create label %q", createName))
+			if c.dryRun("create label %q", createName) {
 				return nil
 			}
 			id, err := c.App.Mail.LabelCreate(c.Ctx, createName, createColor, createFolder, createParent)
@@ -87,15 +86,14 @@ func labelsCmd() *cobra.Command {
 	updateCmd := &cobra.Command{
 		Use: "update LABEL_ID", Short: "Update a label or folder (name, color, parent)",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			if updName == "" && updColor == "" && updParent == "" {
 				return fmt.Errorf("nothing to update: pass --name, --color, or --parent")
 			}
 			if err := validateAccentColor(updColor); err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would update label %s", c.Args[0]))
+			if c.dryRun("update label %s", c.Args[0]) {
 				return nil
 			}
 			if err := c.App.Mail.LabelUpdate(c.Ctx, c.Args[0], updName, updColor, updParent); err != nil {
@@ -113,9 +111,8 @@ func labelsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "delete LABEL_ID...", Short: "Delete labels or folders",
 		Args: cobra.MinimumNArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would delete %d label(s)", len(c.Args)))
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
+			if c.dryRun("delete %d label(s)", len(c.Args)) {
 				return nil
 			}
 			if err := c.App.Mail.LabelDelete(c.Ctx, c.Args); err != nil {
@@ -134,7 +131,7 @@ func filtersCmd() *cobra.Command {
 	c := &cobra.Command{Use: "filters", Short: "Manage Sieve filters"}
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List filters",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			filters, err := c.App.Mail.FiltersList(c.Ctx)
 			if err != nil {
 				return err
@@ -159,12 +156,11 @@ func filtersCmd() *cobra.Command {
 	var fStatus int
 	createCmd := &cobra.Command{
 		Use: "create", Short: "Create a sieve filter",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if fName == "" || fSieve == "" {
 				return fmt.Errorf("--name and --sieve are required")
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create filter %q", fName))
+			if c.dryRun("create filter %q", fName) {
 				return nil
 			}
 			id, err := c.App.Mail.FilterCreate(c.Ctx, fName, fSieve, fStatus)
@@ -184,12 +180,11 @@ func filtersCmd() *cobra.Command {
 	updateCmd := &cobra.Command{
 		Use: "update FILTER_ID", Short: "Update a filter's name or sieve script",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			if fuName == "" && fuSieve == "" {
 				return fmt.Errorf("nothing to update: pass --name or --sieve")
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would update filter %s", c.Args[0]))
+			if c.dryRun("update filter %s", c.Args[0]) {
 				return nil
 			}
 			if err := c.App.Mail.FilterUpdate(c.Ctx, c.Args[0], fuName, fuSieve); err != nil {
@@ -203,20 +198,19 @@ func filtersCmd() *cobra.Command {
 	updateCmd.Flags().StringVar(&fuSieve, "sieve", "", "New sieve script")
 	c.AddCommand(updateCmd)
 
-	c.AddCommand(filterSingleArg("delete", "Delete a filter", func(c *Ctx, id string) error { return c.App.Mail.FilterDelete(c.Ctx, id) }, "Deleted filter %s."))
-	c.AddCommand(filterSingleArg("enable", "Enable a filter", func(c *Ctx, id string) error { return c.App.Mail.FilterEnable(c.Ctx, id) }, "Enabled filter %s."))
-	c.AddCommand(filterSingleArg("disable", "Disable a filter", func(c *Ctx, id string) error { return c.App.Mail.FilterDisable(c.Ctx, id) }, "Disabled filter %s."))
+	c.AddCommand(filterSingleArg("delete", "Delete a filter", func(c *Invocation, id string) error { return c.App.Mail.FilterDelete(c.Ctx, id) }, "Deleted filter %s."))
+	c.AddCommand(filterSingleArg("enable", "Enable a filter", func(c *Invocation, id string) error { return c.App.Mail.FilterEnable(c.Ctx, id) }, "Enabled filter %s."))
+	c.AddCommand(filterSingleArg("disable", "Disable a filter", func(c *Invocation, id string) error { return c.App.Mail.FilterDisable(c.Ctx, id) }, "Disabled filter %s."))
 	return c
 }
 
-func filterSingleArg(use, short string, fn func(c *Ctx, id string) error, successFmt string) *cobra.Command {
+func filterSingleArg(use, short string, fn func(c *Invocation, id string) error, successFmt string) *cobra.Command {
 	return &cobra.Command{
 		Use: use + " FILTER_ID", Short: short,
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			id := c.Args[0]
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would %s filter %s", use, id))
+			if c.dryRun("%s filter %s", use, id) {
 				return nil
 			}
 			if err := fn(c, id); err != nil {
@@ -234,7 +228,7 @@ func addressesCmd() *cobra.Command {
 	c := &cobra.Command{Use: "addresses", Short: "Manage email addresses"}
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List email addresses on the account",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			addrs, err := c.App.Mail.AddressesList(c.Ctx)
 			if err != nil {
 				return err

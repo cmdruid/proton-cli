@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/roman-16/proton-cli/internal/units"
 	"golang.org/x/term"
 )
 
@@ -77,5 +78,5 @@ func (p *Progress) draw() {
 		}
 	}
 	_, _ = fmt.Fprintf(p.Writer, "\r%s [%s] %s / %s (%.0f%%)",
-		p.Label, bar, Size(p.current), Size(p.Total), pct*100)
+		p.Label, bar, units.Size(p.current), units.Size(p.Total), pct*100)
 }

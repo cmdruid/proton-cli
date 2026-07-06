@@ -80,6 +80,32 @@ func splitLastDot(name string) (stem, ext string) {
 	return name[:i], name[i+1:]
 }
 
+// pickDownloadPath resolves where a download writes under the shared download
+// model, returning (path, stdout). "--output -" is stdout; "--output PATH" is an
+// explicit file (errors on an existing file unless force); otherwise the item's
+// own name is written into --output-dir, or the current directory, auto-suffixed
+// on collision unless force.
+func pickDownloadPath(name, output, outputDir string, force bool) (path string, stdout bool, err error) {
+	if output == "-" {
+		return "", true, nil
+	}
+	if output != "" {
+		if !force && fileExists(output) {
+			return "", false, fmt.Errorf("destination %s exists; use --force to overwrite", output)
+		}
+		return output, false, nil
+	}
+	path = filepath.Join(outputDir, name) // outputDir may be empty (current dir)
+	if !force && fileExists(path) {
+		s, serr := suffixedName(path)
+		if serr != nil {
+			return "", false, serr
+		}
+		path = s
+	}
+	return path, false, nil
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {

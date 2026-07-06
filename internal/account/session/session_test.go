@@ -8,6 +8,36 @@ import (
 	"testing"
 )
 
+func TestFromPartsPrefersEncKeyBlob(t *testing.T) {
+	s := FromParts("uid", "acc", "ref", "encrypted-blob", "legacy-cleartext", "App", "https://x")
+	if s.UID != "uid" || s.AccessToken != "acc" || s.RefreshToken != "ref" {
+		t.Errorf("tokens not carried: %+v", s)
+	}
+	if s.EncKeyBlob != "encrypted-blob" {
+		t.Errorf("EncKeyBlob = %q, want encrypted-blob", s.EncKeyBlob)
+	}
+	if s.SaltedKeyPass != "" {
+		t.Errorf("once a blob exists, cleartext must be dropped; got %q", s.SaltedKeyPass)
+	}
+}
+
+func TestFromPartsPreservesLegacyUntilMigrated(t *testing.T) {
+	s := FromParts("uid", "acc", "ref", "", "legacy-cleartext", "App", "https://x")
+	if s.EncKeyBlob != "" {
+		t.Errorf("EncKeyBlob should be empty, got %q", s.EncKeyBlob)
+	}
+	if s.SaltedKeyPass != "legacy-cleartext" {
+		t.Errorf("legacy cleartext should be preserved until migrated, got %q", s.SaltedKeyPass)
+	}
+}
+
+func TestFromPartsNoKeyMaterial(t *testing.T) {
+	s := FromParts("uid", "acc", "ref", "", "", "App", "https://x")
+	if s.EncKeyBlob != "" || s.SaltedKeyPass != "" {
+		t.Errorf("expected no key material, got blob=%q skp=%q", s.EncKeyBlob, s.SaltedKeyPass)
+	}
+}
+
 func TestPathInNamedProfile(t *testing.T) {
 	d := t.TempDir()
 	got := pathIn(d, "work")

@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/render"
 	drivesvc "github.com/roman-16/proton-cli/internal/service/drive"
+	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/roman-16/proton-cli/internal/view"
 	"github.com/spf13/cobra"
 )
 
-func drivePhotosCtx(c *Ctx) (*drivesvc.Context, error) {
+func drivePhotosCtx(c *Invocation) (*drivesvc.Context, error) {
 	u, err := c.App.Unlock(c.Ctx)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func photoTagsLabel(tags []string) string {
 
 func drivePhotosCmd() *cobra.Command {
 	c := &cobra.Command{Use: "photos", Short: "Photo library operations"}
-	c.AddCommand(photosListCmd(), photosDownloadCmd(), photosUploadCmd(), photosDeleteCmd(), photosFavoriteCmd(), photosUnfavoriteCmd(), photosAlbumsCmd())
+	c.AddCommand(photosListCmd(), photosDownloadCmd(), photosUploadCmd(), photosTrashCmd(), photosDeleteCmd(), photosFavoriteCmd(), photosUnfavoriteCmd(), photosAlbumsCmd())
 	return c
 }
 
@@ -38,13 +38,12 @@ func photosFavoriteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "favorite PHOTO_LINK_ID...", Short: "Mark photos as favorite",
 		Args: cobra.MinimumNArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would favorite %d photo(s)", len(c.Args)))
+			if c.dryRun("favorite %d photo(s)", len(c.Args)) {
 				return nil
 			}
 			copied, err := c.App.Drive.PhotosFavorite(c.Ctx, dc, c.Args)
@@ -64,13 +63,12 @@ func photosUnfavoriteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "unfavorite PHOTO_LINK_ID...", Short: "Remove photos from favorites",
 		Args: cobra.MinimumNArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would unfavorite %d photo(s)", len(c.Args)))
+			if c.dryRun("unfavorite %d photo(s)", len(c.Args)) {
 				return nil
 			}
 			if err := c.App.Drive.PhotosUnfavorite(c.Ctx, dc, c.Args); err != nil {
@@ -82,18 +80,26 @@ func photosUnfavoriteCmd() *cobra.Command {
 	}
 }
 
+func photosTrashCmd() *cobra.Command {
+	return photosRemoveCmd("trash", "Move photos to the trash", false)
+}
+
 func photosDeleteCmd() *cobra.Command {
-	var permanent bool
-	cmd := &cobra.Command{
-		Use: "delete PHOTO_LINK_ID...", Short: "Move photos to the trash (or purge with --permanent)",
+	return photosRemoveCmd("delete", "Permanently delete photos", true)
+}
+
+// photosRemoveCmd builds the shared photos trash/delete command. permanent=false
+// moves to the trash (reversible); permanent=true purges outright.
+func photosRemoveCmd(use, short string, permanent bool) *cobra.Command {
+	return &cobra.Command{
+		Use: use + " PHOTO_LINK_ID...", Short: short,
 		Args: cobra.MinimumNArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would %s %d photo(s)", map[bool]string{true: "permanently delete", false: "trash"}[permanent], len(c.Args)))
+			if c.dryRun("%s %d photo(s)", map[bool]string{true: "permanently delete", false: "trash"}[permanent], len(c.Args)) {
 				return nil
 			}
 			if err := c.App.Drive.PhotosDelete(c.Ctx, dc, c.Args, permanent); err != nil {
@@ -107,15 +113,13 @@ func photosDeleteCmd() *cobra.Command {
 			return nil
 		}),
 	}
-	cmd.Flags().BoolVar(&permanent, "permanent", false, "Permanently delete (purge from trash) instead of just trashing")
-	return cmd
 }
 
 func photosListCmd() *cobra.Command {
 	var tag string
 	cmd := &cobra.Command{
 		Use: "list", Short: "List photos",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			tagID, filter := 0, false
 			if tag != "" {
 				id, err := drivesvc.ParseTag(tag)
@@ -134,7 +138,7 @@ func photosListCmd() *cobra.Command {
 			}
 			return view.Render(c.R(), c.short(), c.App.IDCache, view.List[drivesvc.Photo]{
 				Columns: []view.Column[drivesvc.Photo]{
-					{Header: "CAPTURED", Cell: func(p drivesvc.Photo) string { return render.Time(p.CaptureTime) }},
+					{Header: "CAPTURED", Cell: func(p drivesvc.Photo) string { return units.Time(p.CaptureTime) }},
 					{Header: "TAGS", Cell: func(p drivesvc.Photo) string { return photoTagsLabel(p.Tags) }},
 					{Header: "LINK_ID", ID: true, Cell: func(p drivesvc.Photo) string { return p.LinkID }},
 				},
@@ -147,24 +151,35 @@ func photosListCmd() *cobra.Command {
 }
 
 func photosDownloadCmd() *cobra.Command {
-	var out string
+	var output, outputDir string
+	var force bool
 	cmd := &cobra.Command{
-		Use: "download LINK_ID", Short: "Download a photo by link ID",
+		Use: "download LINK_ID", Short: "Download a photo (--output - writes to stdout)",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			dir := "."
-			dest := out
-			if fi, statErr := os.Stat(out); out == "" || (statErr == nil && fi.IsDir()) {
-				if out != "" {
-					dir = out
-				}
-				dest = ""
+			// A photo's own filename is only known after the download, so stream
+			// straight to stdout, else download to a temp file next to the final
+			// destination and rename once the name (and collision-free path) is known.
+			if output == "-" {
+				_, err := c.App.Drive.PhotoDownload(c.Ctx, dc, c.Args[0], c.R().Stdout, drivesvc.DownloadOptions{Label: "Downloading", Quiet: true})
+				return err
 			}
-			tmp, err := os.CreateTemp(dir, ".pcli-photo-*")
+			if outputDir != "" {
+				if err := ensureDir(outputDir); err != nil {
+					return err
+				}
+			}
+			tempDir := "."
+			if output != "" {
+				tempDir = filepath.Dir(output)
+			} else if outputDir != "" {
+				tempDir = outputDir
+			}
+			tmp, err := os.CreateTemp(tempDir, ".pcli-photo-*")
 			if err != nil {
 				return err
 			}
@@ -175,18 +190,22 @@ func photosDownloadCmd() *cobra.Command {
 				_ = os.Remove(tmpName)
 				return derr
 			}
-			if dest == "" {
-				dest = filepath.Join(dir, name)
+			target, _, perr := pickDownloadPath(name, output, outputDir, force)
+			if perr != nil {
+				_ = os.Remove(tmpName)
+				return perr
 			}
-			if err := os.Rename(tmpName, dest); err != nil {
+			if err := os.Rename(tmpName, target); err != nil {
 				_ = os.Remove(tmpName)
 				return err
 			}
-			c.R().Success(fmt.Sprintf("Downloaded %s", dest))
+			c.R().Success(fmt.Sprintf("Downloaded %s", target))
 			return nil
 		}),
 	}
-	cmd.Flags().StringVar(&out, "out", "", "Output file or directory (default: current directory, original name)")
+	cmd.Flags().StringVar(&output, "output", "", "Output file (- for stdout); errors on an existing file")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Output directory; uses the photo's own name (auto-suffix on collision)")
+	cmd.Flags().BoolVar(&force, "force", false, "Overwrite an existing destination")
 	return cmd
 }
 
@@ -194,7 +213,7 @@ func photosUploadCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "upload FILE", Short: "Upload a photo to the library",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
@@ -204,8 +223,7 @@ func photosUploadCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would upload photo %s (%s)", path, render.Size(fi.Size())))
+			if c.dryRun("upload photo %s (%s)", path, units.Size(fi.Size())) {
 				return nil
 			}
 			f, err := os.Open(path)
@@ -230,7 +248,7 @@ func photosAlbumsCmd() *cobra.Command {
 
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List albums",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
@@ -253,7 +271,7 @@ func photosAlbumsCmd() *cobra.Command {
 	var name string
 	create := &cobra.Command{
 		Use: "create", Short: "Create an album",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
 			}
@@ -261,8 +279,7 @@ func photosAlbumsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create album %q", name))
+			if c.dryRun("create album %q", name) {
 				return nil
 			}
 			if err := c.App.Drive.AlbumCreate(c.Ctx, dc, name); err != nil {
@@ -279,13 +296,12 @@ func photosAlbumsCmd() *cobra.Command {
 	del := &cobra.Command{
 		Use: "delete ALBUM_LINK_ID", Short: "Delete an album",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would delete album %s", c.Args[0]))
+			if c.dryRun("delete album %s", c.Args[0]) {
 				return nil
 			}
 			if err := c.App.Drive.AlbumDelete(c.Ctx, dc, c.Args[0], deletePhotos); err != nil {
@@ -301,7 +317,7 @@ func photosAlbumsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "items ALBUM_LINK_ID", Short: "List photos in an album",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
@@ -312,7 +328,7 @@ func photosAlbumsCmd() *cobra.Command {
 			}
 			return view.Render(c.R(), c.short(), c.App.IDCache, view.List[drivesvc.Photo]{
 				Columns: []view.Column[drivesvc.Photo]{
-					{Header: "CAPTURED", Cell: func(p drivesvc.Photo) string { return render.Time(p.CaptureTime) }},
+					{Header: "CAPTURED", Cell: func(p drivesvc.Photo) string { return units.Time(p.CaptureTime) }},
 					{Header: "TAGS", Cell: func(p drivesvc.Photo) string { return photoTagsLabel(p.Tags) }},
 					{Header: "LINK_ID", ID: true, Cell: func(p drivesvc.Photo) string { return p.LinkID }},
 				},
@@ -324,13 +340,12 @@ func photosAlbumsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "add ALBUM_LINK_ID PHOTO_LINK_ID...", Short: "Add photos to an album",
 		Args: cobra.MinimumNArgs(2),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would add %d photo(s) to album %s", len(c.Args)-1, c.Args[0]))
+			if c.dryRun("add %d photo(s) to album %s", len(c.Args)-1, c.Args[0]) {
 				return nil
 			}
 			if err := c.App.Drive.AlbumAddPhotos(c.Ctx, dc, c.Args[0], c.Args[1:]); err != nil {
@@ -344,13 +359,12 @@ func photosAlbumsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "remove ALBUM_LINK_ID PHOTO_LINK_ID...", Short: "Remove photos from an album",
 		Args: cobra.MinimumNArgs(2),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			dc, err := drivePhotosCtx(c)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would remove %d photo(s) from album %s", len(c.Args)-1, c.Args[0]))
+			if c.dryRun("remove %d photo(s) from album %s", len(c.Args)-1, c.Args[0]) {
 				return nil
 			}
 			if err := c.App.Drive.AlbumRemovePhotos(c.Ctx, dc, c.Args[0], c.Args[1:]); err != nil {

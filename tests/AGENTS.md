@@ -80,8 +80,8 @@ func TestDriveItemsFoo(t *testing.T) {
     // Arrange
     folder := "/" + testID() + "-foo"
     runOK(t, "drive", "folders", "create", folder)
-    cleanupRun(t, fmt.Sprintf("Delete: proton-cli drive items delete --permanent %s", folder),
-        "drive", "items", "delete", "--permanent", folder)
+    cleanupRun(t, fmt.Sprintf("Delete: proton-cli drive items delete %s", folder),
+        "drive", "items", "delete", folder)
 
     // Act
     stdout := runOK(t, "drive", "items", "list", folder)
@@ -101,10 +101,10 @@ func TestDriveItemsFoo(t *testing.T) {
 
   ```
   ╔══════════════════════════════════════════════════════════════╗
-  ║  ⚠️  CLEANUP FAILED - MANUAL ACTION REQUIRED                ║
+  ║  ⚠️  CLEANUP FAILED - MANUAL ACTION REQUIRED                 ║
   ╠══════════════════════════════════════════════════════════════╣
-  ║  Delete folder: proton-cli drive items delete --permanent /test-xxx
-  ║  Error: exit 1: ...
+  ║  Delete folder: proton-cli drive items delete /test-xxx      ║
+  ║  Error: exit 1: ...                                          ║
   ╚══════════════════════════════════════════════════════════════╝
   ```
 

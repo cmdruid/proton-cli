@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/render"
 	passsvc "github.com/roman-16/proton-cli/internal/service/pass"
+	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/roman-16/proton-cli/internal/view"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +26,7 @@ func passItemsCmd() *cobra.Command {
 	var listVault string
 	list := &cobra.Command{
 		Use: "list", Short: "List Pass items across vaults",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
 			listVaultRef, err := resolvePrefix(c.App, listVault)
 			if err != nil {
 				return err
@@ -63,7 +64,7 @@ func passItemsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "get {SHARE_ID ITEM_ID | SEARCH}", Short: "Get a Pass item (decrypted)",
 		Args: cobra.RangeArgs(1, 2),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			shareID, itemID, err := c.App.Pass.ResolveItem(c.Ctx, c.U, c.Args)
 			if err != nil {
 				return err
@@ -83,8 +84,8 @@ func passItemsCmd() *cobra.Command {
 	var nc passsvc.NewItem
 	var createVault string
 	create := &cobra.Command{
-		Use: "create", Short: "Create a Pass item (login, note, card)",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
+		Use: "create", Short: "Create a Pass item (login, note, credit-card, ...)",
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
 			if nc.Name == "" {
 				return fmt.Errorf("--name is required")
 			}
@@ -96,8 +97,7 @@ func passItemsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create %s %q in vault %s", nc.Type, nc.Name, shareID))
+			if c.dryRun("create %s %q in vault %s", nc.Type, nc.Name, shareID) {
 				return nil
 			}
 			id, err := c.App.Pass.ItemCreate(c.Ctx, c.U, shareID, nc)
@@ -108,7 +108,7 @@ func passItemsCmd() *cobra.Command {
 			return nil
 		}),
 	}
-	create.Flags().StringVar(&nc.Type, "type", "login", "Item type (login, note, card, wifi, ssh_key, identity, custom)")
+	create.Flags().StringVar(&nc.Type, "type", "login", "Item type (login, note, credit-card, wifi, ssh-key, identity, custom)")
 	create.Flags().StringVar(&nc.Name, "name", "", "Item name")
 	create.Flags().StringVar(&nc.Username, "username", "", "Username (login)")
 	create.Flags().StringVar(&nc.Password, "password", "", "Password (login, wifi)")
@@ -116,15 +116,15 @@ func passItemsCmd() *cobra.Command {
 	create.Flags().StringVar(&nc.URL, "url", "", "URL (login)")
 	create.Flags().StringVar(&nc.TOTP, "totp", "", "TOTP URI or secret (login)")
 	create.Flags().StringVar(&nc.Note, "note", "", "Note")
-	create.Flags().StringVar(&nc.Holder, "holder", "", "Cardholder name (card)")
-	create.Flags().StringVar(&nc.Number, "number", "", "Card number (card)")
-	create.Flags().StringVar(&nc.Expiry, "expiry", "", "Card expiry YYYY-MM (card)")
-	create.Flags().StringVar(&nc.CVV, "cvv", "", "Card CVV (card)")
-	create.Flags().StringVar(&nc.PIN, "pin", "", "Card PIN (card)")
+	create.Flags().StringVar(&nc.Holder, "holder", "", "Cardholder name (credit-card)")
+	create.Flags().StringVar(&nc.Number, "number", "", "Card number (credit-card)")
+	create.Flags().StringVar(&nc.Expiry, "expiry", "", "Card expiry YYYY-MM (credit-card)")
+	create.Flags().StringVar(&nc.CVV, "cvv", "", "Card CVV (credit-card)")
+	create.Flags().StringVar(&nc.PIN, "pin", "", "Card PIN (credit-card)")
 	create.Flags().StringVar(&nc.SSID, "ssid", "", "Network SSID (wifi)")
 	create.Flags().StringVar(&nc.WifiSecurity, "security", "", "Wi-Fi security: WPA, WPA2, WPA3, WEP (wifi)")
-	create.Flags().StringVar(&nc.PrivateKey, "private-key", "", "Private key (ssh_key)")
-	create.Flags().StringVar(&nc.PublicKey, "public-key", "", "Public key (ssh_key)")
+	create.Flags().StringVar(&nc.PrivateKey, "private-key", "", "Private key (ssh-key)")
+	create.Flags().StringVar(&nc.PublicKey, "public-key", "", "Public key (ssh-key)")
 	create.Flags().StringVar(&nc.FullName, "full-name", "", "Full name (identity)")
 	create.Flags().StringVar(&nc.FirstName, "first-name", "", "First name (identity)")
 	create.Flags().StringVar(&nc.LastName, "last-name", "", "Last name (identity)")
@@ -146,13 +146,12 @@ func passItemsCmd() *cobra.Command {
 	edit := &cobra.Command{
 		Use: "edit {SHARE_ID ITEM_ID | SEARCH}", Short: "Edit a Pass item",
 		Args: cobra.RangeArgs(1, 2),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			shareID, itemID, err := c.App.Pass.ResolveItem(c.Ctx, c.U, c.Args)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would edit %s/%s", shareID, itemID))
+			if c.dryRun("edit %s/%s", shareID, itemID) {
 				return nil
 			}
 			if err := c.App.Pass.ItemEdit(c.Ctx, c.U, shareID, itemID, patch); err != nil {
@@ -169,15 +168,15 @@ func passItemsCmd() *cobra.Command {
 	edit.Flags().StringVar(&patch.URL, "url", "", "New URL (login)")
 	edit.Flags().StringVar(&patch.TOTP, "totp", "", "New TOTP URI/secret (login)")
 	edit.Flags().StringVar(&patch.Note, "note", "", "New note")
-	edit.Flags().StringVar(&patch.Holder, "holder", "", "New cardholder name (card)")
-	edit.Flags().StringVar(&patch.Number, "number", "", "New card number (card)")
-	edit.Flags().StringVar(&patch.Expiry, "expiry", "", "New card expiry YYYY-MM (card)")
-	edit.Flags().StringVar(&patch.CVV, "cvv", "", "New card CVV (card)")
-	edit.Flags().StringVar(&patch.PIN, "pin", "", "New card PIN (card)")
+	edit.Flags().StringVar(&patch.Holder, "holder", "", "New cardholder name (credit-card)")
+	edit.Flags().StringVar(&patch.Number, "number", "", "New card number (credit-card)")
+	edit.Flags().StringVar(&patch.Expiry, "expiry", "", "New card expiry YYYY-MM (credit-card)")
+	edit.Flags().StringVar(&patch.CVV, "cvv", "", "New card CVV (credit-card)")
+	edit.Flags().StringVar(&patch.PIN, "pin", "", "New card PIN (credit-card)")
 	edit.Flags().StringVar(&patch.SSID, "ssid", "", "New SSID (wifi)")
 	edit.Flags().StringVar(&patch.WifiSecurity, "security", "", "New Wi-Fi security (wifi)")
-	edit.Flags().StringVar(&patch.PrivateKey, "private-key", "", "New private key (ssh_key)")
-	edit.Flags().StringVar(&patch.PublicKey, "public-key", "", "New public key (ssh_key)")
+	edit.Flags().StringVar(&patch.PrivateKey, "private-key", "", "New private key (ssh-key)")
+	edit.Flags().StringVar(&patch.PublicKey, "public-key", "", "New public key (ssh-key)")
 	edit.Flags().StringVar(&patch.FullName, "full-name", "", "New full name (identity)")
 	edit.Flags().StringVar(&patch.FirstName, "first-name", "", "New first name (identity)")
 	edit.Flags().StringVar(&patch.LastName, "last-name", "", "New last name (identity)")
@@ -192,19 +191,19 @@ func passItemsCmd() *cobra.Command {
 	edit.Flags().StringVar(&patch.Website, "website", "", "New website (identity)")
 	c.AddCommand(edit)
 
-	c.AddCommand(simpleItemCmd("restore", "Restore an item from trash", func(c *Ctx, share, item string) error {
+	c.AddCommand(simpleItemCmd("restore", "Restore an item from trash", func(c *Invocation, share, item string) error {
 		return c.App.Pass.ItemRestore(c.Ctx, share, item)
 	}, "Item restored."))
-	c.AddCommand(bulkItemCmd("trash", "Move items to trash", func(c *Ctx, share, item string) error {
+	c.AddCommand(bulkItemCmd("trash", "Move items to trash", func(c *Invocation, share, item string) error {
 		return c.App.Pass.ItemTrash(c.Ctx, share, item)
 	}, "Trashed %d item(s)."))
-	c.AddCommand(bulkItemCmd("delete", "Permanently delete items", func(c *Ctx, share, item string) error {
+	c.AddCommand(bulkItemCmd("delete", "Permanently delete items", func(c *Invocation, share, item string) error {
 		return c.App.Pass.ItemDelete(c.Ctx, share, item)
 	}, "Deleted %d item(s)."))
 	return c
 }
 
-func printPassItem(c *Ctx, it *passsvc.Item) {
+func printPassItem(c *Invocation, it *passsvc.Item) {
 	out := c.R().Stdout
 	_, _ = fmt.Fprintf(out, "Type:     %s\n", it.Type)
 	_, _ = fmt.Fprintf(out, "Name:     %s\n", it.Name)
@@ -248,17 +247,16 @@ func printPassItem(c *Ctx, it *passsvc.Item) {
 	_, _ = fmt.Fprintf(out, "Share:    %s\n", it.ShareID)
 }
 
-func simpleItemCmd(use, short string, fn func(c *Ctx, share, item string) error, success string) *cobra.Command {
+func simpleItemCmd(use, short string, fn func(c *Invocation, share, item string) error, success string) *cobra.Command {
 	return &cobra.Command{
 		Use: use + " {SHARE_ID ITEM_ID | SEARCH}", Short: short,
 		Args: cobra.RangeArgs(1, 2),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			shareID, itemID, err := c.App.Pass.ResolveItem(c.Ctx, c.U, c.Args)
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would %s %s/%s", use, shareID, itemID))
+			if c.dryRun("%s %s/%s", use, shareID, itemID) {
 				return nil
 			}
 			if err := fn(c, shareID, itemID); err != nil {
@@ -278,7 +276,7 @@ type itemFilter struct {
 
 func (f *itemFilter) register(c *cobra.Command) {
 	c.Flags().StringVar(&f.vault, "vault", "", "Filter by vault name or ID")
-	c.Flags().StringVar(&f.itemType, "type", "", "Filter by item type (login, note, credit_card, alias, identity, ssh_key, wifi, custom)")
+	c.Flags().StringVar(&f.itemType, "type", "", "Filter by item type (login, note, credit-card, alias, identity, ssh-key, wifi, custom)")
 	c.Flags().StringVar(&f.olderThan, "older-than", "", "Match items not modified within DURATION (e.g. 30d, 2w, 1h)")
 	c.Flags().StringVar(&f.newerThan, "newer-than", "", "Match items modified within DURATION")
 	c.Flags().BoolVar(&f.all, "all", false, "Confirm matching every item in the scope (required when no other filter is set)")
@@ -288,7 +286,7 @@ func (f *itemFilter) set() bool {
 	return f.vault != "" || f.itemType != "" || f.olderThan != "" || f.newerThan != "" || f.all
 }
 
-func collectItemIDs(c *Ctx, u *keys.Unlocked, args []string, f *itemFilter) ([][2]string, error) {
+func collectItemIDs(c *Invocation, u *keys.Unlocked, args []string, f *itemFilter) ([][2]string, error) {
 	var pairs [][2]string
 	refs, err := resolvePrefixes(c.App, args)
 	if err != nil {
@@ -307,14 +305,14 @@ func collectItemIDs(c *Ctx, u *keys.Unlocked, args []string, f *itemFilter) ([][
 	if f.set() {
 		var olderCutoff, newerCutoff int64
 		if f.olderThan != "" {
-			d, err := render.ParseDuration(f.olderThan)
+			d, err := units.ParseDuration(f.olderThan)
 			if err != nil {
 				return nil, fmt.Errorf("invalid --older-than: %w", err)
 			}
 			olderCutoff = time.Now().Add(-d).Unix()
 		}
 		if f.newerThan != "" {
-			d, err := render.ParseDuration(f.newerThan)
+			d, err := units.ParseDuration(f.newerThan)
 			if err != nil {
 				return nil, fmt.Errorf("invalid --newer-than: %w", err)
 			}
@@ -359,13 +357,13 @@ func collectItemIDs(c *Ctx, u *keys.Unlocked, args []string, f *itemFilter) ([][
 	return out, nil
 }
 
-func bulkItemCmd(use, short string, fn func(c *Ctx, share, item string) error, successFmt string) *cobra.Command {
+func bulkItemCmd(use, short string, fn func(c *Invocation, share, item string) error, successFmt string) *cobra.Command {
 	var f itemFilter
 	c := &cobra.Command{
 		Use:   use + " [SHARE_ID ITEM_ID | SEARCH]",
 		Short: short,
 		Args:  cobra.RangeArgs(0, 2),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			pairs, err := collectItemIDs(c, c.U, c.Args, &f)
 			if err != nil {
 				return err
@@ -396,7 +394,7 @@ func passVaultsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "vaults", Short: "Manage Pass vaults"}
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List vaults",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
 			vaults, err := c.App.Pass.VaultsList(c.Ctx, c.U)
 			if err != nil {
 				return err
@@ -421,12 +419,11 @@ func passVaultsCmd() *cobra.Command {
 	var name string
 	create := &cobra.Command{
 		Use: "create", Short: "Create a vault",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create vault %q", name))
+			if c.dryRun("create vault %q", name) {
 				return nil
 			}
 			id, err := c.App.Pass.VaultCreate(c.Ctx, c.U, name)
@@ -443,10 +440,9 @@ func passVaultsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "delete SHARE_ID", Short: "Delete a vault",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			shareID := c.Args[0]
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would delete vault %s", shareID))
+			if c.dryRun("delete vault %s", shareID) {
 				return nil
 			}
 			if err := c.App.Pass.VaultDelete(c.Ctx, shareID); err != nil {
@@ -461,12 +457,11 @@ func passVaultsCmd() *cobra.Command {
 	rename := &cobra.Command{
 		Use: "rename SHARE_ID", Short: "Rename a vault",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			if renameName == "" {
 				return fmt.Errorf("--name is required")
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would rename vault %s to %q", c.Args[0], renameName))
+			if c.dryRun("rename vault %s to %q", c.Args[0], renameName) {
 				return nil
 			}
 			if err := c.App.Pass.VaultEdit(c.Ctx, c.U, c.Args[0], renameName); err != nil {
@@ -494,7 +489,7 @@ func passAliasCmd() *cobra.Command {
 	c := &cobra.Command{Use: "alias", Short: "Manage aliases"}
 	c.AddCommand(&cobra.Command{
 		Use: "options", Short: "List available alias suffixes and mailboxes",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
 			shareID, err := c.App.Pass.ResolveVault(c.Ctx, c.U, "")
 			if err != nil {
 				return err
@@ -520,7 +515,7 @@ func passAliasCmd() *cobra.Command {
 	var prefix, suffix, mailbox, name, vault string
 	create := &cobra.Command{
 		Use: "create", Short: "Create an alias",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
 			if prefix == "" {
 				return fmt.Errorf("--prefix is required")
 			}
@@ -532,8 +527,7 @@ func passAliasCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create alias %s@%s", prefix, suffix))
+			if c.dryRun("create alias %s@%s", prefix, suffix) {
 				return nil
 			}
 			id, err := c.App.Pass.AliasCreate(c.Ctx, c.U, shareID, prefix, suffix, mailbox, name)

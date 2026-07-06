@@ -185,16 +185,6 @@ func TestToConversationMapping(t *testing.T) {
 	}
 }
 
-func TestLooksLikeID(t *testing.T) {
-	full := "NWM5AYGxFIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A5C-ADmohv7TjXfYbDEIHZPQ=="
-	if !LooksLikeID(full) {
-		t.Error("LooksLikeID should accept a full Proton ID")
-	}
-	if LooksLikeID("invoice") {
-		t.Error("LooksLikeID should reject a short search term")
-	}
-}
-
 // fakeDoer captures the last request issued through the proton.Doer seam.
 type fakeDoer struct{ last proton.Request }
 

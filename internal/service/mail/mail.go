@@ -10,9 +10,9 @@ import (
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/roman-16/proton-cli/internal/ref"
 )
 
 // WrongTableError signals that an ID-shaped REF was passed to the wrong
@@ -36,10 +36,6 @@ func OppositeKind(k string) string {
 	}
 	return "conversation"
 }
-
-func LooksLikeID(s string) bool { return looksLikeID(s) }
-
-func looksLikeID(s string) bool { return idcache.IsFullID(s) }
 
 // Built-in Proton system-label IDs. The mutation endpoints reference some of
 // these directly; MailboxLabelIDs is built from the same constants so the two
@@ -217,73 +213,63 @@ func (s *Service) crossTableProbe(ctx context.Context, id string, err error, cal
 	return err
 }
 
-func (s *Service) Resolve(ctx context.Context, ref string) (string, error) {
-	if looksLikeID(ref) {
-		return ref, nil
+func msgID(m Message) string    { return m.ID }
+func msgLabel(m Message) string { return m.FromAddress + "  " + m.Subject }
+
+func convSenderAddr(c Conversation) string {
+	if len(c.Senders) > 0 {
+		if a, ok := c.Senders[0]["Address"].(string); ok {
+			return a
+		}
 	}
-	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: ref, Folder: "all", Limit: 20})
+	return ""
+}
+
+func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
+	if idcache.IsFullID(r) {
+		return r, nil
+	}
+	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
 	if err != nil {
 		return "", err
 	}
-	switch len(msgs) {
-	case 0:
-		return "", &errs.NotFound{Kind: "message", Ref: ref}
-	case 1:
-		return msgs[0].ID, nil
+	m, err := ref.Pick("message", r, msgs, msgID, msgLabel)
+	if err != nil {
+		return "", err
 	}
-	cands := make([]errs.Candidate, 0, len(msgs))
-	for _, m := range msgs {
-		cands = append(cands, errs.Candidate{ID: m.ID, Label: m.FromAddress + "  " + m.Subject})
-	}
-	return "", &errs.Ambiguous{Kind: "message", Ref: ref, Candidates: cands}
+	return m.ID, nil
 }
 
 // ResolveScheduled mirrors Resolve but scopes the keyword search to the
 // Scheduled folder, so a REF can only resolve to an unschedulable message.
-func (s *Service) ResolveScheduled(ctx context.Context, ref string) (string, error) {
-	if looksLikeID(ref) {
-		return ref, nil
+func (s *Service) ResolveScheduled(ctx context.Context, r string) (string, error) {
+	if idcache.IsFullID(r) {
+		return r, nil
 	}
-	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: ref, Folder: "scheduled", Limit: 20})
+	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "scheduled", Limit: 20})
 	if err != nil {
 		return "", err
 	}
-	switch len(msgs) {
-	case 0:
-		return "", &errs.NotFound{Kind: "scheduled message", Ref: ref}
-	case 1:
-		return msgs[0].ID, nil
+	m, err := ref.Pick("scheduled message", r, msgs, msgID, msgLabel)
+	if err != nil {
+		return "", err
 	}
-	cands := make([]errs.Candidate, 0, len(msgs))
-	for _, m := range msgs {
-		cands = append(cands, errs.Candidate{ID: m.ID, Label: m.FromAddress + "  " + m.Subject})
-	}
-	return "", &errs.Ambiguous{Kind: "scheduled message", Ref: ref, Candidates: cands}
+	return m.ID, nil
 }
 
-func (s *Service) ResolveConversation(ctx context.Context, ref string) (string, error) {
-	if looksLikeID(ref) {
-		return ref, nil
+func (s *Service) ResolveConversation(ctx context.Context, r string) (string, error) {
+	if idcache.IsFullID(r) {
+		return r, nil
 	}
-	convs, _, err := s.ConversationsSearch(ctx, SearchOptions{Keyword: ref, Folder: "all", Limit: 20})
+	convs, _, err := s.ConversationsSearch(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
 	if err != nil {
 		return "", err
 	}
-	switch len(convs) {
-	case 0:
-		return "", &errs.NotFound{Kind: "conversation", Ref: ref}
-	case 1:
-		return convs[0].ID, nil
+	c, err := ref.Pick("conversation", r, convs,
+		func(c Conversation) string { return c.ID },
+		func(c Conversation) string { return convSenderAddr(c) + "  " + c.Subject })
+	if err != nil {
+		return "", err
 	}
-	cands := make([]errs.Candidate, 0, len(convs))
-	for _, c := range convs {
-		fromAddr := ""
-		if len(c.Senders) > 0 {
-			if a, ok := c.Senders[0]["Address"].(string); ok {
-				fromAddr = a
-			}
-		}
-		cands = append(cands, errs.Candidate{ID: c.ID, Label: fromAddr + "  " + c.Subject})
-	}
-	return "", &errs.Ambiguous{Kind: "conversation", Ref: ref, Candidates: cands}
+	return c.ID, nil
 }

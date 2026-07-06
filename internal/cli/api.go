@@ -24,7 +24,7 @@ Examples:
   proton-cli api POST /calendar/v1 --body '{"Name":"Work","Color":"#7272a7","Display":1,"AddressID":"..."}'
   proton-cli api GET /mail/v4/messages --query Page=0 --query PageSize=10`,
 		Args: cobra.ExactArgs(2),
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			method, path := c.Args[0], c.Args[1]
 
 			q := make(map[string][]string)

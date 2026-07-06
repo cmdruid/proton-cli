@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -83,7 +84,7 @@ func TestPassItemsCreateNote(t *testing.T) {
 func TestPassItemsCreateCardShowsPIN(t *testing.T) {
 	name := testID() + "-card"
 	stdout := runOK(t, "pass", "items", "create",
-		"--type", "card",
+		"--type", "credit-card",
 		"--name", name,
 		"--holder", "Test Holder",
 		"--number", "4111111111111111",
@@ -103,6 +104,33 @@ func TestPassItemsCreateCardShowsPIN(t *testing.T) {
 	assertField(t, got, "Expiry:", "2029-01")
 	assertField(t, got, "CVV:", "123")
 	assertField(t, got, "PIN:", "7890")
+}
+
+// TestPassCreditCardTypeConsistent guards the D1 fix: the type word used at
+// create time is the same word shown in output and accepted by the --type
+// filter, so `create --type credit-card` then `trash --type credit-card`
+// actually matches (the old card/credit_card split matched nothing).
+func TestPassCreditCardTypeConsistent(t *testing.T) {
+	name := testID() + "-cc"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "credit-card",
+		"--name", name, "--holder", "Roman", "--number", "4111111111111111", "--expiry", "2030-01"))
+	cleanupRun(t, fmt.Sprintf("Delete card: proton-cli pass items delete %s", name),
+		"pass", "items", "delete", name)
+
+	// Display/JSON type uses the same kebab spelling as the create flag.
+	// --output json before -- so the flag parses and ref stays positional.
+	var item map[string]interface{}
+	if err := json.Unmarshal([]byte(runOK(t, "pass", "items", "get", "--output", "json", "--", ref)), &item); err != nil {
+		t.Fatalf("parse item JSON: %v", err)
+	}
+	if got := item["type"]; got != "credit-card" {
+		t.Errorf("type = %v, want credit-card", got)
+	}
+	// The --type filter word == the create word, so it matches the item.
+	_, stderr := runOKStderr(t, "--dry-run", "pass", "items", "trash", "--type", "credit-card")
+	if !strings.Contains(stderr, ref) {
+		t.Errorf("trash --type credit-card should match the credit-card item %s; stderr:\n%s", ref, stderr)
+	}
 }
 
 // ── items: trash / restore / delete ──
@@ -207,7 +235,7 @@ func TestPassItemTypesAndFields(t *testing.T) {
 	assertContains(t, runOK(t, "pass", "items", "get", "--", wifiRef), "MyTestNet")
 
 	// SSH key.
-	sshRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "ssh_key",
+	sshRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "ssh-key",
 		"--name", testID()+"-ssh", "--public-key", "ssh-ed25519 AAAATESTKEY", "--private-key", "PRIVATE-TEST"))
 	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", sshRef),
 		"pass", "items", "delete", "--", sshRef)

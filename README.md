@@ -107,7 +107,7 @@ These apply across every command.
 - **Output** - `--output text|json|yaml` (default `text`). JSON/YAML use `snake_case` keys.
 - **Exit codes** - `0` success · `1` user error · `2` auth · `3` not-found · `4` conflict / ambiguous · `5` network / server · `130` cancelled.
 - **Create = ID on stdout** - creating commands print the new ID to stdout and `✓ …` to stderr, so `ID=$(proton-cli ... create ...)` works. `mail messages send` follows suit: it prints the message ID, and scheduled sends confirm the resolved local time.
-- **Streaming I/O** - `-` means stdin (inputs) or stdout (outputs), e.g. `mail messages send --body -`, `drive items upload - /path`, `drive items download /path -`.
+- **Streaming I/O** - `-` means stdin (inputs) or stdout (outputs), e.g. `mail messages send --body -`, `drive items upload - /path`, `drive items download /path --output -`.
 - **Dry run** - `--dry-run` on any mutating command previews without applying.
 - **Cancellation** - `Ctrl+C` aborts in-flight operations.
 
@@ -185,12 +185,12 @@ The examples below are representative, not exhaustive. Every command lists its f
 | `mail labels` | list, create, update, delete |
 | `mail filters` | list, create, update, enable, disable, delete |
 | `mail addresses` | list |
-| `drive items` | list, info, upload, download, rename, move, copy, delete, revisions |
+| `drive items` | list, info, upload, download, rename, move, copy, trash, delete, revisions |
 | `drive folders` | create |
 | `drive share` | status, link, unlink, add, remove |
 | `drive invitations` | list, accept, reject |
 | `drive trash` | list, restore, empty |
-| `drive photos` | list, upload, download, delete, favorite, unfavorite, albums |
+| `drive photos` | list, upload, download, trash, delete, favorite, unfavorite, albums |
 | `calendar calendars` | list, create, rename, delete |
 | `calendar events` | list, get, create, update, respond, delete |
 | `contacts` | list, get, create, update, delete, pin-key, unpin-key, groups |
@@ -244,9 +244,9 @@ proton-cli mail conversations attachments download CONV_ID --all --output-dir ./
 
 # Attachments
 proton-cli mail attachments list MESSAGE_ID
-proton-cli mail attachments download MESSAGE_ID ATT_ID ./file.pdf
+proton-cli mail attachments download MESSAGE_ID ATT_ID --output ./file.pdf
 proton-cli mail attachments download MESSAGE_ID --all --output-dir ./atts/
-proton-cli mail attachments download MESSAGE_ID ATT_ID -   # stdout
+proton-cli mail attachments download MESSAGE_ID ATT_ID --output -   # stdout
 # --force, --include-inline, auto-suffix on collision: proton-cli mail attachments download --help
 
 # Labels and folders
@@ -279,20 +279,21 @@ proton-cli drive items info /Documents/report.pdf       # type, size, checksum, 
 proton-cli drive items upload ./report.pdf /Documents
 proton-cli drive items upload --recursive ./folder /Backup
 proton-cli drive items upload - /Notes/note.txt         # from stdin
-proton-cli drive items download /Documents/report.pdf ./report.pdf
-proton-cli drive items download /Photos/pic.jpg -       # to stdout
+proton-cli drive items download /Documents/report.pdf --output ./report.pdf
+proton-cli drive items download /Documents/report.pdf --output-dir ./out/   # keep original name
+proton-cli drive items download /Photos/pic.jpg --output -       # to stdout
 proton-cli drive items rename /Documents/old.txt new.txt
 proton-cli drive items move /Documents/report.pdf /Archive
 proton-cli drive items copy /Documents/report.pdf /Archive
-proton-cli drive items delete /Documents/old.pdf        # to trash
-proton-cli drive items delete --permanent /Documents/secret.txt
+proton-cli drive items trash /Documents/old.pdf         # to trash (reversible)
+proton-cli drive items delete /Documents/secret.txt     # permanent
 proton-cli drive items revisions list /Documents/report.pdf
 proton-cli drive items revisions restore /Documents/report.pdf REVISION_ID
 
 # Batch filters
-proton-cli drive items delete --pattern "*.tmp" --scope / --recursive
-proton-cli drive items delete --larger-than 100MB --scope /Backups --recursive
-proton-cli drive items delete --older-than 90d --scope /Logs --recursive
+proton-cli drive items trash --pattern "*.tmp" --scope / --recursive
+proton-cli drive items delete --larger-than 100MB --scope /Backups --recursive   # permanent
+proton-cli drive items trash --older-than 90d --scope /Logs --recursive
 
 # Folders
 proton-cli drive folders create /Documents/NewFolder
@@ -320,8 +321,9 @@ proton-cli drive trash empty                            # across all volumes
 proton-cli drive photos list
 proton-cli drive photos list --tags favorites           # filter by tag (favorites, screenshots, videos, …)
 proton-cli drive photos upload ./IMG_0001.jpg
-proton-cli drive photos download PHOTO_LINK_ID --out ./pics/
-proton-cli drive photos delete PHOTO_LINK_ID...         # to trash (--permanent to purge)
+proton-cli drive photos download PHOTO_LINK_ID --output-dir ./pics/
+proton-cli drive photos trash PHOTO_LINK_ID...          # to trash (reversible)
+proton-cli drive photos delete PHOTO_LINK_ID...         # permanent
 proton-cli drive photos favorite PHOTO_LINK_ID...       # mark as favorite (album-only photos are copied to your timeline)
 proton-cli drive photos unfavorite PHOTO_LINK_ID...     # remove from favorites
 proton-cli drive photos albums list
@@ -399,9 +401,9 @@ proton-cli pass items get "github.com"                  # search
 proton-cli pass items create --type login --name "GitHub" --username me --password secret \
   --url github.com --totp "otpauth://..."
 proton-cli pass items create --type note --name "My Note" --note "Some text"
-proton-cli pass items create --type card --name "Visa" --holder "Roman" --number "4111..." --expiry "2028-12"
+proton-cli pass items create --type credit-card --name "Visa" --holder "Roman" --number "4111..." --expiry "2028-12"
 proton-cli pass items create --type wifi --name "Home" --ssid MyNet --password pw --security WPA2
-proton-cli pass items create --type ssh_key --name "laptop" --public-key "ssh-ed25519 ..." \
+proton-cli pass items create --type ssh-key --name "laptop" --public-key "ssh-ed25519 ..." \
   --private-key "$(cat id_ed25519)"
 proton-cli pass items create --type identity --name "Me" --full-name "Jane Roe" --email jane@ex.com
 proton-cli pass items create --type custom --name "Server" --field "Host=1.2.3.4" --hidden "Root PW=secret"
@@ -476,7 +478,7 @@ if ! proton-cli contacts get "jane"; then
 fi
 
 # streaming: pipe a Drive file straight into another tool
-proton-cli drive items download /report.pdf - | gpg --encrypt --recipient me ...
+proton-cli drive items download /report.pdf --output - | gpg --encrypt --recipient me ...
 
 # preview any mutation first
 proton-cli mail messages trash --unread --older-than 30d --dry-run

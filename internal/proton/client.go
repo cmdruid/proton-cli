@@ -17,8 +17,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/roman-16/proton-cli/internal/session"
 )
 
 const (
@@ -51,6 +49,7 @@ type Client struct {
 	encKeyBlob    string // persisted (salted key password encrypted with the server-held client key)
 	profile       string
 	hvResolver    HVResolver
+	persist       func()
 }
 
 type Options struct {
@@ -112,25 +111,36 @@ func (c *Client) SetEncKeyBlob(blob string) {
 	c.encKeyBlob = blob
 }
 
-func (c *Client) Session() *session.Session {
+// Tokens returns the current session auth tokens.
+func (c *Client) Tokens() (uid, acc, ref string) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	s := &session.Session{
-		UID:          c.uid,
-		AccessToken:  c.acc,
-		RefreshToken: c.ref,
-		AppVersion:   c.app,
-		BaseURL:      c.base,
+	return c.uid, c.acc, c.ref
+}
+
+// AppVersion returns the app-version header value (a fixed connection setting).
+func (c *Client) AppVersion() string { return c.app }
+
+// BaseURL returns the API base URL (a fixed connection setting).
+func (c *Client) BaseURL() string { return c.base }
+
+// SetPersistHook installs a callback invoked whenever the client's persistable
+// state changes (e.g. a token refresh). The higher layer uses it to write the
+// session file, keeping this transport package free of any persistence format.
+func (c *Client) SetPersistHook(fn func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.persist = fn
+}
+
+// Persist invokes the persist hook if one is installed (best-effort).
+func (c *Client) Persist() {
+	c.mu.RLock()
+	fn := c.persist
+	c.mu.RUnlock()
+	if fn != nil {
+		fn()
 	}
-	// Prefer the encrypted blob. Preserve a legacy cleartext key password only
-	// until it has been migrated to a blob; never write new cleartext.
-	switch {
-	case c.encKeyBlob != "":
-		s.EncKeyBlob = c.encKeyBlob
-	case c.saltedKeyPass != "":
-		s.SaltedKeyPass = c.saltedKeyPass
-	}
-	return s
 }
 
 // Request is a typed API request. Body is JSON-encoded when it is not nil and
@@ -172,7 +182,7 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 		if rerr := c.refreshAuth(ctx); rerr != nil {
 			return resp, ErrUnauthorized
 		}
-		_ = session.Save(c.profile, c.Session())
+		c.Persist()
 		resp, err = c.doOnce(ctx, req)
 		if err != nil {
 			return nil, err
@@ -288,7 +298,7 @@ func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
 		c.log.Debug("api request failed",
 			"method", req.Method, "path", req.Path, "err", err,
 			"duration_ms", time.Since(start).Milliseconds())
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, &NetworkError{Err: err}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	buf, err := io.ReadAll(resp.Body)

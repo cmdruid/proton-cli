@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 

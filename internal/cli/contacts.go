@@ -36,7 +36,7 @@ func readArmoredKey(path string) (string, error) {
 // resolveContactEmail picks which of a contact's emails a key operation targets:
 // the --email flag if given, the sole email if there is one, else an error
 // asking the user to disambiguate.
-func resolveContactEmail(c *Ctx, id, emailFlag string) (string, error) {
+func resolveContactEmail(c *Invocation, id, emailFlag string) (string, error) {
 	if emailFlag != "" {
 		return emailFlag, nil
 	}
@@ -60,7 +60,7 @@ func contactsPinKeyCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "pin-key REF", Short: "Pin a public key to a contact so mail to them is encrypted to it",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			if keyPath == "" {
 				return fmt.Errorf("--key is required (armored public key file, or - for stdin)")
 			}
@@ -79,8 +79,7 @@ func contactsPinKeyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would pin a key for %s", target))
+			if c.dryRun("pin a key for %s", target) {
 				return nil
 			}
 			var enc *bool
@@ -107,7 +106,7 @@ func contactsUnpinKeyCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "unpin-key REF", Short: "Remove pinned key(s) from a contact",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
 			if err != nil {
 				return err
@@ -116,8 +115,7 @@ func contactsUnpinKeyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would remove pinned key(s) for %s", target))
+			if c.dryRun("remove pinned key(s) for %s", target) {
 				return nil
 			}
 			if err := c.App.Contacts.UnpinKey(c.Ctx, c.U, id, target); err != nil {
@@ -136,7 +134,7 @@ func contactsGroupsCmd() *cobra.Command {
 
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List contact groups",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			groups, err := c.App.Contacts.GroupsList(c.Ctx)
 			if err != nil {
 				return err
@@ -155,15 +153,14 @@ func contactsGroupsCmd() *cobra.Command {
 	var gName, gColor string
 	create := &cobra.Command{
 		Use: "create", Short: "Create a contact group",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if gName == "" {
 				return fmt.Errorf("--name is required")
 			}
 			if err := validateAccentColor(gColor); err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create group %q", gName))
+			if c.dryRun("create group %q", gName) {
 				return nil
 			}
 			id, err := c.App.Contacts.GroupCreate(c.Ctx, gName, gColor)
@@ -181,9 +178,8 @@ func contactsGroupsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "delete GROUP_ID", Short: "Delete a contact group",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would delete group %s", c.Args[0]))
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
+			if c.dryRun("delete group %s", c.Args[0]) {
 				return nil
 			}
 			if err := c.App.Contacts.GroupDelete(c.Ctx, c.Args[0]); err != nil {
@@ -194,21 +190,21 @@ func contactsGroupsCmd() *cobra.Command {
 		}),
 	})
 
-	c.AddCommand(contactsGroupMembersCmd("add", "Add contacts to a group", func(c *Ctx, gid string, ids []string) error {
+	c.AddCommand(contactsGroupMembersCmd("add", "Add contacts to a group", func(c *Invocation, gid string, ids []string) error {
 		return c.App.Contacts.GroupAdd(c.Ctx, gid, ids)
 	}, "Added %d contact(s) to group."))
-	c.AddCommand(contactsGroupMembersCmd("remove", "Remove contacts from a group", func(c *Ctx, gid string, ids []string) error {
+	c.AddCommand(contactsGroupMembersCmd("remove", "Remove contacts from a group", func(c *Invocation, gid string, ids []string) error {
 		return c.App.Contacts.GroupRemove(c.Ctx, gid, ids)
 	}, "Removed %d contact(s) from group."))
 
 	return c
 }
 
-func contactsGroupMembersCmd(use, short string, fn func(*Ctx, string, []string) error, successFmt string) *cobra.Command {
+func contactsGroupMembersCmd(use, short string, fn func(*Invocation, string, []string) error, successFmt string) *cobra.Command {
 	return &cobra.Command{
 		Use: use + " GROUP_ID CONTACT_REF...", Short: short,
 		Args: cobra.MinimumNArgs(2),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			groupID := c.Args[0]
 			ids := make([]string, 0, len(c.Args)-1)
 			for _, ref := range c.Args[1:] {
@@ -218,8 +214,7 @@ func contactsGroupMembersCmd(use, short string, fn func(*Ctx, string, []string) 
 				}
 				ids = append(ids, id)
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would %s %d contact(s)", use, len(ids)))
+			if c.dryRun("%s %d contact(s)", use, len(ids)) {
 				return nil
 			}
 			if err := fn(c, groupID, ids); err != nil {
@@ -234,7 +229,7 @@ func contactsGroupMembersCmd(use, short string, fn func(*Ctx, string, []string) 
 func contactsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "list", Short: "List contacts (decrypted)",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
 			contacts, err := c.App.Contacts.List(c.Ctx, c.U)
 			if err != nil {
 				return err
@@ -256,7 +251,7 @@ func contactsGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "get REF", Short: "Get a contact (decrypted)",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
 			if err != nil {
 				return err
@@ -309,9 +304,8 @@ func contactsCreateCmd() *cobra.Command {
 	var nc ctsvc.NewContact
 	c := &cobra.Command{
 		Use: "create", Short: "Create a contact",
-		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Ctx) error {
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create contact %q", nc.Name))
+		RunE: run([]Step{stepAuth, stepUnlock}, func(c *Invocation) error {
+			if c.dryRun("create contact %q", nc.Name) {
 				return nil
 			}
 			id, err := c.App.Contacts.Create(c.Ctx, c.U, nc)
@@ -339,13 +333,12 @@ func contactsUpdateCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "update REF", Short: "Update a contact",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would update contact %s", id))
+			if c.dryRun("update contact %s", id) {
 				return nil
 			}
 			if err := c.App.Contacts.Update(c.Ctx, c.U, id, nc); err != nil {
@@ -371,7 +364,7 @@ func contactsDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "delete REF...", Short: "Delete contacts",
 		Args: cobra.MinimumNArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			ids := make([]string, 0, len(c.Args))
 			for _, ref := range c.Args {
 				id, err := c.App.Contacts.Resolve(c.Ctx, c.U, ref)
@@ -380,8 +373,7 @@ func contactsDeleteCmd() *cobra.Command {
 				}
 				ids = append(ids, id)
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would delete %d contact(s)", len(ids)))
+			if c.dryRun("delete %d contact(s)", len(ids)) {
 				return nil
 			}
 			if err := c.App.Contacts.Delete(c.Ctx, ids); err != nil {

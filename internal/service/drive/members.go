@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
@@ -151,7 +150,7 @@ func (s *Service) addressKeyRing(ctx context.Context, email string) (*pgp.KeyRin
 			Keys []struct{ PublicKey string }
 		}
 	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/keys/all", Query: keys.Query("Email", email)}, &r); err != nil {
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/keys/all", Query: proton.Query("Email", email)}, &r); err != nil {
 		return nil, err
 	}
 	if len(r.Address.Keys) == 0 {

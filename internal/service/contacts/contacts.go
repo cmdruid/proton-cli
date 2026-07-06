@@ -1,19 +1,16 @@
-// Package contacts provides Proton Contacts operations.
 package contacts
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"strings"
 
-	gopenpgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/crypto/ical"
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/roman-16/proton-cli/internal/ref"
 )
 
 type Service struct{ C proton.Doer }
@@ -71,7 +68,7 @@ func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error)
 				Cards []map[string]any
 			}
 		}
-		q := keys.Query("Page", fmt.Sprintf("%d", page), "PageSize", "50")
+		q := proton.Query("Page", fmt.Sprintf("%d", page), "PageSize", "50")
 		if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/contacts/v4/contacts/export", Query: q}, &r); err != nil {
 			return nil, err
 		}
@@ -114,15 +111,15 @@ func (s *Service) Get(ctx context.Context, u *keys.Unlocked, id string) (*Contac
 	return &c, nil
 }
 
-func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, ref string) (string, error) {
-	if looksLikeID(ref) {
-		return ref, nil
+func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, r string) (string, error) {
+	if idcache.IsFullID(r) {
+		return r, nil
 	}
 	contacts, err := s.List(ctx, u)
 	if err != nil {
 		return "", err
 	}
-	needle := strings.ToLower(ref)
+	needle := strings.ToLower(r)
 	var matches []Contact
 	for _, c := range contacts {
 		match := strings.Contains(strings.ToLower(c.Name), needle)
@@ -136,17 +133,13 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, ref string) (st
 			matches = append(matches, c)
 		}
 	}
-	switch len(matches) {
-	case 0:
-		return "", &errs.NotFound{Kind: "contact", Ref: ref}
-	case 1:
-		return matches[0].ID, nil
+	c, err := ref.Pick("contact", r, matches,
+		func(c Contact) string { return c.ID },
+		func(c Contact) string { return fmt.Sprintf("%s <%s>", c.Name, c.Email) })
+	if err != nil {
+		return "", err
 	}
-	cands := make([]errs.Candidate, 0, len(matches))
-	for _, m := range matches {
-		cands = append(cands, errs.Candidate{ID: m.ID, Label: fmt.Sprintf("%s <%s>", m.Name, m.Email)})
-	}
-	return "", &errs.Ambiguous{Kind: "contact", Ref: ref, Candidates: cands}
+	return c.ID, nil
 }
 
 func (s *Service) Create(ctx context.Context, u *keys.Unlocked, nc NewContact) (string, error) {
@@ -250,304 +243,6 @@ func (s *Service) Delete(ctx context.Context, ids []string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/contacts/v4/contacts/delete", Body: map[string]any{"IDs": ids}}, nil)
 }
 
-// ContactCrypto holds a contact's pinned-key encryption preferences for one
-// email address, mirroring the x-pm-* vCard properties Proton stores. A nil
-// Encrypt/Sign means the flag is unset in the contact.
-type ContactCrypto struct {
-	ArmoredKeys       []string `json:"armored_keys"`
-	Encrypt           *bool    `json:"encrypt,omitempty"`
-	Sign              *bool    `json:"sign,omitempty"`
-	Scheme            string   `json:"scheme,omitempty"`
-	SignatureVerified bool     `json:"signature_verified"`
-}
-
-// PinnedKeysFor returns the pinned public keys and encryption preferences a
-// contact stores for email, or nil when the address has no contact or no
-// pinned key. It is best-effort on decrypt/decode: a hiccup returns (nil, nil)
-// so it never blocks sending, but a contact-lookup API error propagates.
-func (s *Service) PinnedKeysFor(ctx context.Context, u *keys.Unlocked, email string) (*ContactCrypto, error) {
-	id, ok, err := s.contactIDByEmail(ctx, email)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-	ct, err := s.Get(ctx, u, id)
-	if err != nil {
-		return nil, nil
-	}
-	joined := strings.Join(ct.Cards, "\n")
-	group := ical.EmailGroup(joined, email)
-	if group == "" {
-		return nil, nil
-	}
-	armored := decodePinnedKeys(ical.GroupValues(joined, group, "KEY"))
-	if len(armored) == 0 {
-		return nil, nil
-	}
-	cc := &ContactCrypto{
-		ArmoredKeys:       armored,
-		Scheme:            strings.ToLower(strings.TrimSpace(ical.GroupValue(joined, group, "X-PM-SCHEME"))),
-		SignatureVerified: ct.Signature == pgp.Verified,
-	}
-	if v := ical.GroupValue(joined, group, "X-PM-ENCRYPT"); v != "" {
-		b := parseVCardBool(v)
-		cc.Encrypt = &b
-	}
-	if v := ical.GroupValue(joined, group, "X-PM-SIGN"); v != "" {
-		b := parseVCardBool(v)
-		cc.Sign = &b
-	}
-	return cc, nil
-}
-
-// contactIDByEmail resolves an email to its contact ID via the contact-emails
-// endpoint. Defaults==1 means the contact has no per-email configuration, so
-// it is treated as a miss.
-func (s *Service) contactIDByEmail(ctx context.Context, email string) (string, bool, error) {
-	var r struct {
-		ContactEmails []struct {
-			ContactID string
-			Defaults  int
-		}
-	}
-	if err := s.C.Decode(ctx, proton.Request{
-		Method: "GET", Path: "/contacts/v4/contacts/emails", Query: keys.Query("Email", email),
-	}, &r); err != nil {
-		return "", false, err
-	}
-	if len(r.ContactEmails) == 0 || r.ContactEmails[0].Defaults == 1 {
-		return "", false, nil
-	}
-	return r.ContactEmails[0].ContactID, true, nil
-}
-
-// decodePinnedKeys turns "data:application/pgp-keys;base64,<b64>" vCard KEY
-// values into armored public keys, dropping any that fail to parse.
-func decodePinnedKeys(values []string) []string {
-	var out []string
-	for _, v := range values {
-		_, b64, ok := strings.Cut(v, ",")
-		if !ok {
-			continue
-		}
-		bin, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
-		if err != nil {
-			continue
-		}
-		key, err := gopenpgp.NewKey(bin)
-		if err != nil {
-			continue
-		}
-		armored, err := key.GetArmoredPublicKey()
-		if err != nil {
-			continue
-		}
-		out = append(out, armored)
-	}
-	return out
-}
-
-func parseVCardBool(v string) bool {
-	return strings.EqualFold(strings.TrimSpace(v), "true")
-}
-
-type rawCard struct {
-	Type      int
-	Data      string
-	Signature string
-}
-
-func (s *Service) rawContactCards(ctx context.Context, id string) ([]rawCard, error) {
-	var r struct {
-		Contact struct{ Cards []rawCard }
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/contacts/v4/contacts/" + id}, &r); err != nil {
-		return nil, err
-	}
-	return r.Contact.Cards, nil
-}
-
-// editableSignedCard fetches a contact's raw cards, verifies and parses the
-// signed card into an editable model, and returns the remaining (encrypted/
-// clear) cards verbatim so callers can re-attach them unchanged on PUT.
-func (s *Service) editableSignedCard(ctx context.Context, u *keys.Unlocked, id string) (*ical.SignedContact, []map[string]any, error) {
-	cards, err := s.rawContactCards(ctx, id)
-	if err != nil {
-		return nil, nil, err
-	}
-	var signedData string
-	haveSigned := false
-	var others []map[string]any
-	for _, c := range cards {
-		if c.Type == pgp.CardSigned && !haveSigned {
-			msg := gopenpgp.NewPlainMessageFromString(c.Data)
-			if v := pgp.VerifyDetachedStatus(u.UserKR, msg, c.Signature); v != pgp.Verified {
-				return nil, nil, fmt.Errorf("contact signed card could not be verified; refusing to edit")
-			}
-			signedData = c.Data
-			haveSigned = true
-			continue
-		}
-		others = append(others, map[string]any{"Type": c.Type, "Data": c.Data, "Signature": c.Signature})
-	}
-	if !haveSigned {
-		return nil, nil, fmt.Errorf("contact has no signed card to edit")
-	}
-	model := ical.ParseSignedVCard(signedData)
-	if model.UID == "" {
-		model.UID = ical.ContactUID()
-	}
-	return &model, others, nil
-}
-
-// putSignedCard re-signs the model and PUTs it alongside the preserved cards.
-func (s *Service) putSignedCard(ctx context.Context, u *keys.Unlocked, id string, model ical.SignedContact, others []map[string]any) error {
-	signedCard, err := pgp.SignCard(ical.BuildSignedVCard(model), u.UserKR)
-	if err != nil {
-		return err
-	}
-	cards := make([]any, 0, len(others)+1)
-	cards = append(cards, signedCard)
-	for _, o := range others {
-		cards = append(cards, o)
-	}
-	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/contacts/v4/contacts/" + id, Body: map[string]any{"Cards": cards}}, nil)
-}
-
-// PinKey pins armoredKey to the contact for email as the preferred key. Encrypt
-// and sign default to true (matching the web client's "trust key" flow) unless
-// overridden. The signed card is re-signed; all other cards are preserved.
-func (s *Service) PinKey(ctx context.Context, u *keys.Unlocked, id, email, armoredKey string, encrypt, sign *bool, scheme string) error {
-	keyValue, err := encodePinnedKey(armoredKey)
-	if err != nil {
-		return err
-	}
-	model, others, err := s.editableSignedCard(ctx, u, id)
-	if err != nil {
-		return err
-	}
-	e := model.FindEmail(email)
-	if e == nil {
-		model.Emails = append(model.Emails, ical.SignedEmail{Address: email})
-		e = &model.Emails[len(model.Emails)-1]
-	}
-	e.KeyValues = prependUnique(e.KeyValues, keyValue)
-	trueVal := true
-	if encrypt != nil {
-		e.Encrypt = encrypt
-	} else {
-		e.Encrypt = &trueVal
-	}
-	if sign != nil {
-		e.Sign = sign
-	} else {
-		signVal := true
-		e.Sign = &signVal
-	}
-	if scheme != "" {
-		e.Scheme = scheme
-	}
-	return s.putSignedCard(ctx, u, id, *model, others)
-}
-
-// UnpinKey removes all pinned keys and crypto flags a contact stores for email.
-func (s *Service) UnpinKey(ctx context.Context, u *keys.Unlocked, id, email string) error {
-	model, others, err := s.editableSignedCard(ctx, u, id)
-	if err != nil {
-		return err
-	}
-	e := model.FindEmail(email)
-	if e == nil || len(e.KeyValues) == 0 {
-		return &errs.NotFound{Kind: "pinned key", Ref: email}
-	}
-	e.KeyValues = nil
-	e.Encrypt = nil
-	e.Sign = nil
-	e.Scheme = ""
-	return s.putSignedCard(ctx, u, id, *model, others)
-}
-
-// encodePinnedKey converts an armored public key (or the public part of a
-// private key) into a vCard KEY property value.
-func encodePinnedKey(armored string) (string, error) {
-	key, err := gopenpgp.NewKeyFromArmored(strings.TrimSpace(armored))
-	if err != nil {
-		return "", fmt.Errorf("invalid public key: %w", err)
-	}
-	bin, err := key.GetPublicKey()
-	if err != nil {
-		return "", fmt.Errorf("read public key: %w", err)
-	}
-	return "data:application/pgp-keys;base64," + base64.StdEncoding.EncodeToString(bin), nil
-}
-
-// prependUnique returns existing with v moved to the front (highest
-// preference), dropping any duplicate of v.
-func prependUnique(existing []string, v string) []string {
-	out := make([]string, 0, len(existing)+1)
-	out = append(out, v)
-	for _, e := range existing {
-		if e != v {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
-// Group is a contact group (a Type-2 label).
-type Group struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
-}
-
-func (s *Service) GroupsList(ctx context.Context) ([]Group, error) {
-	var r struct {
-		Labels []struct{ ID, Name, Color string }
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/labels", Query: keys.Query("Type", "2")}, &r); err != nil {
-		return nil, err
-	}
-	out := make([]Group, 0, len(r.Labels))
-	for _, l := range r.Labels {
-		out = append(out, Group{ID: l.ID, Name: l.Name, Color: l.Color})
-	}
-	return out, nil
-}
-
-func (s *Service) GroupCreate(ctx context.Context, name, color string) (string, error) {
-	var r struct{ Label struct{ ID string } }
-	if err := s.C.Decode(ctx, proton.Request{
-		Method: "POST", Path: "/core/v4/labels",
-		Body: map[string]any{"Name": name, "Color": color, "Type": 2},
-	}, &r); err != nil {
-		return "", err
-	}
-	return r.Label.ID, nil
-}
-
-func (s *Service) GroupDelete(ctx context.Context, id string) error {
-	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/core/v4/labels/" + id}, nil)
-}
-
-// GroupAdd adds contacts to a group; GroupRemove removes them. Both operate on
-// whole contacts (all of a contact's emails join/leave the group).
-func (s *Service) GroupAdd(ctx context.Context, groupID string, contactIDs []string) error {
-	return s.C.Decode(ctx, proton.Request{
-		Method: "PUT", Path: "/contacts/v4/contacts/label",
-		Body: map[string]any{"LabelID": groupID, "ContactIDs": contactIDs},
-	}, nil)
-}
-
-func (s *Service) GroupRemove(ctx context.Context, groupID string, contactIDs []string) error {
-	return s.C.Decode(ctx, proton.Request{
-		Method: "PUT", Path: "/contacts/v4/contacts/unlabel",
-		Body: map[string]any{"LabelID": groupID, "ContactIDs": contactIDs},
-	}, nil)
-}
-
 func contactFromCards(id string, cards []string) Contact {
 	joined := strings.Join(cards, "\n")
 	emails := ical.Fields(joined, "EMAIL")
@@ -586,5 +281,3 @@ func pickSlice(a, b []string) []string {
 	}
 	return b
 }
-
-func looksLikeID(s string) bool { return idcache.IsFullID(s) }

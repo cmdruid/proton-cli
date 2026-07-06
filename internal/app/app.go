@@ -10,7 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/roman-16/proton-cli/internal/account/session"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/render"
@@ -19,7 +20,6 @@ import (
 	"github.com/roman-16/proton-cli/internal/service/drive"
 	"github.com/roman-16/proton-cli/internal/service/mail"
 	"github.com/roman-16/proton-cli/internal/service/pass"
-	"github.com/roman-16/proton-cli/internal/session"
 )
 
 type Credentials struct {
@@ -92,7 +92,7 @@ func New(opts Options) (*App, error) {
 		}
 	}
 
-	return &App{
+	a := &App{
 		Profile:  profileName,
 		Creds:    Credentials{User: user, Password: password, TOTP: totp},
 		API:      c,
@@ -105,7 +105,21 @@ func New(opts Options) (*App, error) {
 		DryRun:   opts.DryRun,
 		FullIDs:  opts.FullIDs,
 		IDCache:  idcache.New(idCachePath(profileName)),
-	}, nil
+	}
+	// The client persists the session file whenever its tokens change (e.g. a
+	// mid-request refresh); it stays free of the persistence format by calling
+	// back into saveSession, which owns the DTO assembly.
+	c.SetPersistHook(func() { _ = a.saveSession() })
+	return a, nil
+}
+
+// saveSession writes the current client state to the profile's session file.
+func (a *App) saveSession() error {
+	uid, acc, refresh := a.API.Tokens()
+	return session.Save(a.Profile, session.FromParts(
+		uid, acc, refresh,
+		a.API.EncKeyBlob(), a.API.SaltedKeyPass(),
+		a.API.AppVersion(), a.API.BaseURL()))
 }
 
 // idCachePath mirrors the session-file convention.
@@ -121,7 +135,7 @@ func idCachePath(profile string) string {
 }
 
 func (a *App) Authenticate(ctx context.Context) error {
-	if a.API.Session().UID != "" {
+	if uid, _, _ := a.API.Tokens(); uid != "" {
 		return nil
 	}
 	if a.Creds.User == "" {
@@ -135,7 +149,7 @@ func (a *App) Authenticate(ctx context.Context) error {
 		return err
 	}
 	a.R.Success("Authenticated.")
-	return session.Save(a.Profile, a.API.Session())
+	return a.saveSession()
 }
 
 // Unlock caches the key hierarchy after the first call.

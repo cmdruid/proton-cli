@@ -9,6 +9,16 @@ import (
 // ErrUnauthorized signals that auth failed and token refresh did not recover.
 var ErrUnauthorized = errors.New("unauthorized: session expired")
 
+// NetworkError wraps a transport-level failure (DNS, connection refused, TLS,
+// timeout) where the request never received an HTTP response. It carries exit
+// code 5, matching the documented "network/server" contract - distinct from an
+// APIError (a response with a non-2xx status).
+type NetworkError struct{ Err error }
+
+func (e *NetworkError) Error() string { return "request failed: " + e.Err.Error() }
+func (e *NetworkError) Unwrap() error { return e.Err }
+func (e *NetworkError) ExitCode() int { return 5 }
+
 // APIError is returned for non-2xx responses that carry a Proton error code.
 type APIError struct {
 	HTTPStatus int

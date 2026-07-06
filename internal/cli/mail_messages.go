@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/crypto/ical"
+	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/render"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/roman-16/proton-cli/internal/view"
 	"github.com/spf13/cobra"
 )
@@ -49,7 +50,7 @@ func msgListCmd() *cobra.Command {
 	var opts mailsvc.ListOptions
 	c := &cobra.Command{
 		Use: "list", Short: "List messages",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			msgs, total, err := c.App.Mail.List(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -81,7 +82,7 @@ func msgSearchCmd() *cobra.Command {
 	var opts mailsvc.SearchOptions
 	c := &cobra.Command{
 		Use: "search", Short: "Search messages",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			msgs, _, err := c.App.Mail.Search(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -114,7 +115,7 @@ func msgReadCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "read REF", Short: "Read a message (decrypted)",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			if format != "text" && format != "html" && format != "raw" {
 				return fmt.Errorf("unknown --format %q (use text, html, raw)", format)
 			}
@@ -183,7 +184,7 @@ func msgSendCmd() *cobra.Command {
 	var html bool
 	c := &cobra.Command{
 		Use: "send", Short: "Send a message",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if len(to)+len(cc)+len(bcc) == 0 {
 				return fmt.Errorf("at least one recipient is required (--to, --cc, or --bcc)")
 			}
@@ -226,7 +227,7 @@ func msgSendCmd() *cobra.Command {
 			}
 			var expiresInSeconds int
 			if expires != "" {
-				d, err := render.ParseDuration(expires)
+				d, err := units.ParseDuration(expires)
 				if err != nil {
 					return fmt.Errorf("invalid --expires: %w", err)
 				}
@@ -293,7 +294,7 @@ func msgSendCmd() *cobra.Command {
 	return c
 }
 
-func collectMessageIDs(c *Ctx, args []string, f *msgFilter) ([]string, error) {
+func collectMessageIDs(c *Invocation, args []string, f *msgFilter) ([]string, error) {
 	return collectMailIDs(c, args, f, mailIDCollector{
 		noun: "message", plural: "messages",
 		assertKind: c.App.Mail.AssertMessageKind,
@@ -316,7 +317,7 @@ func msgTrashCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "trash [REF...]", Short: "Move messages to trash",
-		RunE: bulkMessageAction(&f, "Moved %d message(s) to trash.", "trash", func(c *Ctx, ids []string) error {
+		RunE: bulkMessageAction(&f, "Moved %d message(s) to trash.", "trash", func(c *Invocation, ids []string) error {
 			return c.App.Mail.Trash(c.Ctx, ids)
 		}),
 	}
@@ -328,7 +329,7 @@ func msgDeleteCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "delete [REF...]", Short: "Permanently delete messages",
-		RunE: bulkMessageAction(&f, "Permanently deleted %d message(s).", "delete", func(c *Ctx, ids []string) error {
+		RunE: bulkMessageAction(&f, "Permanently deleted %d message(s).", "delete", func(c *Invocation, ids []string) error {
 			return c.App.Mail.Delete(c.Ctx, ids)
 		}),
 	}
@@ -341,13 +342,12 @@ func msgMoveCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "move [REF...]", Short: "Move messages to a folder",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			ids, err := collectMessageIDs(c, c.Args, &f)
 			if err != nil {
 				return handleWrongTable(err, "move")
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would move %d message(s) to %s", len(ids), dest))
+			if c.dryRun("move %d message(s) to %s", len(ids), dest) {
 				return nil
 			}
 			if err := c.App.Mail.Move(c.Ctx, ids, dest); err != nil {
@@ -370,7 +370,7 @@ func msgMarkCmd() *cobra.Command {
 		Short:     "Mark messages (ACTION: read|unread)",
 		Args:      cobra.MinimumNArgs(1),
 		ValidArgs: []string{"read", "unread"},
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			action := strings.ToLower(c.Args[0])
 			rest := c.Args[1:]
 			if action != "read" && action != "unread" {
@@ -380,8 +380,7 @@ func msgMarkCmd() *cobra.Command {
 			if err != nil {
 				return handleWrongTable(err, "mark "+action)
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would mark %d message(s) as %s", len(ids), action))
+			if c.dryRun("mark %d message(s) as %s", len(ids), action) {
 				return nil
 			}
 			if err := c.App.Mail.Mark(c.Ctx, ids, action == "read", action == "unread", false, false); err != nil {
@@ -399,7 +398,7 @@ func msgStarCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "star [REF...]", Short: "Add a star to messages",
-		RunE: bulkMessageAction(&f, "Starred %d message(s).", "star", func(c *Ctx, ids []string) error {
+		RunE: bulkMessageAction(&f, "Starred %d message(s).", "star", func(c *Invocation, ids []string) error {
 			return c.App.Mail.Mark(c.Ctx, ids, false, false, true, false)
 		}),
 	}
@@ -411,7 +410,7 @@ func msgUnstarCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "unstar [REF...]", Short: "Remove a star from messages",
-		RunE: bulkMessageAction(&f, "Unstarred %d message(s).", "unstar", func(c *Ctx, ids []string) error {
+		RunE: bulkMessageAction(&f, "Unstarred %d message(s).", "unstar", func(c *Invocation, ids []string) error {
 			return c.App.Mail.Mark(c.Ctx, ids, false, false, false, true)
 		}),
 	}
@@ -419,7 +418,7 @@ func msgUnstarCmd() *cobra.Command {
 	return c
 }
 
-func bulkMessageAction(f *msgFilter, successFmt, otherVerb string, do func(c *Ctx, ids []string) error) func(*cobra.Command, []string) error {
+func bulkMessageAction(f *msgFilter, successFmt, otherVerb string, do func(c *Invocation, ids []string) error) func(*cobra.Command, []string) error {
 	return bulkMailAction(collectMessageIDs, "message", f, successFmt, otherVerb, do)
 }
 
@@ -431,7 +430,7 @@ func msgUnscheduleCmd() *cobra.Command {
 		Long: "Cancel a scheduled send. The message stops being queued and moves\n" +
 			"back to Drafts, exactly like the web client's \"Edit and reschedule\".\n" +
 			"To change the time, unschedule it, then send again with --send-at.",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			ids, err := collectScheduledIDs(c, c.Args, all)
 			if err != nil {
 				return err
@@ -457,7 +456,7 @@ func msgUnscheduleCmd() *cobra.Command {
 // collectScheduledIDs unions explicit REFs (resolved within the Scheduled
 // folder) with every scheduled message when --all is set. A bare invocation
 // with neither is rejected, so "unschedule" can never silently drain the queue.
-func collectScheduledIDs(c *Ctx, args []string, all bool) ([]string, error) {
+func collectScheduledIDs(c *Invocation, args []string, all bool) ([]string, error) {
 	if len(args) == 0 && !all {
 		return nil, fmt.Errorf("no messages selected: pass REF(s) or --all to unschedule every scheduled message")
 	}

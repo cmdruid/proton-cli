@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/render"
+	"github.com/roman-16/proton-cli/internal/idcache"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +45,7 @@ func handleWrongTable(err error, otherVerb string) error {
 
 // hintFromTo emits a stderr hint suggesting --keyword when a --from/--to search
 // returned zero results without --keyword.
-func hintFromTo(c *Ctx, noun string, opts mailsvc.SearchOptions) {
+func hintFromTo(c *Invocation, noun string, opts mailsvc.SearchOptions) {
 	if opts.Keyword != "" || (opts.From == "" && opts.To == "") {
 		return
 	}
@@ -114,14 +115,14 @@ func (f *msgFilter) toSearch() (mailsvc.SearchOptions, error) {
 		opts.Folder = "all"
 	}
 	if f.olderThan != "" {
-		d, err := render.ParseDuration(f.olderThan)
+		d, err := units.ParseDuration(f.olderThan)
 		if err != nil {
 			return opts, fmt.Errorf("invalid --older-than: %w", err)
 		}
 		opts.Before = time.Now().Add(-d).Format("2006-01-02")
 	}
 	if f.newerThan != "" {
-		d, err := render.ParseDuration(f.newerThan)
+		d, err := units.ParseDuration(f.newerThan)
 		if err != nil {
 			return opts, fmt.Errorf("invalid --newer-than: %w", err)
 		}
@@ -142,12 +143,12 @@ type mailIDCollector struct {
 // collectMailIDs unions explicit REFs (resolved + kind-checked) with the IDs of
 // entities matched by the batch filters. It is the shared core of the messages
 // and conversations selection logic.
-func collectMailIDs(c *Ctx, args []string, f *msgFilter, col mailIDCollector) ([]string, error) {
+func collectMailIDs(c *Invocation, args []string, f *msgFilter, col mailIDCollector) ([]string, error) {
 	refs, err := resolvePrefixes(c.App, args)
 	if err != nil {
 		return nil, err
 	}
-	if len(refs) == 1 && mailsvc.LooksLikeID(refs[0]) {
+	if len(refs) == 1 && idcache.IsFullID(refs[0]) {
 		if err := col.assertKind(c.Ctx, refs[0]); err != nil {
 			var wte *mailsvc.WrongTableError
 			if errors.As(err, &wte) {
@@ -186,8 +187,8 @@ func collectMailIDs(c *Ctx, args []string, f *msgFilter, col mailIDCollector) ([
 // bulkMailAction is the shared RunE for the messages/conversations bulk verbs
 // (trash/delete/star/unstar). collect selects the IDs; noun fills the dry-run
 // line; do performs the mutation.
-func bulkMailAction(collect func(*Ctx, []string, *msgFilter) ([]string, error), noun string, f *msgFilter, successFmt, otherVerb string, do func(c *Ctx, ids []string) error) func(*cobra.Command, []string) error {
-	return run([]Step{stepAuth}, func(c *Ctx) error {
+func bulkMailAction(collect func(*Invocation, []string, *msgFilter) ([]string, error), noun string, f *msgFilter, successFmt, otherVerb string, do func(c *Invocation, ids []string) error) func(*cobra.Command, []string) error {
+	return run([]Step{stepAuth}, func(c *Invocation) error {
 		ids, err := collect(c, c.Args, f)
 		if err != nil {
 			return handleWrongTable(err, otherVerb)

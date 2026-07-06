@@ -3,7 +3,6 @@ package mail
 import (
 	"context"
 
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -22,10 +21,10 @@ type rawLabel struct {
 
 func (s *Service) LabelsList(ctx context.Context) ([]Label, []Label, error) {
 	var labels, folders struct{ Labels []rawLabel }
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/labels", Query: keys.Query("Type", "1")}, &labels); err != nil {
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/labels", Query: proton.Query("Type", "1")}, &labels); err != nil {
 		return nil, nil, err
 	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/labels", Query: keys.Query("Type", "3")}, &folders); err != nil {
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/core/v4/labels", Query: proton.Query("Type", "3")}, &folders); err != nil {
 		return nil, nil, err
 	}
 	toLabel := func(l rawLabel) Label {

@@ -3,7 +3,6 @@ package drive
 import (
 	"context"
 
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -24,7 +23,7 @@ func (s *Service) TrashList(ctx context.Context, dc *Context) ([]TrashEntry, err
 	}
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "GET", Path: "/drive/volumes/" + dc.VolumeID + "/trash",
-		Query: keys.Query("Page", "0", "PageSize", "150"),
+		Query: proton.Query("Page", "0", "PageSize", "150"),
 	}, &r); err != nil {
 		return nil, err
 	}

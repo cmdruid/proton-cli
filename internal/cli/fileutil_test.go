@@ -7,6 +7,57 @@ import (
 	"testing"
 )
 
+func TestPickDownloadPath(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("--output - is stdout", func(t *testing.T) {
+		_, stdout, err := pickDownloadPath("a.txt", "-", "", false)
+		if err != nil || !stdout {
+			t.Fatalf("want stdout, got stdout=%v err=%v", stdout, err)
+		}
+	})
+	t.Run("explicit --output, no collision", func(t *testing.T) {
+		p := filepath.Join(dir, "new.txt")
+		got, stdout, err := pickDownloadPath("ignored", p, "", false)
+		if err != nil || stdout || got != p {
+			t.Fatalf("got %q stdout=%v err=%v", got, stdout, err)
+		}
+	})
+	t.Run("explicit --output collision errors", func(t *testing.T) {
+		p := filepath.Join(dir, "exists.txt")
+		mustWrite(t, p)
+		if _, _, err := pickDownloadPath("ignored", p, "", false); err == nil || !strings.Contains(err.Error(), "exists") {
+			t.Fatalf("want exists error, got %v", err)
+		}
+	})
+	t.Run("explicit --output collision + force overwrites", func(t *testing.T) {
+		p := filepath.Join(dir, "exists.txt") // created above
+		got, _, err := pickDownloadPath("ignored", p, "", true)
+		if err != nil || got != p {
+			t.Fatalf("force: got %q err=%v", got, err)
+		}
+	})
+	t.Run("--output-dir joins the item name", func(t *testing.T) {
+		got, _, err := pickDownloadPath("photo.jpg", "", dir, false)
+		if want := filepath.Join(dir, "photo.jpg"); err != nil || got != want {
+			t.Fatalf("got %q want %q err=%v", got, want, err)
+		}
+	})
+	t.Run("--output-dir collision auto-suffixes", func(t *testing.T) {
+		mustWrite(t, filepath.Join(dir, "dup.jpg"))
+		got, _, err := pickDownloadPath("dup.jpg", "", dir, false)
+		if want := filepath.Join(dir, "dup_1.jpg"); err != nil || got != want {
+			t.Fatalf("got %q want %q err=%v", got, want, err)
+		}
+	})
+	t.Run("--output-dir collision + force keeps name", func(t *testing.T) {
+		got, _, err := pickDownloadPath("dup.jpg", "", dir, true) // dup.jpg exists
+		if want := filepath.Join(dir, "dup.jpg"); err != nil || got != want {
+			t.Fatalf("force: got %q want %q err=%v", got, want, err)
+		}
+	})
+}
+
 func TestSplitLastDot(t *testing.T) {
 	tests := []struct {
 		in, wantStem, wantExt string

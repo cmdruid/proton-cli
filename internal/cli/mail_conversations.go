@@ -58,7 +58,7 @@ func convListCmd() *cobra.Command {
 	var opts mailsvc.ListOptions
 	c := &cobra.Command{
 		Use: "list", Short: "List conversations",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			convs, total, err := c.App.Mail.ConversationsList(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -92,7 +92,7 @@ func convSearchCmd() *cobra.Command {
 	var opts mailsvc.SearchOptions
 	c := &cobra.Command{
 		Use: "search", Short: "Search conversations",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			convs, _, err := c.App.Mail.ConversationsSearch(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -125,7 +125,7 @@ func convReadCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "read REF", Short: "Read a conversation (full thread, decrypted)",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			id, err := c.App.Mail.ResolveConversation(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
@@ -159,7 +159,7 @@ func convTrashCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "trash [REF...]", Short: "Move conversations to trash",
-		RunE: bulkConversationAction(&f, "Moved %d conversation(s) to trash.", "trash", func(c *Ctx, ids []string) error {
+		RunE: bulkConversationAction(&f, "Moved %d conversation(s) to trash.", "trash", func(c *Invocation, ids []string) error {
 			return c.App.Mail.ConversationsTrash(c.Ctx, ids)
 		}),
 	}
@@ -171,7 +171,7 @@ func convDeleteCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "delete [REF...]", Short: "Permanently delete conversations",
-		RunE: bulkConversationAction(&f, "Permanently deleted %d conversation(s).", "delete", func(c *Ctx, ids []string) error {
+		RunE: bulkConversationAction(&f, "Permanently deleted %d conversation(s).", "delete", func(c *Invocation, ids []string) error {
 			return c.App.Mail.ConversationsDelete(c.Ctx, ids, f.folder)
 		}),
 	}
@@ -184,13 +184,12 @@ func convMoveCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "move [REF...]", Short: "Move conversations to a folder",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			ids, err := collectConversationIDs(c, c.Args, &f)
 			if err != nil {
 				return handleWrongTable(err, "move")
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would move %d conversation(s) to %s", len(ids), dest))
+			if c.dryRun("move %d conversation(s) to %s", len(ids), dest) {
 				return nil
 			}
 			if err := c.App.Mail.ConversationsMove(c.Ctx, ids, dest); err != nil {
@@ -213,7 +212,7 @@ func convMarkCmd() *cobra.Command {
 		Short:     "Mark conversations (ACTION: read|unread)",
 		Args:      cobra.MinimumNArgs(1),
 		ValidArgs: []string{"read", "unread"},
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			action := strings.ToLower(c.Args[0])
 			rest := c.Args[1:]
 			if action != "read" && action != "unread" {
@@ -223,8 +222,7 @@ func convMarkCmd() *cobra.Command {
 			if err != nil {
 				return handleWrongTable(err, "mark "+action)
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would mark %d conversation(s) as %s", len(ids), action))
+			if c.dryRun("mark %d conversation(s) as %s", len(ids), action) {
 				return nil
 			}
 			if err := c.App.Mail.ConversationsMark(c.Ctx, ids, action == "read", action == "unread", false, false, f.folder); err != nil {
@@ -242,7 +240,7 @@ func convStarCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "star [REF...]", Short: "Add a star to conversations",
-		RunE: bulkConversationAction(&f, "Starred %d conversation(s).", "star", func(c *Ctx, ids []string) error {
+		RunE: bulkConversationAction(&f, "Starred %d conversation(s).", "star", func(c *Invocation, ids []string) error {
 			return c.App.Mail.ConversationsMark(c.Ctx, ids, false, false, true, false, f.folder)
 		}),
 	}
@@ -254,7 +252,7 @@ func convUnstarCmd() *cobra.Command {
 	var f msgFilter
 	c := &cobra.Command{
 		Use: "unstar [REF...]", Short: "Remove a star from conversations",
-		RunE: bulkConversationAction(&f, "Unstarred %d conversation(s).", "unstar", func(c *Ctx, ids []string) error {
+		RunE: bulkConversationAction(&f, "Unstarred %d conversation(s).", "unstar", func(c *Invocation, ids []string) error {
 			return c.App.Mail.ConversationsMark(c.Ctx, ids, false, false, false, true, f.folder)
 		}),
 	}
@@ -262,11 +260,11 @@ func convUnstarCmd() *cobra.Command {
 	return c
 }
 
-func bulkConversationAction(f *msgFilter, successFmt, otherVerb string, do func(c *Ctx, ids []string) error) func(*cobra.Command, []string) error {
+func bulkConversationAction(f *msgFilter, successFmt, otherVerb string, do func(c *Invocation, ids []string) error) func(*cobra.Command, []string) error {
 	return bulkMailAction(collectConversationIDs, "conversation", f, successFmt, otherVerb, do)
 }
 
-func collectConversationIDs(c *Ctx, args []string, f *msgFilter) ([]string, error) {
+func collectConversationIDs(c *Invocation, args []string, f *msgFilter) ([]string, error) {
 	return collectMailIDs(c, args, f, mailIDCollector{
 		noun: "conversation", plural: "conversations",
 		assertKind: c.App.Mail.AssertConversationKind,
@@ -285,7 +283,7 @@ func collectConversationIDs(c *Ctx, args []string, f *msgFilter) ([]string, erro
 	})
 }
 
-func renderConversationText(c *Ctx, conv *mailsvc.ConversationFull, format string, includeInline, bodyOnly, stripQuotes bool) error {
+func renderConversationText(c *Invocation, conv *mailsvc.ConversationFull, format string, includeInline, bodyOnly, stripQuotes bool) error {
 	if format != "text" && format != "html" && format != "raw" {
 		return fmt.Errorf("unknown --format %q (use text, html, raw)", format)
 	}
@@ -346,7 +344,7 @@ func renderConversationText(c *Ctx, conv *mailsvc.ConversationFull, format strin
 	return nil
 }
 
-func renderConversationSummary(c *Ctx, conv *mailsvc.ConversationFull) error {
+func renderConversationSummary(c *Invocation, conv *mailsvc.ConversationFull) error {
 	n := len(conv.Messages)
 	for i, m := range conv.Messages {
 		addr := ""

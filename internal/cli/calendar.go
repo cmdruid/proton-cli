@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/crypto/ical"
+	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/render"
 	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/roman-16/proton-cli/internal/view"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +25,7 @@ func calendarsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "calendars", Short: "Manage calendars"}
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List calendars",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			cals, err := c.App.Calendar.CalendarsList(c.Ctx)
 			if err != nil {
 				return err
@@ -43,15 +44,14 @@ func calendarsCmd() *cobra.Command {
 	var cName, cColor string
 	create := &cobra.Command{
 		Use: "create", Short: "Create a calendar",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if cName == "" {
 				return fmt.Errorf("--name is required")
 			}
 			if err := validateAccentColor(cColor); err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create calendar %q", cName))
+			if c.dryRun("create calendar %q", cName) {
 				return nil
 			}
 			u, err := c.App.Unlock(c.Ctx)
@@ -73,13 +73,12 @@ func calendarsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "delete CALENDAR_ID", Short: "Delete a calendar (requires password)",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			if c.App.Creds.Password == "" {
 				return fmt.Errorf("password is required for calendar delete")
 			}
 			calID := c.Args[0]
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would delete calendar %s", calID))
+			if c.dryRun("delete calendar %s", calID) {
 				return nil
 			}
 			c.R().Info("Unlocking password scope...")
@@ -98,15 +97,14 @@ func calendarsCmd() *cobra.Command {
 	rename := &cobra.Command{
 		Use: "rename CALENDAR_ID", Short: "Rename or recolor a calendar",
 		Args: cobra.ExactArgs(1),
-		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve, stepUnlock}, func(c *Invocation) error {
 			if renName == "" && renColor == "" {
 				return fmt.Errorf("nothing to update: pass --name or --color")
 			}
 			if err := validateAccentColor(renColor); err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would update calendar %s", c.Args[0]))
+			if c.dryRun("update calendar %s", c.Args[0]) {
 				return nil
 			}
 			if err := c.App.Calendar.CalendarRename(c.Ctx, c.U, c.Args[0], renName, renColor); err != nil {
@@ -130,7 +128,7 @@ func eventsCmd() *cobra.Command {
 	var listCal, listStart, listEnd string
 	list := &cobra.Command{
 		Use: "list", Short: "List events",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
@@ -166,7 +164,7 @@ func eventsCmd() *cobra.Command {
 				Columns: []view.Column[calsvc.Event]{
 					{Header: "DATE", Cell: func(e calsvc.Event) string { return e.Start.Local().Format("2006-01-02") }},
 					{Header: "TIME", Cell: func(e calsvc.Event) string { return e.Start.Local().Format("15:04") }},
-					{Header: "DURATION", Cell: func(e calsvc.Event) string { return render.Duration(e.End.Sub(e.Start)) }},
+					{Header: "DURATION", Cell: func(e calsvc.Event) string { return units.Duration(e.End.Sub(e.Start)) }},
 					{Header: "TITLE", Cell: func(e calsvc.Event) string { return e.Title }},
 					{Header: "LOCATION", Cell: func(e calsvc.Event) string { return e.Location }},
 					{Header: "CALENDAR_ID", ID: true, Cell: func(e calsvc.Event) string { return e.CalendarID }},
@@ -184,7 +182,7 @@ func eventsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "get {CALENDAR_ID EVENT_ID | TITLE}", Short: "Get an event (decrypted)",
 		Args: cobra.RangeArgs(1, 2),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
@@ -204,7 +202,7 @@ func eventsCmd() *cobra.Command {
 			_, _ = fmt.Fprintf(out, "Event:    %s\n", ev.Title)
 			_, _ = fmt.Fprintf(out, "Start:    %s\n", ev.Start.Local().Format("2006-01-02 15:04"))
 			_, _ = fmt.Fprintf(out, "End:      %s\n", ev.End.Local().Format("2006-01-02 15:04"))
-			_, _ = fmt.Fprintf(out, "Duration: %s\n", render.Duration(ev.End.Sub(ev.Start)))
+			_, _ = fmt.Fprintf(out, "Duration: %s\n", units.Duration(ev.End.Sub(ev.Start)))
 			if ev.Location != "" {
 				_, _ = fmt.Fprintf(out, "Location: %s\n", ev.Location)
 			}
@@ -228,7 +226,7 @@ func eventsCmd() *cobra.Command {
 	var eAllDay bool
 	create := &cobra.Command{
 		Use: "create", Short: "Create an event",
-		RunE: run([]Step{stepAuth}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
 			if eTitle == "" || eStart == "" {
 				return fmt.Errorf("--title and --start are required")
 			}
@@ -252,8 +250,7 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid --duration: %w", err)
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would create event %q in calendar %s with %d attendee(s)", eTitle, calID, len(eAttendees)))
+			if c.dryRun("create event %q in calendar %s with %d attendee(s)", eTitle, calID, len(eAttendees)) {
 				return nil
 			}
 			res, err := c.App.Calendar.EventCreate(c.Ctx, u, calID, calsvc.EventInput{
@@ -297,7 +294,7 @@ func eventsCmd() *cobra.Command {
 	update := &cobra.Command{
 		Use: "update CALENDAR_ID EVENT_ID", Short: "Update an event",
 		Args: cobra.ExactArgs(2),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
@@ -317,8 +314,7 @@ func eventsCmd() *cobra.Command {
 					end = start.Add(d)
 				}
 			}
-			if c.App.DryRun {
-				c.R().Info("dry-run: would update event")
+			if c.dryRun("update event") {
 				return nil
 			}
 			if err := c.App.Calendar.EventUpdate(c.Ctx, u, c.Args[0], c.Args[1], uTitle, uLocation, uDescription, start, end); err != nil {
@@ -345,7 +341,7 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+			return run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 				u, err := c.App.Unlock(c.Ctx)
 				if err != nil {
 					return err
@@ -354,8 +350,7 @@ func eventsCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if c.App.DryRun {
-					c.R().Info(fmt.Sprintf("dry-run: would respond %q to event %s in calendar %s", respStatus, eventID, calID))
+				if c.dryRun("respond %q to event %s in calendar %s", respStatus, eventID, calID) {
 					return nil
 				}
 				res, err := c.App.Calendar.EventRespond(c.Ctx, u, calID, eventID, status)
@@ -389,7 +384,7 @@ func eventsCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "delete {CALENDAR_ID EVENT_ID | TITLE}", Short: "Delete an event",
 		Args: cobra.RangeArgs(1, 2),
-		RunE: run([]Step{stepAuth, stepResolve}, func(c *Ctx) error {
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
@@ -398,8 +393,7 @@ func eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c.App.DryRun {
-				c.R().Info(fmt.Sprintf("dry-run: would delete event %s in calendar %s", eventID, calID))
+			if c.dryRun("delete event %s in calendar %s", eventID, calID) {
 				return nil
 			}
 			if err := c.App.Calendar.EventDelete(c.Ctx, u, calID, eventID); err != nil {

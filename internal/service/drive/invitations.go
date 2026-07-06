@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/crypto/keys"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -36,7 +36,7 @@ func (s *Service) ListInvitations(ctx context.Context) ([]Invitation, error) {
 		}
 		req := proton.Request{Method: "GET", Path: "/drive/v2/shares/invitations"}
 		if anchor != "" {
-			req.Query = keys.Query("AnchorID", anchor)
+			req.Query = proton.Query("AnchorID", anchor)
 		}
 		if err := s.C.Decode(ctx, req, &r); err != nil {
 			return nil, err
