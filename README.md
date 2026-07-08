@@ -61,13 +61,17 @@ sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
 
 **Windows:** download the `.exe` from the [releases page](https://github.com/roman-16/proton-cli/releases/latest) and add it to your PATH.
 
+### Install with Nix (NixOS)
+
+Available in [nixpkgs](https://search.nixos.org/packages?query=proton-cli) as the `proton-cli` package.
+
 ### Install with Go
 
 ```bash
 go install github.com/roman-16/proton-cli@latest
 ```
 
-> **Note:** `go install` builds do **not** embed the CAPTCHA helper that release binaries include. If Proton demands human verification at login, install a release binary instead. See [Human verification](#human-verification-captcha).
+> **Note:** `go install` builds do **not** embed the CAPTCHA helper that release binaries and the Nix package include. If Proton demands human verification at login, install a release binary or the Nix package instead. See [Human verification](#human-verification-captcha).
 
 ### Build from source
 
