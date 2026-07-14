@@ -77,7 +77,7 @@ inputs = {
 
 # in a NixOS module
 environment.systemPackages = [
-  proton-cli.packages.${pkgs.system}.default
+  proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
 ];
 ```
 

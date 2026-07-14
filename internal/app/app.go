@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -188,14 +189,20 @@ func defaultUserAgent(version string) string {
 	return "proton-cli/" + version
 }
 
-// defaultAppVersion builds an honest x-pm-appversion following Proton's
-// third-party "external-{name}@{semver}-{channel}" convention. It identifies
-// proton-cli as an unofficial, multi-service client (hence no service-specific
-// "drive" segment) and must never impersonate an official Proton client.
+// protonVersionRE matches the leading dotted-integer version (e.g. "1.9.2").
+// Proton validates the version part of x-pm-appversion as a number and rejects
+// anything else (a git hash, a "-stable" suffix) with code 2064.
+var protonVersionRE = regexp.MustCompile(`^[0-9]+(\.[0-9]+)+`)
+
+// defaultAppVersion builds an honest x-pm-appversion of the form
+// "external-proton_cli@<version>", identifying proton-cli as an unofficial,
+// multi-service client without impersonating an official Proton client. The
+// version is reduced to the dotted-integer form Proton accepts; builds without
+// a release version (git checkouts, "dev") report 0.0.0.
 func defaultAppVersion(version string) string {
-	v := strings.TrimPrefix(version, "v")
-	if v == "" || v == "dev" {
-		return "external-proton_cli@0.0.0-alpha"
+	v := protonVersionRE.FindString(strings.TrimPrefix(version, "v"))
+	if v == "" {
+		v = "0.0.0"
 	}
-	return "external-proton_cli@" + v + "-stable"
+	return "external-proton_cli@" + v
 }
