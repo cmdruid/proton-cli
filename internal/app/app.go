@@ -8,8 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"sync"
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
@@ -80,7 +78,7 @@ func New(opts Options) (*App, error) {
 	password := firstNonEmpty(opts.Password, envForProfile(profileName, "PASSWORD"))
 	totp := firstNonEmpty(opts.TOTP, envForProfile(profileName, "TOTP"))
 	apiURL := firstNonEmpty(opts.APIURL, envForProfile(profileName, "API_URL"))
-	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"), defaultAppVersion(opts.Version))
+	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"))
 	userAgent := firstNonEmpty(envForProfile(profileName, "USER_AGENT"), defaultUserAgent(opts.Version))
 
 	r := render.New(opts.Output, os.Stdout, os.Stderr, opts.LogLevel, opts.Quiet)
@@ -187,22 +185,4 @@ func defaultUserAgent(version string) string {
 		version = "dev"
 	}
 	return "proton-cli/" + version
-}
-
-// protonVersionRE matches the leading dotted-integer version (e.g. "1.9.2").
-// Proton validates the version part of x-pm-appversion as a number and rejects
-// anything else (a git hash, a "-stable" suffix) with code 2064.
-var protonVersionRE = regexp.MustCompile(`^[0-9]+(\.[0-9]+)+`)
-
-// defaultAppVersion builds an honest x-pm-appversion of the form
-// "external-proton_cli@<version>", identifying proton-cli as an unofficial,
-// multi-service client without impersonating an official Proton client. The
-// version is reduced to the dotted-integer form Proton accepts; builds without
-// a release version (git checkouts, "dev") report 0.0.0.
-func defaultAppVersion(version string) string {
-	v := protonVersionRE.FindString(strings.TrimPrefix(version, "v"))
-	if v == "" {
-		v = "0.0.0"
-	}
-	return "external-proton_cli@" + v
 }

@@ -21,7 +21,7 @@ import (
 
 const (
 	DefaultBaseURL    = "https://mail.proton.me/api"
-	DefaultAppVersion = "external-proton_cli@0.0.0-alpha"
+	DefaultAppVersion = "Other"
 	DefaultUserAgent  = "proton-cli/dev"
 
 	// maxRateLimitWait caps how long a single 429 retry will sleep before

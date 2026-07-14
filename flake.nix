@@ -13,7 +13,7 @@
         "x86_64-linux"
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      version = nixpkgs.lib.fileContents ./VERSION;
+      version = self.shortRev or self.dirtyShortRev or "dev";
     in
     {
       packages = forAllSystems (pkgs: {

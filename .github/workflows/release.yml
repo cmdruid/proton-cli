@@ -41,11 +41,8 @@ jobs:
         run: |
           git config user.name "Roman"
           git config user.email "roman@lerchster.dev"
-          echo "${{ inputs.version }}" > VERSION
-          git add VERSION
-          git commit --message "chore(release): v${{ inputs.version }}"
           git tag --annotate "v${{ inputs.version }}" --message "Release v${{ inputs.version }}"
-          git push origin "HEAD:${{ github.ref_name }}" "v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
           echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
 
   build-helpers:
