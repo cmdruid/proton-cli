@@ -61,9 +61,25 @@ sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
 
 **Windows:** download the `.exe` from the [releases page](https://github.com/roman-16/proton-cli/releases/latest) and add it to your PATH.
 
-### Install with Nix (NixOS)
+### Install with Nix
 
 Available in [nixpkgs](https://search.nixos.org/packages?query=proton-cli) as the `proton-cli` package.
+
+### Install with Nix flake
+
+```nix
+inputs = {
+  proton-cli = {
+    url = "github:roman-16/proton-cli";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+};
+
+# in a NixOS module
+environment.systemPackages = [
+  proton-cli.packages.${pkgs.system}.default
+];
+```
 
 ### Install with Go
 
