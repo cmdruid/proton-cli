@@ -111,7 +111,7 @@ func (c *Client) createSession(ctx context.Context) (*authResp, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-pm-appversion", c.app)
+	c.setClientHeaders(req)
 	req.Header.Set("x-enforce-unauthsession", "true")
 	resp, err := c.hc.Do(req)
 	if err != nil {
@@ -222,7 +222,7 @@ func (c *Client) rawAuthWithHV(ctx context.Context, method, path string, body []
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-pm-appversion", c.app)
+	c.setClientHeaders(req)
 	if uid != "" {
 		req.Header.Set("x-pm-uid", uid)
 	}

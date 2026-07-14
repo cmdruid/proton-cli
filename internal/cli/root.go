@@ -78,6 +78,7 @@ func init() {
 			TOTP:       gFlags.totp,
 			APIURL:     gFlags.apiURL,
 			AppVersion: gFlags.appVersion,
+			Version:    version,
 			Output:     format,
 			LogLevel:   parseLevel(gFlags.logLevel, gFlags.verbose),
 			Quiet:      gFlags.quiet,

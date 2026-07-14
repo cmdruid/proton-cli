@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
@@ -63,6 +64,7 @@ type Options struct {
 	TOTP       string
 	APIURL     string
 	AppVersion string
+	Version    string
 	Output     render.Format
 	LogLevel   slog.Level
 	Quiet      bool
@@ -77,11 +79,12 @@ func New(opts Options) (*App, error) {
 	password := firstNonEmpty(opts.Password, envForProfile(profileName, "PASSWORD"))
 	totp := firstNonEmpty(opts.TOTP, envForProfile(profileName, "TOTP"))
 	apiURL := firstNonEmpty(opts.APIURL, envForProfile(profileName, "API_URL"))
-	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"))
+	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"), defaultAppVersion(opts.Version))
+	userAgent := firstNonEmpty(envForProfile(profileName, "USER_AGENT"), defaultUserAgent(opts.Version))
 
 	r := render.New(opts.Output, os.Stdout, os.Stderr, opts.LogLevel, opts.Quiet)
 	c := proton.New(proton.Options{
-		BaseURL: apiURL, AppVersion: appVer, Profile: profileName, Logger: r.Log,
+		AppVersion: appVer, BaseURL: apiURL, Logger: r.Log, Profile: profileName, UserAgent: userAgent,
 	})
 
 	if sess, err := session.Load(profileName); err == nil && sess != nil {
@@ -174,4 +177,25 @@ func firstNonEmpty(ss ...string) string {
 		}
 	}
 	return ""
+}
+
+// defaultUserAgent honestly identifies the CLI in the User-Agent header, e.g.
+// "proton-cli/1.2.3".
+func defaultUserAgent(version string) string {
+	if version == "" {
+		version = "dev"
+	}
+	return "proton-cli/" + version
+}
+
+// defaultAppVersion builds an honest x-pm-appversion following Proton's
+// third-party "external-{name}@{semver}-{channel}" convention. It identifies
+// proton-cli as an unofficial, multi-service client (hence no service-specific
+// "drive" segment) and must never impersonate an official Proton client.
+func defaultAppVersion(version string) string {
+	v := strings.TrimPrefix(version, "v")
+	if v == "" || v == "dev" {
+		return "external-proton_cli@0.0.0-alpha"
+	}
+	return "external-proton_cli@" + v + "-stable"
 }

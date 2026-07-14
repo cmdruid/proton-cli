@@ -21,7 +21,8 @@ import (
 
 const (
 	DefaultBaseURL    = "https://mail.proton.me/api"
-	DefaultAppVersion = "Other"
+	DefaultAppVersion = "external-proton_cli@0.0.0-alpha"
+	DefaultUserAgent  = "proton-cli/dev"
 
 	// maxRateLimitWait caps how long a single 429 retry will sleep before
 	// giving up and surfacing the error.
@@ -39,6 +40,7 @@ type Client struct {
 	hc   *http.Client
 	base string
 	app  string
+	ua   string
 	log  *slog.Logger
 
 	mu            sync.RWMutex
@@ -55,6 +57,7 @@ type Client struct {
 type Options struct {
 	BaseURL    string
 	AppVersion string
+	UserAgent  string
 	Profile    string
 	HTTPClient *http.Client
 	Logger     *slog.Logger
@@ -68,6 +71,9 @@ func New(opts Options) *Client {
 	if opts.AppVersion == "" {
 		opts.AppVersion = DefaultAppVersion
 	}
+	if opts.UserAgent == "" {
+		opts.UserAgent = DefaultUserAgent
+	}
 	hc := opts.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: 5 * time.Minute}
@@ -76,7 +82,7 @@ func New(opts Options) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Client{hc: hc, base: opts.BaseURL, app: opts.AppVersion, profile: opts.Profile, log: log}
+	return &Client{hc: hc, base: opts.BaseURL, app: opts.AppVersion, ua: opts.UserAgent, profile: opts.Profile, log: log}
 }
 
 func (c *Client) Profile() string { return c.profile }
@@ -256,6 +262,15 @@ func (c *Client) Decode(ctx context.Context, req Request, out any) error {
 	return nil
 }
 
+// setClientHeaders applies the identity headers every Proton request carries:
+// an honest User-Agent and x-pm-appversion. Per Proton's third-party rules
+// these identify the app honestly and must never impersonate an official
+// client.
+func (c *Client) setClientHeaders(r *http.Request) {
+	r.Header.Set("User-Agent", c.ua)
+	r.Header.Set("x-pm-appversion", c.app)
+}
+
 func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
 	c.mu.RLock()
 	uid, acc := c.uid, c.acc
@@ -280,7 +295,7 @@ func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
 	} else {
 		r.Header.Set("Content-Type", "application/json")
 	}
-	r.Header.Set("x-pm-appversion", c.app)
+	c.setClientHeaders(r)
 	if uid != "" {
 		r.Header.Set("x-pm-uid", uid)
 	}
@@ -368,7 +383,7 @@ func (c *Client) refreshAuth(ctx context.Context) error {
 	}
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("x-pm-uid", c.uid)
-	r.Header.Set("x-pm-appversion", c.app)
+	c.setClientHeaders(r)
 
 	resp, err := c.hc.Do(r)
 	if err != nil {
