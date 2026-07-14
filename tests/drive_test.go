@@ -142,6 +142,51 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 	}
 }
 
+// A stdin DEST whose last segment isn't an existing folder names the new file:
+// the basename becomes the file name and its parent is the target folder.
+func TestDriveItemsUploadFromStdinNamed(t *testing.T) {
+	folder := "/" + testID() + "-stdin-named"
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", folder)
+
+	dest := folder + "/piped.txt"
+	payload := "named piped payload\n"
+	if _, stderr, code := runWithStdin(t, strings.NewReader(payload), "drive", "items", "upload", "-", dest); code != 0 {
+		t.Fatalf("named stdin upload failed (exit %d): %s", code, stderr)
+	}
+
+	children := runJSONArray(t, "drive", "items", "list", folder)
+	if len(children) != 1 {
+		t.Fatalf("expected 1 child after named stdin upload, got %d", len(children))
+	}
+	if name := children[0].(map[string]interface{})["name"].(string); name != "piped.txt" {
+		t.Errorf("expected name %q, got %q", "piped.txt", name)
+	}
+
+	stdout := runOK(t, "drive", "items", "download", dest, "--output", "-")
+	if !strings.Contains(stdout, payload) {
+		t.Errorf("stdout download mismatch: %q", stdout)
+	}
+}
+
+// A stdin upload under a non-existent parent fails as not-found (exit 3) and
+// names the missing folder segment, never the intended filename.
+func TestDriveItemsUploadFromStdinMissingParent(t *testing.T) {
+	missing := testID() + "-nope"
+	_, stderr, code := runWithStdin(t, strings.NewReader("x\n"),
+		"drive", "items", "upload", "-", "/"+missing+"/note.txt")
+	if code != 3 {
+		t.Fatalf("expected exit 3 for missing parent, got %d (stderr: %s)", code, stderr)
+	}
+	if !strings.Contains(stderr, missing) {
+		t.Errorf("expected error to name the missing folder %q, got: %s", missing, stderr)
+	}
+	if strings.Contains(stderr, "note.txt") {
+		t.Errorf("error should not name the filename segment, got: %s", stderr)
+	}
+}
+
 // TestDriveItemsDownloadBehaviors exercises the three download-destination
 // behaviors (refuse-on-collision, --force overwrite, stdout default) against a
 // single folder + uploads created once, rather than one folder+upload per

@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/render"
 	drivesvc "github.com/roman-16/proton-cli/internal/service/drive"
 	"github.com/roman-16/proton-cli/internal/units"
@@ -132,6 +135,17 @@ func uploadOne(c *Invocation, dc *drivesvc.Context, src, dest string) error {
 	if src == "-" {
 		r = os.Stdin
 		name = fmt.Sprintf("stdin-%d", time.Now().Unix())
+		// stdin has no inherent name, so DEST carries it: an existing folder
+		// receives the generated name; any other path is parent + new file name.
+		resolved, err := c.App.Drive.ResolvePath(c.Ctx, dc, dest)
+		var notFound *errs.NotFound
+		if err != nil && !errors.As(err, &notFound) {
+			return err
+		}
+		if err != nil || !resolved.IsFolder {
+			name = path.Base(dest)
+			dest = path.Dir(dest)
+		}
 	} else {
 		fi, err := os.Stat(src)
 		if err != nil {
