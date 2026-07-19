@@ -94,6 +94,9 @@ aurs:
     license: MIT
     private_key: "{{ .Env.AUR_KEY }}"
     git_url: "ssh://aur@aur.archlinux.org/proton-cli-bin.git"
+    commit_author:
+      name: Roman
+      email: roman@lerchster.dev
     optdepends:
       - "gtk3: CAPTCHA/human-verification webview"
       - "webkit2gtk-4.1: CAPTCHA/human-verification webview"
@@ -112,6 +115,9 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.TAP_WINGET_TOKEN }}"
     directory: Formula
+    commit_author:
+      name: Roman
+      email: roman@lerchster.dev
     homepage: "https://github.com/roman-16/proton-cli"
     description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
     license: MIT
@@ -128,6 +134,9 @@ winget:
     publisher: Roman
     package_identifier: Roman.ProtonCLI
     path: "manifests/r/Roman/ProtonCLI/{{ .Version }}"
+    commit_author:
+      name: Roman
+      email: roman@lerchster.dev
     ids: [archive]
     homepage: "https://github.com/roman-16/proton-cli"
     short_description: "Unofficial command-line client for the Proton suite"
