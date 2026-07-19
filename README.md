@@ -111,11 +111,16 @@ environment.systemPackages = [
 winget install Roman.ProtonCLI
 ```
 
-
 ### Install with Homebrew (macOS)
 
 ```bash
 brew install --cask roman-16/tap/proton-cli
+```
+
+### Install with npm
+
+```bash
+npm install -g @roman-16/proton-cli
 ```
 
 ### Install with Go
@@ -125,12 +130,6 @@ go install github.com/roman-16/proton-cli@latest
 ```
 
 > **Note:** `go install` builds do **not** embed the CAPTCHA helper that release binaries include. If Proton demands human verification at login, install a release binary instead. See [Human verification](#human-verification-captcha).
-
-### Install with npm
-
-```bash
-npm install -g @roman-16/proton-cli
-```
 
 ### Build from source
 
