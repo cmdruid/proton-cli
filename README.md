@@ -85,6 +85,20 @@ sudo dnf install ./proton-cli_*.rpm            # Fedora / RHEL
 sudo apk add --allow-untrusted ./proton-cli_*.apk   # Alpine
 ```
 
+### Install with Homebrew (macOS, Linux)
+
+```bash
+brew install roman-16/tap/proton-cli
+```
+
+### Install on Windows (winget)
+
+```powershell
+winget install Roman.ProtonCLI
+```
+
+Each release opens a pull request to Microsoft's `winget-pkgs`; the new version becomes installable via `winget` once their moderators merge it (usually within a day).
+
 ### Install with Nix
 
 Available in [nixpkgs](https://search.nixos.org/packages?query=proton-cli) as the `proton-cli` package.

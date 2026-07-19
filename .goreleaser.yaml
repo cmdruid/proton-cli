@@ -33,9 +33,10 @@ archives:
   - id: binary
     formats: [binary]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-  # tar.gz (linux only) bundling the binary, license, and completions.
-  # Consumed by the AUR -bin package; the raw binaries above stay for
-  # the documented direct download.
+  # Per-platform archives (tar.gz for linux/darwin, zip for windows)
+  # bundling the binary, license, and completions. Consumed by the AUR,
+  # Homebrew, and winget packages, and offered as a direct download
+  # next to the raw binaries above.
   - id: archive
     ids: [proton-cli]
     formats: [tar.gz]
@@ -44,10 +45,8 @@ archives:
       - LICENSE
       - completions/*
     format_overrides:
-      - goos: darwin
-        formats: [none]
       - goos: windows
-        formats: [none]
+        formats: [zip]
 
 nfpms:
   - ids: [proton-cli]
@@ -104,6 +103,52 @@ aurs:
       install -Dm644 "./completions/proton-cli.bash" "${pkgdir}/usr/share/bash-completion/completions/proton-cli"
       install -Dm644 "./completions/proton-cli.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/proton-cli.fish"
       install -Dm644 "./completions/proton-cli.zsh"  "${pkgdir}/usr/share/zsh/site-functions/_proton-cli"
+
+brews:
+  - name: proton-cli
+    ids: [archive]
+    repository:
+      owner: roman-16
+      name: homebrew-tap
+      token: "{{ .Env.TAP_WINGET_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/roman-16/proton-cli"
+    description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
+    license: MIT
+    install: |
+      bin.install "proton-cli"
+      bash_completion.install "completions/proton-cli.bash" => "proton-cli"
+      fish_completion.install "completions/proton-cli.fish"
+      zsh_completion.install "completions/proton-cli.zsh" => "_proton-cli"
+    test: |
+      system "#{bin}/proton-cli", "--version"
+
+winget:
+  - name: proton-cli
+    publisher: Roman
+    package_identifier: Roman.ProtonCLI
+    path: "manifests/r/Roman/ProtonCLI/{{ .Version }}"
+    ids: [archive]
+    homepage: "https://github.com/roman-16/proton-cli"
+    short_description: "Unofficial command-line client for the Proton suite"
+    description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
+    license: MIT
+    publisher_url: "https://github.com/roman-16"
+    publisher_support_url: "https://github.com/roman-16/proton-cli/issues"
+    tags:
+      - cli
+      - proton
+    repository:
+      owner: roman-16
+      name: winget-pkgs
+      branch: "proton-cli-{{ .Version }}"
+      token: "{{ .Env.TAP_WINGET_TOKEN }}"
+      pull_request:
+        enabled: true
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
 
 checksum:
   name_template: "checksums.txt"
