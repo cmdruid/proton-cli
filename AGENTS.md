@@ -14,8 +14,11 @@ proton-cli mirrors what the **Proton web clients let a user do**, not every endp
 
 ## Quality Gates
 
-- **Always run `just lint` after making code changes** and fix everything before considering the work done. It runs `gofmt -w .` and `golangci-lint run ./...` (CGO-free, so no C compiler needed).
-- `just build` produces the release-shaped binary (`-tags=embed_hv` + the CGO webview helper); it needs the toolchain from `devbox shell`.
+After making code changes, run these in order. Stop on the first failure and fix it before continuing.
+
+1. **Lint** - **always run `just lint`** and fix everything before considering the work done. It runs `gofmt -w .` and `golangci-lint run ./...` (CGO-free, so no C compiler needed).
+2. **Build** - `just build` produces the release-shaped binary (`-tags=embed_hv` + the CGO webview helper); it needs the toolchain from `devbox shell`.
+3. **Tests** - **do not run.** The suite hits the live Proton API, creates real data, and takes several minutes; the user runs it manually and reports back. See [Testing](#testing).
 
 ## Testing
 
