@@ -64,7 +64,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -127,7 +127,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -165,7 +165,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Download .deb assets from the release
         env:
@@ -199,7 +199,7 @@ jobs:
           import-from-repo-failure-allow: "true"
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ steps.apt.outputs.dir }}
 
@@ -215,4 +215,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
