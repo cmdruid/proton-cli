@@ -107,27 +107,25 @@ aurs:
       install -Dm644 "./completions/proton-cli.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/proton-cli.fish"
       install -Dm644 "./completions/proton-cli.zsh"  "${pkgdir}/usr/share/zsh/site-functions/_proton-cli"
 
-brews:
+homebrew_casks:
   - name: proton-cli
     ids: [archive]
     repository:
       owner: roman-16
       name: homebrew-tap
       token: "{{ .Env.TAP_WINGET_TOKEN }}"
-    directory: Formula
     commit_author:
       name: Roman
       email: roman@lerchster.dev
     homepage: "https://github.com/roman-16/proton-cli"
     description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
     license: MIT
-    install: |
-      bin.install "proton-cli"
-      bash_completion.install "completions/proton-cli.bash" => "proton-cli"
-      fish_completion.install "completions/proton-cli.fish"
-      zsh_completion.install "completions/proton-cli.zsh" => "_proton-cli"
-    test: |
-      system "#{bin}/proton-cli", "--version"
+    binaries:
+      - proton-cli
+    completions:
+      bash: completions/proton-cli.bash
+      fish: completions/proton-cli.fish
+      zsh: completions/proton-cli.zsh
 
 winget:
   - name: proton-cli

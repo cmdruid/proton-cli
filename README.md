@@ -85,18 +85,6 @@ sudo dnf install ./proton-cli_*.rpm            # Fedora / RHEL
 sudo apk add --allow-untrusted ./proton-cli_*.apk   # Alpine
 ```
 
-### Install with Homebrew (macOS, Linux)
-
-```bash
-brew install roman-16/tap/proton-cli
-```
-
-### Install on Windows (winget)
-
-```powershell
-winget install Roman.ProtonCLI
-```
-
 ### Install with Nix
 
 Available in [nixpkgs](https://search.nixos.org/packages?query=proton-cli) as the `proton-cli` package.
@@ -117,13 +105,32 @@ environment.systemPackages = [
 ];
 ```
 
+### Install on Windows (winget)
+
+```powershell
+winget install Roman.ProtonCLI
+```
+
+
+### Install with Homebrew (macOS)
+
+```bash
+brew install --cask roman-16/tap/proton-cli
+```
+
 ### Install with Go
 
 ```bash
 go install github.com/roman-16/proton-cli@latest
 ```
 
-> **Note:** `go install` builds do **not** embed the CAPTCHA helper that release binaries and the Nix package include. If Proton demands human verification at login, install a release binary or the Nix package instead. See [Human verification](#human-verification-captcha).
+> **Note:** `go install` builds do **not** embed the CAPTCHA helper that release binaries include. If Proton demands human verification at login, install a release binary instead. See [Human verification](#human-verification-captcha).
+
+### Install with npm
+
+```bash
+npm install -g @roman-16/proton-cli
+```
 
 ### Build from source
 

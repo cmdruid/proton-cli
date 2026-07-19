@@ -217,3 +217,42 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v5
+
+  npm-publish:
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Download release binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p npm-bin
+          gh release download "${{ needs.prepare.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern 'proton-cli_linux_amd64' \
+            --pattern 'proton-cli_linux_arm64' \
+            --pattern 'proton-cli_darwin_amd64' \
+            --pattern 'proton-cli_darwin_arm64' \
+            --pattern 'proton-cli_windows_amd64.exe' \
+            --dir npm-bin
+          ls -la npm-bin/
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.tag }}
+        run: node scripts/publish-npm.mjs
