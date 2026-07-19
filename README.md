@@ -61,6 +61,30 @@ sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
 
 **Windows:** download the `.exe` from the [releases page](https://github.com/roman-16/proton-cli/releases/latest) and add it to your PATH.
 
+### Install on Arch Linux (AUR)
+
+```bash
+yay -S proton-cli-bin      # or: paru -S proton-cli-bin
+```
+
+### Install on Debian, Ubuntu, Linux Mint (APT)
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://roman-16.github.io/proton-cli/gpg.key | sudo tee /etc/apt/keyrings/proton-cli.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/proton-cli.asc] https://roman-16.github.io/proton-cli stable main" | sudo tee /etc/apt/sources.list.d/proton-cli.list
+sudo apt update && sudo apt install proton-cli
+```
+
+### Install on Fedora, RHEL, Alpine
+
+`.rpm` and `.apk` packages are attached to each [release](https://github.com/roman-16/proton-cli/releases/latest). Download the one for your platform and install it directly:
+
+```bash
+sudo dnf install ./proton-cli_*.rpm            # Fedora / RHEL
+sudo apk add --allow-untrusted ./proton-cli_*.apk   # Alpine
+```
+
 ### Install with Nix
 
 Available in [nixpkgs](https://search.nixos.org/packages?query=proton-cli) as the `proton-cli` package.

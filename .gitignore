@@ -1,5 +1,6 @@
 **/node_modules/
 .devbox/
+completions/
 internal/hv/assets/
 .env
 proton-cli

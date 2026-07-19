@@ -150,4 +150,69 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
+          AUR_KEY: ${{ secrets.AUR_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  apt-repo:
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Download .deb assets from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p debs
+          gh release download "${{ needs.prepare.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern '*.deb' \
+            --dir debs
+          ls -la debs/
+
+      - name: Build signed APT repository
+        id: apt
+        uses: morph027/apt-repo-action@v3
+        with:
+          repo-name: proton-cli
+          scan-dir: debs
+          codename: stable
+          components: main
+          architectures: amd64 arm64
+          signing-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          signing-key-passphrase: ${{ secrets.GPG_PRIVATE_KEY_PASSPHRASE }}
+          # reprepro's database is not persisted across workflow runs, so
+          # re-import the already-published packages before rebuilding to
+          # keep older versions available. Allowed to fail on the very
+          # first run, when nothing is published yet.
+          import-from-repo-url: |
+            deb-amd64 https://roman-16.github.io/proton-cli/ stable main
+            deb-arm64 https://roman-16.github.io/proton-cli/ stable main
+          import-from-repo-failure-allow: "true"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.apt.outputs.dir }}
+
+  apt-deploy:
+    needs: apt-repo
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      pages: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
