@@ -86,6 +86,8 @@ for (const [key, { asset, bin }] of Object.entries(PLATFORMS)) {
   mkdirSync(join(dir, "bin"), { recursive: true });
   cpSync(join(binDir, asset), join(dir, "bin", bin));
   chmodSync(join(dir, "bin", bin), 0o755);
+  cpSync("README.md", join(dir, "README.md"));
+  cpSync("LICENSE", join(dir, "LICENSE"));
   writeJSON(join(dir, "package.json"), {
     name: pkgName,
     version,
