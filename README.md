@@ -39,28 +39,6 @@ proton-cli implements the same authentication and encryption as the [Proton web 
 
 ## Install
 
-### Download a binary (recommended)
-
-Grab the latest binary for your platform from [**GitHub Releases**](https://github.com/roman-16/proton-cli/releases/latest).
-
-| Platform | Binary |
-|---|---|
-| Linux (x86_64) | `proton-cli_linux_amd64` |
-| Linux (ARM64) | `proton-cli_linux_arm64` |
-| macOS (Apple Silicon) | `proton-cli_darwin_arm64` |
-| macOS (Intel) | `proton-cli_darwin_amd64` |
-| Windows (x86_64) | `proton-cli_windows_amd64.exe` |
-
-**Linux / macOS:**
-
-```bash
-curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64
-chmod +x proton-cli_linux_amd64
-sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
-```
-
-**Windows:** download the `.exe` from the [releases page](https://github.com/roman-16/proton-cli/releases/latest) and add it to your PATH.
-
 ### Install on Arch Linux (AUR)
 
 ```bash
@@ -130,6 +108,28 @@ go install github.com/roman-16/proton-cli@latest
 ```
 
 > **Note:** `go install` builds do **not** embed the CAPTCHA helper that release binaries include. If Proton demands human verification at login, install a release binary instead. See [Human verification](#human-verification-captcha).
+
+### Download a binary
+
+Grab the latest binary for your platform from [**GitHub Releases**](https://github.com/roman-16/proton-cli/releases/latest).
+
+| Platform | Binary |
+|---|---|
+| Linux (x86_64) | `proton-cli_linux_amd64` |
+| Linux (ARM64) | `proton-cli_linux_arm64` |
+| macOS (Apple Silicon) | `proton-cli_darwin_arm64` |
+| macOS (Intel) | `proton-cli_darwin_amd64` |
+| Windows (x86_64) | `proton-cli_windows_amd64.exe` |
+
+**Linux / macOS:**
+
+```bash
+curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64
+chmod +x proton-cli_linux_amd64
+sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
+```
+
+**Windows:** download the `.exe` from the [releases page](https://github.com/roman-16/proton-cli/releases/latest) and add it to your PATH.
 
 ### Build from source
 
