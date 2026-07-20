@@ -43,15 +43,14 @@ type Client struct {
 	ua   string
 	log  *slog.Logger
 
-	mu            sync.RWMutex
-	uid           string
-	acc           string
-	ref           string
-	saltedKeyPass string // in-memory cleartext only; never persisted as cleartext
-	encKeyBlob    string // persisted (salted key password encrypted with the server-held client key)
-	profile       string
-	hvResolver    HVResolver
-	persist       func()
+	mu         sync.RWMutex
+	uid        string
+	acc        string
+	ref        string
+	encKeyBlob string // persisted (salted key password encrypted with the server-held client key)
+	profile    string
+	hvResolver HVResolver
+	persist    func()
 }
 
 type Options struct {
@@ -91,18 +90,6 @@ func (c *Client) SetTokens(uid, acc, ref string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.uid, c.acc, c.ref = uid, acc, ref
-}
-
-func (c *Client) SaltedKeyPass() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.saltedKeyPass
-}
-
-func (c *Client) SetSaltedKeyPass(skp string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.saltedKeyPass = skp
 }
 
 func (c *Client) EncKeyBlob() string {

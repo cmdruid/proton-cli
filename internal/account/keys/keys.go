@@ -50,9 +50,8 @@ type salt struct {
 // salted key password on the client, or the provided password if none is
 // cached.
 func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, error) {
-	skp := c.SaltedKeyPass()
-	switch {
-	case skp == "" && c.EncKeyBlob() != "":
+	var skp string
+	if c.EncKeyBlob() != "" {
 		// Resume: recover the key password by unwrapping the on-disk blob with the
 		// server-held client key. A failure here (e.g. the session was revoked) is
 		// fatal - the blob is useless without the key.
@@ -65,8 +64,7 @@ func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, 
 			return nil, fmt.Errorf("decrypt session key blob: %w", err)
 		}
 		skp = d
-		c.SetSaltedKeyPass(skp)
-	case skp == "":
+	} else {
 		// First unlock: derive from the password, then wrap + persist.
 		if password == "" {
 			return nil, fmt.Errorf("password required for encrypted operations;\nset PROTON_PASSWORD or --password")
@@ -76,11 +74,6 @@ func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, 
 			return nil, fmt.Errorf("derive key password: %w", err)
 		}
 		skp = d
-		c.SetSaltedKeyPass(skp)
-		wrapAndPersist(ctx, c, skp)
-	case c.EncKeyBlob() == "":
-		// Migration: legacy cleartext key password from an old session file, not
-		// yet wrapped. Convert it on this run.
 		wrapAndPersist(ctx, c, skp)
 	}
 

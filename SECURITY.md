@@ -75,7 +75,7 @@ That client key is **not** stored on your machine - it is held by Proton's serve
 - The key password is never written to disk in cleartext, so it can't be lifted from a backup, a synced home directory, a disk image, or with `grep`.
 - **Revoking the session** (from the Proton web/mobile app or its session settings) makes the on-disk blob undecryptable: without a live session the client key can't be fetched, so a leaked copy of the file can no longer be turned back into your key password.
 
-Caveat: the file still contains the session refresh token, so it is **not** safe to share - treat it as a secret. The encryption-at-rest above limits the damage of a *leaked copy* (it can be neutralised by revoking the session); it is not a substitute for protecting the file. Session files created by older versions stored the key password in cleartext; they are migrated to the encrypted form automatically on the next unlock.
+Caveat: the file still contains the session refresh token, so it is **not** safe to share - treat it as a secret. The encryption-at-rest above limits the damage of a *leaked copy* (it can be neutralised by revoking the session); it is not a substitute for protecting the file.
 
 ## Hardening recommendations for users
 

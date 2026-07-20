@@ -79,7 +79,7 @@ func New(opts Options) (*App, error) {
 	totp := firstNonEmpty(opts.TOTP, envForProfile(profileName, "TOTP"))
 	apiURL := firstNonEmpty(opts.APIURL, envForProfile(profileName, "API_URL"))
 	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"))
-	userAgent := firstNonEmpty(envForProfile(profileName, "USER_AGENT"), defaultUserAgent(opts.Version))
+	userAgent := defaultUserAgent(opts.Version)
 
 	r := render.New(opts.Output, os.Stdout, os.Stderr, opts.LogLevel, opts.Quiet)
 	c := proton.New(proton.Options{
@@ -89,9 +89,6 @@ func New(opts Options) (*App, error) {
 	if sess, err := session.Load(profileName); err == nil && sess != nil {
 		c.SetTokens(sess.UID, sess.AccessToken, sess.RefreshToken)
 		c.SetEncKeyBlob(sess.EncKeyBlob)
-		if sess.SaltedKeyPass != "" { // legacy file; migrated to a blob on next unlock
-			c.SetSaltedKeyPass(sess.SaltedKeyPass)
-		}
 	}
 
 	a := &App{
@@ -120,7 +117,7 @@ func (a *App) saveSession() error {
 	uid, acc, refresh := a.API.Tokens()
 	return session.Save(a.Profile, session.FromParts(
 		uid, acc, refresh,
-		a.API.EncKeyBlob(), a.API.SaltedKeyPass(),
+		a.API.EncKeyBlob(),
 		a.API.AppVersion(), a.API.BaseURL()))
 }
 
@@ -141,7 +138,7 @@ func (a *App) Authenticate(ctx context.Context) error {
 		return nil
 	}
 	if a.Creds.User == "" {
-		return fmt.Errorf("user is required (set --user, PROTON_USER, or configure a profile)")
+		return fmt.Errorf("user is required (set --user or PROTON_USER)")
 	}
 	if a.Creds.Password == "" {
 		return fmt.Errorf("password is required (set --password or PROTON_PASSWORD)")
