@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"net/http"
+	"strconv"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -47,45 +47,45 @@ func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, 
 		return fmt.Errorf("get file session key: %w", err)
 	}
 
-	var rev struct {
-		Revision struct {
-			Blocks []struct {
-				Index        int
-				BareURL      string
-				Token        string
-				EncSignature string
-			}
+	// Revision blocks are paginated; page through them all so files larger than
+	// one page (PageSize blocks) download in full rather than truncating.
+	type revBlock struct {
+		Index        int
+		BareURL      string
+		Token        string
+		EncSignature string
+	}
+	const pageSize = 50
+	revID := link.FileProperties.ActiveRevision.ID
+	var blocks []revBlock
+	for from := 1; ; from += pageSize {
+		var rev struct {
+			Revision struct{ Blocks []revBlock }
 		}
-	}
-	q := proton.Request{
-		Method: "GET",
-		Path:   fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", shareID, link.LinkID, link.FileProperties.ActiveRevision.ID),
-	}
-	q.Query = make(map[string][]string)
-	q.Query.Set("FromBlockIndex", "1")
-	q.Query.Set("PageSize", "50")
-	if err := s.C.Decode(ctx, q, &rev); err != nil {
-		return err
+		q := proton.Request{
+			Method: "GET",
+			Path:   fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", shareID, link.LinkID, revID),
+		}
+		q.Query = make(map[string][]string)
+		q.Query.Set("FromBlockIndex", strconv.Itoa(from))
+		q.Query.Set("PageSize", strconv.Itoa(pageSize))
+		if err := s.C.Decode(ctx, q, &rev); err != nil {
+			return err
+		}
+		blocks = append(blocks, rev.Revision.Blocks...)
+		if len(rev.Revision.Blocks) < pageSize {
+			break
+		}
 	}
 
 	progress := &render.Progress{Total: link.Size, Label: opts.Label, Quiet: opts.Quiet}
 	progress.Start()
 	defer progress.Finish()
 
-	for i, b := range rev.Revision.Blocks {
-		req, err := http.NewRequestWithContext(ctx, "GET", b.BareURL, nil)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("pm-storage-token", b.Token)
-		resp, err := http.DefaultClient.Do(req)
+	for i, b := range blocks {
+		encData, err := downloadBlock(ctx, b.BareURL, b.Token)
 		if err != nil {
 			return fmt.Errorf("download block %d: %w", i+1, err)
-		}
-		encData, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			return err
 		}
 		dec, err := sk.Decrypt(encData)
 		if err != nil {

@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
+	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -22,6 +22,26 @@ type UploadOptions struct {
 	// Photo, when set, marks the committed revision as a photo (added to the
 	// commit body verbatim, e.g. {MainPhotoLinkID, CaptureTime, ContentHash}).
 	Photo map[string]any
+}
+
+// encBlock is one 4 MiB file chunk after encryption, carrying everything the
+// block-link request, the parallel upload, a token refresh, and the final
+// revision manifest need. data is released once the block is uploaded.
+type encBlock struct {
+	index    int
+	hash     string // base64(sha256(data))
+	rawHash  []byte // sha256(data), concatenated into the manifest
+	encSig   string
+	verifier string // base64 verifier token
+	size     int
+	data     []byte
+}
+
+func (b *encBlock) listEntry() map[string]any {
+	return map[string]any{
+		"Hash": b.hash, "EncSignature": b.encSig, "Size": b.size, "Index": b.index,
+		"Verifier": map[string]string{"Token": b.verifier},
+	}
 }
 
 func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string, r io.Reader, opts UploadOptions) error {
@@ -104,103 +124,17 @@ func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string
 	progress.Start()
 	defer progress.Finish()
 
-	type blockInfo struct {
-		Index    int
-		Hash     string
-		EncSig   string
-		Size     int
-		EncData  []byte
-		Verifier string
-	}
-	const blockSize = 4 * 1024 * 1024
-	buf := make([]byte, blockSize)
-	var blocks []blockInfo
-	index := 0
-	for {
-		n, err := io.ReadFull(r, buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil && err != io.ErrUnexpectedEOF {
-			return err
-		}
-		chunk := make([]byte, n)
-		copy(chunk, buf[:n])
-		index++
-		enc, encSig, errE := encryptBlock(chunk, sessionKey, nodeKR, dc.AddrKR)
-		if errE != nil {
-			return fmt.Errorf("encrypt block %d: %w", index, errE)
-		}
-		h := sha256.Sum256(enc)
-		verTok := make([]byte, len(verCode))
-		for j := range verCode {
-			if j < len(enc) {
-				verTok[j] = verCode[j] ^ enc[j]
-			} else {
-				verTok[j] = verCode[j]
-			}
-		}
-		blocks = append(blocks, blockInfo{
-			Index: index, Hash: base64.StdEncoding.EncodeToString(h[:]),
-			EncSig: encSig, Size: len(enc), EncData: enc,
-			Verifier: base64.StdEncoding.EncodeToString(verTok),
-		})
-		if err == io.ErrUnexpectedEOF || n < blockSize {
-			break
-		}
-	}
-
-	blockList := make([]map[string]any, len(blocks))
-	for i, b := range blocks {
-		blockList[i] = map[string]any{
-			"Hash": b.Hash, "EncSignature": b.EncSig, "Size": b.Size, "Index": b.Index,
-			"Verifier": map[string]string{"Token": b.Verifier},
-		}
-	}
-	var uploadResult struct {
-		Code        int
-		UploadLinks []struct{ Token, BareURL string }
-	}
-	if err := s.C.Decode(ctx, proton.Request{
-		Method: "POST", Path: "/drive/blocks",
-		Body: map[string]any{
-			"AddressID": dc.AddrID, "ShareID": parent.ShareID,
-			"LinkID": linkID, "RevisionID": revisionID, "BlockList": blockList,
-		},
-	}, &uploadResult); err != nil {
+	rawHashByIdx, tokenByIdx, err := s.streamBlocks(
+		ctx, parent.ShareID, linkID, revisionID, dc.AddrID,
+		sessionKey, nodeKR, dc.AddrKR, verCode, r, progress,
+	)
+	if err != nil {
 		return err
 	}
 
-	for i, link := range uploadResult.UploadLinks {
-		boundary := "proton-cli-boundary"
-		var body strings.Builder
-		body.WriteString("--" + boundary + "\r\n")
-		body.WriteString("Content-Disposition: form-data; name=\"Block\"; filename=\"blob\"\r\n")
-		body.WriteString("Content-Type: application/octet-stream\r\n\r\n")
-		body.Write(blocks[i].EncData)
-		body.WriteString("\r\n--" + boundary + "--\r\n")
-		req, err := http.NewRequestWithContext(ctx, "POST", link.BareURL, strings.NewReader(body.String()))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("pm-storage-token", link.Token)
-		req.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("upload block %d: %w", i+1, err)
-		}
-		respBody, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if resp.StatusCode >= 400 {
-			return fmt.Errorf("upload block %d: HTTP %d: %s", i+1, resp.StatusCode, string(respBody))
-		}
-		progress.Add(int64(blocks[i].Size))
-	}
-
-	var manifestBytes []byte
-	for _, b := range blocks {
-		h, _ := base64.StdEncoding.DecodeString(b.Hash)
-		manifestBytes = append(manifestBytes, h...)
+	manifestBytes, blockTokens, err := buildRevisionCommit(rawHashByIdx, tokenByIdx)
+	if err != nil {
+		return err
 	}
 	sig, err := dc.AddrKR.SignDetached(pgp.NewPlainMessage(manifestBytes))
 	if err != nil {
@@ -209,10 +143,6 @@ func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string
 	manifestSig, err := sig.GetArmored()
 	if err != nil {
 		return err
-	}
-	blockTokens := make([]map[string]any, len(uploadResult.UploadLinks))
-	for i, link := range uploadResult.UploadLinks {
-		blockTokens[i] = map[string]any{"Index": blocks[i].Index, "Token": link.Token}
 	}
 	commit := map[string]any{
 		"BlockList": blockTokens, "State": 1,
@@ -225,6 +155,212 @@ func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string
 		Method: "PUT", Path: fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", parent.ShareID, linkID, revisionID),
 		Body: commit,
 	}, nil)
+}
+
+// streamBlocks reads r in 4 MiB chunks, encrypts each, requests upload links in
+// batches, and uploads blocks in parallel with per-block retry. Memory stays
+// bounded to the encryption window plus in-flight uploads (never the whole
+// file). It returns, per block index, the raw block hash (for the manifest) and
+// the token the successful upload used (for the revision BlockList).
+func (s *Service) streamBlocks(
+	ctx context.Context,
+	shareID, linkID, revisionID, addrID string,
+	sessionKey *pgp.SessionKey, nodeKR, addrKR *pgp.KeyRing,
+	verCode []byte, r io.Reader, progress *render.Progress,
+) (map[int][]byte, map[int]string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var (
+		mu           sync.Mutex
+		firstErr     error
+		rawHashByIdx = map[int][]byte{}
+		tokenByIdx   = map[int]string{}
+	)
+	setErr := func(e error) {
+		mu.Lock()
+		if firstErr == nil {
+			firstErr = e
+			cancel()
+		}
+		mu.Unlock()
+	}
+
+	// Producer: read -> encrypt -> hash one block at a time, bounded by the
+	// channel so the whole file is never resident in memory.
+	encCh := make(chan *encBlock, uploadBufferBlocks)
+	go func() {
+		defer close(encCh)
+		buf := make([]byte, driveBlockSize)
+		index := 0
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			n, rerr := io.ReadFull(r, buf)
+			if rerr == io.EOF {
+				return
+			}
+			if rerr != nil && rerr != io.ErrUnexpectedEOF {
+				setErr(rerr)
+				return
+			}
+			index++
+			chunk := make([]byte, n)
+			copy(chunk, buf[:n])
+			enc, encSig, eerr := encryptBlock(chunk, sessionKey, nodeKR, addrKR)
+			if eerr != nil {
+				setErr(fmt.Errorf("encrypt block %d: %w", index, eerr))
+				return
+			}
+			sum := sha256.Sum256(enc)
+			blk := &encBlock{
+				index:    index,
+				hash:     base64.StdEncoding.EncodeToString(sum[:]),
+				rawHash:  append([]byte(nil), sum[:]...),
+				encSig:   encSig,
+				verifier: base64.StdEncoding.EncodeToString(xorVerifier(verCode, enc)),
+				size:     len(enc),
+				data:     enc,
+			}
+			select {
+			case encCh <- blk:
+			case <-ctx.Done():
+				return
+			}
+			if rerr == io.ErrUnexpectedEOF || n < driveBlockSize {
+				return
+			}
+		}
+	}()
+
+	// Uploaders: a bounded worker pool draining the encryption window.
+	sem := make(chan struct{}, uploadParallelJobs)
+	var wg sync.WaitGroup
+	dispatch := func(blk *encBlock, link uploadLink) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if ctx.Err() != nil {
+				return
+			}
+			refresh := func(rctx context.Context) (uploadLink, error) {
+				links, err := s.requestBlockLinks(rctx, shareID, linkID, revisionID, addrID, []*encBlock{blk})
+				if err != nil {
+					return uploadLink{}, err
+				}
+				return links[0], nil
+			}
+			tok, err := uploadBlock(ctx, blk.index, blk.data, link, refresh)
+			if err != nil {
+				setErr(err)
+				return
+			}
+			mu.Lock()
+			tokenByIdx[blk.index] = tok
+			rawHashByIdx[blk.index] = blk.rawHash
+			progress.Add(int64(blk.size))
+			mu.Unlock()
+			blk.data = nil // release the encrypted payload once uploaded
+		}()
+	}
+
+	// Dispatcher: batch encrypted blocks, request their links, hand them to the
+	// worker pool (blocking on the pool bounds total in-flight memory).
+	flush := func(batch []*encBlock) error {
+		if len(batch) == 0 {
+			return nil
+		}
+		links, err := s.requestBlockLinks(ctx, shareID, linkID, revisionID, addrID, batch)
+		if err != nil {
+			return err
+		}
+		for i, blk := range batch {
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			dispatch(blk, links[i])
+		}
+		return nil
+	}
+
+	batch := make([]*encBlock, 0, uploadLinkBatch)
+	for done := false; !done; {
+		select {
+		case blk, ok := <-encCh:
+			if !ok {
+				if err := flush(batch); err != nil {
+					setErr(err)
+				}
+				done = true
+				break
+			}
+			batch = append(batch, blk)
+			if len(batch) >= uploadLinkBatch {
+				if err := flush(batch); err != nil {
+					setErr(err)
+					done = true
+					break
+				}
+				batch = make([]*encBlock, 0, uploadLinkBatch)
+			}
+		case <-ctx.Done():
+			done = true
+		}
+	}
+
+	wg.Wait()
+
+	mu.Lock()
+	err := firstErr
+	mu.Unlock()
+	if err != nil {
+		return nil, nil, err
+	}
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
+	return rawHashByIdx, tokenByIdx, nil
+}
+
+// buildRevisionCommit assembles the manifest (block hashes concatenated in
+// index order) and the revision BlockList (index + token) from the per-block
+// results. It errors on any gap so a revision is never committed with a missing
+// block, which also asserts the parallel uploads produced a complete 1..N set.
+func buildRevisionCommit(rawHashByIdx map[int][]byte, tokenByIdx map[int]string) ([]byte, []map[string]any, error) {
+	n := len(tokenByIdx)
+	var manifest []byte
+	blockList := make([]map[string]any, 0, n)
+	for idx := 1; idx <= n; idx++ {
+		h, ok := rawHashByIdx[idx]
+		if !ok {
+			return nil, nil, fmt.Errorf("missing hash for block %d", idx)
+		}
+		tok, ok := tokenByIdx[idx]
+		if !ok {
+			return nil, nil, fmt.Errorf("missing token for block %d", idx)
+		}
+		manifest = append(manifest, h...)
+		blockList = append(blockList, map[string]any{"Index": idx, "Token": tok})
+	}
+	return manifest, blockList, nil
+}
+
+// xorVerifier builds a block's verifier token: verCode XOR the block's leading
+// bytes, zero-padded to verCode's length.
+func xorVerifier(verCode, enc []byte) []byte {
+	out := make([]byte, len(verCode))
+	for j := range verCode {
+		if j < len(enc) {
+			out[j] = verCode[j] ^ enc[j]
+		} else {
+			out[j] = verCode[j]
+		}
+	}
+	return out
 }
 
 func genFileKeys(nodeKR, addrKR *pgp.KeyRing) (*pgp.SessionKey, string, string, error) {

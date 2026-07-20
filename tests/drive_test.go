@@ -307,6 +307,39 @@ func TestDriveItemsUploadMultiBlock(t *testing.T) {
 	}
 }
 
+// TestDriveItemsUploadManyBlocks crosses the upload link-batch boundary (11
+// blocks > the 10-per-batch request size) so the streaming uploader has to
+// request links in multiple batches and upload blocks in parallel; the sha256
+// round-trip proves block ordering survives the concurrency.
+func TestDriveItemsUploadManyBlocks(t *testing.T) {
+	folder := "/" + testID() + "-many"
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "many.bin")
+	big := make([]byte, 11*4*1024*1024) // 44 MiB -> 11 x 4 MiB blocks
+	if _, err := io.ReadFull(rand.Reader, big); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(src, big, 0644)
+	hWant := sha256.Sum256(big)
+
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", folder)
+
+	runOK(t, "drive", "items", "upload", src, folder)
+	out := filepath.Join(tmp, "out.bin")
+	runOK(t, "drive", "items", "download", folder+"/many.bin", "--output", out)
+
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hGot := sha256.Sum256(got)
+	if hex.EncodeToString(hGot[:]) != hex.EncodeToString(hWant[:]) {
+		t.Errorf("sha256 mismatch after many-block round-trip")
+	}
+}
+
 // ── rename / move (re-encryption) ──
 
 func TestDriveItemsRename(t *testing.T) {
