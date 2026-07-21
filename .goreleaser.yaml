@@ -129,9 +129,9 @@ homebrew_casks:
 
 winget:
   - name: proton-cli
-    publisher: Roman
-    package_identifier: Roman.ProtonCLI
-    path: "manifests/r/Roman/ProtonCLI/{{ .Version }}"
+    publisher: Roman-16
+    package_identifier: Roman-16.ProtonCLI
+    path: "manifests/r/Roman-16/ProtonCLI/{{ .Version }}"
     commit_author:
       name: Roman
       email: roman@lerchster.dev

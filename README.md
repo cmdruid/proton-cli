@@ -86,7 +86,7 @@ environment.systemPackages = [
 ### Install on Windows (winget)
 
 ```powershell
-winget install Roman.ProtonCLI
+winget install Roman-16.ProtonCLI
 ```
 
 ### Install with Homebrew (macOS)
