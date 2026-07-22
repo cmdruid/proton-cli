@@ -322,7 +322,7 @@ components:
   # SupportedProtonDocsMimeTypes: application/vnd.openxmlformats-officedocument.wordprocessingml.document=docx, text/plain=txt, text/markdown=md, text/html=html, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=xlsx, text/csv=csv, text/tab-separated-values=tsv, application/vnd.oasis.opendocument.spreadsheet=ods
   # SWIPE_ACTION: -1=None, 0=Trash, 1=Spam, 2=Star, 3=Archive, 4=MarkAsRead, 5=LabelAs, 6=MoveTo
   # TelemetryAccountCancellationEvents: start_cancellation=startCancellation, cancel_page=cancelPage, cancel_modal=cancelModal, feedback_modal=feedbackModal, resubscribe_modal=resubscribeModal, dashboard_reactivate=dashboardReactivate, upsell_modal=upsellModal
-  # TelemetryAccountCancellationFlowFeedbackEvents: start_cancellation=startCancellation, feedback_step=feedbackStep, second_step=secondStep, confirm_cancellation=confirmCancellation
+  # TelemetryAccountCancellationFlowFeedbackEvents: start_cancellation=startCancellation, feedback_step=feedbackStep, second_step=secondStep, confirm_cancellation=confirmCancellation, managed_externally=managedExternally
   # TelemetryAccountDashboardEvents: page_load=pageLoad, cross_product_click=crossProductClick, feature_card_click=featureCardClick, upgrade_button_click=upgradeButtonClick, upsell_cta_click=upsellCtaClick
   # TelemetryAccountOrganizationLogoUploadEvents: process_start=processStart, process_success=processSuccess, process_failure=processFailure
   # TelemetryAccountSecurityCheckupEvents: page_load=pageLoad, cohort_change.complete_recovery_multiple=completeRecoveryMultiple, cohort_change.complete_recovery_single=completeRecoverySingle, cohort_change.account_recovery_enabled=accountRecoveryEnabled
@@ -898,6 +898,10 @@ paths:
                 Environment:
                   type: string
                 ModelID:
+                  type: string
+                RequestedModel:
+                  type: string
+                HasGeneratedImages:
                   type: string
                 Component:
                   type: string
@@ -6932,6 +6936,24 @@ paths:
           application/json:
             schema:
               type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /core/v4/organizations/{mspId}/subsidiaries/billing-summary/cost:
+    get:
+      tags: [Core]
+      summary: Get Msp Billing Summary
+      operationId: getMspBillingSummary
+      parameters:
+        - name: mspId
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         "200":
           description: Success
