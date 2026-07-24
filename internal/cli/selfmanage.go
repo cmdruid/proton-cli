@@ -53,9 +53,9 @@ func managedHint(kind selfmanage.Kind, action selfAction) (via, cmd string) {
 	switch kind {
 	case selfmanage.KindNix:
 		if update {
-			return "Nix", "update it through your flake or nixpkgs"
+			return "Nix", "update it through your flake or nixpkgs configuration"
 		}
-		return "Nix", "remove it from your flake or nixpkgs configuration"
+		return "Nix", "remove it through your flake or nixpkgs configuration"
 	case selfmanage.KindHomebrew:
 		if update {
 			return "Homebrew", "run `brew upgrade --cask proton-cli`"
