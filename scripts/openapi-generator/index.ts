@@ -8,7 +8,7 @@
  * 3. Outputs openapi.yaml to stdout
  * 4. Cleans up the clone
  *
- * Usage: npm run generate-openapi
+ * Usage: bun run generate-openapi
  */
 
 import { ensureRepo } from "./clone.js";

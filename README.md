@@ -648,7 +648,7 @@ Tests are integration tests that run against the live Proton API and require `PR
 See [`openapi.yaml`](openapi.yaml) for the complete API spec covering ~740 endpoints. To regenerate from the latest Proton source:
 
 ```bash
-cd scripts && npm install && npm run generate-openapi
+cd scripts && bun install && bun run generate-openapi
 ```
 
 See [`scripts/README.md`](scripts/README.md) for details on the generator.
