@@ -14,6 +14,8 @@ proton-cli implements the same authentication and encryption as the [Proton web 
 
 - [Features](#features)
 - [Install](#install)
+- [Updating](#updating)
+- [Uninstalling](#uninstalling)
 - [Quick start](#quick-start)
 - [Core concepts](#core-concepts)
 - [Configuration](#configuration)
@@ -38,6 +40,18 @@ proton-cli implements the same authentication and encryption as the [Proton web 
 - **Built for scripts** - `--output json`, meaningful exit codes, streaming I/O, and `stdout = new ID` on create.
 
 ## Install
+
+### Install with curl (Linux, macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
+```
+
+### Install with PowerShell (Windows)
+
+```powershell
+irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 | iex
+```
 
 ### Install on Arch Linux (AUR)
 
@@ -137,6 +151,26 @@ sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
 git clone https://github.com/roman-16/proton-cli.git
 cd proton-cli
 go build .
+```
+
+## Updating
+
+If you installed with the curl script or a downloaded binary, update in place:
+
+```bash
+proton-cli update           # update to the latest release
+proton-cli update --check   # report whether an update is available
+proton-cli update <version> # install a specific version
+```
+
+## Uninstalling
+
+If you installed with the curl/PowerShell script or a downloaded binary, remove it in place:
+
+```bash
+proton-cli uninstall                 # preview what would be removed
+proton-cli uninstall --yes           # remove the binary
+proton-cli uninstall --yes --purge   # also delete saved sessions and the ID cache
 ```
 
 ## Quick start

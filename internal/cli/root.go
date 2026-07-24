@@ -154,6 +154,8 @@ func registerSubcommands() {
 	rootCmd.AddCommand(newCalendarCmd())
 	rootCmd.AddCommand(newContactsCmd())
 	rootCmd.AddCommand(newPassCmd())
+	rootCmd.AddCommand(newUpdateCmd())
+	rootCmd.AddCommand(newUninstallCmd())
 }
 
 func parseLevel(s string, verbose bool) slog.Level {

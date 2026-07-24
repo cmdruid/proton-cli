@@ -16549,49 +16549,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
-  /meet/v1/meetings/{meetingId}/password:
-    put:
-      tags: [Meet]
-      summary: Update Meeting Password Call
-      operationId: updateMeetingPasswordCall
-      parameters:
-        - name: meetingId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - Password
-                - SessionKey
-                - SRPSalt
-                - SRPVerifier
-                - SRPModulusID
-                - CustomPassword
-              properties:
-                Password:
-                  type: string
-                SessionKey:
-                  type: string
-                SRPSalt:
-                  type: string
-                SRPVerifier:
-                  type: string
-                SRPModulusID:
-                  type: string
-                CustomPassword:
-                  type: integer
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
   /meet/v1/meetings/{meetingId}/schedule:
     put:
       tags: [Meet]
