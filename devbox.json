@@ -7,6 +7,7 @@
     "bun": "latest",
     "just": "latest",
     "protobuf": "latest",
+    "gcc": "latest",
     "pkg-config": "latest",
     "webkitgtk_4_1": {
       "version": "latest",
