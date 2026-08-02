@@ -127,7 +127,7 @@ components:
   # DOMAIN_STATE: 0=DOMAIN_STATE_DEFAULT, 1=DOMAIN_STATE_VERIFIED, 2=DOMAIN_STATE_WARN
   # DRAFT_TYPE: text/html=NORMAL, text/plain=PLAIN_TEXT
   # DRAWER_EVENTS: close=CLOSE, show=SHOW, switch=SWITCH, ready=READY, session=SESSION, api-request=API_REQUEST, api-response=API_RESPONSE, api-request-abort=ABORT_REQUEST, child-url-update=CHILD_URL_UPDATE, outside-call-event-manager=CALL_EVENT_MANAGER_FROM_OUTSIDE, outside-update-theme=UPDATE_THEME, outside-calendar-open-event=CALENDAR_OPEN_EVENT, outside-call-calendar-event-manager=CALL_CALENDAR_EVENT_MANAGER, outside-set-widget-event=SET_WIDGET_EVENT, outside-unset-widget-event=UNSET_WIDGET_EVENT, outside-request-open-events=REQUEST_OPEN_EVENTS, outside-refresh-widget=REFRESH_WIDGET, open-contact-modal=OPEN_CONTACT_MODAL
-  # DRAWER_NATIVE_APPS: quick-settings=QUICK_SETTINGS, contacts=CONTACTS, security-center=SECURITY_CENTER, vpn=VPN, referral=REFERRAL
+  # DRAWER_NATIVE_APPS: quick-settings=QUICK_SETTINGS, contacts=CONTACTS, security-center=SECURITY_CENTER, vpn=VPN, referral=REFERRAL, lumo=LUMO
   # DRAWER_VISIBILITY: 0=SHOW, 1=HIDE
   # DRIVE_PERMISSIONS: 4=READ, 2=WRITE, 16=ADMIN
   # DRIVE_SIGNATURE_CONTEXT: drive.share-member.inviter=SHARE_MEMBER_INVITER, drive.share-member.member=SHARE_MEMBER_MEMBER, drive.share-member.external-invitation=SHARE_MEMBER_EXTERNAL_INVITATION, drive.search.index=SEARCH_INDEX
@@ -148,6 +148,7 @@ components:
   # EXPORT_STEPS: 0=EXPORTING, 1=FINISHED
   # EXTENSION: csv=CSV, vcf=VCF
   # ExtraSessionForkSearchParameters: email=Email
+  # FIDO2_CREDENTIALS_PIN_VALUE: 1=ENABLED, 0=DISABLED
   # Fido2CredentialFlags: 1=Compromised
   # FileRevisionState: 0=Draft, 1=Active, 2=Inactive
   # FILTER_STATUS: 1=ENABLED, 0=DISABLED
@@ -251,6 +252,7 @@ components:
   # PASSWORD_MODE: 1=SINGLE, 2=TWO_PASSWORD
   # PASSWORD_REMINDERS_VALUE: 0=ENABLED, 1=DISABLED
   # PasswordPolicyState: 1=ENABLED, 2=OPTIONAL
+  # PersonalMeetingState: 0=NOT_YOUR_PERSONAL, 1=YOUR_PERSONAL
   # PGP_SCHEME_TEXT: PGP/Inline=INLINE, PGP/MIME=MIME
   # PGP_SCHEMES: pgp-inline=PGP_INLINE, pgp-mime=PGP_MIME
   # PGP_SCHEMES_MORE: =GLOBAL_DEFAULT
@@ -7928,6 +7930,8 @@ paths:
                 DisplayTrialEndModal:
                   type: string
                 PasswordReminderOptOut:
+                  type: string
+                Fido2CredentialsPinOptIn:
                   type: string
                 PersistPasswordScope:
                   type: string
@@ -16832,6 +16836,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
+  /organizations/subsidiaries/{id}/members:
+    get:
+      tags: [Organizations]
+      summary: Get Msp Subsidiary Managers
+      operationId: getMspSubsidiaryManagers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /organizations/subsidiaries/{id}/members/{memberId}:
     delete:
       tags: [Organizations]
       summary: Unassign Msp Subsidiary Manager
