@@ -166,6 +166,9 @@ changelog:
 
 release:
   draft: false
-  # Replace existing assets on re-run so a partial failure (e.g. a
-  # transient AUR/apt hiccup) can be retried without 422 already_exists.
+  # A re-run has to be idempotent: a partial failure (e.g. the AUR being down)
+  # leaves the release, its notes and its assets in place. `mode` only governs
+  # the notes; without `replace_existing_artifacts` every asset upload fails
+  # with 422 already_exists and the retry dies before reaching the publishers.
   mode: replace
+  replace_existing_artifacts: true
