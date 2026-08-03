@@ -16390,33 +16390,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
   /meet/v1/meetings/links/{meetingLinkName}/waiting-room:
-    post:
+    put:
       tags: [Meet]
-      summary: Enable Waiting Room
-      operationId: enableWaitingRoom
+      summary: Toggle Waiting Room
+      operationId: toggleWaitingRoom
       parameters:
         - name: meetingLinkName
           in: path
           required: true
           schema:
             type: string
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-    delete:
-      tags: [Meet]
-      summary: Disable Waiting Room
-      operationId: disableWaitingRoom
-      parameters:
-        - name: meetingLinkName
-          in: path
-          required: true
-          schema:
-            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - WaitingRoom
+              properties:
+                WaitingRoom:
+                  type: integer
       responses:
         "200":
           description: Success
