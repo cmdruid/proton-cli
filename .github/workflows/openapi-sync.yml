@@ -1,0 +1,74 @@
+name: Sync OpenAPI
+
+on:
+  schedule:
+    # Mondays at 01:00 UTC: 03:00 CEST in summer, 02:00 CET in winter. Cron is
+    # UTC-only and cannot follow DST, so this is the slot that never lands after
+    # 03:00 local time.
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openapi-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install generator dependencies
+        working-directory: scripts
+        run: bun install --frozen-lockfile
+
+      - name: Regenerate openapi.yaml
+        run: |
+          cp openapi.yaml /tmp/openapi-previous.yaml
+          cd scripts
+          bun run generate-openapi
+
+      - name: Verify the regenerated spec
+        run: |
+          prev_paths=$(grep -cE '^  /' /tmp/openapi-previous.yaml || true)
+          new_paths=$(grep -cE '^  /' openapi.yaml || true)
+          prev_lines=$(wc -l < /tmp/openapi-previous.yaml)
+          new_lines=$(wc -l < openapi.yaml)
+          echo "paths: $prev_paths -> $new_paths"
+          echo "lines: $prev_lines -> $new_lines"
+
+          # A WebClients refactor the generator no longer understands yields a
+          # spec that is still valid YAML but has lost most of its endpoints.
+          # Refuse anything that shrinks by more than 10%.
+          if (( new_paths * 10 < prev_paths * 9 || new_lines * 10 < prev_lines * 9 )); then
+            echo "::error::regenerated spec shrank by more than 10% ($prev_paths paths/$prev_lines lines -> $new_paths paths/$new_lines lines); refusing to commit"
+            exit 1
+          fi
+
+      - name: Commit and push
+        run: |
+          if git diff --quiet -- openapi.yaml; then
+            echo "openapi.yaml is already in sync with WebClients."
+            exit 0
+          fi
+
+          # Clone path is CLONE_DIR in scripts/openapi-generator/index.ts.
+          webclients=$(git -C /tmp/proton-cli-WebClients rev-parse --short HEAD)
+
+          git config user.name "Roman"
+          git config user.email "roman@lerchster.dev"
+          git add openapi.yaml
+          git commit -F - <<EOF
+          chore(openapi): sync generated spec
+
+          Regenerated from ProtonMail/WebClients at ${webclients}.
+          EOF
+          git push
