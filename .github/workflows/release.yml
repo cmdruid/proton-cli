@@ -7,6 +7,11 @@ on:
         description: "Version to release (e.g. 1.0.0)"
         required: true
         type: string
+      resume:
+        description: "Re-run a partially failed release: reuse the existing tag instead of failing"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -29,20 +34,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check tag does not exist
+      # An existing tag is a hard error for a fresh release but the resume path
+      # for a partially failed one (e.g. a publisher outage after the tag was
+      # pushed), where the tag is reused as-is and never moved.
+      - name: Check tag
         run: |
           if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
-            echo "::error::Tag v${{ inputs.version }} already exists"
-            exit 1
+            if [ "${{ inputs.resume }}" != "true" ]; then
+              echo "::error::Tag v${{ inputs.version }} already exists (pass resume=true to re-run a failed release)"
+              exit 1
+            fi
+            echo "Tag v${{ inputs.version }} exists; resuming the release from it."
           fi
 
-      - name: Create and push tag
+      - name: Create or reuse tag
         id: tag
         run: |
-          git config user.name "Roman"
-          git config user.email "roman@lerchster.dev"
-          git tag --annotate "v${{ inputs.version }}" --message "Release v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Reusing existing tag v${{ inputs.version }}."
+          else
+            git config user.name "Roman"
+            git config user.email "roman@lerchster.dev"
+            git tag --annotate "v${{ inputs.version }}" --message "Release v${{ inputs.version }}"
+            git push origin "v${{ inputs.version }}"
+          fi
           echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
 
   build-helpers:
