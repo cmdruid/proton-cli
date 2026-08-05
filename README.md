@@ -28,7 +28,7 @@ Read your mail, move files in and out of Drive, manage calendars, passwords, and
 
 ## Install
 
-| | |
+| Method | Command |
 | --- | --- |
 | **Linux, macOS** | `curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh \| sh` |
 | **Windows** | `irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 \| iex` |
@@ -156,7 +156,7 @@ The saved session keeps your key password encrypted with a key held server-side,
 
 Everything lives in [`docs/`](docs/README.md):
 
-| | |
+| Page | What's in it |
 | --- | --- |
 | [Installation](docs/installation.md) | Every platform, updating, uninstalling |
 | [Configuration](docs/configuration.md) | Credentials, profiles, environment variables |
