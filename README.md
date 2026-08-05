@@ -101,7 +101,7 @@ proton-cli calendar events create --title Standup --start 2026-04-16T09:00 \
 proton-cli calendar events respond "Team sync" --status accept
 ```
 
-→ [Calendar](docs/commands/calendar.md)
+Plus calendars of your own, all-day events, and attendees who get an invitation by email. → [Calendar](docs/commands/calendar.md)
 
 ### Pass
 
@@ -124,7 +124,7 @@ proton-cli contacts pin-key jane --key jane-pubkey.asc
 proton-cli contacts groups add GROUP_ID jane
 ```
 
-→ [Contacts](docs/commands/contacts.md)
+Groups, several addresses per contact, and details like organization and birthday. → [Contacts](docs/commands/contacts.md)
 
 Account and mail [settings](docs/commands/settings.md) are covered as well, and [`proton-cli api`](docs/commands/api.md) reaches any endpoint the commands don't.
 
