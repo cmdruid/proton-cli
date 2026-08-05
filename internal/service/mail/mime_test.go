@@ -10,7 +10,7 @@ import (
 
 func TestBuildMIMEMessageStructure(t *testing.T) {
 	body := "hello world"
-	atts := []preparedAttachment{
+	atts := []mimePart{
 		{Filename: "note.txt", MIMEType: "text/plain", Data: []byte("attached bytes")},
 	}
 	out, err := buildMIMEMessage(body, "text/plain", atts)
@@ -78,7 +78,7 @@ func TestBuildMIMEMessageNoAttachments(t *testing.T) {
 // rather than as a downloadable attachment, so embedded images render in place
 // for external PGP/MIME recipients.
 func TestBuildMIMEMessageInlineDisposition(t *testing.T) {
-	out, err := buildMIMEMessage("<p>hi</p>", "text/html", []preparedAttachment{
+	out, err := buildMIMEMessage("<p>hi</p>", "text/html", []mimePart{
 		{Filename: "pic.png", MIMEType: "image/png", Data: []byte("PNGDATA"), ContentID: "abc123@proton.me"},
 	})
 	if err != nil {

@@ -2,6 +2,9 @@ package cli
 
 import "path/filepath"
 
+// Helpers shared by the bulk-selection commands, which all union explicit
+// references with whatever their filters matched.
+
 // matchGlob reports whether name matches the shell-style glob. Empty matches all.
 func matchGlob(pattern, name string) bool {
 	if pattern == "" {

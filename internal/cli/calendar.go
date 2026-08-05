@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/roman-16/proton-cli/internal/account/keys"
+
 	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/render"
 	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
@@ -15,11 +17,33 @@ import (
 
 func newCalendarCmd() *cobra.Command {
 	c := &cobra.Command{Use: "calendar", Short: "Calendar operations"}
-	c.AddCommand(calendarsCmd(), eventsCmd())
+	c.AddCommand(eventsCmd(), calendarSettingsCmd())
 	return c
 }
 
-// ── calendar calendars ──
+// sendICS mails a calendar invitation or reply, attaching the ICS with the iTIP
+// method that tells the recipient's client what to do with it. Invitations are
+// system mail, so they carry no signature.
+func sendICS(c *Invocation, u *keys.Unlocked, to []string, subject, body, ics, method string) error {
+	sender, err := mailsvc.ResolveSender(u, mailsvc.SenderRequest{})
+	if err != nil {
+		return err
+	}
+	_, err = c.App.Mail.Send(c.Ctx, u, mailsvc.Content{
+		From:    sender,
+		To:      mailsvc.ParseRecipients(to),
+		Subject: subject,
+		Body:    body,
+		Attach: []mailsvc.LocalAttachment{{
+			Filename: "invite.ics",
+			MIMEType: "text/calendar; method=" + method,
+			Data:     []byte(ics),
+		}},
+	}, mailsvc.Delivery{})
+	return err
+}
+
+// ── calendar settings calendars ──
 
 func calendarsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "calendars", Short: "Manage calendars"}
@@ -263,14 +287,7 @@ func eventsCmd() *cobra.Command {
 			}
 			if res.Invite != nil {
 				body := fmt.Sprintf("You have been invited to %q.\n\nThe calendar invitation is attached.", eTitle)
-				if _, err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
-					To:      res.Invite.Recipients,
-					Subject: res.Invite.Subject,
-					Body:    body,
-					InlineAttachments: []mailsvc.InlineAttachment{{
-						Filename: "invite.ics", MIMEType: "text/calendar; method=REQUEST", Data: []byte(res.Invite.ICS),
-					}},
-				}); err != nil {
+				if err := sendICS(c, u, res.Invite.Recipients, res.Invite.Subject, body, res.Invite.ICS, "REQUEST"); err != nil {
 					c.R().Info(fmt.Sprintf("event created, but sending the invitation email to %d external attendee(s) failed: %v", len(res.Invite.Recipients), err))
 				}
 			}
@@ -358,14 +375,7 @@ func eventsCmd() *cobra.Command {
 					return err
 				}
 				if res.Reply != nil {
-					if _, err := c.App.Mail.Send(c.Ctx, u, mailsvc.SendOptions{
-						To:      res.Reply.Recipients,
-						Subject: res.Reply.Subject,
-						Body:    res.Reply.Body,
-						InlineAttachments: []mailsvc.InlineAttachment{{
-							Filename: "invite.ics", MIMEType: "text/calendar; method=REPLY", Data: []byte(res.Reply.ICS),
-						}},
-					}); err != nil {
+					if err := sendICS(c, u, res.Reply.Recipients, res.Reply.Subject, res.Reply.Body, res.Reply.ICS, "REPLY"); err != nil {
 						c.R().Info(fmt.Sprintf("responded, but notifying the organizer by email failed: %v", err))
 					}
 				}

@@ -14,7 +14,7 @@ import (
 // eoAddress builds an encrypted-for-outside sub-package: the body session key
 // and attachment keys are wrapped with the password, and a random token plus an
 // SRP verifier let the recipient authenticate to Proton's EO viewer.
-func eoAddress(sessionKey *pgp.SessionKey, password, hint string, atts []*uploadedAttachment, modulus, modulusID string) (map[string]any, error) {
+func eoAddress(sessionKey *pgp.SessionKey, password, hint string, atts []*draftAttachment, modulus, modulusID string) (map[string]any, error) {
 	bodyKP, err := pgp.EncryptSessionKeyWithPassword(sessionKey, []byte(password))
 	if err != nil {
 		return nil, err

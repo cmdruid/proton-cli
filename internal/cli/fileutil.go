@@ -3,11 +3,56 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
+
+// readTextArg resolves a text flag that may be "-", meaning "read stdin",
+// centralising that convention for every body-like flag.
+func readTextArg(value, flag string) (string, error) {
+	if value != "-" {
+		return value, nil
+	}
+	b, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return "", fmt.Errorf("read %s from stdin: %w", flag, err)
+	}
+	return string(b), nil
+}
+
+// sanitizeFilename turns arbitrary text (a mail subject) into a portable file
+// name: path separators, control characters and the characters Windows forbids
+// become spaces, runs of whitespace collapse, and the result is length-capped so
+// it survives every filesystem the CLI targets.
+func sanitizeFilename(s string) string {
+	const maxLen = 120
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' ||
+			r == '"' || r == '<' || r == '>' || r == '|':
+			b.WriteByte(' ')
+		case unicode.IsControl(r):
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	out := strings.Join(strings.Fields(b.String()), " ")
+	if len(out) > maxLen {
+		out = strings.TrimSpace(out[:maxLen])
+	}
+	// A trailing dot makes a file unopenable on Windows.
+	out = strings.TrimRight(out, ".")
+	if out == "" {
+		return "message"
+	}
+	return out
+}
 
 // writeMode controls how writeFileSafe handles a pre-existing destination.
 type writeMode int

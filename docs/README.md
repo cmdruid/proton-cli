@@ -22,12 +22,12 @@ Start with the [README](../README.md) for the tour. These pages are the details.
 
 | Page | Commands |
 | --- | --- |
-| [Mail](commands/mail.md) | `messages`, `conversations`, `attachments`, `labels`, `filters`, `addresses` |
-| [Drive](commands/drive.md) | `items`, `folders`, `share`, `invitations`, `trash`, `photos` |
-| [Calendar](commands/calendar.md) | `calendars`, `events` |
+| [Mail](commands/mail.md) | `messages`, `drafts`, `conversations`, `attachments`, `settings` |
+| [Drive](commands/drive.md) | `items`, `folders`, `share`, `invitations`, `trash`, `photos`, `settings` |
+| [Calendar](commands/calendar.md) | `events`, `settings` |
 | [Pass](commands/pass.md) | `items`, `vaults`, `alias` |
 | [Contacts](commands/contacts.md) | contacts, pinned keys, groups |
-| [Settings](commands/settings.md) | account and mail settings |
+| [Settings](commands/settings.md) | account settings, and how each product scopes its own |
 | [Raw API](commands/api.md) | `api` for anything not covered by a command |
 
 ## Under the hood

@@ -123,3 +123,34 @@ func collapseWhitespace(s string) string {
 func IsHTML(mimeType string) bool {
 	return strings.Contains(strings.ToLower(mimeType), "html")
 }
+
+// TextToHTML renders plain text as an HTML fragment: markup characters are
+// escaped and newlines become <br>. It is the inverse direction of HTMLToText,
+// used wherever Proton stores an HTML field the CLI accepts as plain text
+// (address signatures, the auto-reply message).
+func TextToHTML(s string) string {
+	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+	for i, line := range lines {
+		lines[i] = htmlEscape(line)
+	}
+	return strings.Join(lines, "<br>")
+}
+
+func htmlEscape(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '&':
+			b.WriteString("&amp;")
+		case '<':
+			b.WriteString("&lt;")
+		case '>':
+			b.WriteString("&gt;")
+		case '"':
+			b.WriteString("&quot;")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}

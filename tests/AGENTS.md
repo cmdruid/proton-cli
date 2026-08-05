@@ -33,7 +33,7 @@ It's wired through the CLI's per-profile env handling: the `alt` profile reads `
 
 ```go
 func TestSecondAccountFoo(t *testing.T) {
-    runOK(t, alt("mail", "addresses", "list")...)    // runs the CLI as the second account
+    runOK(t, alt("mail", "settings", "addresses", "list")...)    // runs the CLI as the second account
     // ... primary (default profile) and alt interact ...
 }
 ```
@@ -48,8 +48,11 @@ Run order matters: the *primary* invites/sends, then the *alt* accepts/receives,
 ```
 tests/
 ├── integration_test.go      TestMain + helpers
-├── settings_test.go
-├── mail_test.go             messages, attachments, labels, filters, addresses, batch filters
+├── settings_test.go         account / mail / calendar / drive settings
+├── mail_test.go             messages, attachments, conversations, batch filters
+├── mail_compose_test.go     drafts, reply, forward, sender selection, signatures
+├── mail_export_test.go      .eml and mbox export, --eml import
+├── mail_identity_test.go    addresses, display name, signature, auto-reply
 ├── drive_test.go            items, folders, trash, streaming, recursive, batch filters
 ├── calendar_test.go         calendars, events, scope-unlock delete
 ├── contacts_test.go         CRUD, REF resolution, exit codes
@@ -176,7 +179,7 @@ These are stable CLI guarantees that tests verify:
 Every create command writes **just the new ID** (one line, no JSON, no trailing text) to stdout and `✓ …` to stderr:
 
 ```go
-stdout := runOK(t, "mail", "labels", "create", "--name", name, "--color", "#8080FF")
+stdout := runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF")
 id := strings.TrimSpace(stdout)
 // id is a bare 88-char Proton ID; stderr carried the human message.
 ```

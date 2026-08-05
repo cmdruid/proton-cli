@@ -1091,7 +1091,7 @@ func TestMailConversationsAttachmentsDownloadUnknownID(t *testing.T) {
 // ── labels ──
 
 func TestMailLabelsList(t *testing.T) {
-	stdout := runOK(t, "mail", "labels", "list")
+	stdout := runOK(t, "mail", "settings", "labels", "list")
 	assertContains(t, stdout, "NAME")
 }
 
@@ -1099,26 +1099,26 @@ func TestMailLabelsCreateDeleteLabel(t *testing.T) {
 	name := testID() + "-label"
 
 	// stdout = just the ID
-	stdout := runOK(t, "mail", "labels", "create", "--name", name, "--color", "#8080FF")
+	stdout := runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF")
 	id := strings.TrimSpace(stdout)
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail labels delete -- %s", id),
-		"mail", "labels", "delete", "--", id)
+	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete -- %s", id),
+		"mail", "settings", "labels", "delete", "--", id)
 
-	list := runOK(t, "mail", "labels", "list")
+	list := runOK(t, "mail", "settings", "labels", "list")
 	assertContains(t, list, name)
 	assertContains(t, list, "LABEL")
 }
 
 func TestMailLabelsCreateFolder(t *testing.T) {
 	name := testID() + "-folder"
-	stdout := runOK(t, "mail", "labels", "create", "--name", name, "--folder", "--color", "#8080FF")
+	stdout := runOK(t, "mail", "settings", "labels", "create", "--name", name, "--folder", "--color", "#8080FF")
 	id := strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli mail labels delete -- %s", id),
-		"mail", "labels", "delete", "--", id)
-	list := runOK(t, "mail", "labels", "list")
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli mail settings labels delete -- %s", id),
+		"mail", "settings", "labels", "delete", "--", id)
+	list := runOK(t, "mail", "settings", "labels", "list")
 	assertContains(t, list, name)
 	assertContains(t, list, "FOLDER")
 }
@@ -1129,29 +1129,29 @@ func TestMailFiltersCRUD(t *testing.T) {
 	name := testID() + "-filter"
 	sieve := `require ["fileinto"]; if header :contains "Subject" "xyz-never-matches-` + testID() + `" { fileinto "Archive"; }`
 
-	stdout := runOK(t, "mail", "filters", "create", "--name", name, "--sieve", sieve)
+	stdout := runOK(t, "mail", "settings", "filters", "create", "--name", name, "--sieve", sieve)
 	id := strings.TrimSpace(stdout)
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail filters delete -- %s", id),
-		"mail", "filters", "delete", "--", id)
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail settings filters delete -- %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
 
-	list := runOK(t, "mail", "filters", "list")
+	list := runOK(t, "mail", "settings", "filters", "list")
 	assertContains(t, list, name)
 	assertContains(t, list, "enabled")
 
-	runOK(t, "mail", "filters", "disable", "--", id)
-	assertContains(t, runOK(t, "mail", "filters", "list"), "disabled")
+	runOK(t, "mail", "settings", "filters", "disable", "--", id)
+	assertContains(t, runOK(t, "mail", "settings", "filters", "list"), "disabled")
 
-	runOK(t, "mail", "filters", "enable", "--", id)
-	assertContains(t, runOK(t, "mail", "filters", "list"), "enabled")
+	runOK(t, "mail", "settings", "filters", "enable", "--", id)
+	assertContains(t, runOK(t, "mail", "settings", "filters", "list"), "enabled")
 }
 
 // ── addresses ──
 
 func TestMailAddressesList(t *testing.T) {
-	stdout := runOK(t, "mail", "addresses", "list")
+	stdout := runOK(t, "mail", "settings", "addresses", "list")
 	assertContains(t, stdout, "EMAIL")
 	assertContains(t, stdout, selfEmail())
 }
@@ -1226,25 +1226,25 @@ func TestMailSendWithAttachment(t *testing.T) {
 
 func TestMailLabelsUpdate(t *testing.T) {
 	name := testID() + "-label"
-	id := strings.TrimSpace(runOK(t, "mail", "labels", "create", "--name", name, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail labels delete %s", id),
-		"mail", "labels", "delete", "--", id)
+	id := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete %s", id),
+		"mail", "settings", "labels", "delete", "--", id)
 
 	newName := name + "-renamed"
-	runOK(t, "mail", "labels", "update", "--name", newName, "--color", "#DB60D6", id)
-	assertContains(t, runOK(t, "mail", "labels", "list"), newName)
+	runOK(t, "mail", "settings", "labels", "update", "--name", newName, "--color", "#DB60D6", id)
+	assertContains(t, runOK(t, "mail", "settings", "labels", "list"), newName)
 }
 
 func TestMailFiltersUpdate(t *testing.T) {
 	name := testID() + "-filter"
 	sieve := `require ["fileinto"]; if header :contains "Subject" "` + name + `" { fileinto "Archive"; }`
-	id := strings.TrimSpace(runOK(t, "mail", "filters", "create", "--name", name, "--sieve", sieve))
-	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail filters delete %s", id),
-		"mail", "filters", "delete", "--", id)
+	id := strings.TrimSpace(runOK(t, "mail", "settings", "filters", "create", "--name", name, "--sieve", sieve))
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail settings filters delete %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
 
 	newName := name + "-renamed"
-	runOK(t, "mail", "filters", "update", "--name", newName, id)
-	assertContains(t, runOK(t, "mail", "filters", "list"), newName)
+	runOK(t, "mail", "settings", "filters", "update", "--name", newName, id)
+	assertContains(t, runOK(t, "mail", "settings", "filters", "list"), newName)
 }
 
 func TestMailSendHTMLSetsHTMLMimeType(t *testing.T) {
@@ -1474,14 +1474,14 @@ func TestMailSendEncryptedForOutside(t *testing.T) {
 
 func TestMailLabelsNestedFolderReportsParent(t *testing.T) {
 	parentName := testID() + "-parent"
-	parentID := strings.TrimSpace(runOK(t, "mail", "labels", "create", "--name", parentName, "--folder", "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton-cli mail labels delete %s", parentID),
-		"mail", "labels", "delete", "--", parentID)
+	parentID := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", parentName, "--folder", "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton-cli mail settings labels delete %s", parentID),
+		"mail", "settings", "labels", "delete", "--", parentID)
 
 	childName := testID() + "-child"
-	childID := strings.TrimSpace(runOK(t, "mail", "labels", "create", "--name", childName, "--folder", "--parent", parentID, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete child folder: proton-cli mail labels delete %s", childID),
-		"mail", "labels", "delete", "--", childID)
+	childID := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", childName, "--folder", "--parent", parentID, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete child folder: proton-cli mail settings labels delete %s", childID),
+		"mail", "settings", "labels", "delete", "--", childID)
 
 	data := runJSON(t, "api", "GET", "/core/v4/labels", "--query", "Type=3")
 	labels, _ := data["Labels"].([]interface{})

@@ -26,11 +26,26 @@ type User struct {
 	Keys []Key
 }
 
+// Address mirrors the fields of /core/v4/addresses the CLI needs. Order,
+// Status, Send and Receive drive sender selection: Proton only allows sending
+// from an address that is active and both sendable and receivable, and presents
+// them in Order.
 type Address struct {
 	ID          string
 	Email       string
 	DisplayName string
+	Signature   string
+	Order       int
+	Status      int
+	Send        int
+	Receive     int
+	Type        int
 	Keys        []Key
+}
+
+// CanSend reports whether Proton permits composing from this address.
+func (a Address) CanSend() bool {
+	return a.Status == 1 && a.Send == 1 && a.Receive == 1
 }
 
 type Key struct {

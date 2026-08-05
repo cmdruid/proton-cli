@@ -27,11 +27,11 @@ func assertBareID(t *testing.T, stdout, where string) string {
 
 func TestStdoutIDMailLabelCreate(t *testing.T) {
 	name := testID() + "-stid-label"
-	stdout, stderr := runOKStderr(t, "mail", "labels", "create",
+	stdout, stderr := runOKStderr(t, "mail", "settings", "labels", "create",
 		"--name", name, "--color", "#8080FF")
 	id := assertBareID(t, stdout, "labels create")
-	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail labels delete -- %s", id),
-		"mail", "labels", "delete", "--", id)
+	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete -- %s", id),
+		"mail", "settings", "labels", "delete", "--", id)
 	if !strings.Contains(stderr, "✓") {
 		t.Errorf("expected ✓ on stderr, got: %q", stderr)
 	}
@@ -39,21 +39,21 @@ func TestStdoutIDMailLabelCreate(t *testing.T) {
 
 func TestStdoutIDMailFilterCreate(t *testing.T) {
 	name := testID() + "-stid-filter"
-	stdout, _ := runOKStderr(t, "mail", "filters", "create",
+	stdout, _ := runOKStderr(t, "mail", "settings", "filters", "create",
 		"--name", name,
 		"--sieve", `require ["fileinto"]; if header :contains "Subject" "nope-`+testID()+`" { fileinto "Archive"; }`)
 	id := assertBareID(t, stdout, "filters create")
-	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail filters delete -- %s", id),
-		"mail", "filters", "delete", "--", id)
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail settings filters delete -- %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
 }
 
 func TestStdoutIDCalendarCreate(t *testing.T) {
 	name := testID() + "-stid-cal"
-	stdout, _ := runOKStderr(t, "calendar", "calendars", "create",
+	stdout, _ := runOKStderr(t, "calendar", "settings", "calendars", "create",
 		"--name", name, "--color", "#8080FF")
 	id := assertBareID(t, stdout, "calendars create")
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete -- %s", id),
-		"calendar", "calendars", "delete", "--", id)
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete -- %s", id),
+		"calendar", "settings", "calendars", "delete", "--", id)
 }
 
 func TestStdoutIDContactCreate(t *testing.T) {

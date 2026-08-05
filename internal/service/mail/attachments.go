@@ -122,93 +122,51 @@ func (s *Service) AttachmentDownload(ctx context.Context, u *keys.Unlocked, msgI
 	return dec.GetBinary(), name, nil
 }
 
-// InlineAttachment is an in-memory attachment supplied by a caller (e.g. a
-// calendar ICS invitation) rather than read from disk.
-type InlineAttachment struct {
-	Filename string
-	MIMEType string
-	Data     []byte
+// ReadLocalAttachment reads a file into a LocalAttachment, resolving its MIME
+// type from the extension. inline marks an image to embed in an HTML body.
+func ReadLocalAttachment(path string, inline bool) (LocalAttachment, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return LocalAttachment{}, err
+	}
+	return LocalAttachment{
+		Filename: filepath.Base(path),
+		MIMEType: mimeTypeForPath(path),
+		Data:     data,
+		Inline:   inline,
+	}, nil
 }
 
-// uploadedAttachment couples a server attachment ID with the session key its
-// data packet was encrypted under, so the key can be re-wrapped per recipient
-// at send time.
-type uploadedAttachment struct {
-	ID         string
-	SessionKey *pgp.SessionKey
+func mimeTypeForPath(path string) string {
+	if t := mime.TypeByExtension(filepath.Ext(path)); t != "" {
+		return t
+	}
+	return "application/octet-stream"
 }
 
-// preparedAttachment is an attachment's raw bytes plus metadata, gathered once
-// so it can be both uploaded (for internal/EO/cleartext packages) and embedded
-// verbatim in a PGP/MIME body. A non-empty ContentID marks the part inline
-// (an image embedded in the HTML body via cid:), which Proton records as
-// disposition "inline".
-type preparedAttachment struct {
-	Filename  string
-	MIMEType  string
-	Data      []byte
-	ContentID string
-}
-
-// prepareAttachments reads local files and normalizes inline attachments into a
-// single list, resolving the MIME type from the file extension when needed.
-func prepareAttachments(paths []string, inline []InlineAttachment) ([]preparedAttachment, error) {
-	out := make([]preparedAttachment, 0, len(paths)+len(inline))
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		mimeType := mime.TypeByExtension(filepath.Ext(path))
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-		out = append(out, preparedAttachment{Filename: filepath.Base(path), MIMEType: mimeType, Data: data})
-	}
-	for _, ia := range inline {
-		mimeType := ia.MIMEType
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-		out = append(out, preparedAttachment{Filename: ia.Filename, MIMEType: mimeType, Data: ia.Data})
-	}
-	return out, nil
-}
-
-// prepareInlineImages reads each inline image path, assigns it a Content-ID,
-// appends an <img src="cid:..."> reference to the (HTML) body so the image
-// renders in place, and returns the attachments to upload. Uploading with a
-// Content-ID is what makes Proton record the part as disposition "inline".
-// Inline images require an HTML body.
-func prepareInlineImages(opts *SendOptions, senderEmail string) ([]preparedAttachment, error) {
-	if len(opts.InlineAttach) == 0 {
-		return nil, nil
-	}
-	if !opts.HTML {
-		return nil, fmt.Errorf("--attach-inline requires --html (inline images need an HTML body)")
-	}
-	out := make([]preparedAttachment, 0, len(opts.InlineAttach))
+// assignInlineContentIDs gives every inline attachment a Content-ID and appends
+// an <img src="cid:..."> reference to the body, so the image renders where the
+// message says it should. Uploading with a Content-ID is what makes Proton
+// record the part as disposition "inline", and it only works in an HTML body.
+func assignInlineContentIDs(c *Content) error {
 	var imgs strings.Builder
-	for _, path := range opts.InlineAttach {
-		data, err := os.ReadFile(path)
+	for i := range c.Attach {
+		a := &c.Attach[i]
+		if !a.Inline || a.ContentID != "" {
+			continue
+		}
+		if !c.HTML {
+			return fmt.Errorf("inline attachments need an HTML body (pass --html)")
+		}
+		cid, err := newContentID(c.From.Address.Email)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		mimeType := mime.TypeByExtension(filepath.Ext(path))
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-		cid, err := newContentID(senderEmail)
-		if err != nil {
-			return nil, err
-		}
-		fmt.Fprintf(&imgs, "<img src=%q alt=%q>", "cid:"+cid, filepath.Base(path))
-		out = append(out, preparedAttachment{
-			Filename: filepath.Base(path), MIMEType: mimeType, Data: data, ContentID: cid,
-		})
+		a.ContentID = cid
+		fmt.Fprintf(&imgs, "<img src=%q alt=%q>", "cid:"+cid, a.Filename)
 	}
-	opts.Body += imgs.String()
-	return out, nil
+	c.Body += imgs.String()
+	return nil
 }
 
 // newContentID returns a Content-ID of the form <hex>@<sender-domain>, matching
@@ -225,11 +183,25 @@ func newContentID(senderEmail string) (string, error) {
 	return hex.EncodeToString(b) + "@" + domain, nil
 }
 
-// uploadAttachmentData encrypts in-memory data with a fresh session key (key
-// packet wrapped to the draft address key), detached-signs it, and uploads it
-// as a multipart form against the draft message.
-func (s *Service) uploadAttachmentData(ctx context.Context, addrKR *pgp.KeyRing, messageID, filename, mimeType, contentID string, data []byte) (*uploadedAttachment, error) {
-	msg := pgp.NewPlainMessage(data)
+// uploadAttachments uploads each local attachment against a draft, returning
+// them with the server IDs and session keys the send path needs.
+func (s *Service) uploadAttachments(ctx context.Context, addrKR *pgp.KeyRing, messageID string, atts []LocalAttachment) ([]*draftAttachment, error) {
+	out := make([]*draftAttachment, 0, len(atts))
+	for _, a := range atts {
+		uploaded, err := s.uploadAttachment(ctx, addrKR, messageID, a)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, uploaded)
+	}
+	return out, nil
+}
+
+// uploadAttachment encrypts an attachment with a fresh session key (key packet
+// wrapped to the draft's address key), detached-signs it, and uploads it as a
+// multipart form against the draft.
+func (s *Service) uploadAttachment(ctx context.Context, addrKR *pgp.KeyRing, messageID string, a LocalAttachment) (*draftAttachment, error) {
+	msg := pgp.NewPlainMessage(a.Data)
 
 	sk, err := pgp.GenerateSessionKey()
 	if err != nil {
@@ -248,10 +220,14 @@ func (s *Service) uploadAttachmentData(ctx context.Context, addrKR *pgp.KeyRing,
 		return nil, fmt.Errorf("sign attachment: %w", err)
 	}
 
+	mimeType := a.MIMEType
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
 	body, contentType, err := buildAttachmentForm(map[string]string{
-		"Filename":  filename,
+		"Filename":  a.Filename,
 		"MessageID": messageID,
-		"ContentID": contentID,
+		"ContentID": a.ContentID,
 		"MIMEType":  mimeType,
 	}, map[string][]byte{
 		"KeyPackets": keyPacket,
@@ -268,9 +244,12 @@ func (s *Service) uploadAttachmentData(ctx context.Context, addrKR *pgp.KeyRing,
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "POST", Path: "/mail/v4/attachments", Body: body, ContentType: contentType,
 	}, &res); err != nil {
-		return nil, fmt.Errorf("upload attachment %s: %w", filename, err)
+		return nil, fmt.Errorf("upload attachment %s: %w", a.Filename, err)
 	}
-	return &uploadedAttachment{ID: res.Attachment.ID, SessionKey: sk}, nil
+	return &draftAttachment{
+		ID: res.Attachment.ID, Name: a.Filename, MIMEType: mimeType,
+		ContentID: a.ContentID, Size: int64(len(a.Data)), SessionKey: sk, Data: a.Data,
+	}, nil
 }
 
 func buildAttachmentForm(fields map[string]string, files map[string][]byte) (body []byte, contentType string, err error) {
@@ -298,12 +277,15 @@ func buildAttachmentForm(fields map[string]string, files map[string][]byte) (bod
 
 // attachmentKeyPackets wraps each attachment session key to an internal
 // recipient's key ring (Type-1 per-recipient packets).
-func attachmentKeyPackets(recKR *pgp.KeyRing, atts []*uploadedAttachment) (map[string]string, error) {
+func attachmentKeyPackets(recKR *pgp.KeyRing, atts []*draftAttachment) (map[string]string, error) {
 	if len(atts) == 0 {
 		return nil, nil
 	}
 	out := make(map[string]string, len(atts))
 	for _, a := range atts {
+		if a.SessionKey == nil {
+			return nil, fmt.Errorf("attachment %s: its key could not be read, so it cannot be sent", a.Name)
+		}
 		kp, err := recKR.EncryptSessionKey(a.SessionKey)
 		if err != nil {
 			return nil, err
@@ -315,12 +297,15 @@ func attachmentKeyPackets(recKR *pgp.KeyRing, atts []*uploadedAttachment) (map[s
 
 // attachmentPasswordKeyPackets wraps each attachment session key with the EO
 // password (symmetric packets), for encrypted-for-outside recipients.
-func attachmentPasswordKeyPackets(atts []*uploadedAttachment, password string) (map[string]string, error) {
+func attachmentPasswordKeyPackets(atts []*draftAttachment, password string) (map[string]string, error) {
 	if len(atts) == 0 {
 		return nil, nil
 	}
 	out := make(map[string]string, len(atts))
 	for _, a := range atts {
+		if a.SessionKey == nil {
+			return nil, fmt.Errorf("attachment %s: its key could not be read, so it cannot be sent", a.Name)
+		}
 		kp, err := pgp.EncryptSessionKeyWithPassword(a.SessionKey, []byte(password))
 		if err != nil {
 			return nil, err
@@ -332,12 +317,15 @@ func attachmentPasswordKeyPackets(atts []*uploadedAttachment, password string) (
 
 // attachmentCleartextKeys exposes raw attachment session keys for external
 // (Type-4 cleartext) packages.
-func attachmentCleartextKeys(atts []*uploadedAttachment) map[string]any {
+func attachmentCleartextKeys(atts []*draftAttachment) map[string]any {
 	if len(atts) == 0 {
 		return nil
 	}
 	out := make(map[string]any, len(atts))
 	for _, a := range atts {
+		if a.SessionKey == nil {
+			continue
+		}
 		out[a.ID] = map[string]any{
 			"Key":       base64.StdEncoding.EncodeToString(a.SessionKey.Key),
 			"Algorithm": a.SessionKey.Algo,

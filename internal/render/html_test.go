@@ -59,3 +59,29 @@ func TestIsHTML(t *testing.T) {
 		}
 	}
 }
+
+func TestTextToHTMLEscapesAndBreaksLines(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"one line", "one line"},
+		{"two\nlines", "two<br>lines"},
+		{"crlf\r\nlines", "crlf<br>lines"},
+		{`a < b & c > d "q"`, `a &lt; b &amp; c &gt; d &quot;q&quot;`},
+		{"", ""},
+		{"trailing\n", "trailing<br>"},
+	}
+	for _, tt := range tests {
+		if got := TextToHTML(tt.in); got != tt.want {
+			t.Errorf("TextToHTML(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// A signature typed as plain text must survive the trip through HTML storage and
+// back, which is how the CLI shows what it stored.
+func TestTextToHTMLRoundTripsThroughHTMLToText(t *testing.T) {
+	const in = "Roman L.\nVienna & elsewhere"
+	got := HTMLToText(TextToHTML(in))
+	if got != in {
+		t.Errorf("round trip = %q, want %q", got, in)
+	}
+}

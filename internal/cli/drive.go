@@ -7,7 +7,8 @@ import (
 
 func newDriveCmd() *cobra.Command {
 	c := &cobra.Command{Use: "drive", Short: "Drive operations"}
-	c.AddCommand(driveItemsCmd(), driveFoldersCmd(), driveTrashCmd(), driveShareCmd(), driveInvitationsCmd(), drivePhotosCmd())
+	c.AddCommand(driveItemsCmd(), driveFoldersCmd(), driveTrashCmd(), driveShareCmd(),
+		driveInvitationsCmd(), drivePhotosCmd(), driveSettingsCmd())
 	return c
 }
 

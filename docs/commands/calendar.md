@@ -2,16 +2,7 @@
 
 Calendars and events, encrypted with your calendar key and signed with your address key.
 
-## Calendars
-
-```bash
-proton-cli calendar calendars list
-proton-cli calendar calendars create --name Work --color "#8080FF"
-proton-cli calendar calendars rename CALENDAR_ID --name Personal --color "#DB60D6"
-proton-cli calendar calendars delete CALENDAR_ID
-```
-
-Colors have to be Proton accent colors; an invalid value prints the allowed list. Deleting a calendar is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a session already exists.
+`proton-cli calendar` is the calendar itself; the calendars you keep events in are managed under [`calendar settings`](#settings), matching where Proton puts them.
 
 ## Events
 
@@ -75,3 +66,42 @@ proton-cli calendar events delete "Dentist"
 | `--duration` | `15m`, `90m`, `1h`, `2h30m` |
 | `--remind` | `15m`, `1h`, `1d` (repeatable) |
 | `--start` / `--end` on `list` | `YYYY-MM-DD` |
+
+## Settings
+
+One subcommand per page of Proton's calendar settings.
+
+```bash
+proton-cli calendar settings          # time zones, layout, invitations
+proton-cli calendar settings set      # the writable keys
+```
+
+```bash
+proton-cli calendar settings set view week
+proton-cli calendar settings set primary-timezone Europe/Vienna
+proton-cli calendar settings set week-numbers on
+proton-cli calendar settings set auto-import-invite on
+```
+
+| Key | Values |
+| --- | --- |
+| `view` | `day`, `week`, `month`, `year`, `planning` |
+| `week-numbers` | `off`, `on` |
+| `primary-timezone` | an IANA zone, e.g. `Europe/Vienna` |
+| `auto-detect-timezone` | `off`, `on` |
+| `secondary-timezone` | an IANA zone |
+| `show-secondary-timezone` | `off`, `on` |
+| `auto-import-invite` | `off`, `on` |
+| `invite-locale` | a language, e.g. `en_US` |
+| `default-calendar` | a calendar ID |
+
+### Calendars
+
+```bash
+proton-cli calendar settings calendars list
+proton-cli calendar settings calendars create --name Work --color "#8080FF"
+proton-cli calendar settings calendars rename CALENDAR_ID --name Personal --color "#DB60D6"
+proton-cli calendar settings calendars delete CALENDAR_ID
+```
+
+Colors have to be Proton accent colors; an invalid value prints the allowed list. Deleting a calendar is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a session already exists.

@@ -22,7 +22,7 @@ printf 'The north trail is open again.\n' >"$work/trail-map.txt"
 
 # Authenticate before recording starts, so the transcript opens on a command
 # instead of a login notice.
-"$bin" mail addresses list >/dev/null 2>&1
+"$bin" mail settings addresses list >/dev/null 2>&1
 
 # Only the prompt marker is colored; the rest is whatever proton-cli prints.
 prompt() { printf '\033[38;2;138;110;255m$\033[0m %s\n' "$*"; }

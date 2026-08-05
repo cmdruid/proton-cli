@@ -131,18 +131,59 @@ func validateDates(opts SearchOptions, q url.Values) error {
 }
 
 type rawMessage struct {
-	ID          string
-	Subject     string
-	Sender      map[string]any
-	ToList      []map[string]any
-	Time        int64
-	Body        string
-	MIMEType    string
-	AddressID   string
-	Attachments []struct {
-		ID, Name, MIMEType, KeyPackets, Disposition string
-		Size                                        int64
+	ID             string
+	ConversationID string
+	Subject        string
+	Sender         map[string]any
+	ToList         []map[string]any
+	CCList         []map[string]any
+	BCCList        []map[string]any
+	ReplyTos       []map[string]any
+	Time           int64
+	Body           string
+	MIMEType       string
+	AddressID      string
+	ExternalID     string
+	Flags          int64
+	// Header is the original message's raw RFC 822 header block, and
+	// ParsedHeaders the same thing keyed. Export reuses Header verbatim; reply
+	// reads X-Original-To out of ParsedHeaders to pick the sending address.
+	Header        string
+	ParsedHeaders map[string]any
+	Attachments   []rawAttachment
+}
+
+type rawAttachment struct {
+	ID, Name, MIMEType, KeyPackets, Disposition, ContentID string
+	Size                                                   int64
+}
+
+// Message flags the CLI acts on, from Proton's MESSAGE_FLAGS.
+const (
+	flagReceived = 1 << 0
+	flagSent     = 1 << 1
+)
+
+// isSent reports whether we sent this message, which flips how a reply derives
+// its recipients: answering our own sent mail addresses its original recipients.
+func (m rawMessage) isSent() bool { return m.Flags&flagSent != 0 }
+
+func (m rawMessage) parsedHeader(name string) string {
+	v, ok := m.ParsedHeaders[name]
+	if !ok {
+		return ""
 	}
+	switch x := v.(type) {
+	case string:
+		return x
+	case []any:
+		if len(x) > 0 {
+			if s, ok := x[0].(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 func (s *Service) decryptMessage(ctx context.Context, u *keys.Unlocked, m rawMessage) Full {

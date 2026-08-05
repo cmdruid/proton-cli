@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/render"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
-	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/roman-16/proton-cli/internal/view"
 	"github.com/spf13/cobra"
 )
 
 func messagesCmd() *cobra.Command {
 	c := &cobra.Command{Use: "messages", Short: "Manage messages"}
-	c.AddCommand(msgListCmd(), msgSearchCmd(), msgReadCmd(), msgSendCmd(), msgTrashCmd(), msgDeleteCmd(), msgMoveCmd(), msgMarkCmd(), msgStarCmd(), msgUnstarCmd(), msgUnscheduleCmd())
+	c.AddCommand(msgListCmd(), msgSearchCmd(), msgReadCmd(), msgSendCmd(),
+		msgReplyCmd(), msgForwardCmd(), msgExportCmd(),
+		msgTrashCmd(), msgDeleteCmd(), msgMoveCmd(), msgMarkCmd(),
+		msgStarCmd(), msgUnstarCmd(), msgUnscheduleCmd())
 	return c
 }
 
@@ -179,119 +179,165 @@ func msgReadCmd() *cobra.Command {
 }
 
 func msgSendCmd() *cobra.Command {
-	var to, cc, bcc, attach, attachInline []string
-	var subject, body, sendAt, expires, eoPassword, eoPasswordHint string
-	var html bool
+	var f composeFlags
+	var d deliveryFlags
 	c := &cobra.Command{
 		Use: "send", Short: "Send a message",
 		RunE: run([]Step{stepAuth}, func(c *Invocation) error {
-			if len(to)+len(cc)+len(bcc) == 0 {
-				return fmt.Errorf("at least one recipient is required (--to, --cc, or --bcc)")
-			}
-			if subject == "" {
+			if f.eml == "" && f.subject == "" {
 				return fmt.Errorf("--subject is required")
 			}
-			if body == "-" {
-				b, err := io.ReadAll(os.Stdin)
-				if err != nil {
-					return err
-				}
-				body = string(b)
-			}
-			if body == "" {
+			if f.eml == "" && f.body == "" {
 				return fmt.Errorf("--body is required (use - for stdin)")
 			}
-			for _, p := range attach {
-				if _, err := os.Stat(p); err != nil {
-					return fmt.Errorf("attachment %s: %w", p, err)
-				}
+			del, at, err := d.delivery()
+			if err != nil {
+				return err
 			}
-			for _, p := range attachInline {
-				if _, err := os.Stat(p); err != nil {
-					return fmt.Errorf("inline attachment %s: %w", p, err)
-				}
-			}
-			if len(attachInline) > 0 && !html {
-				return fmt.Errorf("--attach-inline requires --html (inline images need an HTML body)")
-			}
-			// Parse schedule/expiry before the dry-run check so a bad value is
-			// caught there too and the resolved time can be echoed.
-			var deliveryTime int64
-			var scheduledAt time.Time
-			if sendAt != "" {
-				t, err := ical.ParseTime(sendAt)
-				if err != nil {
-					return fmt.Errorf("invalid --send-at: %w", err)
-				}
-				scheduledAt, deliveryTime = t, t.Unix()
-			}
-			var expiresInSeconds int
-			if expires != "" {
-				d, err := units.ParseDuration(expires)
-				if err != nil {
-					return fmt.Errorf("invalid --expires: %w", err)
-				}
-				expiresInSeconds = int(d.Seconds())
-			}
-			if c.App.DryRun {
-				msg := fmt.Sprintf("dry-run: would send to %d recipient(s) subject %q (%d bytes, %d attachment(s))", len(to)+len(cc)+len(bcc), subject, len(body), len(attach))
-				if !scheduledAt.IsZero() {
-					msg += fmt.Sprintf("; scheduled for %s", scheduledAt.Format("2006-01-02 15:04:05 -07:00"))
-				}
-				c.R().Info(msg)
-				return nil
-			}
-			opts := mailsvc.SendOptions{To: to, CC: cc, BCC: bcc, Subject: subject, Body: body, HTML: html, Attachments: attach, InlineAttach: attachInline, EOPassword: eoPassword, EOPasswordHint: eoPasswordHint, DeliveryTime: deliveryTime, ExpiresInSeconds: expiresInSeconds}
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
 			}
-			// Consult Contacts for pinned keys per recipient. A pinned key means
-			// we encrypt to it (E2EE / PGP-MIME) rather than sending cleartext.
-			for _, email := range dedupe(append(append(append([]string{}, to...), cc...), bcc...)) {
-				pin, err := c.App.Contacts.PinnedKeysFor(c.Ctx, u, email)
-				if err != nil {
-					return err
-				}
-				if pin == nil {
-					continue
-				}
-				if opts.PinnedKeys == nil {
-					opts.PinnedKeys = map[string]*mailsvc.PinnedRecipient{}
-				}
-				opts.PinnedKeys[email] = &mailsvc.PinnedRecipient{
-					ArmoredKeys:       pin.ArmoredKeys,
-					Encrypt:           pin.Encrypt,
-					Sign:              pin.Sign,
-					Scheme:            pin.Scheme,
-					SignatureVerified: pin.SignatureVerified,
-				}
-			}
-			id, err := c.App.Mail.Send(c.Ctx, u, opts)
+			content, err := f.content(c, u)
 			if err != nil {
 				return err
 			}
-			if !scheduledAt.IsZero() {
-				c.R().ID(id, fmt.Sprintf("Scheduled for %s", scheduledAt.Format("2006-01-02 15:04:05 -07:00")))
-			} else {
-				c.R().ID(id, "Message sent.")
+			if !content.HasRecipients() {
+				return fmt.Errorf("at least one recipient is required (--to, --cc, or --bcc)")
 			}
-			return nil
+			if msg, dry := composeDryRun(c, content, "send", at); dry {
+				c.R().Info(msg)
+				return nil
+			}
+			return deliver(c, u, content, del, at)
 		}),
 	}
-	c.Flags().StringArrayVar(&to, "to", nil, "Recipient email (repeatable)")
-	c.Flags().StringArrayVar(&cc, "cc", nil, "CC recipient (repeatable)")
-	c.Flags().StringArrayVar(&bcc, "bcc", nil, "BCC recipient (repeatable)")
-	c.Flags().StringVar(&subject, "subject", "", "Subject")
-	c.Flags().StringVar(&body, "body", "", "Message body (use - for stdin)")
-	c.Flags().BoolVar(&html, "html", false, "Send the body as text/html instead of text/plain")
-	c.Flags().StringVar(&sendAt, "send-at", "", "Schedule delivery (RFC3339, or YYYY-MM-DDTHH:MM in the local system timezone)")
-	c.Flags().StringVar(&expires, "expires", "", "Self-destruct after DURATION (e.g. 7d, 24h)")
-	c.Flags().StringArrayVar(&attach, "attach", nil, "File to attach (repeatable)")
-	c.Flags().StringArrayVar(&attachInline, "attach-inline", nil, "Image embedded inline in the HTML body via Content-ID (repeatable; requires --html)")
-	c.Flags().StringVar(&eoPassword, "eo-password", "", "Password-protect the message for non-Proton recipients (Encrypted Outside; defaults to a 28-day expiry)")
-	c.Flags().StringVar(&eoPasswordHint, "eo-password-hint", "", "Optional hint shown to Encrypted Outside recipients")
+	f.registerRecipients(c)
+	f.registerBody(c)
+	f.registerAttachments(c)
+	f.registerIdentity(c)
+	f.registerEML(c)
+	d.register(c)
 	return c
+}
+
+// msgAnswerCmd builds `reply` and `forward`, which differ only in how they derive
+// recipients and whether the original's attachments come along.
+func msgAnswerCmd(use, short, long string, forward bool) *cobra.Command {
+	var f composeFlags
+	var d deliveryFlags
+	var replyAll, noQuote, noAttachments, asDraft bool
+	c := &cobra.Command{
+		Use: use + " REF", Short: short, Long: long,
+		Args: cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
+			del, at, err := d.delivery()
+			if err != nil {
+				return err
+			}
+			u, err := c.App.Unlock(c.Ctx)
+			if err != nil {
+				return err
+			}
+			id, err := c.App.Mail.Resolve(c.Ctx, c.Args[0])
+			if err != nil {
+				return err
+			}
+			body, err := f.resolvedBody()
+			if err != nil {
+				return err
+			}
+			atts, err := f.localAttachments()
+			if err != nil {
+				return err
+			}
+			spec := mailsvc.AnswerSpec{
+				Action:        answerAction(forward, replyAll),
+				Body:          body,
+				To:            mailsvc.ParseRecipients(f.to),
+				CC:            mailsvc.ParseRecipients(f.cc),
+				BCC:           mailsvc.ParseRecipients(f.bcc),
+				From:          f.from,
+				Attach:        atts,
+				NoQuote:       noQuote,
+				NoAttachments: noAttachments,
+				NoSignature:   f.noSignature,
+			}
+			if c.changed("html") {
+				spec.HTML = &f.html
+			}
+			content, err := c.App.Mail.Answer(c.Ctx, u, id, spec)
+			if err != nil {
+				return handleWrongTable(err, use)
+			}
+			verb := use
+			if asDraft {
+				verb = "save a " + use + " draft"
+			}
+			if msg, dry := composeDryRun(c, content, verb, at); dry {
+				c.R().Info(msg)
+				return nil
+			}
+			if asDraft {
+				return saveDraft(c, u, content, use)
+			}
+			return deliver(c, u, content, del, at)
+		}),
+	}
+	f.registerRecipients(c)
+	c.Flags().StringVar(&f.body, "body", "", "Your text, placed above the quoted original (use - for stdin)")
+	c.Flags().BoolVar(&f.html, "html", false, "Compose in HTML (default: the original's format)")
+	f.registerAttachments(c)
+	f.registerIdentity(c)
+	d.register(c)
+	c.Flags().BoolVar(&noQuote, "no-quote", false, "Do not quote the original message")
+	c.Flags().BoolVar(&asDraft, "draft", false, "Save as a draft instead of sending, and print its ID")
+	if forward {
+		c.Flags().BoolVar(&noAttachments, "no-attachments", false, "Do not carry over the original's attachments")
+	} else {
+		c.Flags().BoolVar(&replyAll, "all", false, "Reply to every recipient, not just the sender")
+	}
+	return c
+}
+
+func answerAction(forward, replyAll bool) int {
+	switch {
+	case forward:
+		return mailsvc.ActionForward
+	case replyAll:
+		return mailsvc.ActionReplyAll
+	}
+	return mailsvc.ActionReply
+}
+
+func msgReplyCmd() *cobra.Command {
+	return msgAnswerCmd("reply", "Reply to a message",
+		"Reply to a message. The original is quoted below your text, the subject gains\n"+
+			"\"Re:\", and the reply leaves from the address the original arrived on.\n\n"+
+			"Use --all to include everyone who was on the message, and --draft to stop\n"+
+			"before sending so you can edit it with `mail drafts edit`.", false)
+}
+
+func msgForwardCmd() *cobra.Command {
+	return msgAnswerCmd("forward", "Forward a message",
+		"Forward a message. The original is quoted below your text with its own\n"+
+			"headers, the subject gains \"Fw:\", and its attachments come along without\n"+
+			"being re-uploaded. Pass --no-attachments to leave them behind.", true)
+}
+
+// composeDryRun renders the dry-run line for a composing command, reporting
+// whether --dry-run is active.
+func composeDryRun(c *Invocation, content mailsvc.Content, verb string, at time.Time) (string, bool) {
+	if !c.App.DryRun {
+		return "", false
+	}
+	msg := fmt.Sprintf("dry-run: would %s from %s to %d recipient(s) subject %q (%d bytes, %d attachment(s))",
+		verb, content.From.Address.Email, len(content.RecipientAddresses()),
+		content.Subject, len(content.Body), content.AttachmentCount())
+	if !at.IsZero() {
+		msg += fmt.Sprintf("; scheduled for %s", at.Format("2006-01-02 15:04:05 -07:00"))
+	}
+	return msg, true
 }
 
 func collectMessageIDs(c *Invocation, args []string, f *msgFilter) ([]string, error) {

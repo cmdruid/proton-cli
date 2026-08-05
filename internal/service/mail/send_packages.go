@@ -1,26 +1,27 @@
 package mail
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/render"
 )
 
-// buildBodyPackages encrypts the plaintext/HTML body once under a shared session
-// key and returns up to three packages (internal, EO, cleartext) that reference
-// it, keyed per recipient scheme.
-func (s *Service) buildBodyPackages(mimeType string, opts SendOptions, atts []*uploadedAttachment, plans []plannedRecipient, addrKR *pgp.KeyRing, eoModulus, eoModulusID string) ([]map[string]any, error) {
+// buildBodyPackages encrypts the body once under a shared session key and
+// returns up to three packages (internal, encrypted-for-outside, cleartext) that
+// reference it, keyed per recipient scheme.
+func (s *Service) buildBodyPackages(c Content, del Delivery, atts []*draftAttachment, plans []plannedRecipient, eoModulus, eoModulusID string) ([]map[string]any, error) {
 	sessionKey, err := pgp.GenerateSessionKey()
 	if err != nil {
 		return nil, err
 	}
-	encBody, err := sessionKey.EncryptAndSign(pgp.NewPlainMessageFromString(opts.Body), addrKR)
+	encBody, err := sessionKey.EncryptAndSign(pgp.NewPlainMessageFromString(c.Body), c.From.KR)
 	if err != nil {
 		return nil, err
 	}
 	bodyB64 := base64.StdEncoding.EncodeToString(encBody)
+	mimeType := c.mimeType()
 
 	internalAddrs := map[string]any{}
 	eoAddrs := map[string]any{}
@@ -51,7 +52,7 @@ func (s *Service) buildBodyPackages(mimeType string, opts SendOptions, atts []*u
 			}
 			internalAddrs[p.email] = addr
 		case schemeEO:
-			addr, err := eoAddress(sessionKey, opts.EOPassword, opts.EOPasswordHint, atts, eoModulus, eoModulusID)
+			addr, err := eoAddress(sessionKey, del.EOPassword, del.EOPasswordHint, atts, eoModulus, eoModulusID)
 			if err != nil {
 				return nil, err
 			}
@@ -63,7 +64,7 @@ func (s *Service) buildBodyPackages(mimeType string, opts SendOptions, atts []*u
 
 	var packages []map[string]any
 	if len(internalAddrs) > 0 {
-		bodyKP, err := addrKR.EncryptSessionKey(sessionKey)
+		bodyKP, err := c.From.KR.EncryptSessionKey(sessionKey)
 		if err != nil {
 			return nil, err
 		}
@@ -100,15 +101,12 @@ func (s *Service) buildBodyPackages(mimeType string, opts SendOptions, atts []*u
 }
 
 // buildInlinePackage builds the SEND_PGP_INLINE package: a plaintext body
-// encrypted under a fresh session key, with the session key and each
-// attachment key wrapped to every inline recipient's pinned PGP key. Inline is
-// plaintext-only, so an HTML message body is flattened via HTMLToText. Returns
-// ok=false when no recipient uses PGP-Inline.
-func (s *Service) buildInlinePackage(opts SendOptions, atts []*uploadedAttachment, plans []plannedRecipient, addrKR *pgp.KeyRing) (map[string]any, bool, error) {
-	body := opts.Body
-	if opts.HTML {
-		body = render.HTMLToText(opts.Body)
-	}
+// encrypted under a fresh session key, with the session key and each attachment
+// key wrapped to every inline recipient's pinned PGP key. Inline is
+// plaintext-only, so an HTML body is flattened. Returns ok=false when no
+// recipient uses PGP-Inline.
+func (s *Service) buildInlinePackage(c Content, atts []*draftAttachment, plans []plannedRecipient) (map[string]any, bool, error) {
+	body := c.plainBody()
 	addrs := map[string]any{}
 	var sessionKey *pgp.SessionKey
 	var bodyB64 string
@@ -121,7 +119,7 @@ func (s *Service) buildInlinePackage(opts SendOptions, atts []*uploadedAttachmen
 			if err != nil {
 				return nil, false, err
 			}
-			enc, err := sk.EncryptAndSign(pgp.NewPlainMessageFromString(body), addrKR)
+			enc, err := sk.EncryptAndSign(pgp.NewPlainMessageFromString(body), c.From.KR)
 			if err != nil {
 				return nil, false, err
 			}
@@ -153,28 +151,24 @@ func (s *Service) buildInlinePackage(opts SendOptions, atts []*uploadedAttachmen
 	if len(addrs) == 0 {
 		return nil, false, nil
 	}
-	bodyKP, err := addrKR.EncryptSessionKey(sessionKey)
+	bodyKP, err := c.From.KR.EncryptSessionKey(sessionKey)
 	if err != nil {
 		return nil, false, err
 	}
 	return map[string]any{
 		"Addresses":     addrs,
-		"MIMEType":      "text/plain",
+		"MIMEType":      mimeTypePlain,
 		"Type":          pkgPGPInline,
 		"Body":          bodyB64,
 		"BodyKeyPacket": base64.StdEncoding.EncodeToString(bodyKP),
 	}, true, nil
 }
 
-// buildPGPMIMEPackage builds the multipart/mixed MIME body (with embedded
-// attachments), encrypts it under a fresh session key, and wraps that key to
-// each external-PGP recipient's key. Returns ok=false when no recipient uses
-// PGP/MIME.
-func (s *Service) buildPGPMIMEPackage(opts SendOptions, prepared []preparedAttachment, plans []plannedRecipient, addrKR *pgp.KeyRing) (map[string]any, bool, error) {
-	mimeType := "text/plain"
-	if opts.HTML {
-		mimeType = "text/html"
-	}
+// buildPGPMIMEPackage builds the multipart MIME body (with attachments embedded
+// verbatim rather than referenced), encrypts it under a fresh session key, and
+// wraps that key to each external-PGP recipient's key. Returns ok=false when no
+// recipient uses PGP/MIME.
+func (s *Service) buildPGPMIMEPackage(ctx context.Context, c Content, atts []*draftAttachment, plans []plannedRecipient) (map[string]any, bool, error) {
 	addrs := map[string]any{}
 	var sessionKey *pgp.SessionKey
 	var bodyB64 string
@@ -184,7 +178,11 @@ func (s *Service) buildPGPMIMEPackage(opts SendOptions, prepared []preparedAttac
 			continue
 		}
 		if sessionKey == nil {
-			mimeStr, err := buildMIMEMessage(opts.Body, mimeType, prepared)
+			parts, err := s.mimeParts(ctx, atts)
+			if err != nil {
+				return nil, false, err
+			}
+			mimeStr, err := buildMIMEMessage(c.Body, c.mimeType(), parts)
 			if err != nil {
 				return nil, false, err
 			}
@@ -192,7 +190,7 @@ func (s *Service) buildPGPMIMEPackage(opts SendOptions, prepared []preparedAttac
 			if err != nil {
 				return nil, false, err
 			}
-			enc, err := sessionKey.EncryptAndSign(pgp.NewPlainMessageFromString(mimeStr), addrKR)
+			enc, err := sessionKey.EncryptAndSign(pgp.NewPlainMessageFromString(mimeStr), c.From.KR)
 			if err != nil {
 				return nil, false, err
 			}
@@ -220,6 +218,22 @@ func (s *Service) buildPGPMIMEPackage(opts SendOptions, prepared []preparedAttac
 		"Type":      pkgPGPMIME,
 		"Body":      bodyB64,
 	}, true, nil
+}
+
+// mimeParts materialises a draft's attachments as MIME parts, downloading and
+// decrypting any whose bytes are not already in hand.
+func (s *Service) mimeParts(ctx context.Context, atts []*draftAttachment) ([]mimePart, error) {
+	out := make([]mimePart, 0, len(atts))
+	for _, a := range atts {
+		data, err := s.attachmentBytes(ctx, a)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, mimePart{
+			Filename: a.Name, MIMEType: a.MIMEType, Data: data, ContentID: a.ContentID,
+		})
+	}
+	return out, nil
 }
 
 func keyRingFromArmored(armored string) (*pgp.KeyRing, error) {

@@ -7,7 +7,7 @@ proton-cli is designed to be a good citizen in a pipeline: data on stdout, chatt
 Creating commands print the new ID to stdout and the confirmation to stderr, so a plain assignment works:
 
 ```bash
-LABEL=$(proton-cli mail labels create --name Work --color "#8080FF")
+LABEL=$(proton-cli mail settings labels create --name Work --color "#8080FF")
 VAULT=$(proton-cli pass vaults create --name Automation)
 MSG=$(proton-cli mail messages send --to me@proton.me --subject Deploy --body "Done.")
 ```
@@ -30,6 +30,45 @@ proton-cli pass vaults list --output json | jq -r '.[].name'
 ```
 
 JSON keys are `snake_case` and IDs are always complete, never shortened.
+
+## Archiving mail to disk
+
+`export` writes ordinary RFC 822 files, so the rest of your toolchain already knows what to do with them.
+
+```bash
+# a year of archive, one .eml per message, named "<date> <subject>.eml"
+proton-cli mail messages export --folder archive --older-than 1y --all --output-dir ./mail-backup
+
+# a whole folder as a single mbox, ready for Thunderbird or mutt
+proton-cli mail messages export --folder inbox --all --format mbox --output inbox.mbox
+
+# one message straight into another tool
+proton-cli mail messages export "Invoice #2291" --output - | formail -X ""
+
+# metadata and bodies only, skipping attachment downloads - much faster
+proton-cli mail messages export --folder all --all --no-attachments --output-dir ./index
+```
+
+Exported files are not encrypted, so put them somewhere you would be comfortable putting the mail itself.
+
+The reverse direction reads a file back into a draft or a send:
+
+```bash
+proton-cli mail drafts create --eml ./message.eml
+proton-cli mail messages send --eml ./message.eml --to someone-else@proton.me
+```
+
+## Answering mail from a script
+
+```bash
+# acknowledge everything unread from a sender, then archive it
+proton-cli mail messages search --from alerts@example.com --unread --output json \
+  | jq -r '.messages[].id' \
+  | while read -r id; do
+      proton-cli mail messages reply "$id" --body "Received, thanks." --no-signature
+      proton-cli mail messages move --dest archive "$id"
+    done
+```
 
 ## Exit codes as control flow
 
@@ -105,6 +144,18 @@ Persistent=true
 
 [Install]
 WantedBy=timers.target
+```
+
+### Out of office
+
+```bash
+proton-cli mail settings autoreply set --repeat fixed \
+  --start "$(date -d 'next monday 09:00' +%Y-%m-%dT%H:%M)" \
+  --end   "$(date -d 'next friday 18:00' +%Y-%m-%dT%H:%M)" \
+  --message "Away this week. For anything urgent, contact team@example.com."
+
+# and when you are back
+proton-cli mail settings autoreply disable
 ```
 
 ### Alias-per-signup

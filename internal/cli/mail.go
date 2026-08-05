@@ -15,7 +15,7 @@ import (
 
 func newMailCmd() *cobra.Command {
 	c := &cobra.Command{Use: "mail", Short: "Mail operations"}
-	c.AddCommand(messagesCmd(), conversationsCmd(), attachmentsCmd(), labelsCmd(), filtersCmd(), addressesCmd())
+	c.AddCommand(messagesCmd(), draftsCmd(), conversationsCmd(), attachmentsCmd(), mailSettingsCmd())
 	return c
 }
 

@@ -133,3 +133,16 @@ proton-cli drive photos albums remove ALBUM_LINK_ID PHOTO_LINK_ID...
 proton-cli drive photos albums delete ALBUM_LINK_ID
 proton-cli drive photos albums delete ALBUM_LINK_ID --delete-photos
 ```
+
+## Settings
+
+```bash
+proton-cli drive settings                          # how long previous versions are kept
+proton-cli drive settings set version-history 30d
+```
+
+| Key | Values |
+| --- | --- |
+| `version-history` | `off`, `7d`, `30d`, `180d`, `1y`, `10y` |
+
+Keeping more than the default is a paid feature.

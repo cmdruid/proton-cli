@@ -16,7 +16,7 @@ import (
 func conversationsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "conversations", Short: "Manage conversations (threads)"}
 	c.AddCommand(
-		convListCmd(), convSearchCmd(), convReadCmd(),
+		convListCmd(), convSearchCmd(), convReadCmd(), convExportCmd(), convReplyCmd(),
 		convTrashCmd(), convDeleteCmd(), convMoveCmd(),
 		convMarkCmd(), convStarCmd(), convUnstarCmd(),
 		convAttachmentsCmd(),
@@ -386,4 +386,82 @@ func nonInlineAttachmentCount(atts []mailsvc.Attachment) int {
 		}
 	}
 	return n
+}
+
+// convReplyCmd replies to the newest message in a thread, which is what the web
+// client's Reply button does from the conversation view.
+func convReplyCmd() *cobra.Command {
+	var f composeFlags
+	var d deliveryFlags
+	var replyAll, noQuote, asDraft bool
+	c := &cobra.Command{
+		Use:   "reply REF",
+		Short: "Reply to the newest message in a thread",
+		Args:  cobra.ExactArgs(1),
+		RunE: run([]Step{stepAuth, stepResolve}, func(c *Invocation) error {
+			del, at, err := d.delivery()
+			if err != nil {
+				return err
+			}
+			u, err := c.App.Unlock(c.Ctx)
+			if err != nil {
+				return err
+			}
+			convID, err := c.App.Mail.ResolveConversation(c.Ctx, c.Args[0])
+			if err != nil {
+				return err
+			}
+			ids, err := c.App.Mail.ConversationMessageIDs(c.Ctx, convID)
+			if err != nil {
+				return handleWrongTable(err, "reply")
+			}
+			if len(ids) == 0 {
+				return fmt.Errorf("thread %s has no messages", convID)
+			}
+			body, err := f.resolvedBody()
+			if err != nil {
+				return err
+			}
+			atts, err := f.localAttachments()
+			if err != nil {
+				return err
+			}
+			spec := mailsvc.AnswerSpec{
+				Action:      answerAction(false, replyAll),
+				Body:        body,
+				To:          mailsvc.ParseRecipients(f.to),
+				CC:          mailsvc.ParseRecipients(f.cc),
+				BCC:         mailsvc.ParseRecipients(f.bcc),
+				From:        f.from,
+				Attach:      atts,
+				NoQuote:     noQuote,
+				NoSignature: f.noSignature,
+			}
+			if c.changed("html") {
+				spec.HTML = &f.html
+			}
+			content, err := c.App.Mail.Answer(c.Ctx, u, ids[len(ids)-1], spec)
+			if err != nil {
+				return err
+			}
+			if msg, dry := composeDryRun(c, content, "reply to thread "+convID, at); dry {
+				c.R().Info(msg)
+				return nil
+			}
+			if asDraft {
+				return saveDraft(c, u, content, "reply")
+			}
+			return deliver(c, u, content, del, at)
+		}),
+	}
+	f.registerRecipients(c)
+	c.Flags().StringVar(&f.body, "body", "", "Your text, placed above the quoted original (use - for stdin)")
+	c.Flags().BoolVar(&f.html, "html", false, "Compose in HTML (default: the original's format)")
+	f.registerAttachments(c)
+	f.registerIdentity(c)
+	d.register(c)
+	c.Flags().BoolVar(&replyAll, "all", false, "Reply to every recipient, not just the sender")
+	c.Flags().BoolVar(&noQuote, "no-quote", false, "Do not quote the original message")
+	c.Flags().BoolVar(&asDraft, "draft", false, "Save as a draft instead of sending, and print its ID")
+	return c
 }

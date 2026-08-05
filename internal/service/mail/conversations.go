@@ -165,3 +165,18 @@ func (s *Service) ConversationsMark(ctx context.Context, ids []string, read, unr
 	}
 	return nil
 }
+
+// ConversationMessageIDs lists a thread's message IDs oldest first, which is the
+// order an exported thread reads in.
+func (s *Service) ConversationMessageIDs(ctx context.Context, convID string) ([]string, error) {
+	var r struct{ Messages []rawMessage }
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/conversations/" + convID}, &r); err != nil {
+		return nil, s.crossTableProbe(ctx, convID, err, "conversations")
+	}
+	sort.SliceStable(r.Messages, func(i, j int) bool { return r.Messages[i].Time < r.Messages[j].Time })
+	out := make([]string, 0, len(r.Messages))
+	for _, m := range r.Messages {
+		out = append(out, m.ID)
+	}
+	return out, nil
+}

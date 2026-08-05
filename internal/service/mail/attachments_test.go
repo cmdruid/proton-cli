@@ -1,11 +1,15 @@
 package mail
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 )
 
 func TestNewContentID(t *testing.T) {
@@ -46,66 +50,137 @@ func TestNewContentID(t *testing.T) {
 	}
 }
 
-func TestPrepareInlineImagesNoInlineIsNoOp(t *testing.T) {
-	opts := &SendOptions{HTML: true, Body: "<p>x</p>"}
-	got, err := prepareInlineImages(opts, "a@b.c")
-	if err != nil {
-		t.Fatalf("prepareInlineImages: %v", err)
+func TestAssignInlineContentIDsNoInlineIsNoOp(t *testing.T) {
+	c := &Content{From: testSender(), HTML: true, Body: "<p>x</p>"}
+	if err := assignInlineContentIDs(c); err != nil {
+		t.Fatalf("assignInlineContentIDs: %v", err)
 	}
-	if got != nil {
-		t.Errorf("expected nil, got %v", got)
-	}
-	if opts.Body != "<p>x</p>" {
-		t.Errorf("body must be untouched, got %q", opts.Body)
+	if c.Body != "<p>x</p>" {
+		t.Errorf("body must be untouched, got %q", c.Body)
 	}
 }
 
-func TestPrepareInlineImagesRequiresHTML(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "a.png")
-	if err := os.WriteFile(p, []byte("x"), 0644); err != nil {
-		t.Fatal(err)
+func TestAssignInlineContentIDsRequiresHTML(t *testing.T) {
+	c := &Content{
+		From: testSender(), HTML: false, Body: "plain",
+		Attach: []LocalAttachment{{Filename: "a.png", Data: []byte("x"), Inline: true}},
 	}
-	opts := &SendOptions{HTML: false, Body: "plain", InlineAttach: []string{p}}
-	if _, err := prepareInlineImages(opts, "a@b.c"); err == nil {
-		t.Error("expected an error when --attach-inline is used without --html")
+	if err := assignInlineContentIDs(c); err == nil {
+		t.Error("expected an error when an inline attachment is used without an HTML body")
 	}
 }
 
-func TestPrepareInlineImagesEmbedsAndSetsContentID(t *testing.T) {
+func TestAssignInlineContentIDsEmbedsAndSetsContentID(t *testing.T) {
+	c := &Content{
+		From: testSender(), HTML: true, Body: "<p>hi</p>",
+		Attach: []LocalAttachment{
+			{Filename: "logo.png", MIMEType: "image/png", Data: []byte("PNGBYTES"), Inline: true},
+			{Filename: "note.txt", MIMEType: "text/plain", Data: []byte("plain")},
+		},
+	}
+	if err := assignInlineContentIDs(c); err != nil {
+		t.Fatalf("assignInlineContentIDs: %v", err)
+	}
+	inline, regular := c.Attach[0], c.Attach[1]
+	if inline.ContentID == "" {
+		t.Error("ContentID must be set for an inline attachment")
+	}
+	if regular.ContentID != "" {
+		t.Errorf("a regular attachment must not get a ContentID, got %q", regular.ContentID)
+	}
+	// The body keeps its original content and gains a cid: reference so the
+	// image renders in place.
+	if !strings.HasPrefix(c.Body, "<p>hi</p>") {
+		t.Errorf("original body should be preserved as a prefix, got %q", c.Body)
+	}
+	if !strings.Contains(c.Body, `src="cid:`+inline.ContentID+`"`) {
+		t.Errorf("body should reference the cid, got %q", c.Body)
+	}
+	if strings.Contains(c.Body, "note.txt") {
+		t.Errorf("a regular attachment must not be referenced in the body, got %q", c.Body)
+	}
+}
+
+func TestReadLocalAttachmentResolvesMIMEType(t *testing.T) {
 	dir := t.TempDir()
-	p := filepath.Join(dir, "logo.png")
+	path := filepath.Join(dir, "logo.png")
 	data := []byte("PNGBYTES")
-	if err := os.WriteFile(p, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	opts := &SendOptions{HTML: true, Body: "<p>hi</p>", InlineAttach: []string{p}}
-	got, err := prepareInlineImages(opts, "sender@proton.me")
+	a, err := ReadLocalAttachment(path, true)
 	if err != nil {
-		t.Fatalf("prepareInlineImages: %v", err)
+		t.Fatalf("ReadLocalAttachment: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("got %d prepared, want 1", len(got))
-	}
-	a := got[0]
 	if a.Filename != "logo.png" {
 		t.Errorf("filename = %q, want logo.png", a.Filename)
-	}
-	if a.ContentID == "" {
-		t.Error("ContentID must be set for an inline attachment")
 	}
 	if !strings.HasPrefix(a.MIMEType, "image/png") {
 		t.Errorf("mime = %q, want image/png", a.MIMEType)
 	}
+	if !a.Inline {
+		t.Error("inline flag was not carried through")
+	}
 	if string(a.Data) != string(data) {
 		t.Errorf("data = %q, want %q", a.Data, data)
 	}
-	// The body keeps its original content and gains a cid: reference so the
-	// image renders in place.
-	if !strings.HasPrefix(opts.Body, "<p>hi</p>") {
-		t.Errorf("original body should be preserved as a prefix, got %q", opts.Body)
+}
+
+func TestReadLocalAttachmentUnknownExtensionFallsBack(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "blob.zzzz")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(opts.Body, `src="cid:`+a.ContentID+`"`) {
-		t.Errorf("body should reference the cid, got %q", opts.Body)
+	a, err := ReadLocalAttachment(path, false)
+	if err != nil {
+		t.Fatalf("ReadLocalAttachment: %v", err)
+	}
+	if a.MIMEType != "application/octet-stream" {
+		t.Errorf("mime = %q, want application/octet-stream", a.MIMEType)
+	}
+}
+
+// TestAttachmentPasswordKeyPacketsRoundTrip proves an EO attachment key packet
+// decrypts back to the original session key with the password.
+func TestAttachmentPasswordKeyPacketsRoundTrip(t *testing.T) {
+	const pw = "correct horse battery staple"
+	sk, err := pgp.GenerateSessionKey()
+	if err != nil {
+		t.Fatalf("GenerateSessionKey: %v", err)
+	}
+	atts := []*draftAttachment{{ID: "att-1", SessionKey: sk}}
+
+	out, err := attachmentPasswordKeyPackets(atts, pw)
+	if err != nil {
+		t.Fatalf("attachmentPasswordKeyPackets: %v", err)
+	}
+	packetB64, ok := out["att-1"]
+	if !ok {
+		t.Fatalf("missing key packet for att-1: %v", out)
+	}
+	packet, err := base64.StdEncoding.DecodeString(packetB64)
+	if err != nil {
+		t.Fatalf("packet is not base64: %v", err)
+	}
+	got, err := pgp.DecryptSessionKeyWithPassword(packet, []byte(pw))
+	if err != nil {
+		t.Fatalf("DecryptSessionKeyWithPassword: %v", err)
+	}
+	if !reflect.DeepEqual(got.Key, sk.Key) {
+		t.Error("round-tripped session key does not match the original")
+	}
+	if _, err := pgp.DecryptSessionKeyWithPassword(packet, []byte("wrong")); err == nil {
+		t.Error("decrypting with the wrong password should fail")
+	}
+}
+
+func TestAttachmentPasswordKeyPacketsEmpty(t *testing.T) {
+	out, err := attachmentPasswordKeyPackets(nil, "pw")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != nil {
+		t.Errorf("expected nil for no attachments, got %v", out)
 	}
 }

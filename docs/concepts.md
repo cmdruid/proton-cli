@@ -72,7 +72,7 @@ proton-cli drive items download /report.pdf --output - > report.pdf
 Commands that create something print the new ID to stdout, which makes capturing it trivial:
 
 ```bash
-LABEL=$(proton-cli mail labels create --name Work --color "#8080FF")
+LABEL=$(proton-cli mail settings labels create --name Work --color "#8080FF")
 ```
 
 ## Exit codes

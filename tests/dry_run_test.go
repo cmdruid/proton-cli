@@ -9,11 +9,11 @@ import (
 
 func TestDryRunLabelCreate(t *testing.T) {
 	name := testID() + "-dryrun"
-	_, stderr := runOKStderr(t, "--dry-run", "mail", "labels", "create",
+	_, stderr := runOKStderr(t, "--dry-run", "mail", "settings", "labels", "create",
 		"--name", name, "--color", "#8080FF")
 	assertContains(t, stderr, "dry-run")
 
-	list := runOK(t, "mail", "labels", "list")
+	list := runOK(t, "mail", "settings", "labels", "list")
 	if strings.Contains(list, name) {
 		t.Errorf("dry-run created a label: %q appears in list", name)
 	}

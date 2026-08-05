@@ -72,12 +72,14 @@ proton-cli mail messages search --from billing@example.com --after 2026-01-01
 proton-cli mail messages read "Invoice #2291"
 proton-cli mail messages send --to alice@proton.me --subject Report \
   --body "See attached." --attach ./report.pdf
-proton-cli mail messages send --to team@example.com --subject Standup \
-  --body "Same time tomorrow." --send-at 2026-05-01T09:00
+proton-cli mail messages reply "Invoice #2291" --body "Thanks, paid today."
+proton-cli mail messages forward "Invoice #2291" --to alice@proton.me
+proton-cli mail drafts create --to team@example.com --subject Standup --body "Notes to follow."
+proton-cli mail messages export --folder archive --older-than 1y --output-dir ./backup
 proton-cli mail messages trash --unread --older-than 30d
 ```
 
-Threads, attachments, labels, folders, and Sieve filters too. → [Mail](docs/commands/mail.md)
+Threads, drafts, attachments, `.eml` export, folders, labels, Sieve filters, signatures, and an auto-reply. → [Mail](docs/commands/mail.md)
 
 ### Drive
 
@@ -126,19 +128,22 @@ proton-cli contacts groups add GROUP_ID jane
 
 Groups, several addresses per contact, and details like organization and birthday. → [Contacts](docs/commands/contacts.md)
 
-Account and mail [settings](docs/commands/settings.md) are covered as well, and [`proton-cli api`](docs/commands/api.md) reaches any endpoint the commands don't.
+[Settings](docs/commands/settings.md) are scoped the way Proton scopes them — `proton-cli settings` for the account, `proton-cli mail settings` and friends per product — and [`proton-cli api`](docs/commands/api.md) reaches any endpoint the commands don't.
 
 ## Automate it
 
 ```bash
 # creating something prints its new ID to stdout
-ID=$(proton-cli mail labels create --name Work --color "#8080FF")
+ID=$(proton-cli mail settings labels create --name Work --color "#8080FF")
 
 # JSON for the machines, always with full IDs
 proton-cli mail messages list --unread --output json | jq -r '.messages[].subject'
 
 # stream through, no temporary files
 pg_dump mydb | gzip | proton-cli drive items upload - /Backups/db.sql.gz
+
+# archive a folder to disk as ordinary .eml files
+proton-cli mail messages export --folder archive --all --output-dir ./mail-backup
 
 # check what a bulk change would touch before it happens
 proton-cli mail messages trash --from newsletter@example.com --older-than 90d --dry-run

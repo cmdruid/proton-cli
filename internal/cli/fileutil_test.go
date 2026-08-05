@@ -186,3 +186,29 @@ func mustWrite(t *testing.T, path string) {
 		t.Fatalf("setup: write %s: %v", path, err)
 	}
 }
+
+func TestSanitizeFilename(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"Invoice #2291", "Invoice #2291"},
+		// Windows forbids a colon in a file name, so subjects lose theirs too.
+		{"Re: path/to/thing", "Re path to thing"},
+		{`a\b:c*d?e"f<g>h|i`, "a b c d e f g h i"},
+		{"tabs\tand\nnewlines", "tabs and newlines"},
+		{"   collapsed    spaces   ", "collapsed spaces"},
+		{"trailing dots...", "trailing dots"},
+		{"", "message"},
+		{"///", "message"},
+	}
+	for _, tt := range tests {
+		if got := sanitizeFilename(tt.in); got != tt.want {
+			t.Errorf("sanitizeFilename(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestSanitizeFilenameCapsLength(t *testing.T) {
+	got := sanitizeFilename(strings.Repeat("a", 500))
+	if len(got) > 120 {
+		t.Errorf("length = %d, want it capped at 120", len(got))
+	}
+}

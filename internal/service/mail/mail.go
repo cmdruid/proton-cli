@@ -81,6 +81,12 @@ type Service struct {
 	// we don't refetch on every message in a conversation.
 	keyMu      sync.Mutex
 	senderKeys map[string]*pgp.KeyRing
+
+	// Mail settings are read once per run, for the outgoing signature's Proton
+	// footer. See signature.go.
+	settingsOnce  sync.Once
+	settingsCache mailSettings
+	settingsErr   error
 }
 
 func New(c proton.Doer) *Service { return &Service{C: c} }

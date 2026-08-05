@@ -10,13 +10,13 @@ import (
 // ── calendars ──
 
 func TestCalendarCalendarsList(t *testing.T) {
-	stdout := runOK(t, "calendar", "calendars", "list")
+	stdout := runOK(t, "calendar", "settings", "calendars", "list")
 	assertContains(t, stdout, "NAME")
 	assertContains(t, stdout, "COLOR")
 }
 
 func TestCalendarCalendarsListColorPopulated(t *testing.T) {
-	cals := runJSONArray(t, "calendar", "calendars", "list")
+	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
 	if len(cals) == 0 {
 		t.Skip("no calendars on account")
 	}
@@ -36,16 +36,16 @@ func TestCalendarCalendarsListColorPopulated(t *testing.T) {
 
 func TestCalendarCalendarsCreateAndDelete(t *testing.T) {
 	name := testID() + "-cal"
-	stdout := runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF")
+	stdout := runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF")
 	id := strings.TrimSpace(stdout)
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
 	// Delete exercises the password-scope unlock path.
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete -- %s", id),
-		"calendar", "calendars", "delete", "--", id)
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete -- %s", id),
+		"calendar", "settings", "calendars", "delete", "--", id)
 
-	list := runOK(t, "calendar", "calendars", "list")
+	list := runOK(t, "calendar", "settings", "calendars", "list")
 	assertContains(t, list, name)
 }
 
@@ -71,7 +71,7 @@ func TestCalendarEventsCRUDByIDs(t *testing.T) {
 	}
 
 	// Need both calendar ID + event ID for explicit ops and cleanup.
-	cals := runJSONArray(t, "calendar", "calendars", "list")
+	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
 	var calID string
 	for _, c := range cals {
 		m := c.(map[string]interface{})
@@ -109,7 +109,7 @@ func TestCalendarEventsGetByTitleRef(t *testing.T) {
 		"--duration", "30m")
 	eventID := strings.TrimSpace(idOut)
 
-	cals := runJSONArray(t, "calendar", "calendars", "list")
+	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
 	var calID string
 	for _, c := range cals {
 		m := c.(map[string]interface{})
@@ -151,7 +151,7 @@ func TestCalendarEventsNotFound(t *testing.T) {
 
 func firstCalendarID(t *testing.T) string {
 	t.Helper()
-	cals := runJSONArray(t, "calendar", "calendars", "list")
+	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
 	if len(cals) == 0 {
 		t.Skip("no calendars on this account")
 	}
@@ -220,22 +220,22 @@ func TestCalendarEventWithProtonAttendee(t *testing.T) {
 
 func TestCalendarCalendarsRename(t *testing.T) {
 	name := testID() + "-cal"
-	calID := strings.TrimSpace(runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete %s", calID),
-		"calendar", "calendars", "delete", calID)
+	calID := strings.TrimSpace(runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete %s", calID),
+		"calendar", "settings", "calendars", "delete", calID)
 
 	newName := name + "-renamed"
-	runOK(t, "calendar", "calendars", "rename", "--name", newName, "--color", "#DB60D6", calID)
-	assertContains(t, runOK(t, "calendar", "calendars", "list"), newName)
+	runOK(t, "calendar", "settings", "calendars", "rename", "--name", newName, "--color", "#DB60D6", calID)
+	assertContains(t, runOK(t, "calendar", "settings", "calendars", "list"), newName)
 }
 
 // TestCalendarCreateUsable proves a freshly created calendar is provisioned
 // with keys (setupCalendar) by creating an event in it.
 func TestCalendarCreateUsable(t *testing.T) {
 	name := testID() + "-usable"
-	calID := strings.TrimSpace(runOK(t, "calendar", "calendars", "create", "--name", name, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar calendars delete %s", calID),
-		"calendar", "calendars", "delete", calID)
+	calID := strings.TrimSpace(runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete %s", calID),
+		"calendar", "settings", "calendars", "delete", calID)
 
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", calID, "--title", name+"-evt",
@@ -330,7 +330,7 @@ func firstAttendeeStatus(ev map[string]interface{}) (int, bool) {
 }
 
 func TestCalendarEventsRespondRoundTrip(t *testing.T) {
-	altCals := runJSONArray(t, alt("calendar", "calendars", "list")...)
+	altCals := runJSONArray(t, alt("calendar", "settings", "calendars", "list")...)
 	if len(altCals) == 0 {
 		t.Skip("alt account has no calendars")
 	}

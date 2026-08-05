@@ -93,10 +93,10 @@ func TestOutputUnknownFormat(t *testing.T) {
 func TestOutputJSONParsesEverywhere(t *testing.T) {
 	cases := [][]string{
 		{"mail", "messages", "list", "--page-size", "1"},
-		{"mail", "labels", "list"},
-		{"mail", "addresses", "list"},
+		{"mail", "settings", "labels", "list"},
+		{"mail", "settings", "addresses", "list"},
 		{"contacts", "list"},
-		{"calendar", "calendars", "list"},
+		{"calendar", "settings", "calendars", "list"},
 		{"pass", "vaults", "list"},
 	}
 	for _, args := range cases {

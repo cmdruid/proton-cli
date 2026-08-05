@@ -2,8 +2,12 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
+
+// Settings are scoped per product, mirroring Proton's own settings app: bare
+// `settings` is the account, and each product carries its own tree.
 
 func mailViewMode(t *testing.T) int {
 	t.Helper()
@@ -19,39 +23,122 @@ func mailViewMode(t *testing.T) int {
 	return int(vm)
 }
 
-func TestSettingsSet(t *testing.T) {
+// Named values are the point of the typed key table: nobody should have to
+// remember that "conversations" is zero.
+func TestMailSettingsSetByName(t *testing.T) {
 	orig := mailViewMode(t)
-	target := 0
-	if orig == 0 {
-		target = 1
+	origName, targetName, targetValue := "conversations", "messages", 1
+	if orig == 1 {
+		origName, targetName, targetValue = "messages", "conversations", 0
 	}
-	cleanup(t, fmt.Sprintf("Restore mail ViewMode: proton-cli settings set view-mode %d", orig), func() error {
-		if _, _, code := run(t, "settings", "set", "view-mode", fmt.Sprintf("%d", orig)); code != 0 {
-			return fmt.Errorf("restore exit %d", code)
+	cleanup(t, fmt.Sprintf("Restore mail view mode: proton-cli mail settings set view-mode %s", origName),
+		func() error {
+			if _, _, code := run(t, "mail", "settings", "set", "view-mode", origName); code != 0 {
+				return fmt.Errorf("restore exit %d", code)
+			}
+			return nil
+		})
+
+	runOK(t, "mail", "settings", "set", "view-mode", targetName)
+	if got := mailViewMode(t); got != targetValue {
+		t.Errorf("ViewMode after setting %q: got %d want %d", targetName, got, targetValue)
+	}
+	// The numeric form Proton itself uses stays valid.
+	runOK(t, "mail", "settings", "set", "view-mode", fmt.Sprintf("%d", targetValue))
+}
+
+func TestMailSettingsSetRejectsValuesOutsideTheDomain(t *testing.T) {
+	tests := []struct{ key, value, want string }{
+		{"view-mode", "threads", "conversations, messages"},
+		{"view-mode", "7", "conversations, messages"},
+		{"delay-send", "999", "0-20 (seconds)"},
+		{"page-size", "3", "50, 100, 200"},
+		{"draft-type", "text/markdown", "text/html, text/plain"},
+	}
+	for _, tt := range tests {
+		_, stderr, code := run(t, "mail", "settings", "set", tt.key, tt.value)
+		if code == 0 {
+			t.Errorf("%s %s should have been rejected", tt.key, tt.value)
+			continue
 		}
-		return nil
-	})
-
-	runOK(t, "settings", "set", "view-mode", fmt.Sprintf("%d", target))
-	if got := mailViewMode(t); got != target {
-		t.Errorf("ViewMode after set: got %d want %d", got, target)
+		if !strings.Contains(stderr, tt.want) {
+			t.Errorf("%s %s: stderr = %q, want it to list %q", tt.key, tt.value, stderr, tt.want)
+		}
 	}
 }
 
-func TestSettingsGet(t *testing.T) {
-	stdout := runOK(t, "settings", "get")
-	assertContains(t, stdout, "Locale")
+func TestMailSettingsSetUnknownKey(t *testing.T) {
+	_, stderr, code := run(t, "mail", "settings", "set", "no-such-key", "1")
+	if code == 0 {
+		t.Error("an unknown key should be rejected")
+	}
+	assertContains(t, stderr, "unknown mail setting")
+	assertContains(t, stderr, "mail settings set")
 }
 
-func TestSettingsMail(t *testing.T) {
-	stdout := runOK(t, "settings", "mail")
-	assertContains(t, stdout, "Display Name")
-	assertContains(t, stdout, "Page Size")
+// With no arguments, `set` lists the writable keys grouped by the settings page
+// they come from.
+func TestMailSettingsSetListsKeysByPage(t *testing.T) {
+	stdout := runOK(t, "mail", "settings", "set")
+	for _, want := range []string{"General", "Email privacy", "view-mode", "hide-remote-images"} {
+		assertContains(t, stdout, want)
+	}
 }
 
-func TestSettingsGetJSON(t *testing.T) {
-	data := runJSON(t, "settings", "get")
+func TestMailSettingsSetDryRun(t *testing.T) {
+	orig := mailViewMode(t)
+	_, stderr := runOKStderr(t, "--dry-run", "mail", "settings", "set", "view-mode", "messages")
+	assertContains(t, stderr, "dry-run")
+	if got := mailViewMode(t); got != orig {
+		t.Error("--dry-run changed the setting")
+	}
+}
+
+func TestAccountSettings(t *testing.T) {
+	stdout := runOK(t, "settings")
+	for _, want := range []string{"Locale", "Date Format", "Time Format", "Week Start"} {
+		assertContains(t, stdout, want)
+	}
+}
+
+func TestAccountSettingsJSON(t *testing.T) {
+	data := runJSON(t, "settings")
 	if _, ok := data["UserSettings"]; !ok {
 		t.Error("expected UserSettings key in JSON output")
 	}
+}
+
+func TestAccountSettingsSetListsKeys(t *testing.T) {
+	stdout := runOK(t, "settings", "set")
+	for _, want := range []string{"Language and time", "locale", "week-start"} {
+		assertContains(t, stdout, want)
+	}
+}
+
+func TestMailSettings(t *testing.T) {
+	stdout := runOK(t, "mail", "settings")
+	for _, want := range []string{"Display Name", "Page Size", "View Mode", "Auto-reply"} {
+		assertContains(t, stdout, want)
+	}
+}
+
+func TestCalendarSettings(t *testing.T) {
+	stdout := runOK(t, "calendar", "settings")
+	assertContains(t, stdout, "Primary Timezone")
+}
+
+func TestCalendarSettingsSetListsKeys(t *testing.T) {
+	stdout := runOK(t, "calendar", "settings", "set")
+	assertContains(t, stdout, "primary-timezone")
+	assertContains(t, stdout, "week-numbers")
+}
+
+func TestDriveSettings(t *testing.T) {
+	stdout := runOK(t, "drive", "settings")
+	assertContains(t, stdout, "Version History")
+}
+
+func TestDriveSettingsSetListsKeys(t *testing.T) {
+	stdout := runOK(t, "drive", "settings", "set")
+	assertContains(t, stdout, "version-history")
 }

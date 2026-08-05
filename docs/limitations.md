@@ -16,19 +16,27 @@ To confirm a change, act on the ID the command printed with `read`, instead of s
 
 ### Deleting a calendar needs your password
 
-`calendar calendars delete` is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a saved session exists.
+`calendar settings calendars delete` is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a saved session exists.
 
 ### CAPTCHAs need a display
 
 Proton may ask for human verification at login. Release binaries embed a webview helper for it, but a headless machine has nowhere to draw it, and `go install` builds don't include the helper at all. See [Human verification](human-verification.md) for the workaround.
 
+### A message cannot be put back into a mailbox
+
+Proton exposes no endpoint, to any client, that ingests a message file into an existing mailbox. `mail messages export` therefore has no exact inverse: [`--eml`](commands/mail.md#import) reads a file back into a draft or a send, which is as close as the platform allows.
+
+### An exported message is plaintext
+
+Export decrypts, so the files it writes are readable by anything. The original `DKIM-Signature` and `ARC-*` headers also stop verifying, because the body has been rebuilt around the decrypted content. The web client's own export behaves the same way.
+
 ## Not implemented yet
 
-- **Mail**: no reply or forward, no draft editing, no auto-responder, no signature management, no import or export.
+- **Mail**: no encryption and key management, no IMAP/SMTP tokens, no custom domains.
 - **Calendar**: no calendar sharing, no subscribed (ICS) calendars, no import or export.
 - **Contacts**: no vCard import or export.
 - **Pass**: no item or vault sharing, no secure links, no password history.
-- **Account**: no plan, billing, or user management.
+- **Account**: no plan, billing, or user management. No **Easy Switch**, Proton's mailbox migration from Gmail and other IMAP providers: it is a server-side job spanning four products that needs your old account's credentials or a browser sign-in, so it belongs to the account settings rather than to Mail.
 
 ## Out of scope
 

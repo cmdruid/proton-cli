@@ -18,6 +18,15 @@ type Invocation struct {
 	App  *app.App
 	U    *keys.Unlocked
 	Args []string
+	// Cmd is the running cobra command, so handlers can distinguish a flag left
+	// unset from one explicitly set to its zero value (clearing a signature,
+	// emptying a recipient list).
+	Cmd *cobra.Command
+}
+
+// changed reports whether the user passed the named flag, however it was set.
+func (c *Invocation) changed(flag string) bool {
+	return c.Cmd != nil && c.Cmd.Flags().Changed(flag)
 }
 
 func (c *Invocation) R() *render.Renderer { return c.App.R }
@@ -70,7 +79,7 @@ func stepResolve(c *Invocation) error {
 
 func run(steps []Step, h Handler) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		c := &Invocation{Ctx: cmd.Context(), App: app.From(cmd.Context()), Args: args}
+		c := &Invocation{Ctx: cmd.Context(), App: app.From(cmd.Context()), Args: args, Cmd: cmd}
 		for _, s := range steps {
 			if err := s(c); err != nil {
 				return err
