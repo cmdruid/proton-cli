@@ -156,6 +156,8 @@ jobs:
           file internal/hv/assets/proton-cli-hv-* || true
 
       - name: Run GoReleaser
+        id: goreleaser
+        continue-on-error: true
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
@@ -166,9 +168,32 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_WINGET_TOKEN: ${{ secrets.TAP_WINGET_TOKEN }}
 
+      - name: Verify GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          echo "Assets on $TAG:"; echo "$assets"
+          missing=()
+          for a in checksums.txt \
+                   proton-cli_linux_amd64 proton-cli_linux_arm64 \
+                   proton-cli_darwin_amd64 proton-cli_darwin_arm64 \
+                   proton-cli_windows_amd64.exe; do
+            grep -qxF "$a" <<<"$assets" || missing+=("$a")
+          done
+          grep -q '_linux_amd64\.deb$' <<<"$assets" || missing+=("*_linux_amd64.deb")
+          grep -q '_linux_arm64\.deb$' <<<"$assets" || missing+=("*_linux_arm64.deb")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::GitHub release $TAG is missing required assets: ${missing[*]}"
+            exit 1
+          fi
+          echo "GitHub release $TAG has all required assets."
+
   apt-repo:
     needs: [prepare, release]
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
       id-token: write
@@ -219,6 +244,7 @@ jobs:
   apt-deploy:
     needs: apt-repo
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       id-token: write
       pages: write
@@ -233,6 +259,7 @@ jobs:
   npm-publish:
     needs: [prepare, release]
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
       id-token: write
@@ -268,3 +295,58 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.tag }}
         run: node scripts/publish-npm.mjs
+
+  report:
+    needs: [prepare, release, apt-repo, apt-deploy, npm-publish]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Channel status report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+        run: |
+          v="${TAG#v}"
+          gh_assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length' 2>/dev/null || echo 0)
+          apt=$(curl -fsS https://roman-16.github.io/proton-cli/dists/stable/main/binary-amd64/Packages 2>/dev/null | awk '$1=="Version:"{print $2}' | sort -V | tail -1)
+          npm=$(curl -fsS https://registry.npmjs.org/@roman-16%2Fproton-cli 2>/dev/null | jq -r '."dist-tags".latest // ""')
+          aur=$(curl -fsS 'https://aur.archlinux.org/rpc/v5/info?arg[]=proton-cli-bin' 2>/dev/null | jq -r '.results[0].Version // ""' | sed 's/-[0-9]*$//')
+          brew=$(curl -fsS https://raw.githubusercontent.com/roman-16/homebrew-tap/HEAD/Casks/proton-cli.rb 2>/dev/null | sed -n 's/.*version "\([^"]*\)".*/\1/p' | head -1)
+
+          row() { printf '| %s | %s | %s |\n' "$1" "$2" "$3" >> "$GITHUB_STEP_SUMMARY"; }
+          {
+            echo "## Release $TAG - channel status"
+            echo
+            echo "| Channel | Status | Detail |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$RELEASE_RESULT" = "success" ] && [ "$gh_assets" -gt 0 ]; then
+            row "GitHub release" "✅" "$TAG ($gh_assets assets)"
+          else
+            row "GitHub release" "❌" "release job: $RELEASE_RESULT"
+            echo "::warning::GitHub release did not complete ($RELEASE_RESULT)"
+          fi
+
+          check() { # name expected got
+            if [ "$3" = "$2" ]; then
+              row "$1" "✅" "$3"
+            elif [ -z "$3" ]; then
+              row "$1" "⚠️" "unreachable"; echo "::warning::$1 could not be checked"
+            else
+              row "$1" "⚠️" "still $3 (expected $2)"; echo "::warning::$1 is still $3, expected $2 - re-run to backfill"
+            fi
+          }
+          check "apt" "$v" "${apt:-}"
+          check "npm" "$v" "$npm"
+          check "AUR" "$v" "$aur"
+          check "Homebrew" "$v" "$brew"
+
+          if gh api "repos/roman-16/winget-pkgs/branches/proton-cli-$v" >/dev/null 2>&1; then
+            row "winget" "✅" "PR branch proton-cli-$v pushed"
+          else
+            row "winget" "⚠️" "no branch proton-cli-$v"; echo "::warning::winget: branch proton-cli-$v not found (PR may be merged or closed)"
+          fi
