@@ -36,14 +36,16 @@ type globalFlags struct {
 	logLevel   string
 	dryRun     bool
 	fullIDs    bool
+	noColor    bool
 }
 
 var gFlags globalFlags
 
 var rootCmd = &cobra.Command{
-	Use:           "proton-cli",
-	Short:         "CLI for the Proton API",
-	Long:          "An unofficial command-line tool for Proton (Mail, Drive, Calendar, Pass, Contacts). Handles SRP authentication and end-to-end encryption automatically.",
+	Use:   "proton-cli",
+	Short: "Unofficial CLI for Proton Mail, Drive, Calendar, Pass and Contacts",
+	Long: "Proton, in your terminal.\n\n" +
+		"Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.",
 	Version:       version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -63,6 +65,7 @@ func init() {
 	pf.StringVar(&gFlags.logLevel, "log-level", "", "Log level: debug, info, warn, error")
 	pf.BoolVar(&gFlags.dryRun, "dry-run", false, "Preview mutations without applying them")
 	pf.BoolVar(&gFlags.fullIDs, "full-ids", false, "Show full IDs in interactive output (default: shortened to 8 chars on TTY)")
+	pf.BoolVar(&gFlags.noColor, "no-color", false, "Disable colored output (env: NO_COLOR)")
 
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
@@ -84,6 +87,7 @@ func init() {
 			Quiet:      gFlags.quiet,
 			DryRun:     gFlags.dryRun,
 			FullIDs:    gFlags.fullIDs,
+			NoColor:    gFlags.noColor,
 		})
 		if err != nil {
 			return err

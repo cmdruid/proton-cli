@@ -100,7 +100,7 @@ func (s *Service) AttachmentDownload(ctx context.Context, u *keys.Unlocked, msgI
 	}
 	addrKR, ok := u.AddrKR(r.Message.AddressID)
 	if !ok {
-		kr, _, _, err := u.FirstAddrKR()
+		kr, _, err := u.FirstAddr()
 		if err != nil {
 			return nil, "", err
 		}

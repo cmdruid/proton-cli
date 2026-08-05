@@ -54,7 +54,7 @@ nfpms:
     formats: [apk, deb, rpm]
     maintainer: "Roman <roman@lerchster.dev>"
     homepage: "https://github.com/roman-16/proton-cli"
-    description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
+    description: "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts."
     license: MIT
     bindir: /usr/bin
     contents:
@@ -88,7 +88,7 @@ aurs:
   - name: proton-cli-bin
     ids: [archive]
     homepage: "https://github.com/roman-16/proton-cli"
-    description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
+    description: "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts."
     maintainers:
       - "Roman <roman@lerchster.dev>"
     license: MIT
@@ -118,7 +118,7 @@ homebrew_casks:
       name: Roman
       email: roman@lerchster.dev
     homepage: "https://github.com/roman-16/proton-cli"
-    description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
+    description: "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts."
     license: MIT
     binaries:
       - proton-cli
@@ -137,8 +137,8 @@ winget:
       email: roman@lerchster.dev
     ids: [archive]
     homepage: "https://github.com/roman-16/proton-cli"
-    short_description: "Unofficial command-line client for the Proton suite"
-    description: "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption."
+    short_description: "Unofficial CLI for Proton Mail, Drive, Calendar, Pass and Contacts"
+    description: "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts."
     license: MIT
     publisher_url: "https://github.com/roman-16"
     publisher_support_url: "https://github.com/roman-16/proton-cli/issues"

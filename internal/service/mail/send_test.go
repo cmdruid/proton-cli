@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 )
 
 func TestDedupeRecipientsIsCaseInsensitiveAndPreservesFirstSeenOrder(t *testing.T) {
@@ -332,6 +333,39 @@ func TestBuildInlinePackage(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotAttSK.Key, attSK.Key) {
 		t.Error("attachment session key was not wrapped to the recipient")
+	}
+}
+
+func TestNewDraftBodyCarriesSenderDisplayName(t *testing.T) {
+	sender := keys.Address{ID: "a1", Email: "jane@proton.me", DisplayName: "Jane Roe"}
+	opts := SendOptions{To: []string{"bob@example.com"}, CC: []string{"cc@example.com"}, Subject: "Hi"}
+
+	msg, ok := newDraftBody(sender, opts, "-----BEGIN PGP MESSAGE-----", "text/plain")["Message"].(map[string]any)
+	if !ok {
+		t.Fatal("draft body has no Message object")
+	}
+	got, ok := msg["Sender"].(map[string]string)
+	if !ok {
+		t.Fatalf("Sender is %T, want map[string]string", msg["Sender"])
+	}
+	if got["Address"] != "jane@proton.me" || got["Name"] != "Jane Roe" {
+		t.Errorf("Sender = %v, want the address paired with its display name", got)
+	}
+	if msg["Subject"] != "Hi" || msg["MIMEType"] != "text/plain" {
+		t.Errorf("Subject/MIMEType = %v/%v", msg["Subject"], msg["MIMEType"])
+	}
+	if len(msg["ToList"].([]map[string]string)) != 1 || len(msg["BCCList"].([]map[string]string)) != 0 {
+		t.Errorf("recipient lists = %v / %v", msg["ToList"], msg["BCCList"])
+	}
+}
+
+// An address without a display name must send an empty name, not the address
+// duplicated into it.
+func TestNewDraftBodyWithoutDisplayName(t *testing.T) {
+	sender := keys.Address{Email: "jane@proton.me"}
+	msg := newDraftBody(sender, SendOptions{}, "", "text/html")["Message"].(map[string]any)
+	if got := msg["Sender"].(map[string]string)["Name"]; got != "" {
+		t.Errorf("Sender name = %q, want empty", got)
 	}
 }
 

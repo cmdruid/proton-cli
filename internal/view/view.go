@@ -17,6 +17,9 @@ type Column[T any] struct {
 	// ID marks the cell as a Proton ID: it is shortened to 8 chars on an
 	// interactive terminal (unless full IDs are requested).
 	ID bool
+	// Accent highlights the column in interactive output, for compact status
+	// markers such as the unread and attachment flags.
+	Accent bool
 }
 
 type List[T any] struct {
@@ -66,10 +69,19 @@ func Render[T any](r *render.Renderer, short bool, cache *idcache.Cache, l List[
 		}
 		rows = append(rows, row)
 	}
-	render.Table(r.Stdout, headers, rows)
+	style := render.TableStyle{Header: r.Out.Hint, Rule: r.Out.Rule, Cells: make([]func(string) string, len(l.Columns))}
+	for i, c := range l.Columns {
+		switch {
+		case c.ID:
+			style.Cells[i] = r.Out.ID
+		case c.Accent:
+			style.Cells[i] = r.Out.Accent
+		}
+	}
+	render.Table(r.Stdout, headers, rows, style)
 	if l.Footer != nil {
 		if f := l.Footer(len(items)); f != "" {
-			_, _ = fmt.Fprintln(r.Stderr, "\n"+f)
+			_, _ = fmt.Fprintln(r.Stderr, "\n"+r.Err.Hint(f))
 		}
 	}
 	return nil

@@ -20,6 +20,7 @@ type Progress struct {
 	current int64
 	isTTY   bool
 	active  bool
+	colors  Colors
 }
 
 // Start initialises the progress reporter. Safe to call with zero Total.
@@ -31,6 +32,7 @@ func (p *Progress) Start() {
 		p.isTTY = term.IsTerminal(int(f.Fd()))
 	}
 	p.active = !p.Quiet && p.isTTY
+	p.colors = ColorsFor(p.Writer)
 	p.draw()
 }
 
@@ -65,6 +67,12 @@ func (p *Progress) draw() {
 			pct = 1
 		}
 	}
+	// Encryption adds per-block overhead, so the byte counter can run past the
+	// source size; report the size the user asked about instead.
+	done := p.current
+	if p.Total > 0 && done > p.Total {
+		done = p.Total
+	}
 	filled := int(pct * float64(barWidth))
 	bar := ""
 	for i := 0; i < barWidth; i++ {
@@ -77,6 +85,6 @@ func (p *Progress) draw() {
 			bar += " "
 		}
 	}
-	_, _ = fmt.Fprintf(p.Writer, "\r%s [%s] %s / %s (%.0f%%)",
-		p.Label, bar, units.Size(p.current), units.Size(p.Total), pct*100)
+	_, _ = fmt.Fprintf(p.Writer, "\r%s %s %s / %s (%.0f%%)",
+		p.Label, p.colors.Accent("["+bar+"]"), units.Size(done), units.Size(p.Total), pct*100)
 }

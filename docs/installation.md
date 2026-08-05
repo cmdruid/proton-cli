@@ -1,0 +1,186 @@
+# Installation
+
+proton-cli is a single self-contained binary. Pick whichever line matches your system.
+
+## Linux
+
+**Any distribution** (installs to `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
+```
+
+The script takes `--version X.Y.Z` and `--install-dir DIR` (or the `PROTON_CLI_VERSION` and `PROTON_CLI_INSTALL_DIR` environment variables):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh -s -- --install-dir /usr/local/bin
+```
+
+**Arch Linux** (AUR):
+
+```bash
+yay -S proton-cli-bin      # or: paru -S proton-cli-bin
+```
+
+**Debian, Ubuntu, Linux Mint** (APT repository, gets updates with the rest of your system):
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://roman-16.github.io/proton-cli/gpg.key | sudo tee /etc/apt/keyrings/proton-cli.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/proton-cli.asc] https://roman-16.github.io/proton-cli stable main" | sudo tee /etc/apt/sources.list.d/proton-cli.list
+sudo apt update && sudo apt install proton-cli
+```
+
+**Fedora, RHEL, Alpine** - download the package from the [latest release](https://github.com/roman-16/proton-cli/releases/latest) and install it:
+
+```bash
+sudo dnf install ./proton-cli_*.rpm                  # Fedora, RHEL
+sudo apk add --allow-untrusted ./proton-cli_*.apk    # Alpine
+```
+
+**Nix** - the [`proton-cli`](https://search.nixos.org/packages?query=proton-cli) package is in nixpkgs:
+
+```nix
+environment.systemPackages = [ pkgs.proton-cli ];
+```
+
+To track the latest release instead of your nixpkgs channel, use the flake:
+
+```nix
+inputs = {
+  proton-cli = {
+    url = "github:roman-16/proton-cli";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+};
+
+# in a NixOS module
+environment.systemPackages = [
+  proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
+];
+```
+
+## macOS
+
+```bash
+brew install --cask roman-16/tap/proton-cli
+```
+
+Or the install script, which puts the binary in `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
+```
+
+## Windows
+
+```powershell
+winget install Roman-16.ProtonCLI
+```
+
+Or the PowerShell installer, which installs to `%LOCALAPPDATA%\Programs\proton-cli`:
+
+```powershell
+irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 | iex
+```
+
+It accepts `-Version` and `-InstallDir`:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1))) -InstallDir "C:\tools\proton-cli"
+```
+
+## Cross-platform
+
+**npm** - handy if you already manage tooling with Node:
+
+```bash
+npm install -g @roman-16/proton-cli
+```
+
+**Go** - builds from source:
+
+```bash
+go install github.com/roman-16/proton-cli@latest
+```
+
+> [!NOTE]
+> `go install` builds don't embed the CAPTCHA helper that release binaries carry. If Proton asks for human verification at login, use a release binary instead. See [Human verification](human-verification.md).
+
+## Manual download
+
+Every release ships raw binaries and archives on the [releases page](https://github.com/roman-16/proton-cli/releases/latest).
+
+| Platform | Binary |
+| --- | --- |
+| Linux x86_64 | `proton-cli_linux_amd64` |
+| Linux ARM64 | `proton-cli_linux_arm64` |
+| macOS Apple Silicon | `proton-cli_darwin_arm64` |
+| macOS Intel | `proton-cli_darwin_amd64` |
+| Windows x86_64 | `proton-cli_windows_amd64.exe` |
+
+```bash
+curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64
+chmod +x proton-cli_linux_amd64
+sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
+```
+
+On Windows, download the `.exe` and put its folder on your `PATH`.
+
+The `proton-cli_<version>_<os>_<arch>.tar.gz` / `.zip` archives bundle the binary, the licence, and shell completions for bash, zsh, and fish.
+
+### Verifying a download
+
+Each release includes `checksums.txt`:
+
+```bash
+curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/checksums.txt
+sha256sum --check --ignore-missing checksums.txt
+```
+
+## Shell completions
+
+Package installs (APT, AUR, Homebrew, RPM, APK) wire completions up for you. For a manual install, generate them yourself:
+
+```bash
+proton-cli completion bash > /etc/bash_completion.d/proton-cli
+proton-cli completion zsh  > "${fpath[1]}/_proton-cli"
+proton-cli completion fish > ~/.config/fish/completions/proton-cli.fish
+```
+
+## Updating
+
+If you used a package manager, update with it (`apt upgrade`, `brew upgrade`, `winget upgrade`, `yay -Syu`, …).
+
+If you used the install script or a manual download, proton-cli updates itself:
+
+```bash
+proton-cli update           # install the latest release
+proton-cli update --check   # only report whether an update exists
+proton-cli update 1.9.13    # install a specific version
+proton-cli update --force   # reinstall the current version
+```
+
+## Uninstalling
+
+Package installs go out the way they came in (`apt remove proton-cli`, `brew uninstall --cask proton-cli`, …).
+
+Script and manual installs can remove themselves:
+
+```bash
+proton-cli uninstall                 # dry run: show what would be removed
+proton-cli uninstall --yes           # remove the binary
+proton-cli uninstall --yes --purge   # also delete saved sessions and the ID cache
+```
+
+## Building from source
+
+Needs Go 1.26 or newer:
+
+```bash
+git clone https://github.com/roman-16/proton-cli.git
+cd proton-cli
+go build .
+```
+
+That plain build has no CAPTCHA helper. For a release-shaped binary, see [Contributing](../CONTRIBUTING.md).

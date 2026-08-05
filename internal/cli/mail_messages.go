@@ -33,7 +33,7 @@ func messageColumns() []view.Column[mailsvc.Message] {
 		}},
 		{Header: "SUBJECT", Cell: func(m mailsvc.Message) string { return m.Subject }},
 		{Header: "DATE", Cell: func(m mailsvc.Message) string { return time.Unix(m.Time, 0).Local().Format("2006-01-02 15:04") }},
-		{Header: "⚑", Cell: func(m mailsvc.Message) string {
+		{Header: "⚑", Accent: true, Cell: func(m mailsvc.Message) string {
 			flags := ""
 			if m.Unread == 1 {
 				flags += "●"

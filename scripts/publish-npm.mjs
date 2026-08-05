@@ -9,7 +9,7 @@
 //   BIN_DIR  directory holding the release binaries           (default: npm-bin)
 //   DRY_RUN  "1" to run `npm publish --dry-run` (skips provenance)
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,7 +17,18 @@ const SCOPE = "roman-16";
 const NAME = "proton-cli";
 const REPO = "https://github.com/roman-16/proton-cli";
 const DESCRIPTION =
-  "An unofficial command-line tool for Proton - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption.";
+  "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.";
+
+const RAW = `${REPO.replace("github.com", "raw.githubusercontent.com")}/main`;
+const BLOB = `${REPO}/blob/main`;
+
+// npmjs.com does not resolve a README's relative links, so the published copy
+// gets absolute ones: assets through raw.githubusercontent, the rest through
+// the repository's file view.
+const readmeForNpm = () =>
+  readFileSync("README.md", "utf8")
+    .replace(/(src|srcset)="(?!https?:)([^"]+)"/g, (_, attr, path) => `${attr}="${RAW}/${path}"`)
+    .replace(/\]\((?!https?:|#|mailto:)([^)]+)\)/g, (_, path) => `](${BLOB}/${path})`);
 
 const version = (process.env.VERSION || "").replace(/^v/, "");
 if (!/^\d+\.\d+\.\d+/.test(version)) {
@@ -78,6 +89,8 @@ const publish = (dir) => {
   execFileSync("npm", args, { cwd: dir, stdio: "inherit" });
 };
 
+const npmReadme = readmeForNpm();
+
 const optionalDependencies = {};
 for (const [key, { asset, bin }] of Object.entries(PLATFORMS)) {
   const [os, cpu] = key.split("-");
@@ -86,7 +99,7 @@ for (const [key, { asset, bin }] of Object.entries(PLATFORMS)) {
   mkdirSync(join(dir, "bin"), { recursive: true });
   cpSync(join(binDir, asset), join(dir, "bin", bin));
   chmodSync(join(dir, "bin", bin), 0o755);
-  cpSync("README.md", join(dir, "README.md"));
+  writeFileSync(join(dir, "README.md"), npmReadme);
   cpSync("LICENSE", join(dir, "LICENSE"));
   writeJSON(join(dir, "package.json"), {
     name: pkgName,
@@ -108,7 +121,7 @@ const rootDir = join(work, "root");
 mkdirSync(join(rootDir, "bin"), { recursive: true });
 writeFileSync(join(rootDir, "bin", `${NAME}.js`), shim);
 chmodSync(join(rootDir, "bin", `${NAME}.js`), 0o755);
-cpSync("README.md", join(rootDir, "README.md"));
+writeFileSync(join(rootDir, "README.md"), npmReadme);
 cpSync("LICENSE", join(rootDir, "LICENSE"));
 writeJSON(join(rootDir, "package.json"), {
   name: `@${SCOPE}/${NAME}`,

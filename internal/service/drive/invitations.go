@@ -127,7 +127,7 @@ func inviteeAddrKR(u *keys.Unlocked, email string) *pgp.KeyRing {
 			}
 		}
 	}
-	kr, _, _, err := u.FirstAddrKR()
+	kr, _, err := u.FirstAddr()
 	if err != nil {
 		return nil
 	}

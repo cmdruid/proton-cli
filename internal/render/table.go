@@ -10,9 +10,33 @@ import (
 	"golang.org/x/term"
 )
 
+// TableStyle colors the parts of a table. A nil function leaves its part
+// unstyled. Styling is applied after layout, so it never affects column
+// widths.
+type TableStyle struct {
+	Header func(string) string
+	Rule   func(string) string
+	// Cells styles data cells per column index; entries may be nil.
+	Cells []func(string) string
+}
+
+func (s TableStyle) cell(col int, v string) string {
+	if col < len(s.Cells) && s.Cells[col] != nil {
+		return s.Cells[col](v)
+	}
+	return v
+}
+
+func paint(fn func(string) string, s string) string {
+	if fn == nil {
+		return s
+	}
+	return fn(s)
+}
+
 // Table prints a simple two-space-separated table with a header underline.
 // Widths are computed from content and clamped to the terminal width.
-func Table(w io.Writer, headers []string, rows [][]string) {
+func Table(w io.Writer, headers []string, rows [][]string, style TableStyle) {
 	if len(rows) == 0 {
 		fmt.Fprintln(os.Stderr, "(no results)")
 		return
@@ -58,8 +82,8 @@ func Table(w io.Writer, headers []string, rows [][]string) {
 		head.WriteString(padRight(h, widths[i]))
 		sep.WriteString(strings.Repeat("─", widths[i]))
 	}
-	_, _ = fmt.Fprintln(w, head.String())
-	_, _ = fmt.Fprintln(w, sep.String())
+	_, _ = fmt.Fprintln(w, paint(style.Header, head.String()))
+	_, _ = fmt.Fprintln(w, paint(style.Rule, sep.String()))
 
 	for _, row := range rows {
 		var line strings.Builder
@@ -71,7 +95,11 @@ func Table(w io.Writer, headers []string, rows [][]string) {
 			if i < len(row) {
 				cell = row[i]
 			}
-			line.WriteString(padRight(truncate(cell, widths[i]), widths[i]))
+			padded := padRight(truncate(cell, widths[i]), widths[i])
+			if cell != "" {
+				padded = style.cell(i, padded)
+			}
+			line.WriteString(padded)
 		}
 		_, _ = fmt.Fprintln(w, line.String())
 	}

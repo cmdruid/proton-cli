@@ -148,7 +148,7 @@ type rawMessage struct {
 func (s *Service) decryptMessage(ctx context.Context, u *keys.Unlocked, m rawMessage) Full {
 	addrKR, ok := u.AddrKR(m.AddressID)
 	if !ok {
-		if kr, _, _, err := u.FirstAddrKR(); err == nil {
+		if kr, _, err := u.FirstAddr(); err == nil {
 			addrKR = kr
 		}
 	}

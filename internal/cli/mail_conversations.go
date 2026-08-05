@@ -41,7 +41,7 @@ func conversationColumns() []view.Column[mailsvc.Conversation] {
 		{Header: "SUBJECT", Cell: func(c mailsvc.Conversation) string { return c.Subject }},
 		{Header: "#", Cell: func(c mailsvc.Conversation) string { return fmt.Sprintf("%d", c.NumMessages) }},
 		{Header: "DATE", Cell: func(c mailsvc.Conversation) string { return time.Unix(c.Time, 0).Local().Format("2006-01-02 15:04") }},
-		{Header: "⚑", Cell: func(c mailsvc.Conversation) string {
+		{Header: "⚑", Accent: true, Cell: func(c mailsvc.Conversation) string {
 			flags := ""
 			if c.NumUnread > 0 {
 				flags += "●"

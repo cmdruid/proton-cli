@@ -233,8 +233,25 @@ func planPinnedRecipient(email string, base sendScheme, apiArmored string, pin *
 // (E2EE), external-PGP (PGP/MIME), encrypted-for-outside (password link), or
 // cleartext. Internal/EO/cleartext recipients share one symmetric body; PGP/MIME
 // recipients get a separately encrypted MIME body with embedded attachments.
+// newDraftBody builds the POST /mail/v4/messages payload. The sender carries
+// the address's display name, so recipients see "Jane Roe" rather than a bare
+// address - the same pairing the web client sends.
+func newDraftBody(sender keys.Address, opts SendOptions, armoredBody, mimeType string) map[string]any {
+	return map[string]any{
+		"Message": map[string]any{
+			"ToList":   recipientList(opts.To),
+			"CCList":   recipientList(opts.CC),
+			"BCCList":  recipientList(opts.BCC),
+			"Subject":  opts.Subject,
+			"Sender":   map[string]string{"Address": sender.Email, "Name": sender.DisplayName},
+			"Body":     armoredBody,
+			"MIMEType": mimeType,
+		},
+	}
+}
+
 func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) (string, error) {
-	addrKR, _, senderEmail, err := u.FirstAddrKR()
+	addrKR, senderAddr, err := u.FirstAddr()
 	if err != nil {
 		return "", err
 	}
@@ -246,7 +263,7 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 
 	// Inline images assign a Content-ID and append a cid: reference to the body,
 	// so this must happen before the draft body is encrypted below.
-	inlinePrepared, err := prepareInlineImages(&opts, senderEmail)
+	inlinePrepared, err := prepareInlineImages(&opts, senderAddr.Email)
 	if err != nil {
 		return "", err
 	}
@@ -263,18 +280,10 @@ func (s *Service) Send(ctx context.Context, u *keys.Unlocked, opts SendOptions) 
 		Code    int
 		Message struct{ ID string }
 	}
-	draftBody := map[string]any{
-		"Message": map[string]any{
-			"ToList":   recipientList(opts.To),
-			"CCList":   recipientList(opts.CC),
-			"BCCList":  recipientList(opts.BCC),
-			"Subject":  opts.Subject,
-			"Sender":   map[string]string{"Address": senderEmail, "Name": ""},
-			"Body":     armoredDraft,
-			"MIMEType": mimeType,
-		},
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/mail/v4/messages", Body: draftBody}, &draft); err != nil {
+	if err := s.C.Decode(ctx, proton.Request{
+		Method: "POST", Path: "/mail/v4/messages",
+		Body: newDraftBody(senderAddr, opts, armoredDraft, mimeType),
+	}, &draft); err != nil {
 		return "", err
 	}
 	messageID := draft.Message.ID

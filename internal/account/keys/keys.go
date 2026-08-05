@@ -27,9 +27,10 @@ type User struct {
 }
 
 type Address struct {
-	ID    string
-	Email string
-	Keys  []Key
+	ID          string
+	Email       string
+	DisplayName string
+	Keys        []Key
 }
 
 type Key struct {
@@ -125,27 +126,29 @@ func wrapAndPersist(ctx context.Context, c *proton.Client, skp string) {
 	c.Persist()
 }
 
-// PrimaryAddrKR returns the key ring for the user's primary proton.me/pm.me
-// address, falling back to the first unlockable address.
-func (u *Unlocked) PrimaryAddrKR() (*pgp.KeyRing, string, string, error) {
+// PrimaryAddr returns the key ring and address record for the user's primary
+// proton.me/pm.me address, falling back to the first unlockable address.
+func (u *Unlocked) PrimaryAddr() (*pgp.KeyRing, Address, error) {
 	for _, a := range u.Addresses {
 		if kr, ok := u.AddrKRs[a.ID]; ok {
 			e := a.Email
 			if strings.HasSuffix(e, "@proton.me") || strings.HasSuffix(e, "@pm.me") || strings.HasSuffix(e, "@protonmail.com") {
-				return kr, a.ID, a.Email, nil
+				return kr, a, nil
 			}
 		}
 	}
-	return u.FirstAddrKR()
+	return u.FirstAddr()
 }
 
-func (u *Unlocked) FirstAddrKR() (*pgp.KeyRing, string, string, error) {
+// FirstAddr returns the key ring and address record of the first address whose
+// keys could be unlocked.
+func (u *Unlocked) FirstAddr() (*pgp.KeyRing, Address, error) {
 	for _, a := range u.Addresses {
 		if kr, ok := u.AddrKRs[a.ID]; ok {
-			return kr, a.ID, a.Email, nil
+			return kr, a, nil
 		}
 	}
-	return nil, "", "", fmt.Errorf("no address key rings available")
+	return nil, Address{}, fmt.Errorf("no address key rings available")
 }
 
 func (u *Unlocked) AddrKR(addrID string) (*pgp.KeyRing, bool) {

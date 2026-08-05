@@ -41,22 +41,44 @@ type Renderer struct {
 	Stderr io.Writer
 	Log    *slog.Logger
 	Quiet  bool
+	// Out and Err style interactive output on the respective stream. Both are
+	// disabled unless that stream is a terminal and the format is text.
+	Out Colors
+	Err Colors
 }
 
-func New(format Format, stdout, stderr io.Writer, level slog.Level, quiet bool) *Renderer {
+// Options configures a Renderer. Stdout and Stderr default to the process
+// streams when nil.
+type Options struct {
+	Format   Format
+	Stdout   io.Writer
+	Stderr   io.Writer
+	LogLevel slog.Level
+	Quiet    bool
+	NoColor  bool
+}
+
+func New(opts Options) *Renderer {
+	stdout, stderr := opts.Stdout, opts.Stderr
 	if stdout == nil {
 		stdout = os.Stdout
 	}
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	h := slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level})
+	h := slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: opts.LogLevel})
+	var out, errC Colors
+	if opts.Format == FormatText && !opts.NoColor {
+		out, errC = ColorsFor(stdout), ColorsFor(stderr)
+	}
 	return &Renderer{
-		Format: format,
+		Format: opts.Format,
 		Stdout: stdout,
 		Stderr: stderr,
 		Log:    slog.New(h),
-		Quiet:  quiet,
+		Quiet:  opts.Quiet,
+		Out:    out,
+		Err:    errC,
 	}
 }
 
@@ -145,7 +167,7 @@ func (r *Renderer) ID(id, msg string) {
 		_, _ = fmt.Fprintln(r.Stdout, id)
 	}
 	if !r.Quiet && msg != "" {
-		_, _ = fmt.Fprintln(r.Stderr, "✓ "+msg)
+		_, _ = fmt.Fprintln(r.Stderr, r.Err.Success("✓")+" "+msg)
 	}
 }
 
@@ -153,7 +175,7 @@ func (r *Renderer) Success(msg string) {
 	if r.Quiet || msg == "" {
 		return
 	}
-	_, _ = fmt.Fprintln(r.Stderr, "✓ "+msg)
+	_, _ = fmt.Fprintln(r.Stderr, r.Err.Success("✓")+" "+msg)
 }
 
 func (r *Renderer) Info(msg string) {

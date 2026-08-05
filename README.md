@@ -1,658 +1,185 @@
+<div align="center">
+
+<img src="assets/logo.svg" width="96" height="96" alt="">
+
 # proton-cli
 
-[![Release](https://img.shields.io/github/v/release/roman-16/proton-cli?sort=semver)](https://github.com/roman-16/proton-cli/releases/latest)
-[![License: MIT](https://img.shields.io/github/license/roman-16/proton-cli)](LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/roman-16/proton-cli)](go.mod)
+**Proton, in your terminal.**
 
-> **Disclaimer:** This is an unofficial, community-built tool and is not endorsed by or affiliated with Proton AG. Use at your own risk.
+_Unofficial, community-built, not affiliated with Proton AG._
 
-An unofficial command-line tool for [Proton](https://proton.me) - Mail, Drive, Calendar, Pass, and Contacts from your terminal, with real end-to-end encryption.
+[![Release](https://img.shields.io/github/v/release/roman-16/proton-cli?sort=semver&style=flat-square&color=6D4AFF)](https://github.com/roman-16/proton-cli/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/roman-16/proton-cli/total?style=flat-square&color=6D4AFF)](https://github.com/roman-16/proton-cli/releases)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-6D4AFF?style=flat-square)](docs/installation.md)
+[![License](https://img.shields.io/github/license/roman-16/proton-cli?style=flat-square&color=6D4AFF)](LICENSE)
 
-proton-cli implements the same authentication and encryption as the [Proton web client](https://github.com/ProtonMail/WebClients): SRP login, the PGP key hierarchy, and full end-to-end encryption, using [go-srp](https://github.com/ProtonMail/go-srp) and [gopenpgp](https://github.com/ProtonMail/gopenpgp).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.svg">
+  <img src="assets/demo-light.svg" alt="Listing unread mail, sending a message with an attachment, and uploading a file to Drive">
+</picture>
 
-## Contents
+</div>
 
-- [Features](#features)
-- [Install](#install)
-- [Updating](#updating)
-- [Uninstalling](#uninstalling)
-- [Quick start](#quick-start)
-- [Core concepts](#core-concepts)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Scripting](#scripting)
-- [How it works](#how-it-works)
-- [Human verification (CAPTCHA)](#human-verification-captcha)
-- [Security](#security)
-- [Limitations](#limitations)
-- [Development](#development)
-- [API reference](#api-reference)
-- [License](#license)
+Read your mail, move files in and out of Drive, manage calendars, passwords, and contacts, all without opening a browser. proton-cli logs in the way the Proton apps do and does the encryption on your machine, so your keys stay yours.
 
-## Features
-
-- **Mail** - list, search, read, send (attachments, HTML, scheduled, self-destruct), organize, and manage labels, folders, and Sieve filters.
-- **Drive** - upload/download (streaming and recursive), move, copy, revisions, public links, member sharing, trash, and photos.
-- **Calendar** - calendars and events, recurrence, reminders, and attendees.
-- **Pass** - vaults, items (login, note, card, wifi, ssh key, identity, custom), aliases, and TOTP.
-- **Contacts** - full CRUD, pinned encryption keys, and contact groups.
-- **Real E2EE** - SRP login and the full PGP key hierarchy, decrypting and signing exactly like the web client.
-- **Built for scripts** - `--output json`, meaningful exit codes, streaming I/O, and `stdout = new ID` on create.
+- **Real end-to-end encryption.** SRP login and the full PGP key hierarchy, handled locally with Proton's own [go-srp](https://github.com/ProtonMail/go-srp) and [gopenpgp](https://github.com/ProtonMail/gopenpgp). No bridge, no proxy, no browser in the middle.
+- **Five apps, one binary.** Mail, Drive, Calendar, Pass, and Contacts, in a single static executable on Linux, macOS, and Windows.
+- **Built for pipes and cron.** JSON and YAML output, streaming stdin and stdout, exit codes that mean something, and `--dry-run` on everything that changes state.
 
 ## Install
 
-### Install with curl (Linux, macOS)
+| | |
+| --- | --- |
+| **Linux, macOS** | `curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh \| sh` |
+| **Windows** | `irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 \| iex` |
+| **Homebrew** | `brew install --cask roman-16/tap/proton-cli` |
+| **winget** | `winget install Roman-16.ProtonCLI` |
+| **Arch (AUR)** | `yay -S proton-cli-bin` |
+| **Nix** | `pkgs.proton-cli` |
+| **npm** | `npm install -g @roman-16/proton-cli` |
+
+There's also an APT repository for Debian and Ubuntu, `.rpm` and `.apk` packages, plain binaries with checksums, and `go install`. See [Installation](docs/installation.md).
+
+Already installed? `proton-cli update`.
+
+## Get started
+
+Point it at your account:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
+export PROTON_USER=you@proton.me
+export PROTON_PASSWORD='your-password'
+# export PROTON_TOTP=123456     # only if two-factor is enabled
 ```
 
-### Install with PowerShell (Windows)
-
-```powershell
-irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 | iex
-```
-
-### Install on Arch Linux (AUR)
-
-```bash
-yay -S proton-cli-bin      # or: paru -S proton-cli-bin
-```
-
-### Install on Debian, Ubuntu, Linux Mint (APT)
-
-```bash
-sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL https://roman-16.github.io/proton-cli/gpg.key | sudo tee /etc/apt/keyrings/proton-cli.asc >/dev/null
-echo "deb [signed-by=/etc/apt/keyrings/proton-cli.asc] https://roman-16.github.io/proton-cli stable main" | sudo tee /etc/apt/sources.list.d/proton-cli.list
-sudo apt update && sudo apt install proton-cli
-```
-
-### Install on Fedora, RHEL, Alpine
-
-`.rpm` and `.apk` packages are attached to each [release](https://github.com/roman-16/proton-cli/releases/latest). Download the one for your platform and install it directly:
-
-```bash
-sudo dnf install ./proton-cli_*.rpm            # Fedora / RHEL
-sudo apk add --allow-untrusted ./proton-cli_*.apk   # Alpine
-```
-
-### Install with Nix
-
-Available in [nixpkgs](https://search.nixos.org/packages?query=proton-cli) as the `proton-cli` package.
-
-### Install with Nix flake
-
-```nix
-inputs = {
-  proton-cli = {
-    url = "github:roman-16/proton-cli";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
-};
-
-# in a NixOS module
-environment.systemPackages = [
-  proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
-];
-```
-
-### Install on Windows (winget)
-
-```powershell
-winget install Roman-16.ProtonCLI
-```
-
-### Install with Homebrew (macOS)
-
-```bash
-brew install --cask roman-16/tap/proton-cli
-```
-
-### Install with npm
-
-```bash
-npm install -g @roman-16/proton-cli
-```
-
-### Install with Go
-
-```bash
-go install github.com/roman-16/proton-cli@latest
-```
-
-> **Note:** `go install` builds do **not** embed the CAPTCHA helper that release binaries include. If Proton demands human verification at login, install a release binary instead. See [Human verification](#human-verification-captcha).
-
-### Download a binary
-
-Grab the latest binary for your platform from [**GitHub Releases**](https://github.com/roman-16/proton-cli/releases/latest).
-
-| Platform | Binary |
-|---|---|
-| Linux (x86_64) | `proton-cli_linux_amd64` |
-| Linux (ARM64) | `proton-cli_linux_arm64` |
-| macOS (Apple Silicon) | `proton-cli_darwin_arm64` |
-| macOS (Intel) | `proton-cli_darwin_amd64` |
-| Windows (x86_64) | `proton-cli_windows_amd64.exe` |
-
-**Linux / macOS:**
-
-```bash
-curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64
-chmod +x proton-cli_linux_amd64
-sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
-```
-
-**Windows:** download the `.exe` from the [releases page](https://github.com/roman-16/proton-cli/releases/latest) and add it to your PATH.
-
-### Build from source
-
-```bash
-git clone https://github.com/roman-16/proton-cli.git
-cd proton-cli
-go build .
-```
-
-## Updating
-
-If you installed with the curl script or a downloaded binary, update in place:
-
-```bash
-proton-cli update           # update to the latest release
-proton-cli update --check   # report whether an update is available
-proton-cli update <version> # install a specific version
-```
-
-## Uninstalling
-
-If you installed with the curl/PowerShell script or a downloaded binary, remove it in place:
-
-```bash
-proton-cli uninstall                 # preview what would be removed
-proton-cli uninstall --yes           # remove the binary
-proton-cli uninstall --yes --purge   # also delete saved sessions and the ID cache
-```
-
-## Quick start
-
-### 1. Set your credentials
-
-```bash
-export PROTON_USER=alice@proton.me
-export PROTON_PASSWORD=your-password
-# export PROTON_TOTP=123456   # if 2FA is enabled
-```
-
-The session is saved to `~/.config/proton-cli/sessions/<profile>.json` after the first login and reused automatically.
-
-### 2. Try it
+Then use it:
 
 ```bash
 proton-cli mail messages list
-proton-cli drive items list
-proton-cli --help          # every command and subcommand accepts --help
-proton-cli --version
 ```
 
-## Core concepts
+That's the whole setup. The session is saved after the first login, so later commands don't ask again, and every command documents itself with `--help`. Juggling a personal and a work account? Add `--profile work`. More in [Configuration](docs/configuration.md).
 
-These apply across every command.
+## What you can do
 
-- **REF** - anywhere you see `REF`, pass either a full Proton ID or a search term (subject / name / URL / title, depending on the command). Ambiguous matches print candidates to stderr and exit `4`.
-- **Short IDs** - in an interactive terminal, list commands shorten Proton IDs to 8 characters. proton-cli caches the IDs you have seen at `~/.config/proton-cli/idcache/<profile>.json`, so you can paste an 8-char prefix into any command that takes an ID. Pipes, redirection, and `--output json|yaml` always emit full IDs. Pass `--full-ids` to disable shortening. See [Short IDs](#short-ids) below.
-- **Output** - `--output text|json|yaml` (default `text`). JSON/YAML use `snake_case` keys.
-- **Exit codes** - `0` success · `1` user error · `2` auth · `3` not-found · `4` conflict / ambiguous · `5` network / server · `130` cancelled.
-- **Create = ID on stdout** - creating commands print the new ID to stdout and `✓ …` to stderr, so `ID=$(proton-cli ... create ...)` works. `mail messages send` follows suit: it prints the message ID, and scheduled sends confirm the resolved local time.
-- **Streaming I/O** - `-` means stdin (inputs) or stdout (outputs), e.g. `mail messages send --body -`, `drive items upload - /path`, `drive items download /path --output -`.
-- **Dry run** - `--dry-run` on any mutating command previews without applying.
-- **Cancellation** - `Ctrl+C` aborts in-flight operations.
+Anywhere a command wants an ID, a subject, name, or URL works too, and lists shorten IDs to 8 characters you can paste straight back. See [Concepts](docs/concepts.md).
 
-### Short IDs
-
-```
-$ proton-cli mail messages list
-ID        FROM            SUBJECT          DATE              ⚑
-────────  ──────────────  ───────────────  ────────────────  ─
-NWM5AYGx  alice@a.com     Hello            2026-04-15 14:32
-```
-
-The short prefix pastes straight back into any command:
-
-```
-$ proton-cli mail messages read NWM5AYGx
-Subject: Hello
-...
-```
-
-Pipes and `--output json|yaml` always emit full IDs:
-
-```
-$ proton-cli mail messages list --output json | jq -r '.messages[].id'
-NWM5AYGx_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A5C-ADmohv7TjXfYbDEIHZPQ==
-```
-
-If a prefix isn't in your local cache (e.g. copied from another machine), run the matching list command first or use the full ID. Ambiguous prefixes (two cached IDs share the first 8 chars) exit `4` with both candidates listed.
-
-## Configuration
-
-Credentials and connection settings resolve in this order: **a flag overrides the profile-scoped env var (`PROTON_<PROFILE>_X`), which overrides the plain env var (`PROTON_X`).** See [Profiles](#profiles-multi-account).
-
-### Environment variables
-
-| Variable | Description |
-|---|---|
-| `PROTON_USER` | Proton account email |
-| `PROTON_PASSWORD` | Account password (required for encrypted operations) |
-| `PROTON_TOTP` | TOTP code (if 2FA is enabled) |
-| `PROTON_API_URL` | API base URL (default: `https://mail.proton.me/api`) |
-| `PROTON_APP_VERSION` | App version header (default: `Other`) |
-
-### Profiles (multi-account)
-
-A profile is just a name. Each profile has its own session file (`~/.config/proton-cli/sessions/<profile>.json`) and its own set of profile-scoped environment variables. Select the active profile with the `--profile` flag or the `PROTON_PROFILE` environment variable (the flag wins; both fall back to `default`):
+### Mail
 
 ```bash
-proton-cli --profile work mail messages list
-# or make it the default for your shell session:
-export PROTON_PROFILE=work
-proton-cli mail messages list
-```
-
-For every setting, the active profile is consulted **scoped-first, then unscoped**: `PROTON_<PROFILE>_X` takes precedence over the plain `PROTON_X`. `<PROFILE>` is the profile name upper-cased, with any non-alphanumeric character replaced by `_` (so `work` becomes `WORK`, `my-work` becomes `MY_WORK`). This applies to every env-backed setting (`USER`, `PASSWORD`, `TOTP`, `API_URL`, `APP_VERSION`):
-
-```bash
-export PROTON_PROFILE=work
-export PROTON_WORK_USER=alice@company.com
-export PROTON_WORK_PASSWORD=work-password
-proton-cli mail messages list          # uses PROTON_WORK_*, falling back to PROTON_*
-```
-
-Only the per-profile session file is written to disk; all other wiring lives in flags and the environment.
-
-## Usage
-
-The examples below are representative, not exhaustive. Every command lists its full flags with `--help`, e.g. `proton-cli mail messages send --help`.
-
-| Area | Subcommands |
-|---|---|
-| `mail messages` | list, search, read, send, unschedule, trash, delete, move, mark, star, unstar |
-| `mail conversations` | list, search, read, trash, delete, move, mark, star, unstar, attachments |
-| `mail attachments` | list, download |
-| `mail labels` | list, create, update, delete |
-| `mail filters` | list, create, update, enable, disable, delete |
-| `mail addresses` | list |
-| `drive items` | list, info, upload, download, rename, move, copy, trash, delete, revisions |
-| `drive folders` | create |
-| `drive share` | status, link, unlink, add, remove |
-| `drive invitations` | list, accept, reject |
-| `drive trash` | list, restore, empty |
-| `drive photos` | list, upload, download, trash, delete, favorite, unfavorite, albums |
-| `calendar calendars` | list, create, rename, delete |
-| `calendar events` | list, get, create, update, respond, delete |
-| `contacts` | list, get, create, update, delete, pin-key, unpin-key, groups |
-| `pass items` | list, get, create, edit, trash, restore, delete |
-| `pass vaults` | list, create, rename, delete |
-| `pass alias` | options, create |
-| `settings` | get, mail, set |
-| `api` | any endpoint (GET / POST / PUT / DELETE) |
-
-<details>
-<summary><b>Mail</b></summary>
-
-```bash
-# Messages
-proton-cli mail messages list --folder inbox --unread
-proton-cli mail messages search --keyword "invoice"
-proton-cli mail messages search --from "amazon" --after 2026-01-01
-proton-cli mail messages read REF                       # body + attachments footer
-proton-cli mail messages read --format text|html|raw REF
-proton-cli mail messages read --body-only REF > body.txt
-proton-cli mail messages send --to a@ex.com --cc c@ex.com --subject Hi --body Hello
-proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --html
-proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --attach ./report.pdf
-proton-cli mail messages send --to to@ex.com --subject Hi --body "<b>Hi</b>" --html --attach-inline ./logo.png   # embed an image inline in the HTML body
-proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --send-at 2026-05-01T09:00   # local time; prints the message ID + confirms the schedule
-proton-cli mail messages list --folder scheduled          # queued scheduled sends
-proton-cli mail messages unschedule REF                   # cancel a scheduled send (moves it back to Drafts)
-proton-cli mail messages send --to to@ex.com --subject Hi --body Hi --expires 7d
-proton-cli mail messages send --to bob@gmail.com --subject Hi --body secret --eo-password hunter2   # password-protect for non-Proton recipients
-echo "body" | proton-cli mail messages send --to foo --subject bar --body -
-proton-cli mail messages trash REF...
-proton-cli mail messages delete REF...                  # permanent
-proton-cli mail messages move --dest archive REF...
-proton-cli mail messages mark read|unread REF
-proton-cli mail messages star REF
-proton-cli mail messages unstar REF
-
-# Batch filters (union with any explicit REFs)
+proton-cli mail messages list --unread
+proton-cli mail messages search --from billing@example.com --after 2026-01-01
+proton-cli mail messages read "Invoice #2291"
+proton-cli mail messages send --to alice@proton.me --subject Report \
+  --body "See attached." --attach ./report.pdf
+proton-cli mail messages send --to team@example.com --subject Standup \
+  --body "Same time tomorrow." --send-at 2026-05-01T09:00
 proton-cli mail messages trash --unread --older-than 30d
-proton-cli mail messages move --dest archive --from "newsletter@" --older-than 7d
-proton-cli mail messages delete --folder spam --all
-# Combine filters, --limit, --all: proton-cli mail messages trash --help
-
-# Conversations (full threads; same verbs as messages)
-proton-cli mail conversations list --folder sent --unread
-proton-cli mail conversations read CONV_ID              # full thread, chronological
-proton-cli mail conversations read --summary CONV_ID    # one line per message
-proton-cli mail conversations read --strip-quotes CONV_ID
-proton-cli mail conversations attachments list CONV_ID
-proton-cli mail conversations attachments download CONV_ID --all --output-dir ./atts/
-
-# Attachments
-proton-cli mail attachments list MESSAGE_ID
-proton-cli mail attachments download MESSAGE_ID ATT_ID --output ./file.pdf
-proton-cli mail attachments download MESSAGE_ID --all --output-dir ./atts/
-proton-cli mail attachments download MESSAGE_ID ATT_ID --output -   # stdout
-# --force, --include-inline, auto-suffix on collision: proton-cli mail attachments download --help
-
-# Labels and folders
-proton-cli mail labels list
-proton-cli mail labels create --name "Important" --color "#8080FF"
-proton-cli mail labels create --name "Projects" --folder --parent PARENT_LABEL_ID
-proton-cli mail labels update LABEL_ID --name "Renamed" --color "#DB60D6"
-proton-cli mail labels delete LABEL_ID
-
-# Filters (Sieve)
-proton-cli mail filters list
-proton-cli mail filters create --name "Archive invoices" \
-  --sieve 'require ["fileinto"]; if header :contains "Subject" "invoice" { fileinto "Archive"; }'
-proton-cli mail filters enable|disable FILTER_ID
-proton-cli mail filters delete FILTER_ID
-
-# Addresses
-proton-cli mail addresses list
 ```
 
-</details>
+Threads, attachments, labels, folders, and Sieve filters too. → [Mail](docs/commands/mail.md)
 
-<details>
-<summary><b>Drive</b></summary>
+### Drive
 
 ```bash
-# Items
 proton-cli drive items list /Documents
-proton-cli drive items info /Documents/report.pdf       # type, size, checksum, sharing
-proton-cli drive items upload ./report.pdf /Documents
-proton-cli drive items upload --recursive ./folder /Backup
-proton-cli drive items upload - /Notes/note.txt         # from stdin
-proton-cli drive items download /Documents/report.pdf --output ./report.pdf
-proton-cli drive items download /Documents/report.pdf --output-dir ./out/   # keep original name
-proton-cli drive items download /Photos/pic.jpg --output -       # to stdout
-proton-cli drive items rename /Documents/old.txt new.txt
-proton-cli drive items move /Documents/report.pdf /Archive
-proton-cli drive items copy /Documents/report.pdf /Archive
-proton-cli drive items trash /Documents/old.pdf         # to trash (reversible)
-proton-cli drive items delete /Documents/secret.txt     # permanent
-proton-cli drive items revisions list /Documents/report.pdf
-proton-cli drive items revisions restore /Documents/report.pdf REVISION_ID
-
-# Batch filters
-proton-cli drive items trash --pattern "*.tmp" --scope / --recursive
-proton-cli drive items delete --larger-than 100MB --scope /Backups --recursive   # permanent
-proton-cli drive items trash --older-than 90d --scope /Logs --recursive
-
-# Folders
-proton-cli drive folders create /Documents/NewFolder
-
-# Sharing - public links
-proton-cli drive share status /Documents/report.pdf     # who has access + public link
-proton-cli drive share link /Documents/report.pdf       # create/show the public link
-proton-cli drive share link /Documents/report.pdf --edit --expires 7d --password hunter2
-proton-cli drive share unlink /Documents/report.pdf
-
-# Sharing - members (invite Proton users)
-proton-cli drive share add /Documents/report.pdf bob@proton.me --edit
-proton-cli drive share remove /Documents/report.pdf bob@proton.me
-
-# Incoming share invitations
-proton-cli drive invitations list
-proton-cli drive invitations accept|reject INVITATION_ID
-
-# Trash
-proton-cli drive trash list
-proton-cli drive trash restore LINK_ID...
-proton-cli drive trash empty                            # across all volumes
-
-# Photos
-proton-cli drive photos list
-proton-cli drive photos list --tags favorites           # filter by tag (favorites, screenshots, videos, …)
-proton-cli drive photos upload ./IMG_0001.jpg
-proton-cli drive photos download PHOTO_LINK_ID --output-dir ./pics/
-proton-cli drive photos trash PHOTO_LINK_ID...          # to trash (reversible)
-proton-cli drive photos delete PHOTO_LINK_ID...         # permanent
-proton-cli drive photos favorite PHOTO_LINK_ID...       # mark as favorite (album-only photos are copied to your timeline)
-proton-cli drive photos unfavorite PHOTO_LINK_ID...     # remove from favorites
-proton-cli drive photos albums list
-proton-cli drive photos albums create --name "Holiday"
-proton-cli drive photos albums add ALBUM_LINK_ID PHOTO_LINK_ID...
-proton-cli drive photos albums items ALBUM_LINK_ID
+proton-cli drive items upload --recursive ./project /Backup
+proton-cli drive items download /Documents/report.pdf --output-dir .
+proton-cli drive share link /Documents/report.pdf --expires 7d --password hunter2
+proton-cli drive items trash --pattern "*.tmp" --scope /Build --recursive
 ```
 
-</details>
+Plus revisions, sharing with people, trash, and photo albums. → [Drive](docs/commands/drive.md)
 
-<details>
-<summary><b>Calendar</b></summary>
+### Calendar
 
 ```bash
-# Calendars
-proton-cli calendar calendars list
-proton-cli calendar calendars create --name "Work" --color "#8080FF"
-proton-cli calendar calendars rename CALENDAR_ID --name "Personal" --color "#DB60D6"
-proton-cli calendar calendars delete CALENDAR_ID        # requires PROTON_PASSWORD
-
-# Events
-proton-cli calendar events list --calendar "Work" --start 2026-04-15 --end 2026-04-20
-proton-cli calendar events get CALENDAR_ID EVENT_ID
-proton-cli calendar events get "Meeting"                # search by title
-proton-cli calendar events create \
-  --title "Meeting" --location "Vienna" --description "Quarterly sync" \
-  --start "2026-04-16T14:00" --duration 1h
-proton-cli calendar events create --title "Standup" --start 2026-04-16T09:00 \
-  --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h        # recurrence + reminders
-proton-cli calendar events create --title "Review" --start 2026-04-16T14:00 \
-  --attendee alice@proton.me --attendee bob@example.com         # externals get an emailed invite
-proton-cli calendar events update CALENDAR_ID EVENT_ID --title "Updated"
-proton-cli calendar events respond CALENDAR_ID EVENT_ID --status accept    # reply to an invitation (accept|tentative|decline)
-proton-cli calendar events respond "Meeting" --status decline              # by title; emails the organizer a REPLY
-proton-cli calendar events delete CALENDAR_ID EVENT_ID
+proton-cli calendar events list --start 2026-04-15 --end 2026-04-30
+proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
+proton-cli calendar events create --title Standup --start 2026-04-16T09:00 \
+  --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m
+proton-cli calendar events respond "Team sync" --status accept
 ```
 
-</details>
+→ [Calendar](docs/commands/calendar.md)
 
-<details>
-<summary><b>Contacts</b></summary>
+### Pass
+
+```bash
+proton-cli pass items list --vault Work
+proton-cli pass items get github.com
+proton-cli pass items create --name GitHub --username roman \
+  --password "$(openssl rand -base64 24)" --url github.com
+proton-cli pass alias create --prefix shop --mailbox me@proton.me
+```
+
+Logins, notes, cards, Wi-Fi, SSH keys, identities, custom items. → [Pass](docs/commands/pass.md)
+
+### Contacts
 
 ```bash
 proton-cli contacts list
-proton-cli contacts get REF                             # ID or search
-proton-cli contacts create --name "John Doe" --email john@example.com --phone "+1234567890"
-proton-cli contacts create --name "Jane" --email a@ex.com --email b@ex.com \
-  --title "CTO" --birthday 1990-01-01 --address "Vienna" --url https://jane.example
-proton-cli contacts update --email "new@example.com" REF
-proton-cli contacts delete REF
-
-# Pinned keys - encrypt mail to a specific PGP key you trust for a contact
-proton-cli contacts pin-key REF --key bob-pubkey.asc            # pin & auto-encrypt to it
-proton-cli contacts pin-key REF --email bob@ex.com --key -      # armored key from stdin; pick which email
-proton-cli contacts unpin-key REF
-
-# Contact groups
-proton-cli contacts groups list
-proton-cli contacts groups create --name "Team" --color "#8080FF"
-proton-cli contacts groups add GROUP_ID REF...
-proton-cli contacts groups remove GROUP_ID REF...
-proton-cli contacts groups delete GROUP_ID
+proton-cli contacts create --name "Jane Roe" --email jane@example.com
+proton-cli contacts pin-key jane --key jane-pubkey.asc
+proton-cli contacts groups add GROUP_ID jane
 ```
 
-</details>
+→ [Contacts](docs/commands/contacts.md)
 
-<details>
-<summary><b>Pass</b></summary>
+Account and mail [settings](docs/commands/settings.md) are covered as well, and [`proton-cli api`](docs/commands/api.md) reaches any endpoint the commands don't.
+
+## Automate it
 
 ```bash
-# Items
-proton-cli pass items list --vault "Work"
-proton-cli pass items get SHARE_ID ITEM_ID
-proton-cli pass items get "github.com"                  # search
-proton-cli pass items create --type login --name "GitHub" --username me --password secret \
-  --url github.com --totp "otpauth://..."
-proton-cli pass items create --type note --name "My Note" --note "Some text"
-proton-cli pass items create --type credit-card --name "Visa" --holder "Roman" --number "4111..." --expiry "2028-12"
-proton-cli pass items create --type wifi --name "Home" --ssid MyNet --password pw --security WPA2
-proton-cli pass items create --type ssh-key --name "laptop" --public-key "ssh-ed25519 ..." \
-  --private-key "$(cat id_ed25519)"
-proton-cli pass items create --type identity --name "Me" --full-name "Jane Roe" --email jane@ex.com
-proton-cli pass items create --type custom --name "Server" --field "Host=1.2.3.4" --hidden "Root PW=secret"
-proton-cli pass items create --type login --name X --field "Recovery=abc"   # custom fields on any type
-proton-cli pass items edit REF --password "new-secret"
-proton-cli pass items trash REF
-proton-cli pass items restore REF
-proton-cli pass items delete REF
+# creating something prints its new ID to stdout
+ID=$(proton-cli mail labels create --name Work --color "#8080FF")
 
-# Batch filters
-proton-cli pass items trash --vault "Old" --type login
-proton-cli pass items trash --older-than 1y --type login
-proton-cli pass items delete --vault "Temporary" --all
+# JSON for the machines, always with full IDs
+proton-cli mail messages list --unread --output json | jq -r '.messages[].subject'
 
-# Vaults
-proton-cli pass vaults list
-proton-cli pass vaults create --name "Work"
-proton-cli pass vaults rename SHARE_ID --name "Personal"
-proton-cli pass vaults delete SHARE_ID
+# stream through, no temporary files
+pg_dump mydb | gzip | proton-cli drive items upload - /Backups/db.sql.gz
 
-# Aliases
-proton-cli pass alias options
-proton-cli pass alias create --prefix my-alias --mailbox my-mailbox@proton.me
+# check what a bulk change would touch before it happens
+proton-cli mail messages trash --from newsletter@example.com --older-than 90d --dry-run
 ```
 
-</details>
+Data goes to stdout and progress to stderr, so redirects stay clean. Exit codes tell user error, auth failure, not-found, ambiguity, and network trouble apart, so scripts can react to each. → [Scripting](docs/scripting.md)
 
-<details>
-<summary><b>Settings</b></summary>
+## Encryption you can verify
 
-```bash
-proton-cli settings get                     # account settings
-proton-cli settings mail                    # mail settings
-proton-cli settings set                     # list the writable mail-setting keys
-proton-cli settings set view-mode 1         # 0=conversations, 1=messages
-proton-cli settings set draft-type text/html
-proton-cli settings set hide-remote-images 1
-```
+Your password never reaches Proton: login is SRP, and the key password it derives stays local and unlocks your PGP keys in memory. Mail, files, events, contacts, and Pass items are decrypted after they arrive and encrypted before they leave, with the same key hierarchy the web clients use. Signatures on incoming mail are checked and reported.
 
-</details>
+The saved session keeps your key password encrypted with a key held server-side, so revoking the session from any Proton app makes a leaked copy of the file useless. proton-cli is unaudited, and the whole storage model is written down in [Security](SECURITY.md). The mechanics are in [How it works](docs/how-it-works.md).
 
-<details>
-<summary><b>Raw API</b></summary>
+## Documentation
 
-For any endpoint not covered by a high-level command:
+Everything lives in [`docs/`](docs/README.md):
 
-```bash
-proton-cli api GET /drive/volumes
-proton-cli api POST /calendar/v1 --body '{"Name":"Work",...}'
-proton-cli api GET /mail/v4/messages --query Page=0 --query PageSize=10
-proton-cli api GET /calendar/v1 --output json | jq '.Calendars[].ID'
-```
+| | |
+| --- | --- |
+| [Installation](docs/installation.md) | Every platform, updating, uninstalling |
+| [Configuration](docs/configuration.md) | Credentials, profiles, environment variables |
+| [Concepts](docs/concepts.md) | References, short IDs, output, exit codes, dry runs |
+| **Command reference** | [Mail](docs/commands/mail.md) · [Drive](docs/commands/drive.md) · [Calendar](docs/commands/calendar.md) · [Pass](docs/commands/pass.md) · [Contacts](docs/commands/contacts.md) · [Settings](docs/commands/settings.md) · [API](docs/commands/api.md) |
+| [Scripting](docs/scripting.md) | Pipelines, `jq`, cron and systemd |
+| [How it works](docs/how-it-works.md) | Login, keys, what's encrypted with what |
+| [Limitations](docs/limitations.md) | Platform constraints and gaps |
 
-See [API reference](#api-reference) for the full endpoint spec.
+## Good to know
 
-</details>
+- **Search lags a few seconds.** Proton's index is eventually consistent, so act on the ID a command printed rather than searching for the same subject again.
+- **CAPTCHAs need a desktop.** Proton occasionally asks for human verification at login, which opens a small window. On a headless machine, log in elsewhere and copy the session. See [Human verification](docs/human-verification.md).
+- **Colors are Proton's.** Labels, folders, calendars, and groups accept only the 20 accent colors; an invalid `--color` prints the valid ones.
 
-## Scripting
+## Contributing
 
-proton-cli is built to compose in shell pipelines.
+Bug reports, ideas, and pull requests are all welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the setup, and [`SECURITY.md`](SECURITY.md) has the private channel for security issues.
 
-```bash
-# stdout is the new ID on create - capture it directly
-LABEL=$(proton-cli mail labels create --name Work --color "#8080FF")
+## Disclaimer
 
-# JSON + jq for full IDs and fields
-proton-cli mail messages list --output json | jq -r '.messages[].id'
-
-# exit codes drive control flow (0 ok · 3 not-found · 4 ambiguous)
-if ! proton-cli contacts get "jane"; then
-  echo "no unique match (exit $?)"
-fi
-
-# streaming: pipe a Drive file straight into another tool
-proton-cli drive items download /report.pdf --output - | gpg --encrypt --recipient me ...
-
-# preview any mutation first
-proton-cli mail messages trash --unread --older-than 30d --dry-run
-```
-
-## How it works
-
-1. **Session creation** - creates an unauthenticated session via `POST /auth/v4/sessions`.
-2. **SRP authentication** - Secure Remote Password login with [go-srp](https://github.com/ProtonMail/go-srp), with 2FA/TOTP support.
-3. **Session persistence** - per profile, saves the auth tokens plus the salted key password **encrypted** with a random client key held server-side. The key password is never written to disk in cleartext, and revoking the session makes the saved blob undecryptable. See [Security](#security).
-4. **Key hierarchy** - unlocks User key → Address keys → per-service keys (Calendar, Drive, Contacts).
-5. **End-to-end encryption** - encrypts/decrypts using [gopenpgp](https://github.com/ProtonMail/gopenpgp).
-6. **Auto-refresh** - refreshes expired tokens automatically.
-
-### Encryption details
-
-| Service | Encrypt with | Sign with |
-|---|---|---|
-| Calendar events | Calendar key (session key) | Address key |
-| Drive files | Node key (session key per block) | Address key |
-| Drive names | Parent node key | Address key |
-| Contacts | User key | User key |
-| Mail | Session key | Address key |
-| Pass items | AES-256-GCM (item key) | N/A (symmetric) |
-| Pass vaults | AES-256-GCM (vault key) | N/A (symmetric) |
-
-## Human verification (CAPTCHA)
-
-Proton's anti-bot may demand a CAPTCHA at login. proton-cli opens a small webview window via an embedded helper, you solve it, and the original command retries automatically. No extra install is needed - the helper is `//go:embed`-ded into release binaries.
-
-- **Linux desktop** needs `libwebkit2gtk-4.1` and `libgtk-3` installed.
-- **macOS / Windows** need nothing (system WebKit / WebView2).
-- **Headless** environments (server, container, no GUI) can't display the webview, so proton-cli exits with an error - run the command on a desktop machine instead.
-- **`go install` builds** don't embed the helper. Install a [release binary](#install) if you hit a CAPTCHA.
-
-## Security
-
-proton-cli saves a per-profile session file at `~/.config/proton-cli/sessions/<profile>.json` (mode `0600`). The salted key password that unlocks your PGP keys is stored **encrypted** with a random 256-bit client key that lives server-side, so:
-
-- the key password is never written to disk in cleartext, and
-- revoking the session (from the Proton apps) makes a leaked copy of the file undecryptable.
-
-The file still contains the session refresh token, so treat it as a secret. proton-cli is unaudited; see [`SECURITY.md`](SECURITY.md) for the full storage model, the vulnerability-reporting process, and hardening recommendations.
-
-## Limitations
-
-A few constraints are inherent to Proton's design or platform:
-
-- **Colors** - labels, folders, calendars, and contact groups accept only Proton's 20 fixed accent colors; the CLI validates `--color` and lists the allowed values on error.
-- **Calendar deletion** - `calendar calendars delete` is password-scoped and needs `PROTON_PASSWORD`.
-- **Search lag** - `search` and `list` read Proton's eventually-consistent server-side index; a just-sent or just-deleted message can take a few seconds to appear or disappear. Confirm a mutation by ID with `read` rather than re-searching a subject.
-- **CAPTCHA** - can't be solved headlessly, and `go install` builds don't embed the helper (see [Human verification](#human-verification-captcha)).
-
-See [`docs/limitations.md`](docs/limitations.md) for the full list, including features not yet implemented.
-
-## Development
-
-Requires [devbox](https://www.jetify.com/devbox) and [direnv](https://direnv.net/):
-
-```bash
-direnv allow
-go build .        # quick build
-just lint         # gofmt + golangci-lint
-just build        # release-shaped binary (embeds the CAPTCHA helper)
-```
-
-Tests are integration tests that run against the live Proton API and require `PROTON_USER` / `PROTON_PASSWORD`.
-
-## API reference
-
-See [`openapi.yaml`](openapi.yaml) for the complete API spec covering ~740 endpoints. To regenerate from the latest Proton source:
-
-```bash
-cd scripts && bun install && bun run generate-openapi
-```
-
-See [`scripts/README.md`](scripts/README.md) for details on the generator.
+proton-cli is an independent, community-built project. It is not endorsed by, affiliated with, or supported by Proton AG. Proton is a trademark of Proton AG. Use it at your own risk, and mind Proton's terms of service.
 
 ## License
 
-MIT
+[MIT](LICENSE)

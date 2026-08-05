@@ -91,7 +91,7 @@ func (s *Service) VaultCreate(ctx context.Context, u *keys.Unlocked, name string
 	if err != nil {
 		return "", err
 	}
-	_, addrID, _, err := u.PrimaryAddrKR()
+	_, addr, err := u.PrimaryAddr()
 	if err != nil {
 		return "", err
 	}
@@ -99,7 +99,7 @@ func (s *Service) VaultCreate(ctx context.Context, u *keys.Unlocked, name string
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "POST", Path: "/pass/v1/vault",
 		Body: map[string]any{
-			"AddressID":            addrID,
+			"AddressID":            addr.ID,
 			"ContentFormatVersion": 1,
 			"Content":              base64.StdEncoding.EncodeToString(ct),
 			"EncryptedVaultKey":    encVaultKey,

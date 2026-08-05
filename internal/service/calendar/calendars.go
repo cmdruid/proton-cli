@@ -49,14 +49,14 @@ func (s *Service) CalendarsList(ctx context.Context) ([]Calendar, error) {
 }
 
 func (s *Service) CalendarCreate(ctx context.Context, u *keys.Unlocked, name, color string) (string, error) {
-	addrKR, addrID, _, err := u.PrimaryAddrKR()
+	addrKR, addr, err := u.PrimaryAddr()
 	if err != nil {
 		return "", err
 	}
 	var r struct{ Calendar struct{ ID string } }
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "POST", Path: "/calendar/v1",
-		Body: map[string]any{"Name": name, "Color": color, "Display": 1, "AddressID": addrID},
+		Body: map[string]any{"Name": name, "Color": color, "Display": 1, "AddressID": addr.ID},
 	}, &r); err != nil {
 		return "", err
 	}
@@ -70,7 +70,7 @@ func (s *Service) CalendarCreate(ctx context.Context, u *keys.Unlocked, name, co
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "POST", Path: "/calendar/v1/" + r.Calendar.ID + "/keys",
 		Body: map[string]any{
-			"AddressID":  addrID,
+			"AddressID":  addr.ID,
 			"PrivateKey": payload.PrivateKey,
 			"Passphrase": map[string]any{"DataPacket": payload.DataPacket, "KeyPacket": payload.KeyPacket},
 			"Signature":  payload.Signature,

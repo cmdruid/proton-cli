@@ -49,6 +49,54 @@
         }
       }
     },
+    "charm-freeze@latest": {
+      "last_modified": "2026-08-01T16:34:20Z",
+      "resolved": "github:NixOS/nixpkgs/a5cbcfe954791221bfffe2307f7d1a1bf61a871e#charm-freeze",
+      "source": "devbox-search",
+      "version": "0.2.2",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/9fcy0kb2z995n71nzy3vi7fnj1c00hhx-charm-freeze-0.2.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/9fcy0kb2z995n71nzy3vi7fnj1c00hhx-charm-freeze-0.2.2"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/sj0shixr64ps7m9m06lrrflbibr99s7z-charm-freeze-0.2.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/sj0shixr64ps7m9m06lrrflbibr99s7z-charm-freeze-0.2.2"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/c0x13sn714v2mp5mnzbp88lgh01aw8w1-charm-freeze-0.2.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/c0x13sn714v2mp5mnzbp88lgh01aw8w1-charm-freeze-0.2.2"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/dknk9kispdd4rk62fimvpyl30y6zsa2h-charm-freeze-0.2.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/dknk9kispdd4rk62fimvpyl30y6zsa2h-charm-freeze-0.2.2"
+        }
+      }
+    },
     "gcc@latest": {
       "last_modified": "2026-07-23T05:10:05Z",
       "resolved": "github:NixOS/nixpkgs/7525d999cd850b9a488817abc89c75dc733acf17#gcc16",

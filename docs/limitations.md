@@ -1,35 +1,37 @@
 # Limitations
 
-proton-cli aims for broad parity with the Proton web clients. The items below
-fall into two groups: constraints that are **inherent** to Proton's design or
-platform, and a short list of features **not yet implemented**.
+proton-cli aims for parity with what the Proton web clients let you do. Some things it will never do, because Proton's platform doesn't allow it; others simply aren't built yet.
 
-## Inherent constraints
+## Platform constraints
 
-### Colors are restricted to Proton's accent palette
+### Colors come from a fixed palette
 
-Labels, folders, calendars and contact groups accept only Proton's 20 fixed
-accent colors. The CLI validates `--color` and prints the allowed hex values on
-error; arbitrary colors are rejected by the API.
+Labels, folders, calendars, and contact groups accept only Proton's 20 accent colors. `--color` is validated locally and prints the allowed values on error, because the API rejects anything else.
 
-### `search` and `list` are eventually consistent
+### Search and list are eventually consistent
 
-`search` and `list` read Proton's server-side index, not local state, and that index lags a few seconds behind a mutation: a message you just sent may not appear yet, and one you just deleted or unscheduled may still show up briefly. This is a property of Proton's backend - the same lag exists in the web client - so there is nothing for the CLI to cache or invalidate.
+`search` and `list` read Proton's server-side index rather than local state, and that index lags a few seconds behind a change. A message you just sent might not appear yet; one you just deleted or unscheduled might still show up. The web client behaves the same way, so there's nothing for the CLI to cache or invalidate.
 
-To verify a mutation reliably, act on the message ID (which `send` and the create commands print on stdout) with `read`, rather than re-running `search` on a subject.
+To confirm a change, act on the ID the command printed with `read`, instead of searching for the subject again.
 
-### Calendar deletion requires your password
+### Deleting a calendar needs your password
 
-`calendar calendars delete` performs a password-scoped operation, so it needs
-`PROTON_PASSWORD` to be set even when you authenticated with a stored session.
+`calendar calendars delete` is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a saved session exists.
 
-### CAPTCHA cannot be solved headlessly
+### CAPTCHAs need a display
 
-Proton may require human verification (CAPTCHA) at login. Release binaries embed
-a small webview helper to solve it, but:
+Proton may ask for human verification at login. Release binaries embed a webview helper for it, but a headless machine has nowhere to draw it, and `go install` builds don't include the helper at all. See [Human verification](human-verification.md) for the workaround.
 
-- a headless environment (server, container, no GUI) can't display it, and
-- `go install` builds don't include the helper at all.
+## Not implemented yet
 
-See [Human Verification](../README.md#human-verification-captcha). Run the
-command on a desktop machine, or install a release binary, to get past a CAPTCHA.
+- **Mail**: no reply or forward, no draft editing, no auto-responder, no signature management, no import or export.
+- **Calendar**: no calendar sharing, no subscribed (ICS) calendars, no import or export.
+- **Contacts**: no vCard import or export.
+- **Pass**: no item or vault sharing, no secure links, no password history.
+- **Account**: no plan, billing, or user management.
+
+## Out of scope
+
+proton-cli mirrors the Proton web clients for Mail, Drive, Calendar, Pass, and Contacts. Other Proton products (VPN, Wallet, Docs, Meet, Lumo, Authenticator) are not covered, and neither are endpoints that exist in the API but have no equivalent action in a web client.
+
+For anything the commands don't reach, [`proton-cli api`](commands/api.md) sends raw authenticated requests to any endpoint.

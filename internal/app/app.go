@@ -69,6 +69,7 @@ type Options struct {
 	Quiet      bool
 	DryRun     bool
 	FullIDs    bool
+	NoColor    bool
 }
 
 func New(opts Options) (*App, error) {
@@ -81,7 +82,12 @@ func New(opts Options) (*App, error) {
 	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"))
 	userAgent := defaultUserAgent(opts.Version)
 
-	r := render.New(opts.Output, os.Stdout, os.Stderr, opts.LogLevel, opts.Quiet)
+	r := render.New(render.Options{
+		Format:   opts.Output,
+		LogLevel: opts.LogLevel,
+		Quiet:    opts.Quiet,
+		NoColor:  opts.NoColor,
+	})
 	c := proton.New(proton.Options{
 		AppVersion: appVer, BaseURL: apiURL, Logger: r.Log, Profile: profileName, UserAgent: userAgent,
 	})
