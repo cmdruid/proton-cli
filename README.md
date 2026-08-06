@@ -19,6 +19,7 @@ _Unofficial, community-built, not affiliated with Proton AG._
 </picture>
 
 </div>
+<br />
 
 Read your mail, move files in and out of Drive, manage calendars, passwords, and contacts, all without opening a browser. proton-cli logs in the way the Proton apps do and does the encryption on your machine, so your keys stay yours.
 
