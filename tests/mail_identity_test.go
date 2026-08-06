@@ -49,7 +49,7 @@ func TestMailSettingsAddressesUpdateRequiresAField(t *testing.T) {
 	if code == 0 {
 		t.Error("an update with nothing to change should fail")
 	}
-	assertContains(t, stderr, "nothing to update")
+	assertContains(t, stderr, "Nothing to change")
 }
 
 func restoreSignature(t *testing.T, addrID, original string) {
@@ -117,7 +117,7 @@ func TestMailSettingsAutoreply(t *testing.T) {
 	}
 
 	// The status shows up on the settings overview too.
-	assertContains(t, runOK(t, "mail", "settings"), "Auto-reply:")
+	assertContains(t, runOK(t, "mail", "settings", "get"), "Auto-reply:")
 }
 
 func TestMailSettingsAutoreplyRejectsMismatchedSchedules(t *testing.T) {

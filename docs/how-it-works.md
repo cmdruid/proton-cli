@@ -40,7 +40,7 @@ Unlocking happens lazily: commands that only list metadata never touch your keys
 | Pass items | AES-256-GCM item key | symmetric, no signature |
 | Pass vaults | AES-256-GCM vault key | symmetric, no signature |
 
-Reading works the other way around: content arrives encrypted, gets decrypted locally, and signatures are verified against the sender's key. `mail messages read` reports the verdict on a `Sig:` line.
+Reading works the other way around: content arrives encrypted, gets decrypted locally, and signatures are verified against the sender's key. `mail messages get` reports the verdict on a `Sig:` line.
 
 ## What leaves your machine
 
@@ -53,3 +53,17 @@ What never leaves: your password, your key password, and your private keys.
 ## Where the API definitions come from
 
 The endpoint shapes are generated from Proton's own open-source [web client](https://github.com/ProtonMail/WebClients) into [`openapi.yaml`](../openapi.yaml), covering roughly 740 endpoints. A weekly workflow regenerates it, so the CLI tracks upstream changes rather than guessing.
+
+## Elevated operations
+
+Proton guards its most destructive endpoints behind an elevated session scope. A request that needs one and hasn't got it comes back refused, and the client is expected to prove a human is present: re-run SRP against a scope-granting endpoint, retry the request, then drop the scope again.
+
+proton-cli handles that in the transport layer, the way the web clients do, rather than in each command. So no command has to know which operations are guarded - it runs, the server asks, your password is requested once, the request is retried, and the elevation is dropped immediately afterwards.
+
+Both halves of SRP are verified, on the initial sign-in and on every elevation: the server has to prove it knows your verifier just as you prove you know your password.
+
+## Two-factor authentication
+
+A TOTP code is asked for only when the account actually has one enabled, so a code is never wasted on a guess.
+
+Security keys (FIDO2/WebAuthn) need a browser, so proton-cli cannot sign in with one.

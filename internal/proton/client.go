@@ -43,14 +43,15 @@ type Client struct {
 	ua   string
 	log  *slog.Logger
 
-	mu         sync.RWMutex
-	uid        string
-	acc        string
-	ref        string
-	encKeyBlob string // persisted (salted key password encrypted with the server-held client key)
-	profile    string
-	hvResolver HVResolver
-	persist    func()
+	mu            sync.RWMutex
+	uid           string
+	acc           string
+	ref           string
+	encKeyBlob    string // persisted (salted key password encrypted with the server-held client key)
+	profile       string
+	hvResolver    HVResolver
+	scopeResolver ScopeResolver
+	persist       func()
 }
 
 type Options struct {
@@ -152,6 +153,10 @@ type Request struct {
 	// Human-verification state (set by retry logic, not by most callers).
 	HVToken string
 	HVType  string
+
+	// elevated marks a request already retried after a scope elevation, so a
+	// second refusal cannot restart the cycle.
+	elevated bool
 }
 
 type Response struct {
@@ -198,6 +203,12 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 
 	if resp.Status >= 200 && resp.Status < 300 {
 		return resp, nil
+	}
+
+	// The server can refuse because the session is not elevated. Handling that
+	// here, once, is why no command has to know which operations are guarded.
+	if isMissingScope(resp.Status, resp.Body) {
+		return c.elevateAndRetry(ctx, req, resp)
 	}
 
 	hvErr, apiErr := classifyErrorBody(resp.Status, resp.Body)

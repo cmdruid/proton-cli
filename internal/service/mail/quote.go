@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/render"
+	"github.com/roman-16/proton-cli/internal/mailtext"
 )
 
 // Replying and forwarding derive a new Content from the message being answered:
@@ -13,7 +13,7 @@ import (
 // parent's body is quoted below the new text.
 //
 // The markers below are the ones the web client writes and the ones
-// render.StripHTMLQuotes / render.StripPlaintextQuotes look for, so a quote
+// mailtext.StripHTMLQuotes / mailtext.StripPlaintextQuotes look for, so a quote
 // proton-cli produces is one proton-cli's own --strip-quotes removes.
 
 const (
@@ -175,7 +175,7 @@ func quoteBlock(action int, p replyContext, asHTML bool) string {
 	if asHTML {
 		body := p.Body
 		if !p.HTML {
-			body = render.TextToHTML(body)
+			body = mailtext.TextToHTML(body)
 		}
 		return fmt.Sprintf(
 			"<div class=%q>%s<br><blockquote class=%q type=\"cite\">%s</blockquote><br></div>",
@@ -183,7 +183,7 @@ func quoteBlock(action int, p replyContext, asHTML bool) string {
 	}
 	body := p.Body
 	if p.HTML {
-		body = render.HTMLToText(body)
+		body = mailtext.HTMLToText(body)
 	}
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	for i, line := range lines {

@@ -9,7 +9,7 @@ Your Drive as paths. Files are encrypted before they leave your machine and decr
 ```bash
 proton-cli drive items list                       # root
 proton-cli drive items list /Documents
-proton-cli drive items info /Documents/report.pdf # type, size, checksum, sharing state
+proton-cli drive items get /Documents/report.pdf  # type, size, checksum, sharing state
 ```
 
 ### Upload
@@ -35,9 +35,9 @@ proton-cli drive items download /Documents/report.pdf --output ./report.pdf --fo
 ### Move, rename, copy
 
 ```bash
-proton-cli drive items rename /Documents/old.txt new.txt
-proton-cli drive items move /Documents/report.pdf /Archive
-proton-cli drive items copy /Documents/report.pdf /Archive
+proton-cli drive items update /Documents/old.txt --name new.txt
+proton-cli drive items move /Documents/report.pdf --into /Archive
+proton-cli drive items copy /Documents/report.pdf --into /Archive
 ```
 
 ### Trash and delete
@@ -56,7 +56,7 @@ proton-cli drive items delete --larger-than 100MB --scope /Downloads --recursive
 proton-cli drive items delete --scope /Temp --recursive --all
 ```
 
-Filters: `--pattern` (glob), `--larger-than`, `--older-than`, `--newer-than`, `--scope`, `--recursive`, `--all`. Always try them with `--dry-run` first.
+Filters: `--pattern` (glob), `--larger-than`, `--smaller-than`, `--older-than`, `--newer-than`, `--scope`, `--recursive`, `--all`. `move` and `copy` take them too. Always try them with `--dry-run` first.
 
 ### Revisions
 
@@ -76,8 +76,8 @@ proton-cli drive folders create /Documents/Invoices
 ### Public links
 
 ```bash
-proton-cli drive share status /Documents/report.pdf   # who has access, plus the link
-proton-cli drive share link /Documents/report.pdf     # create or show the link
+proton-cli drive share get /Documents/report.pdf   # who has access, plus the link
+proton-cli drive share link /Documents/report.pdf  # create or show the link
 proton-cli drive share link /Documents/report.pdf --expires 7d --password hunter2
 proton-cli drive share link /Documents/project --edit
 proton-cli drive share unlink /Documents/report.pdf
@@ -96,7 +96,7 @@ proton-cli drive share remove /Documents/report.pdf bob@proton.me
 ```bash
 proton-cli drive invitations list
 proton-cli drive invitations accept INVITATION_ID
-proton-cli drive invitations reject INVITATION_ID
+proton-cli drive invitations decline INVITATION_ID
 ```
 
 ## Trash
@@ -111,7 +111,7 @@ proton-cli drive trash empty        # permanent, across all volumes
 
 ```bash
 proton-cli drive photos list
-proton-cli drive photos list --tags favorites
+proton-cli drive photos list --tag favorites
 proton-cli drive photos upload ./IMG_0001.jpg
 proton-cli drive photos download LINK_ID --output-dir ./photos/
 proton-cli drive photos trash LINK_ID...       # reversible
@@ -127,7 +127,7 @@ Tags: `favorites`, `screenshots`, `videos`, `live-photos`, `motion-photos`, `sel
 ```bash
 proton-cli drive photos albums list
 proton-cli drive photos albums create --name Holiday
-proton-cli drive photos albums items ALBUM_LINK_ID
+proton-cli drive photos list --album ALBUM_LINK_ID
 proton-cli drive photos albums add ALBUM_LINK_ID PHOTO_LINK_ID...
 proton-cli drive photos albums remove ALBUM_LINK_ID PHOTO_LINK_ID...
 proton-cli drive photos albums delete ALBUM_LINK_ID

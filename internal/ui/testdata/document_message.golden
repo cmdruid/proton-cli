@@ -1,0 +1,15 @@
+== stdout ==
+Subject:    Invoice #2291 is ready
+From:       Fastmail Billing <billing@fastmail.com>
+To:         me@proton.me
+Date:       2026-04-15 14:32
+Signature:  verified
+ID:         5bH2mQxK
+
+Hi Roman, your invoice is attached.
+
+Attachments
+ID        NAME                 SIZE
+────────  ────────────────  ───────
+kQ81mDx4  invoice-2291.pdf  84.2 KB
+== stderr ==

@@ -50,7 +50,7 @@ func TestDriveItemsInfo(t *testing.T) {
 		"drive", "items", "delete", folder)
 	runOK(t, "drive", "items", "upload", src, folder)
 
-	info := runJSON(t, "drive", "items", "info", folder+"/doc.txt")
+	info := runJSON(t, "drive", "items", "get", folder+"/doc.txt")
 	if info["type"] != "file" {
 		t.Errorf("type = %v, want file", info["type"])
 	}
@@ -68,7 +68,7 @@ func TestDriveItemsInfo(t *testing.T) {
 	}
 
 	// Text mode renders the key/value block.
-	text := runOK(t, "drive", "items", "info", folder+"/doc.txt")
+	text := runOK(t, "drive", "items", "get", folder+"/doc.txt")
 	assertContains(t, text, "type:")
 	assertContains(t, text, "size:")
 }
@@ -79,7 +79,7 @@ func TestDriveItemsInfoFolder(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	info := runJSON(t, "drive", "items", "info", folder)
+	info := runJSON(t, "drive", "items", "get", folder)
 	if info["type"] != "folder" {
 		t.Errorf("type = %v, want folder", info["type"])
 	}
@@ -467,7 +467,7 @@ func TestDriveBatchDeletePatternDryRun(t *testing.T) {
 
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "items", "delete",
 		"--pattern", "*.log", "--scope", folder, "--recursive")
-	assertContains(t, stderr, "would permanently delete 2 item(s)")
+	assertContains(t, stderr, "would delete 2 items")
 	assertContains(t, stderr, "a.log")
 	assertContains(t, stderr, "b.log")
 	assertNotContains(t, stderr, "keep.txt")
@@ -478,7 +478,7 @@ func TestDriveBatchDeleteRequiresInput(t *testing.T) {
 	if code == 0 {
 		t.Error("expected error when no PATH and no filter given")
 	}
-	assertContains(t, stderr, "no paths selected")
+	assertContains(t, stderr, "Nothing selected")
 }
 
 func TestDriveBatchDeleteAllRequiresScope(t *testing.T) {
@@ -486,7 +486,7 @@ func TestDriveBatchDeleteAllRequiresScope(t *testing.T) {
 	if code == 0 {
 		t.Error("expected --all alone to be rejected")
 	}
-	assertContains(t, stderr, "--all requires")
+	assertContains(t, stderr, "--all")
 }
 
 // ── folders ──
@@ -653,7 +653,7 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 	// Add the photo to the album (node-passphrase re-wrap), verify, remove.
 	runOK(t, "drive", "photos", "albums", "add", albumID, photoID)
 	found := false
-	for _, it := range runJSONArray(t, "drive", "photos", "albums", "items", albumID) {
+	for _, it := range runJSONArray(t, "drive", "photos", "list", "--album", albumID) {
 		if it.(map[string]interface{})["link_id"] == photoID {
 			found = true
 		}
@@ -666,7 +666,7 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 
 func photoInFavorites(t *testing.T, photoID string) bool {
 	t.Helper()
-	for _, p := range runJSONArray(t, "drive", "photos", "list", "--tags", "favorites") {
+	for _, p := range runJSONArray(t, "drive", "photos", "list", "--tag", "favorites") {
 		if p.(map[string]interface{})["link_id"] == photoID {
 			return true
 		}
@@ -678,7 +678,7 @@ func photoInFavorites(t *testing.T, photoID string) bool {
 // proving tags surface as names (e.g. "favorites") rather than raw ints.
 func favoritePhotoTags(t *testing.T, photoID string) []string {
 	t.Helper()
-	for _, p := range runJSONArray(t, "drive", "photos", "list", "--tags", "favorites") {
+	for _, p := range runJSONArray(t, "drive", "photos", "list", "--tag", "favorites") {
 		m := p.(map[string]interface{})
 		if m["link_id"] != photoID {
 			continue
@@ -766,7 +766,7 @@ func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
 
 	// --dry-run must not favorite.
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "photos", "favorite", "--", photoID)
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	if photoInFavorites(t, photoID) {
 		t.Error("dry-run favorite should not actually favorite the photo")
 	}
@@ -788,14 +788,14 @@ func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
 		t.Errorf("favorited photo tags = %v, want to contain the name \"favorites\"", tags)
 	}
 	// Text mode (forced TTY) also renders the tag name, never a raw int.
-	ttyOut, _, _ := runWithEnv(t, map[string]string{"PROTON_CLI_FORCE_TTY": "1"}, "drive", "photos", "list", "--tags", "favorites")
+	ttyOut, _, _ := runWithEnv(t, map[string]string{"PROTON_CLI_FORCE_TTY": "1"}, "drive", "photos", "list", "--tag", "favorites")
 	if !strings.Contains(ttyOut, "favorites") {
 		t.Errorf("text-mode list --tags favorites should show the 'favorites' tag name; got:\n%s", truncateOutput(ttyOut))
 	}
 
 	// --dry-run must not unfavorite either.
 	_, stderr = runOKStderr(t, "--dry-run", "drive", "photos", "unfavorite", "--", photoID)
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	if !photoInFavorites(t, photoID) {
 		t.Error("dry-run unfavorite should not actually remove the favorite")
 	}
@@ -821,17 +821,17 @@ func TestDrivePhotosRead(t *testing.T) {
 func TestDrivePhotosListTags(t *testing.T) {
 	// Tags are referenced by name only - an unknown name and an integer are
 	// both rejected (the CLI never accepts or leaks raw enum ints).
-	_, stderr, code := run(t, "drive", "photos", "list", "--tags", "bogus-"+testID())
+	_, stderr, code := run(t, "drive", "photos", "list", "--tag", "bogus-"+testID())
 	if code == 0 {
 		t.Error("expected non-zero exit for an unknown --tags value")
 	}
 	assertContains(t, stderr, "unknown tag")
-	if _, _, code := run(t, "drive", "photos", "list", "--tags", "2"); code == 0 {
+	if _, _, code := run(t, "drive", "photos", "list", "--tag", "2"); code == 0 {
 		t.Error("expected non-zero exit for an integer --tags value (names only)")
 	}
 
 	// Filtering by a valid classification tag runs cleanly (result may be empty).
-	if _, stderr, code := run(t, "drive", "photos", "list", "--tags", "videos"); code != 0 {
+	if _, stderr, code := run(t, "drive", "photos", "list", "--tag", "videos"); code != 0 {
 		if strings.Contains(stderr, "photos") {
 			t.Skip("no photos share on this account")
 		}
@@ -842,13 +842,15 @@ func TestDrivePhotosListTags(t *testing.T) {
 // TestDrivePhotosTagsSubcommandRemoved guards the deliberate scope decision:
 // the web UI exposes no add/remove-tag action, so neither do we. favorite /
 // unfavorite stay; the old `photos tags` subcommand is gone.
-func TestDrivePhotosTagsSubcommandRemoved(t *testing.T) {
+// Favouriting is a verb, not a tag to be set: `tags` would invite a second way to
+// say the same thing.
+func TestDrivePhotosFavouriteIsAVerb(t *testing.T) {
 	help := runOK(t, "drive", "photos", "--help")
 	assertContains(t, help, "favorite")
 	assertContains(t, help, "unfavorite")
 	for _, line := range strings.Split(help, "\n") {
 		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == "tags" {
-			t.Errorf("photos should no longer expose a 'tags' subcommand:\n%s", help)
+			t.Errorf("photos should not expose a 'tags' subcommand:\n%s", help)
 		}
 	}
 }

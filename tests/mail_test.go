@@ -215,7 +215,7 @@ func TestMailMessagesSendAndReadText(t *testing.T) {
 	msgID, _, subject := plainMail(t)
 
 	// Default --format text: human-readable, fields on stderr-safe stdout
-	stdout := runOK(t, "mail", "messages", "read", "--", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--", msgID)
 	assertContains(t, stdout, subject)
 	assertContains(t, stdout, selfEmail())
 	assertField(t, stdout, "Subject:", subject)
@@ -233,7 +233,7 @@ func TestMailMessagesReadByRef(t *testing.T) {
 	var stdout, lastStderr string
 	var lastCode int
 	for attempt := 0; attempt < 8; attempt++ {
-		out, stderr, code := run(t, "mail", "messages", "read", subject)
+		out, stderr, code := run(t, "mail", "messages", "get", subject)
 		if code == 0 {
 			stdout = out
 			break
@@ -251,14 +251,14 @@ func TestMailMessagesReadByRef(t *testing.T) {
 func TestMailMessagesReadFormatRaw(t *testing.T) {
 	msgID, _, subject := plainMail(t)
 
-	stdout := runOK(t, "mail", "messages", "read", "--format", "raw", "--", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", "--", msgID)
 	assertContains(t, stdout, subject)
 }
 
 func TestMailMessagesReadFormatInvalid(t *testing.T) {
 	msgID, _, _ := plainMail(t)
 
-	_, stderr, code := run(t, "mail", "messages", "read", "--format", "wut", "--", msgID)
+	_, stderr, code := run(t, "mail", "messages", "get", "--format", "wut", "--", msgID)
 	if code == 0 {
 		t.Error("expected non-zero exit for unknown --format")
 	}
@@ -266,7 +266,7 @@ func TestMailMessagesReadFormatInvalid(t *testing.T) {
 }
 
 func TestMailMessagesReadNotFound(t *testing.T) {
-	_, _, code := run(t, "mail", "messages", "read", "no-such-msg-"+testID())
+	_, _, code := run(t, "mail", "messages", "get", "no-such-msg-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3 (not-found), got %d", code)
 	}
@@ -329,7 +329,7 @@ func TestMailMessagesMoveDest(t *testing.T) {
 	subject := testID() + "-move"
 	msgID := sendTestMail(t, subject)
 
-	runOK(t, "mail", "messages", "move", "--dest", "archive", "--", msgID)
+	runOK(t, "mail", "messages", "move", "--into", "archive", "--", msgID)
 	data := runJSON(t, "mail", "messages", "list", "--folder", "archive", "--page-size", "50")
 	msgs := data["messages"].([]interface{})
 	found := false
@@ -343,7 +343,7 @@ func TestMailMessagesMoveDest(t *testing.T) {
 		t.Error("message should appear in archive after --dest archive")
 	}
 
-	runOK(t, "mail", "messages", "move", "--dest", "inbox", "--", msgID)
+	runOK(t, "mail", "messages", "move", "--into", "inbox", "--", msgID)
 }
 
 func TestMailMessagesTrash(t *testing.T) {
@@ -359,19 +359,19 @@ func TestMailMessagesTrash(t *testing.T) {
 		}
 	}
 	// put it back so cleanup can delete
-	runOK(t, "mail", "messages", "move", "--dest", "inbox", "--", msgID)
+	runOK(t, "mail", "messages", "move", "--into", "inbox", "--", msgID)
 }
 
 // ── batch filters (all dry-run so nothing is actually mutated) ──
 
 func TestMailBatchTrashDryRunUnread(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "trash", "--unread", "--limit", "5")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 func TestMailBatchTrashDryRunOlderThan(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "trash", "--older-than", "365d", "--from", "noreply", "--limit", "5")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 func TestMailBatchRequiresInput(t *testing.T) {
@@ -379,7 +379,7 @@ func TestMailBatchRequiresInput(t *testing.T) {
 	if code == 0 {
 		t.Error("expected error when no REF and no filter given")
 	}
-	assertContains(t, stderr, "no messages selected")
+	assertContains(t, stderr, "Nothing selected")
 }
 
 // ── conversations ──
@@ -436,41 +436,41 @@ func findConversationFor(t *testing.T, msgID string) string {
 func TestMailConversationsRead(t *testing.T) {
 	_, convID, subject := plainMail(t)
 
-	stdout := runOK(t, "mail", "conversations", "read", "--", convID)
+	stdout := runOK(t, "mail", "conversations", "get", "--", convID)
 	assertContains(t, stdout, subject)
 	assertContains(t, stdout, "Subject:")
-	assertContains(t, stdout, "Conversation:")
+	assertContains(t, stdout, "Messages:")
 	assertContains(t, stdout, "Messages:")
 }
 
 func TestMailMessagesReadConvIDRedirects(t *testing.T) {
 	_, convID, _ := plainMail(t)
 
-	_, stderr, code := run(t, "mail", "messages", "read", "--", convID)
+	_, stderr, code := run(t, "mail", "messages", "get", "--", convID)
 	if code != 3 {
 		t.Errorf("expected exit 3, got %d (stderr: %s)", code, stderr)
 	}
-	assertContains(t, stderr, "that ID is a conversation, not a message")
-	assertContains(t, stderr, "proton-cli mail conversations read")
+	assertContains(t, stderr, "is a conversation, not a message")
+	assertContains(t, stderr, "proton-cli mail conversations get")
 	assertContains(t, stderr, convID)
 }
 
 func TestMailConversationsReadMsgIDRedirects(t *testing.T) {
 	msgID, _, _ := plainMail(t)
 
-	_, stderr, code := run(t, "mail", "conversations", "read", "--", msgID)
+	_, stderr, code := run(t, "mail", "conversations", "get", "--", msgID)
 	if code != 3 {
 		t.Errorf("expected exit 3, got %d (stderr: %s)", code, stderr)
 	}
-	assertContains(t, stderr, "that ID is a message, not a conversation")
-	assertContains(t, stderr, "proton-cli mail messages read")
+	assertContains(t, stderr, "is a message, not a conversation")
+	assertContains(t, stderr, "proton-cli mail messages get")
 	assertContains(t, stderr, msgID)
 }
 
 func TestMailConversationsBulkDryRun(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "conversations", "trash",
 		"--unread", "--limit", "3")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 func TestMailConversationsTrashRoundTrip(t *testing.T) {
@@ -486,7 +486,7 @@ func TestMailConversationsTrashRoundTrip(t *testing.T) {
 			t.Error("trashed conversation should not appear in inbox list")
 		}
 	}
-	runOK(t, "mail", "conversations", "move", "--dest", "inbox", "--", convID)
+	runOK(t, "mail", "conversations", "move", "--into", "inbox", "--", convID)
 }
 
 // ── attachments ──
@@ -495,12 +495,12 @@ func TestMailAttachmentsListAndDownload(t *testing.T) {
 	msgID, attID, attName := findMessageWithAttachment(t)
 
 	// List
-	stdout := runOK(t, "mail", "attachments", "list", msgID)
+	stdout := runOK(t, "mail", "messages", "attachments", "list", msgID)
 	assertContains(t, stdout, "NAME")
 
 	// Download to tempdir
 	out := filepath.Join(t.TempDir(), "att")
-	runOK(t, "mail", "attachments", "download", msgID, attID, "--output", out)
+	runOK(t, "mail", "messages", "attachments", "download", msgID, attID, "--output", out)
 
 	info, err := os.Stat(out)
 	if err != nil {
@@ -528,7 +528,7 @@ func TestMailAttachmentsDownloadCollisionAutoSuffix(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	_, stderr := runOKStderr(t, "mail", "attachments", "download", msgID, attID,
+	_, stderr := runOKStderr(t, "mail", "messages", "attachments", "download", msgID, attID,
 		"--output-dir", dir)
 
 	// Suffixed file must exist; placeholder must be untouched.
@@ -550,7 +550,7 @@ func TestMailAttachmentsDownloadCollisionExplicitErrors(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("x"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	_, stderr, code := run(t, "mail", "attachments", "download", msgID, attID,
+	_, stderr, code := run(t, "mail", "messages", "attachments", "download", msgID, attID,
 		"--output", dest)
 	if code == 0 {
 		t.Errorf("expected non-zero exit on collision, got 0")
@@ -567,7 +567,7 @@ func TestMailAttachmentsDownloadForce(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("placeholder"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	runOK(t, "mail", "attachments", "download", msgID, attID,
+	runOK(t, "mail", "messages", "attachments", "download", msgID, attID,
 		"--output", dest, "--force")
 	data, err := os.ReadFile(dest)
 	if err != nil {
@@ -582,7 +582,7 @@ func TestMailAttachmentsDownloadAll(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "attachments", "download", msgID, "--all", "--output-dir", dir)
+	runOK(t, "mail", "messages", "attachments", "download", msgID, "--all", "--output-dir", dir)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -594,7 +594,7 @@ func TestMailAttachmentsDownloadAll(t *testing.T) {
 }
 
 func TestMailAttachmentsDownloadAllRequiresDir(t *testing.T) {
-	_, stderr, code := run(t, "mail", "attachments", "download", "any-msg-id", "--all")
+	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "any-msg-id", "--all")
 	if code == 0 {
 		t.Error("expected non-zero exit when --all is missing --output-dir")
 	}
@@ -604,7 +604,7 @@ func TestMailAttachmentsDownloadAllRequiresDir(t *testing.T) {
 }
 
 func TestMailAttachmentsDownloadAllRejectsStdout(t *testing.T) {
-	_, stderr, code := run(t, "mail", "attachments", "download", "any-msg-id",
+	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "any-msg-id",
 		"--all", "--output", "-")
 	if code == 0 {
 		t.Error("expected non-zero exit for --all --output -")
@@ -618,7 +618,7 @@ func TestMailAttachmentsDownloadOutputDirAutoCreates(t *testing.T) {
 	msgID, attID, _ := findMessageWithAttachment(t)
 
 	dir := filepath.Join(t.TempDir(), "new", "deep", "nested")
-	runOK(t, "mail", "attachments", "download", msgID, attID, "--output-dir", dir)
+	runOK(t, "mail", "messages", "attachments", "download", msgID, attID, "--output-dir", dir)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -646,13 +646,13 @@ func TestMailAttachmentsListFiltersInline(t *testing.T) {
 	msgID := findMessageWithMixedAttachments(t)
 
 	// Default: filtered. Text mode must NOT have a DISPOSITION header.
-	stdout := runOK(t, "mail", "attachments", "list", msgID)
+	stdout := runOK(t, "mail", "messages", "attachments", "list", msgID)
 	if strings.Contains(stdout, "DISPOSITION") {
 		t.Error("default text-mode list should not show DISPOSITION column")
 	}
 
 	// JSON: filtered, but each entry still has the disposition field.
-	defaultRaw := runOK(t, "mail", "attachments", "list", msgID, "--output", "json")
+	defaultRaw := runOK(t, "mail", "messages", "attachments", "list", msgID, "--output", "json")
 	var defaultAtts []map[string]interface{}
 	if err := json.Unmarshal([]byte(defaultRaw), &defaultAtts); err != nil {
 		t.Fatalf("parse default JSON: %v", err)
@@ -667,13 +667,13 @@ func TestMailAttachmentsListFiltersInline(t *testing.T) {
 	}
 
 	// --include-inline: text mode shows DISPOSITION column.
-	stdoutAll := runOK(t, "mail", "attachments", "list", msgID, "--include-inline")
+	stdoutAll := runOK(t, "mail", "messages", "attachments", "list", msgID, "--include-inline")
 	if !strings.Contains(stdoutAll, "DISPOSITION") {
 		t.Error("--include-inline text-mode list should show DISPOSITION column")
 	}
 
 	// --include-inline JSON has both kinds.
-	allRaw := runOK(t, "mail", "attachments", "list", msgID,
+	allRaw := runOK(t, "mail", "messages", "attachments", "list", msgID,
 		"--include-inline", "--output", "json")
 	var allAtts []map[string]interface{}
 	if err := json.Unmarshal([]byte(allRaw), &allAtts); err != nil {
@@ -700,7 +700,7 @@ func TestMailAttachmentsListFiltersInline(t *testing.T) {
 func TestMailAttachmentsListJSONHasDisposition(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 
-	raw := runOK(t, "mail", "attachments", "list", msgID, "--output", "json")
+	raw := runOK(t, "mail", "messages", "attachments", "list", msgID, "--output", "json")
 	var atts []map[string]interface{}
 	if err := json.Unmarshal([]byte(raw), &atts); err != nil {
 		t.Fatalf("parse: %v", err)
@@ -722,7 +722,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 	msgID := findMessageWithMixedAttachments(t)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "attachments", "download", msgID, "--all", "--output-dir", dir)
+	runOK(t, "mail", "messages", "attachments", "download", msgID, "--all", "--output-dir", dir)
 
 	written, err := os.ReadDir(dir)
 	if err != nil {
@@ -732,7 +732,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 
 	// --include-inline should yield strictly more files.
 	dir2 := t.TempDir()
-	runOK(t, "mail", "attachments", "download", msgID,
+	runOK(t, "mail", "messages", "attachments", "download", msgID,
 		"--all", "--include-inline", "--output-dir", dir2)
 	written2, err := os.ReadDir(dir2)
 	if err != nil {
@@ -749,12 +749,12 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 func TestMailMessagesReadStripQuotesPlaintext(t *testing.T) {
 	msgID, _ := quotedMail(t)
 
-	default1 := runOK(t, "mail", "messages", "read", msgID)
+	default1 := runOK(t, "mail", "messages", "get", msgID)
 	if !strings.Contains(default1, "ancient quoted text") {
 		t.Errorf("default mode should preserve the quote; stdout:\n%s", truncateOutput(default1))
 	}
 
-	stripped := runOK(t, "mail", "messages", "read", "--strip-quotes", msgID)
+	stripped := runOK(t, "mail", "messages", "get", "--strip-quotes", msgID)
 	if strings.Contains(stripped, "ancient quoted text") {
 		t.Errorf("--strip-quotes should remove the quote; stdout:\n%s", truncateOutput(stripped))
 	}
@@ -766,8 +766,8 @@ func TestMailMessagesReadStripQuotesPlaintext(t *testing.T) {
 func TestMailMessagesReadStripQuotesNoFalsePositive(t *testing.T) {
 	msgID, _, _ := plainMail(t)
 
-	default1 := runOK(t, "mail", "messages", "read", msgID)
-	stripped := runOK(t, "mail", "messages", "read", "--strip-quotes", msgID)
+	default1 := runOK(t, "mail", "messages", "get", msgID)
+	stripped := runOK(t, "mail", "messages", "get", "--strip-quotes", msgID)
 	// On a body with no canonical reply marker, --strip-quotes is a no-op.
 	if default1 != stripped {
 		t.Errorf("--strip-quotes should be a no-op on bodies without quote markers")
@@ -777,7 +777,7 @@ func TestMailMessagesReadStripQuotesNoFalsePositive(t *testing.T) {
 func TestMailConversationsReadSummary(t *testing.T) {
 	_, convID, _ := plainMail(t)
 
-	data := runJSON(t, "--full-ids", "mail", "conversations", "read", convID)
+	data := runJSON(t, "--full-ids", "mail", "conversations", "get", convID)
 	// Use the JSON shape to determine the expected message count.
 	msgs := data["messages"].([]interface{})
 	wantCount := len(msgs)
@@ -785,7 +785,7 @@ func TestMailConversationsReadSummary(t *testing.T) {
 		t.Skip("conversation has 0 messages")
 	}
 
-	stdout := runOK(t, "mail", "conversations", "read", "--summary", convID)
+	stdout := runOK(t, "mail", "conversations", "get", "--summary", convID)
 	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
 	if len(lines) != wantCount {
 		t.Errorf("expected %d summary lines, got %d:\n%s", wantCount, len(lines), stdout)
@@ -803,7 +803,7 @@ func TestMailConversationsReadSummary(t *testing.T) {
 func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
-	stdout := runOK(t, "mail", "conversations", "read", "--summary", convID)
+	stdout := runOK(t, "mail", "conversations", "get", "--summary", convID)
 	// Some line must end with `(N attachments)`.
 	re := regexp.MustCompile(`\(\d+ attachments\)\s*$`)
 	found := false
@@ -821,7 +821,7 @@ func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
 func TestMailConversationsReadStripQuotesKeepsLayout(t *testing.T) {
 	_, convID, _ := plainMail(t)
 
-	stdout := runOK(t, "mail", "conversations", "read", "--strip-quotes", convID)
+	stdout := runOK(t, "mail", "conversations", "get", "--strip-quotes", convID)
 	// Layout should still have per-message dividers + headers.
 	if !strings.Contains(stdout, "\u2500\u2500\u2500 1/") {
 		t.Errorf("--strip-quotes (without --summary) should keep per-message dividers; stdout:\n%s", truncateOutput(stdout))
@@ -835,7 +835,7 @@ func TestMailConversationsReadStripQuotesKeepsLayout(t *testing.T) {
 
 func TestMailMessagesReadBodyOnly(t *testing.T) {
 	msgID, _, subject := plainMail(t)
-	stdout := runOK(t, "mail", "messages", "read", "--body-only", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--body-only", msgID)
 	for _, marker := range []string{"Subject:", "From:", "To:", "ID:", "---", "Attachments ("} {
 		if strings.Contains(stdout, marker) {
 			t.Errorf("--body-only output should not contain %q; got:\n%s", marker, truncateOutput(stdout))
@@ -849,7 +849,7 @@ func TestMailMessagesReadBodyOnly(t *testing.T) {
 
 func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
 	msgID, _, _ := plainMail(t)
-	stdout := runOK(t, "mail", "messages", "read", "--format", "html", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--format", "html", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
 		t.Errorf("--format html must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
 	}
@@ -862,7 +862,7 @@ func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
 
 func TestMailMessagesReadFormatRawNoHeader(t *testing.T) {
 	msgID, _, _ := plainMail(t)
-	stdout := runOK(t, "mail", "messages", "read", "--format", "raw", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
 		t.Errorf("--format raw must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
 	}
@@ -870,7 +870,7 @@ func TestMailMessagesReadFormatRawNoHeader(t *testing.T) {
 
 func TestMailMessagesReadDefaultStillHasHeader(t *testing.T) {
 	msgID, _, _ := plainMail(t)
-	stdout := runOK(t, "mail", "messages", "read", msgID)
+	stdout := runOK(t, "mail", "messages", "get", msgID)
 	assertContains(t, stdout, "Subject:")
 	assertContains(t, stdout, "From:")
 }
@@ -878,7 +878,7 @@ func TestMailMessagesReadDefaultStillHasHeader(t *testing.T) {
 func TestMailConversationsReadBodyOnly(t *testing.T) {
 	_, convID, subject := plainMail(t)
 
-	stdout := runOK(t, "mail", "conversations", "read", "--body-only", convID)
+	stdout := runOK(t, "mail", "conversations", "get", "--body-only", convID)
 	for _, marker := range []string{
 		"Subject:      ",
 		"Conversation: ",
@@ -903,7 +903,7 @@ func TestMailConversationsReadBodyOnly(t *testing.T) {
 
 func TestMailMessagesReadShowsAttachments(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
-	stdout := runOK(t, "mail", "messages", "read", msgID)
+	stdout := runOK(t, "mail", "messages", "get", msgID)
 	if !strings.Contains(stdout, "\n---\n") {
 		t.Errorf("expected '---' separator before footer in:\n%s", truncateOutput(stdout))
 	}
@@ -914,7 +914,7 @@ func TestMailMessagesReadShowsAttachments(t *testing.T) {
 
 func TestMailMessagesReadNoAttachmentsNoFooter(t *testing.T) {
 	msgID, _, _ := plainMail(t)
-	stdout := runOK(t, "mail", "messages", "read", msgID)
+	stdout := runOK(t, "mail", "messages", "get", msgID)
 	if strings.Contains(stdout, "---") {
 		t.Errorf("unexpected '---' separator on no-attachments message:\n%s", truncateOutput(stdout))
 	}
@@ -925,7 +925,7 @@ func TestMailMessagesReadNoAttachmentsNoFooter(t *testing.T) {
 
 func TestMailMessagesReadFormatHTMLNoFooter(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
-	stdout := runOK(t, "mail", "messages", "read", "--format", "html", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--format", "html", msgID)
 	if strings.Contains(stdout, "Attachments (") {
 		t.Errorf("--format html must not append the footer:\n%s", truncateOutput(stdout))
 	}
@@ -933,7 +933,7 @@ func TestMailMessagesReadFormatHTMLNoFooter(t *testing.T) {
 
 func TestMailMessagesReadFormatRawNoFooter(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
-	stdout := runOK(t, "mail", "messages", "read", "--format", "raw", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", msgID)
 	if strings.Contains(stdout, "Attachments (") {
 		t.Errorf("--format raw must not append the footer:\n%s", truncateOutput(stdout))
 	}
@@ -942,12 +942,12 @@ func TestMailMessagesReadFormatRawNoFooter(t *testing.T) {
 func TestMailMessagesReadIncludeInlineTags(t *testing.T) {
 	msgID := findMessageWithMixedAttachments(t)
 
-	default1 := runOK(t, "mail", "messages", "read", msgID)
+	default1 := runOK(t, "mail", "messages", "get", msgID)
 	if strings.Contains(default1, "(inline)") {
 		t.Errorf("default footer should not show (inline) markers:\n%s", truncateOutput(default1))
 	}
 
-	incl := runOK(t, "mail", "messages", "read", "--include-inline", msgID)
+	incl := runOK(t, "mail", "messages", "get", "--include-inline", msgID)
 	if !strings.Contains(incl, "(inline)") {
 		t.Errorf("--include-inline footer should show at least one (inline) marker:\n%s", truncateOutput(incl))
 	}
@@ -956,7 +956,7 @@ func TestMailMessagesReadIncludeInlineTags(t *testing.T) {
 func TestMailConversationsReadShowsAttachmentsPerMessage(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
-	stdout := runOK(t, "mail", "conversations", "read", convID)
+	stdout := runOK(t, "mail", "conversations", "get", convID)
 	if !strings.Contains(stdout, "Attachments (") {
 		t.Errorf("conversation render should contain a per-message attachments footer:\n%s", truncateOutput(stdout))
 	}
@@ -966,12 +966,12 @@ func TestMailConversationsReadIncludeInline(t *testing.T) {
 	msgID := findMessageWithMixedAttachments(t)
 	convID := findConversationFor(t, msgID)
 
-	default1 := runOK(t, "mail", "conversations", "read", convID)
+	default1 := runOK(t, "mail", "conversations", "get", convID)
 	if strings.Contains(default1, "(inline)") {
 		t.Errorf("default conv read should not include (inline):\n%s", truncateOutput(default1))
 	}
 
-	incl := runOK(t, "mail", "conversations", "read", "--include-inline", convID)
+	incl := runOK(t, "mail", "conversations", "get", "--include-inline", convID)
 	if !strings.Contains(incl, "(inline)") {
 		t.Errorf("--include-inline conv read should include (inline):\n%s", truncateOutput(incl))
 	}
@@ -1207,14 +1207,14 @@ func TestMailSendWithAttachment(t *testing.T) {
 		"mail", "messages", "delete", "--", inboxID)
 
 	// The attachment must be listed and decrypt back to the original bytes.
-	atts := runOK(t, "mail", "attachments", "list", inboxID)
+	atts := runOK(t, "mail", "messages", "attachments", "list", inboxID)
 	assertContains(t, atts, "note.txt")
 
 	dlDir := filepath.Join(dir, "dl")
 	if err := os.MkdirAll(dlDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runOK(t, "mail", "attachments", "download", inboxID, "--all", "--output-dir", dlDir)
+	runOK(t, "mail", "messages", "attachments", "download", inboxID, "--all", "--output-dir", dlDir)
 	got, err := os.ReadFile(filepath.Join(dlDir, "note.txt"))
 	if err != nil {
 		t.Fatalf("read downloaded attachment: %v", err)
@@ -1308,9 +1308,9 @@ func TestMailSendPrintsMessageID(t *testing.T) {
 	}
 	cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
-	assertContains(t, stderr, "Message sent.")
+	assertContains(t, stderr, "Sent")
 	// The returned ID resolves via read.
-	assertContains(t, runOK(t, "mail", "messages", "read", "--", id), subject)
+	assertContains(t, runOK(t, "mail", "messages", "get", "--", id), subject)
 	// Clean the inbox copy too (distinct ID).
 	if inbox := findMessage(t, "inbox", subject); inbox != "" && inbox != id {
 		cleanupRun(t, "Delete inbox mail: proton-cli mail messages delete "+inbox,
@@ -1330,7 +1330,7 @@ func TestMailSendScheduledConfirmsAndReturnsID(t *testing.T) {
 	}
 	cleanupRun(t, "Delete scheduled mail: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
-	assertContains(t, stderr, "Scheduled for")
+	assertContains(t, stderr, "Scheduled")
 	// The returned ID is exactly the Scheduled-folder entry.
 	var schedID string
 	waitFor(30*time.Second, 1*time.Second, func() bool {
@@ -1348,7 +1348,7 @@ func TestMailSendScheduledDryRunEchoesTime(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
 		"--to", selfEmail(), "--subject", subject,
 		"--body", "x", "--send-at", sendAt.Format("2006-01-02T15:04"))
-	assertContains(t, stderr, "scheduled for")
+	assertContains(t, stderr, "Scheduled")
 	assertContains(t, stderr, sendAt.Format("2006-01-02"))
 	if messageIDInFolder("scheduled", subject) != "" {
 		t.Error("dry-run should not create a scheduled message")
@@ -1377,7 +1377,7 @@ func TestMailMessagesUnschedule(t *testing.T) {
 
 	// Dry-run must not move it.
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "unschedule", "--", schedID)
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	if messageIDInFolder("scheduled", subject) == "" {
 		t.Error("dry-run should not unschedule the message")
 	}
@@ -1400,7 +1400,7 @@ func TestMailMessagesUnschedule(t *testing.T) {
 func TestMailMessagesUnscheduleByAllDryRun(t *testing.T) {
 	// --all with --dry-run is safe: it previews without touching the queue.
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "unschedule", "--all")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 func TestMailMessagesUnscheduleRequiresSelection(t *testing.T) {
@@ -1408,7 +1408,7 @@ func TestMailMessagesUnscheduleRequiresSelection(t *testing.T) {
 	if code == 0 {
 		t.Error("expected error when no REF and no --all given")
 	}
-	assertContains(t, stderr, "no messages selected")
+	assertContains(t, stderr, "Nothing selected")
 }
 
 func TestMailSendExpiringHasExpirationTime(t *testing.T) {
@@ -1441,7 +1441,7 @@ func TestMailSendEncryptedForOutsideDryRun(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
 		"--to", externalRecipient, "--subject", testID()+"-eo-dry",
 		"--body", "secret", "--eo-password", "hunter2", "--eo-password-hint", "the usual")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 // TestMailSendEncryptedForOutside exercises the encrypted-for-outside (password)
@@ -1515,7 +1515,7 @@ func altMailContaining(t *testing.T, from, needle string) string {
 			continue
 		}
 		id, _ := mm["id"].(string)
-		if body, _, code := run(t, alt("mail", "messages", "read", "--body-only", id)...); code == 0 && strings.Contains(body, needle) {
+		if body, _, code := run(t, alt("mail", "messages", "get", "--body-only", id)...); code == 0 && strings.Contains(body, needle) {
 			return id
 		}
 	}
@@ -1545,7 +1545,7 @@ func TestMailCrossAccountDelivery(t *testing.T) {
 	cleanupRun(t, "Delete received mail (alt): proton-cli --profile alt mail messages delete "+recvID,
 		alt("mail", "messages", "delete", recvID)...)
 
-	read := runOK(t, alt("mail", "messages", "read", recvID)...)
+	read := runOK(t, alt("mail", "messages", "get", recvID)...)
 	assertContains(t, read, body)
 	assertField(t, read, "Sig:", "verified")
 }

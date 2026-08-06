@@ -1,0 +1,6 @@
+== stdout ==
+== stderr ==
+Error: "jane" matches 2 contacts.
+Try:   narrow the term, or use one of:
+         7Kd91mQx  jane@example.com
+         3Ns8pT2v  jane.roe@work.example

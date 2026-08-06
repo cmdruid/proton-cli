@@ -13,6 +13,22 @@
 # Locally: defaults to the current GOOS/GOARCH and produces a single
 # helper for "release-shaped" testing in `devbox shell`.
 #
+# KNOWN LIMITATION, Linux, devbox on a non-NixOS host: nix bakes a
+# /nix/store RUNPATH into the helper, so it loads nix's webkitgtk
+# rather than the host's. That webkitgtk resolves EGL drivers under
+# /run/opengl-driver, which only exists on NixOS; elsewhere its render
+# process dies with "Could not create default EGL display:
+# EGL_BAD_PARAMETER" and the window opens but paints nothing.
+#
+# Unaffected: NixOS (the driver path is there), and every release
+# binary (CI builds each Linux helper on a native ubuntu runner
+# against apt's libwebkit2gtk-4.1-dev, with no nix involved).
+#
+# To render the webview on a non-NixOS host, build this helper with
+# the host toolchain instead of the devbox one. Supplying nix's own
+# mesa and glib-networking also works but costs ~800 MiB of closure,
+# which is not worth it for an occasional check.
+#
 # Inputs:
 #   PWD           = repo root
 #   GOOS          = target OS         (default: $(go env GOOS))

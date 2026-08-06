@@ -1,10 +1,10 @@
 # Scripting
 
-proton-cli is designed to be a good citizen in a pipeline: data on stdout, chatter on stderr, machine-readable output on request, and exit codes that mean something. See [Concepts](concepts.md) for the rules.
+Data goes to stdout, everything else to stderr, and exit codes say what went wrong. See [Output](output.md) for the details.
 
 ## Capturing new IDs
 
-Creating commands print the new ID to stdout and the confirmation to stderr, so a plain assignment works:
+Commands that create something print the new ID to stdout, so a plain assignment works:
 
 ```bash
 LABEL=$(proton-cli mail settings labels create --name Work --color "#8080FF")
@@ -23,17 +23,25 @@ proton-cli mail messages search --before 2026-04-08 --limit 200 --output json \
   | jq -r '.messages[].from_address' | sort -u
 
 # total size of a Drive folder
-proton-cli drive items list /Backup --output json | jq '[.[].size] | add'
+proton-cli drive items list /Backup --output json | jq '[.items[].size] | add'
 
 # every vault name
-proton-cli pass vaults list --output json | jq -r '.[].name'
+proton-cli pass vaults list --output json | jq -r '.vaults[].name'
 ```
 
-JSON keys are `snake_case` and IDs are always complete, never shortened.
+Every list is an object keyed by its plural name, always with a `count`:
+
+```bash
+proton-cli mail messages list --output json | jq '.count'
+proton-cli drive items list /Backup --output json | jq -r '.items[].name'
+proton-cli pass vaults list --output json | jq -r '.vaults[].name'
+```
+
+Keys are `snake_case`, IDs are always complete, and enumerated values are names rather than numbers: `"type": "file"`, not `"type": 2`.
 
 ## Archiving mail to disk
 
-`export` writes ordinary RFC 822 files, so the rest of your toolchain already knows what to do with them.
+`export` writes ordinary RFC 822 `.eml` files.
 
 ```bash
 # a year of archive, one .eml per message, named "<date> <subject>.eml"
@@ -66,11 +74,17 @@ proton-cli mail messages search --from alerts@example.com --unread --output json
   | jq -r '.messages[].id' \
   | while read -r id; do
       proton-cli mail messages reply "$id" --body "Received, thanks." --no-signature
-      proton-cli mail messages move --dest archive "$id"
+      proton-cli mail messages move "$id" --into archive
     done
 ```
 
 ## Exit codes as control flow
+
+A mutation reports itself structurally too, which is easier to check than parsing a sentence:
+
+```bash
+proton-cli mail messages trash --older-than 1y --output json | jq '.count'
+```
 
 ```bash
 if proton-cli pass items get "deploy-key" >/dev/null 2>&1; then
@@ -117,7 +131,7 @@ proton-cli drive items download /report.pdf --output - | gpg --encrypt --recipie
 set -euo pipefail
 
 # archive read newsletters older than a week
-proton-cli mail messages move --dest archive --from newsletter@example.com --older-than 7d
+proton-cli mail messages move --into archive --from newsletter@example.com --older-than 7d
 
 # bin anything left in spam after a month
 proton-cli mail messages delete --folder spam --older-than 30d
@@ -162,7 +176,7 @@ proton-cli mail settings autoreply disable
 
 ```bash
 alias() {
-  proton-cli pass alias create --prefix "$1" --mailbox me@proton.me
+  proton-cli pass aliases create --prefix "$1" --mailbox me@proton.me
 }
 alias newsletter-xyz
 ```
@@ -172,6 +186,6 @@ alias newsletter-xyz
 - **Credentials**: keep them out of your shell history. Read them from a password manager (`PROTON_PASSWORD=$(pass show proton/password)`) or a file only your user can read.
 - **2FA**: `PROTON_TOTP` is only consulted during a fresh login. For unattended jobs, log in once interactively so the session file exists, then let the job reuse it.
 - **CAPTCHA**: a login on a headless machine can hit human verification, which needs a desktop. Log in on a desktop first and copy the session, or run the job somewhere with a display. See [Human verification](human-verification.md).
-- **`--quiet`** silences the `✓` lines and progress bars, which is what you usually want in cron.
+- **`--quiet`** silences the `✓` lines and progress bars, useful in cron.
 - **Rate limits**: bulk commands page through Proton's API and respect its caps (150 messages per page). Long-running loops should sleep between iterations.
 - **Search lag**: Proton's index is eventually consistent, so a just-sent message may not appear in `search` for a few seconds. Act on the ID that the command printed instead of searching again.

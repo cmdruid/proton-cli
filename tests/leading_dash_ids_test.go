@@ -33,15 +33,15 @@ func TestLeadingDashIDIsAccepted(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"mail messages read", []string{"mail", "messages", "read", dashedSyntheticID}},
+		{"mail messages read", []string{"mail", "messages", "get", dashedSyntheticID}},
 		{"mail messages trash", []string{"mail", "messages", "trash", dashedSyntheticID}},
 		{"mail messages delete", []string{"mail", "messages", "delete", dashedSyntheticID}},
 		{"mail messages star", []string{"mail", "messages", "star", dashedSyntheticID}},
 		{"mail messages unstar", []string{"mail", "messages", "unstar", dashedSyntheticID}},
 		{"mail messages unschedule", []string{"mail", "messages", "unschedule", dashedSyntheticID}},
-		{"mail messages move", []string{"mail", "messages", "move", "--dest", "archive", dashedSyntheticID}},
+		{"mail messages move", []string{"mail", "messages", "move", "--into", "archive", dashedSyntheticID}},
 		{"mail messages mark read", []string{"mail", "messages", "mark", "read", dashedSyntheticID}},
-		{"mail conversations read", []string{"mail", "conversations", "read", dashedSyntheticID}},
+		{"mail conversations read", []string{"mail", "conversations", "get", dashedSyntheticID}},
 		{"mail conversations trash", []string{"mail", "conversations", "trash", dashedSyntheticID}},
 		{"mail conversations delete", []string{"mail", "conversations", "delete", dashedSyntheticID}},
 		{"mail conversations mark read", []string{"mail", "conversations", "mark", "read", dashedSyntheticID}},
@@ -70,7 +70,7 @@ func TestLeadingDashIDIsAccepted(t *testing.T) {
 // works because preprocessArgs inserts `--` before the ID after flag parsing
 // has consumed `--format raw`.
 func TestLeadingDashIDWithFlagsBeforeParsesCleanly(t *testing.T) {
-	_, stderr, _ := run(t, "mail", "messages", "read", "--format", "raw", dashedSyntheticID)
+	_, stderr, _ := run(t, "mail", "messages", "get", "--format", "raw", dashedSyntheticID)
 	assertNotFlagParseError(t, stderr)
 }
 
@@ -80,7 +80,7 @@ func TestLeadingDashIDWithFlagsBeforeParsesCleanly(t *testing.T) {
 // rewrapFlagError catches cobra's "accepts N arg(s)" error and explains
 // the cause.
 func TestLeadingDashIDWithFlagsAfterErrors(t *testing.T) {
-	_, stderr, code := run(t, "mail", "messages", "read", dashedSyntheticID, "--format", "raw")
+	_, stderr, code := run(t, "mail", "messages", "get", dashedSyntheticID, "--format", "raw")
 	if code == 0 {
 		t.Errorf("expected non-zero exit, got 0; stderr=%s", stderr)
 	}

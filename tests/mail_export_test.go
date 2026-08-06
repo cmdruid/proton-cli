@@ -109,7 +109,7 @@ func TestMailMessagesExportDryRun(t *testing.T) {
 	dir := t.TempDir()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "export",
 		"--output-dir", dir, "--", msgID)
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 0 {
 		t.Error("--dry-run wrote files")
@@ -148,9 +148,9 @@ func TestMailExportImportRoundTrip(t *testing.T) {
 		"mail", "messages", "delete", "--", id)
 
 	// The flags win over the file, and the file supplies the rest.
-	read := runOK(t, "mail", "messages", "read", "--", id)
+	read := runOK(t, "mail", "messages", "get", "--", id)
 	assertField(t, read, "Subject:", subject)
-	assertContains(t, runOK(t, "mail", "attachments", "list", id), attName)
+	assertContains(t, runOK(t, "mail", "messages", "attachments", "list", id), attName)
 }
 
 func TestMailSendFromEMLFile(t *testing.T) {
@@ -170,7 +170,7 @@ func TestMailSendFromEMLFile(t *testing.T) {
 	cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
-	read := runOK(t, "mail", "messages", "read", "--", id)
+	read := runOK(t, "mail", "messages", "get", "--", id)
 	assertField(t, read, "Subject:", subject)
 	assertContains(t, read, "Body straight from a file.")
 

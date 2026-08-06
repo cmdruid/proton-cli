@@ -1,22 +1,26 @@
 # Limitations
 
-proton-cli aims for parity with what the Proton web clients let you do. Some things it will never do, because Proton's platform doesn't allow it; others simply aren't built yet.
+proton-cli aims for parity with what the Proton web clients let you do. Some things it will never do, because Proton's platform doesn't allow it; others aren't built yet.
 
 ## Platform constraints
 
 ### Colors come from a fixed palette
 
-Labels, folders, calendars, and contact groups accept only Proton's 20 accent colors. `--color` is validated locally and prints the allowed values on error, because the API rejects anything else.
+Labels, folders, calendars, and contact groups accept only Proton's 20 accent colors. `--color` prints the allowed values when given anything else.
 
 ### Search and list are eventually consistent
 
-`search` and `list` read Proton's server-side index rather than local state, and that index lags a few seconds behind a change. A message you just sent might not appear yet; one you just deleted or unscheduled might still show up. The web client behaves the same way, so there's nothing for the CLI to cache or invalidate.
+`search` and `list` read Proton's server-side index, which lags a few seconds behind a change. A message you just sent might not appear yet; one you just deleted or unscheduled might still show up. The web client behaves the same way.
 
-To confirm a change, act on the ID the command printed with `read`, instead of searching for the subject again.
+To confirm a change, run `get` on the ID the command printed instead of searching for the subject again.
 
-### Deleting a calendar needs your password
+### Some operations need your password again
 
-`calendar settings calendars delete` is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a saved session exists.
+Proton asks for your password again before its most destructive operations, even though you are already signed in. `calendar settings calendars delete` is the one the CLI reaches today. It asks in a terminal, or reads `PROTON_PASSWORD`.
+
+### Signing in needs an authenticator app, not a security key
+
+FIDO2 sign-in speaks WebAuthn, which needs a browser. An account whose only second factor is a security key cannot be used from proton-cli; adding a TOTP authenticator makes it work.
 
 ### CAPTCHAs need a display
 
@@ -28,15 +32,16 @@ Proton exposes no endpoint, to any client, that ingests a message file into an e
 
 ### An exported message is plaintext
 
-Export decrypts, so the files it writes are readable by anything. The original `DKIM-Signature` and `ARC-*` headers also stop verifying, because the body has been rebuilt around the decrypted content. The web client's own export behaves the same way.
+Export decrypts, so the files it writes are readable by anything. The original `DKIM-Signature` and `ARC-*` headers no longer verify, since the body they signed was the encrypted one. The web client's own export behaves the same way.
 
 ## Not implemented yet
 
-- **Mail**: no encryption and key management, no IMAP/SMTP tokens, no custom domains.
+- **Mail**: no encryption and key management, no IMAP/SMTP tokens, no custom domains, no snooze.
+- **Drive**: no search, no downloading an earlier revision (only restoring one), no renaming an album.
 - **Calendar**: no calendar sharing, no subscribed (ICS) calendars, no import or export.
 - **Contacts**: no vCard import or export.
 - **Pass**: no item or vault sharing, no secure links, no password history.
-- **Account**: no plan, billing, or user management. No **Easy Switch**, Proton's mailbox migration from Gmail and other IMAP providers: it is a server-side job spanning four products that needs your old account's credentials or a browser sign-in, so it belongs to the account settings rather than to Mail.
+- **Account**: no plan, billing, or user management. No password, two-factor or recovery changes. No **Easy Switch**, Proton's mailbox migration from Gmail and other IMAP providers. All of these are done at [account.proton.me](https://account.proton.me).
 
 ## Out of scope
 

@@ -3,7 +3,7 @@
 //
 //  1. Extracts the embedded proton-cli-hv helper binary to the user
 //     cache directory (once, then reuses it).
-//  2. Exec's the helper with the HV challenge token as argv[1].
+//  2. Exec's the helper with the CAPTCHA page URL as argv[1].
 //  3. Translates the helper's exit code + stderr into typed errors.
 //
 // The main binary stays CGO-free and statically linked. The helper
@@ -13,7 +13,7 @@
 //
 // Contract with cmd/proton-cli-hv (helper exit codes):
 //
-//	0   success; stdout = "<challenge>:<recaptcha_response>"
+//	0   success; stdout = the solved token, verbatim
 //	2   bad usage
 //	3   webview unavailable (no display, no webkit, init failed, ...)
 //	4   user cancelled (window closed before solving)
@@ -78,31 +78,34 @@ func (e *CancelledError) Error() string {
 // binary for this OS/arch) and never normal operation.
 var ErrHelperMissing = errors.New("hv helper binary not embedded for this OS/arch")
 
-// Resolve runs the embedded helper to obtain a CAPTCHA solution token
-// for the given challenge. On success returns the
-// "<challenge>:<recaptcha_response>" string ready for the
+// Resolve runs the embedded helper against a CAPTCHA page URL, as built by
+// proton.Client.CaptchaURL, and returns the solved token verbatim, ready for the
 // x-pm-human-verification-token header.
+//
+// Which URL to open is the caller's decision: it depends on the API being talked
+// to, and getting it wrong is invisible from here. The helper only opens what it
+// is given and waits for the page to report a result.
 //
 // Returns *UnavailableError if the helper signals or appears to signal
 // "can't run a webview here". Returns *CancelledError if the user
 // cancelled. Returns plain error for other failures.
-func Resolve(ctx context.Context, challenge string) (string, error) {
-	if challenge == "" {
-		return "", errors.New("hv: empty challenge token")
+func Resolve(ctx context.Context, captchaURL string) (string, error) {
+	if captchaURL == "" {
+		return "", errors.New("hv: empty captcha url")
 	}
 	bin, err := extractHelper()
 	if err != nil {
 		return "", err
 	}
-	return resolveWithBinary(ctx, bin, challenge)
+	return resolveWithBinary(ctx, bin, captchaURL)
 }
 
 // resolveWithBinary is the post-extract translation: exec the helper
 // at binPath and map its exit code + stderr into typed errors per the
 // contract documented at the top of this file. Exposed (un-exported)
 // as a seam for tests; production callers go through Resolve.
-func resolveWithBinary(ctx context.Context, binPath, challenge string) (string, error) {
-	cmd := exec.CommandContext(ctx, binPath, challenge)
+func resolveWithBinary(ctx context.Context, binPath, captchaURL string) (string, error) {
+	cmd := exec.CommandContext(ctx, binPath, captchaURL)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

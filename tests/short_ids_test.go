@@ -152,7 +152,7 @@ func TestShortIDRoundTripMail(t *testing.T) {
 	runOK(t, "mail", "messages", "list", "--page-size", "20")
 
 	prefix := msgID[:8]
-	stdout, stderr, code := run(t, "mail", "messages", "read", prefix)
+	stdout, stderr, code := run(t, "mail", "messages", "get", prefix)
 	if code != 0 {
 		t.Fatalf("read by short prefix exit %d; stderr: %s", code, stderr)
 	}
@@ -170,7 +170,7 @@ func TestShortIDPrefixCacheMissOK(t *testing.T) {
 	// we still get a clean exit 3, but with the service's own "no X
 	// matching Y" message rather than a cache-specific hint.
 	prefix := "ZZZZ____" // 4 Z + 4 underscores; very unlikely to match
-	_, stderr, code := run(t, "mail", "messages", "read", prefix)
+	_, stderr, code := run(t, "mail", "messages", "get", prefix)
 	if code == 0 {
 		t.Errorf("expected non-zero exit on no-match prefix, got 0")
 	}
@@ -208,7 +208,7 @@ func TestShortIDAmbiguousErrors(t *testing.T) {
 		t.Fatalf("write cache: %v", err)
 	}
 
-	_, stderr, code := run(t, "mail", "messages", "read", "abcd1234")
+	_, stderr, code := run(t, "mail", "messages", "get", "abcd1234")
 	if code != 4 {
 		t.Errorf("expected exit 4 on ambiguous prefix, got %d", code)
 	}

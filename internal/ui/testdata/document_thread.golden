@@ -1,0 +1,19 @@
+== stdout ==
+Subject:   Quarterly numbers
+Messages:  2
+ID:        8Tr4nVx2
+
+─── 1/2 ────────────────────────────────────────────────────────
+From:  Jane Roe <jane@example.com>
+Date:  2026-04-14 17:48
+ID:    2mNp7RsV
+
+Numbers attached. Let me know.
+
+─── 2/2 ────────────────────────────────────────────────────────
+From:  me@proton.me
+Date:  2026-04-14 18:10
+ID:    4Wq9zLm1
+
+Got them, thanks.
+== stderr ==

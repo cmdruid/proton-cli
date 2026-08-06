@@ -8,13 +8,15 @@ import (
 	"strconv"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/progress"
 	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/render"
 )
 
 type DownloadOptions struct {
+	// Label names the transfer for the progress report.
 	Label string
-	Quiet bool
+	// Progress receives byte counts; nil discards them.
+	Progress progress.Sink
 }
 
 func (s *Service) Download(ctx context.Context, dc *Context, path string, w io.Writer, opts DownloadOptions) error {
@@ -78,9 +80,9 @@ func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, 
 		}
 	}
 
-	progress := &render.Progress{Total: link.Size, Label: opts.Label, Quiet: opts.Quiet}
-	progress.Start()
-	defer progress.Finish()
+	prog := progress.Of(opts.Progress)
+	prog.Start(link.Size, opts.Label)
+	defer prog.Done()
 
 	for i, b := range blocks {
 		encData, err := downloadBlock(ctx, b.BareURL, b.Token)
@@ -95,7 +97,7 @@ func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, 
 		if _, err := w.Write(bin); err != nil {
 			return err
 		}
-		progress.Add(int64(len(bin)))
+		prog.Add(int64(len(bin)))
 	}
 	return nil
 }

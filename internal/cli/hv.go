@@ -23,9 +23,19 @@ func cliHVResolver(_ context.Context, a *app.App) proton.HVResolver {
 		methods := hvErr.Methods
 
 		if slices.Contains(methods, "captcha") {
+			if a == nil {
+				return "", "", proton.ErrHVUnavailable
+			}
+			// The page must come from the API that issued the challenge, so the
+			// client builds the URL rather than the helper guessing.
+			captchaURL, err := a.API.CaptchaURL(hvErr.Token)
+			if err != nil {
+				return "", "", err
+			}
+
 			// Fresh context: the user may take minutes to solve; the helper
 			// enforces its own 5-minute capture timeout.
-			token, err := hv.Resolve(context.Background(), hvErr.Token)
+			token, err := hv.Resolve(context.Background(), captchaURL)
 			if err == nil {
 				return token, "captcha", nil
 			}

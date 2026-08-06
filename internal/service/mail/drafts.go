@@ -9,9 +9,9 @@ import (
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/idcache"
+	"github.com/roman-16/proton-cli/internal/mailtext"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
-	"github.com/roman-16/proton-cli/internal/render"
 )
 
 // Draft is Content stored server-side: its message ID, the content it holds, and
@@ -244,7 +244,7 @@ func (s *Service) DraftLoad(ctx context.Context, u *keys.Unlocked, id string) (*
 			BCC:     recipientsFromRaw(raw.BCCList),
 			Subject: raw.Subject,
 			Body:    body,
-			HTML:    render.IsHTML(raw.MIMEType),
+			HTML:    mailtext.IsHTML(raw.MIMEType),
 		},
 	}
 	for _, a := range raw.Attachments {

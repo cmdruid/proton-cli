@@ -1,0 +1,120 @@
+package mail
+
+import (
+	"strings"
+
+	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/mailtext"
+	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/spf13/cobra"
+)
+
+func autoreplyCmd() *cobra.Command {
+	c := &cobra.Command{Use: "autoreply", Short: "The automatic reply and its schedule"}
+	c.AddCommand(
+		autoreplyGetCmd(), autoreplySetCmd(),
+		autoreplyToggleCmd("enable", "Turn the auto-reply on, keeping its schedule", ui.Enabled, true),
+		autoreplyToggleCmd("disable", "Turn the auto-reply off, keeping its schedule", ui.Disabled, false),
+	)
+	return c
+}
+
+func autoreplyGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get",
+		Short: "Show the auto-reply and its schedule",
+		Args:  cobra.NoArgs,
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			ar, err := c.App.Mail.AutoReplyGet(c.Ctx)
+			if err != nil {
+				return err
+			}
+			fields := []ui.Field{
+				{Label: "Status", Value: kit.OnOffText(boolInt(ar.Enabled)), Always: true},
+				{Label: "Schedule", Value: ar.ScheduleSummary(), Always: true},
+			}
+			if ar.Zone != "" && ar.Repeat != "permanent" {
+				fields = append(fields, ui.Field{Label: "Time Zone", Value: ar.Zone})
+			}
+			if ar.Message != "" {
+				fields = append(fields, ui.Field{Label: "Message", Value: mailtext.HTMLToText(ar.Message)})
+			}
+			return kit.Show(c, ui.RecordSpec{Object: ar, Fields: fields})
+		}),
+	}
+}
+
+func autoreplySetCmd() *cobra.Command {
+	var ar mailsvc.AutoReply
+	var html bool
+	repeat := &kit.Enum{
+		Name: "repeat", Usage: "How the schedule repeats", Default: "fixed",
+		Values: mailsvc.RepeatNames(),
+	}
+	c := &cobra.Command{
+		Use:   "set",
+		Short: "Configure the auto-reply and turn it on",
+		Long: "Configure the auto-reply and turn it on.\n\n" +
+			"--start and --end are written in the grammar the repeat mode dictates:\n" +
+			"  fixed      2026-07-01T09:00   a date and time in --zone\n" +
+			"  daily      09:00              a time of day, with --days\n" +
+			"  weekly     mon:09:00          a weekday and time\n" +
+			"  monthly    1:09:00            a day of the month and time\n" +
+			"  permanent  -                  no bounds\n\n" +
+			"Proton sends every auto-reply with the subject \"Auto\" and offers no way to\n" +
+			"change it, so neither does proton-cli. Auto-reply is a paid feature.",
+		Args: cobra.NoArgs,
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			mode, err := repeat.Value()
+			if err != nil {
+				return err
+			}
+			ar.Repeat = mode
+			msg, err := kit.ReadTextArg(ar.Message, "--message")
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(msg) == "" {
+				return kit.Fail("A message is required.").
+					Hint(`--message "I'm away until the 14th.", or --message - to read stdin.`)
+			}
+			if !html {
+				msg = mailtext.TextToHTML(msg)
+			}
+			ar.Message = msg
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Enabled, Kind: "settings", Count: 1, Name: "auto-reply",
+				Detail: "on a " + mode + " schedule",
+			}, func() error { return c.App.Mail.AutoReplySet(c.Ctx, ar) })
+		}),
+	}
+	repeat.Register(c)
+	c.Flags().StringVar(&ar.Start, "start", "", "Start of the window (grammar depends on --repeat)")
+	c.Flags().StringVar(&ar.End, "end", "", "End of the window (grammar depends on --repeat)")
+	c.Flags().StringSliceVar(&ar.Days, "days", nil, "Days it is active, for a daily schedule, e.g. mon,tue,wed")
+	c.Flags().StringVar(&ar.Zone, "zone", "", "IANA time zone the schedule is read in (default: the system zone)")
+	c.Flags().StringVar(&ar.Message, "message", "", "Reply body (- reads stdin)")
+	c.Flags().BoolVar(&html, "html", false, "Treat the message as HTML rather than escaping it")
+	return c
+}
+
+func autoreplyToggleCmd(use, short string, action ui.Action, enabled bool) *cobra.Command {
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.NoArgs,
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: action, Kind: "settings", Count: 1, Name: "auto-reply",
+			}, func() error { return c.App.Mail.AutoReplyToggle(c.Ctx, enabled) })
+		}),
+	}
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

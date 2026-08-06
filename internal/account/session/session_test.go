@@ -7,20 +7,19 @@ import (
 	"testing"
 )
 
-func TestFromPartsCarriesEncKeyBlob(t *testing.T) {
-	s := FromParts("uid", "acc", "ref", "encrypted-blob", "App", "https://x")
-	if s.UID != "uid" || s.AccessToken != "acc" || s.RefreshToken != "ref" {
-		t.Errorf("tokens not carried: %+v", s)
+// A session without a sealed key password is one that still needs the account
+// password to decrypt anything; Unlocked is how the account commands report the
+// difference.
+func TestUnlockedTracksTheSealedKeyPassword(t *testing.T) {
+	if (&Session{UID: "u"}).Unlocked() {
+		t.Error("a session with no blob is not unlocked")
 	}
-	if s.EncKeyBlob != "encrypted-blob" {
-		t.Errorf("EncKeyBlob = %q, want encrypted-blob", s.EncKeyBlob)
+	if !(&Session{UID: "u", EncKeyBlob: "blob"}).Unlocked() {
+		t.Error("a session with a blob is unlocked")
 	}
-}
-
-func TestFromPartsNoKeyMaterial(t *testing.T) {
-	s := FromParts("uid", "acc", "ref", "", "App", "https://x")
-	if s.EncKeyBlob != "" {
-		t.Errorf("expected no key material, got blob=%q", s.EncKeyBlob)
+	var none *Session
+	if none.Unlocked() {
+		t.Error("a missing session is not unlocked")
 	}
 }
 

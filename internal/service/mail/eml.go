@@ -16,7 +16,7 @@ import (
 
 	gomime "github.com/ProtonMail/go-mime"
 	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/render"
+	"github.com/roman-16/proton-cli/internal/mailtext"
 )
 
 // Exporting a message rebuilds it as RFC 822: Proton keeps the original header
@@ -74,7 +74,7 @@ func (s *Service) Export(ctx context.Context, u *keys.Unlocked, id string, withA
 	}
 
 	var plain, html string
-	if render.IsHTML(raw.MIMEType) {
+	if mailtext.IsHTML(raw.MIMEType) {
 		html = body
 	} else {
 		plain = body

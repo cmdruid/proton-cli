@@ -1,0 +1,12 @@
+== stdout ==
+{
+  "action": "created",
+  "count": 1,
+  "dry_run": false,
+  "ids": [
+    "kQ81mDx4"
+  ],
+  "kind": "label",
+  "name": "Work"
+}
+== stderr ==

@@ -1,0 +1,8 @@
+== stdout ==
+ID        FROM              SUBJECT                        DATE              FLAGS
+────────  ────────────────  ─────────────────────────────  ────────────────  ─────
+5bH2mQxK  Fastmail Billing  Invoice #2291 is ready         2026-04-15 14:32  ●★📎
+9xL4pQrT  Trailhead Weekly  The north trail is open again  2026-04-15 09:02  ●
+2mNp7RsV  Jane Roe          Re: Quarterly numbers          2026-04-14 17:48
+== stderr ==
+3 messages.

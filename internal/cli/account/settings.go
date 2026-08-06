@@ -1,0 +1,145 @@
+package account
+
+import (
+	"encoding/json"
+
+	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/spf13/cobra"
+)
+
+const settingsPath = "/core/v4/settings"
+
+// specs covers the account-level pages the CLI can write: "Language and time",
+// and the privacy half of "Security and privacy".
+//
+// Password, two-factor, account deletion, recovery secrets and billing are
+// deliberately absent: none of them is a thing a script should change in one
+// line. Proton Sentinel and Dark Web Monitoring are absent too, because Proton
+// stores them by calling enable and disable endpoints rather than writing a
+// value, and silently downgrading a security feature does not belong behind
+// `set`. Both are still reported by `get`.
+var specs = map[string]kit.Setting{
+	"crash-reports": {
+		Path: settingsPath + "/crashreports", Field: "CrashReports",
+		Page: "Security and privacy", Desc: "Send crash reports to Proton",
+		Enum: kit.OnOffChoices(),
+	},
+	"date-format": {
+		Path: settingsPath + "/dateformat", Field: "DateFormat",
+		Page: "Language and time", Desc: "How dates are written",
+		Enum: kit.Ordered("locale", "dd/mm/yyyy", "mm/dd/yyyy", "yyyy-mm-dd"),
+	},
+	"locale": {
+		Path: settingsPath + "/locale", Field: "Locale",
+		Page: "Language and time", Desc: "Interface language, e.g. en_US or de_AT",
+	},
+	"telemetry": {
+		Path: settingsPath + "/telemetry", Field: "Telemetry",
+		Page: "Security and privacy", Desc: "Send anonymous usage data to Proton",
+		Enum: kit.OnOffChoices(),
+	},
+	"time-format": {
+		Path: settingsPath + "/timeformat", Field: "TimeFormat",
+		Page: "Language and time", Desc: "Clock format",
+		Enum: kit.Ordered("locale", "24h", "12h"),
+	},
+	"week-start": {
+		Path: settingsPath + "/weekstart", Field: "WeekStart",
+		Page: "Language and time", Desc: "First day of the week",
+		Enum: kit.Ordered("locale", "monday", "tuesday", "wednesday",
+			"thursday", "friday", "saturday", "sunday"),
+	},
+}
+
+// settingsView is the shape `account settings get` reports.
+//
+// It is a declared struct rather than Proton's raw envelope so machine output is
+// snake_case like every other command's, and so numeric settings arrive as the
+// names `set` accepts instead of as bare integers.
+type settingsView struct {
+	Locale        string `json:"locale"`
+	DateFormat    string `json:"date_format"`
+	TimeFormat    string `json:"time_format"`
+	WeekStart     string `json:"week_start"`
+	RecoveryEmail string `json:"recovery_email,omitempty"`
+	RecoveryPhone string `json:"recovery_phone,omitempty"`
+	Telemetry     string `json:"telemetry"`
+	CrashReports  string `json:"crash_reports"`
+	Sentinel      string `json:"sentinel"`
+	TwoFactor     string `json:"two_factor"`
+}
+
+func settingsCmd() *cobra.Command {
+	return kit.Settings("account", "Account-wide preferences", specs, func(c *kit.Invocation) error {
+		resp, err := c.App.API.Do(c.Ctx, proton.Request{Method: "GET", Path: settingsPath})
+		if err != nil {
+			return err
+		}
+		var env struct {
+			UserSettings struct {
+				Locale       string
+				DateFormat   any
+				TimeFormat   any
+				WeekStart    any
+				Email        struct{ Value string }
+				Phone        struct{ Value string }
+				Telemetry    any
+				CrashReports any
+				HighSecurity struct{ Value any }
+				TwoFactor    struct{ Enabled any }
+			}
+		}
+		if err := json.Unmarshal(resp.Body, &env); err != nil {
+			return err
+		}
+		s := env.UserSettings
+
+		view := settingsView{
+			Locale:        s.Locale,
+			DateFormat:    specs["date-format"].Name(s.DateFormat),
+			TimeFormat:    specs["time-format"].Name(s.TimeFormat),
+			WeekStart:     specs["week-start"].Name(s.WeekStart),
+			RecoveryEmail: s.Email.Value,
+			RecoveryPhone: s.Phone.Value,
+			Telemetry:     kit.OnOffText(kit.IntOf(s.Telemetry)),
+			CrashReports:  kit.OnOffText(kit.IntOf(s.CrashReports)),
+			Sentinel:      kit.OnOffText(kit.IntOf(s.HighSecurity.Value)),
+			TwoFactor:     twoFactorText(kit.IntOf(s.TwoFactor.Enabled)),
+		}
+
+		return kit.Show(c, ui.RecordSpec{
+			Object: view,
+			Fields: []ui.Field{
+				{Label: "Locale", Value: view.Locale},
+				{Label: "Date Format", Value: view.DateFormat},
+				{Label: "Time Format", Value: view.TimeFormat},
+				{Label: "Week Start", Value: view.WeekStart},
+				{Label: "Recovery Email", Value: view.RecoveryEmail},
+				{Label: "Recovery Phone", Value: view.RecoveryPhone},
+				{Label: "Telemetry", Value: view.Telemetry, Always: true},
+				{Label: "Crash Reports", Value: view.CrashReports, Always: true},
+				{Label: "Sentinel", Value: view.Sentinel, Always: true},
+				{Label: "Two-Factor", Value: view.TwoFactor, Always: true},
+			},
+		})
+	})
+}
+
+// twoFactorText names the two-factor methods in effect. Proton reports them as a
+// bitfield; reporting "on" would hide the distinction that decides whether this
+// CLI can sign in at all.
+func twoFactorText(enabled int) string {
+	switch {
+	case enabled == 0:
+		return "off"
+	case enabled&1 != 0 && enabled&2 != 0:
+		return "authenticator app and security key"
+	case enabled&1 != 0:
+		return "authenticator app"
+	case enabled&2 != 0:
+		return "security key"
+	}
+	return "on"
+}

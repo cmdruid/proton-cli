@@ -1,0 +1,82 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+	"unicode/utf8"
+)
+
+// Field is one labelled value in a record.
+//
+// Labels are Title Case words, spelled out: "Signature", never "Sig" or
+// "signature". The label column is measured at render time from the fields
+// actually present, so no view carries a hand-tuned width that a longer label
+// can silently break.
+type Field struct {
+	Label string
+	Value string
+	// Always keeps the field even when Value is empty, for facts whose absence
+	// is itself information ("Signature: (none)").
+	Always bool
+	// ID styles the value as a Proton reference and shortens it on a terminal.
+	ID bool
+}
+
+// RecordSpec describes a single object.
+type RecordSpec struct {
+	Fields []Field
+	// Object replaces the field list in machine formats. It should be the
+	// service's own struct, so JSON keeps its snake_case tags rather than
+	// echoing display labels.
+	Object any
+}
+
+// Record renders one object as an aligned label/value block on Out, or as the
+// object itself in a machine format.
+func Record(u *UI, spec RecordSpec) error {
+	if u.Format.Machine() {
+		return u.encode(spec.Object)
+	}
+	writeFields(u, spec.Fields, "")
+	return nil
+}
+
+// writeFields draws a label/value block, prefixed by indent. Empty fields are
+// dropped unless marked Always. A value containing newlines continues in the
+// value column, so a wrapped address or a short signature stays visually inside
+// its field.
+func writeFields(u *UI, fields []Field, indent string) {
+	visible := make([]Field, 0, len(fields))
+	for _, f := range fields {
+		if f.Value == "" && !f.Always {
+			continue
+		}
+		visible = append(visible, f)
+	}
+	if len(visible) == 0 {
+		return
+	}
+
+	width := 0
+	for _, f := range visible {
+		if n := utf8.RuneCountInString(f.Label); n > width {
+			width = n
+		}
+	}
+	width++ // the colon
+
+	short := u.ShortIDs()
+	theme := u.theme
+	for _, f := range visible {
+		label := pad(f.Label+":", width, false)
+		value := f.Value
+		if f.ID {
+			value = theme.ID(Short(value, short))
+		}
+		lines := strings.Split(value, "\n")
+		_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, theme.Hint(label), lines[0])
+		for _, cont := range lines[1:] {
+			_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, strings.Repeat(" ", width), cont)
+		}
+	}
+}

@@ -4,7 +4,7 @@ Read, write, send, search, and organize mail. Bodies are decrypted locally and o
 
 `proton-cli mail` is the mailbox. Everything you configure lives under [`mail settings`](#settings), one subcommand per page of Proton's own mail settings.
 
-Anywhere a command takes `REF`, a subject or sender works as well as an ID. See [Concepts](../concepts.md).
+Anywhere a command takes `REF`, a subject or sender works as well as an ID. See [The language](../language.md).
 
 ## Messages
 
@@ -34,12 +34,12 @@ proton-cli mail messages search --to alice@proton.me --before 2026-04-01 --limit
 ### Read
 
 ```bash
-proton-cli mail messages read REF                       # headers, body, attachment list
-proton-cli mail messages read --format html REF         # original HTML
-proton-cli mail messages read --format raw REF          # untouched body
-proton-cli mail messages read --body-only REF > body.txt
-proton-cli mail messages read --strip-quotes REF        # drop quoted reply blocks
-proton-cli mail messages read --include-inline REF      # list inline images too
+proton-cli mail messages get REF                       # headers, body, attachment list
+proton-cli mail messages get --format html REF         # original HTML
+proton-cli mail messages get --format raw REF          # untouched body
+proton-cli mail messages get --body-only REF > body.txt
+proton-cli mail messages get --strip-quotes REF        # drop quoted reply blocks
+proton-cli mail messages get --include-inline REF      # list inline images too
 ```
 
 Text output includes a `Sig:` line with the verdict of the signature check on the sender's key.
@@ -95,7 +95,7 @@ proton-cli mail messages forward REF --to a@b.c --no-attachments # leave them be
 proton-cli mail messages reply REF --body Hi --draft             # stop before sending
 ```
 
-`--draft` prints the new draft's ID so you can pick it up with `mail drafts edit`, the same as clicking Reply in the web client and leaving the composer open. Reply and forward also take `--to/--cc/--bcc`, `--attach`, `--attach-inline`, `--html`, `--from`, `--no-signature`, `--send-at`, `--expires` and the `--eo-password` pair.
+`--draft` prints the new draft's ID so you can pick it up with `mail drafts update`, the same as clicking Reply in the web client and leaving the composer open. Reply and forward also take `--to/--cc/--bcc`, `--attach`, `--attach-inline`, `--html`, `--from`, `--no-signature`, `--send-at`, `--expires` and the `--eo-password` pair.
 
 ### Export
 
@@ -109,7 +109,7 @@ proton-cli mail conversations export REF --output thread.mbox
 
 Standalone RFC 822 documents you can open in any mail client, grep, or hand to other tools. Export takes the same filters as `trash` and `move`, so archiving a whole folder is one command. `--format eml` writes one file per message named `<date> <subject>.eml`; `--format mbox` concatenates everything into one file or stream. `--no-attachments` skips attachment downloads, which is much faster for a large archive.
 
-Two things to know: **exported files are not encrypted** — that is what exporting means — and the original DKIM signatures will not verify against the rebuilt body, exactly as with the web client's export.
+**Exported files are not encrypted**, and their original DKIM signatures no longer verify. The web client's export behaves the same way.
 
 ### Import
 
@@ -119,7 +119,7 @@ proton-cli mail drafts create --eml ./message.eml
 proton-cli mail messages send --eml ./message.eml --to someone-else@proton.me
 ```
 
-`--eml` reads an RFC 822 file — recipients, subject, body, and attachments — and any flag you also pass overrides what the file says. Because the file is already a finished message, no signature is appended to it.
+`--eml` reads an RFC 822 file - recipients, subject, body, and attachments - and any flag you also pass overrides what the file says. Because the file is already a finished message, no signature is appended to it.
 
 There is no way to place an old message into your archive: Proton exposes no endpoint that ingests one, for any client. Migrating a mailbox from another provider is Easy Switch, which is [not covered](../limitations.md).
 
@@ -135,8 +135,10 @@ proton-cli mail messages unschedule --all
 
 ```bash
 proton-cli mail messages trash REF...
-proton-cli mail messages delete REF...              # permanent
-proton-cli mail messages move --dest archive REF...
+proton-cli mail messages delete REF...               # permanent
+proton-cli mail messages move REF... --into archive  # it leaves where it was
+proton-cli mail messages label REF... --label Work   # it stays where it is
+proton-cli mail messages unlabel REF... --label Work
 proton-cli mail messages mark read REF...
 proton-cli mail messages mark unread REF...
 proton-cli mail messages star REF...
@@ -147,23 +149,23 @@ Each of those also takes filters instead of references, and acts on everything t
 
 ```bash
 proton-cli mail messages trash --unread --older-than 30d
-proton-cli mail messages move --dest archive --from newsletter@example.com --older-than 7d
+proton-cli mail messages move --into archive --from newsletter@example.com --older-than 7d
 proton-cli mail messages delete --folder spam --all
 proton-cli mail messages mark read --folder inbox --all
 ```
 
-Filters: `--folder`, `--from`, `--to`, `--subject`, `--keyword`, `--unread`, `--older-than`, `--newer-than`, `--limit` (default 150, Proton's per-page cap), `--all`. Add `--dry-run` to see the list first.
+Filters: `--folder`, `--from`, `--to`, `--subject`, `--keyword`, `--unread`, `--starred`, `--older-than`, `--newer-than`, `--limit` (default 150, Proton's per-page cap), `--all`. Add `--dry-run` to see the list first.
 
 ## Drafts
 
-A draft is a message, so `mail messages read`, `move` and the rest already work on one. This tree holds what only makes sense before a message goes out.
+A draft is a message, so `mail messages get`, `move` and the rest already work on one. This tree holds what only makes sense before a message goes out.
 
 ```bash
 proton-cli mail drafts create --to alice@proton.me --subject Report --body "Draft one."
 proton-cli mail drafts list
-proton-cli mail drafts edit REF --body "Draft two."
-proton-cli mail drafts edit REF --subject "Q1 report" --to alice@proton.me --cc bob@proton.me
-proton-cli mail drafts edit REF --attach ./report.pdf --detach old-annex.xlsx
+proton-cli mail drafts update REF --body "Draft two."
+proton-cli mail drafts update REF --subject "Q1 report" --to alice@proton.me --cc bob@proton.me
+proton-cli mail drafts update REF --attach ./report.pdf --detach old-annex.xlsx
 proton-cli mail drafts send REF
 proton-cli mail drafts send REF --send-at 2026-05-01T09:00
 proton-cli mail drafts delete REF
@@ -180,13 +182,13 @@ Conversations are whole threads, with the same verbs as messages.
 ```bash
 proton-cli mail conversations list --folder inbox --unread
 proton-cli mail conversations search --keyword invoice
-proton-cli mail conversations read REF                 # every message, chronological
-proton-cli mail conversations read --summary REF        # one line per message
-proton-cli mail conversations read --strip-quotes REF
+proton-cli mail conversations get REF            # every message, chronological
+proton-cli mail conversations get --summary REF  # one line per message
+proton-cli mail conversations get --strip-quotes REF
 proton-cli mail conversations reply REF --body "Works for me."
 proton-cli mail conversations export REF --output thread.mbox
 proton-cli mail conversations trash REF...
-proton-cli mail conversations move --dest archive REF...
+proton-cli mail conversations move --into archive REF...
 proton-cli mail conversations mark read REF...
 proton-cli mail conversations star REF...
 ```
@@ -194,11 +196,11 @@ proton-cli mail conversations star REF...
 ## Attachments
 
 ```bash
-proton-cli mail attachments list MESSAGE_ID
-proton-cli mail attachments list --include-inline MESSAGE_ID
-proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID --output ./file.pdf
-proton-cli mail attachments download MESSAGE_ID --all --output-dir ./attachments/
-proton-cli mail attachments download MESSAGE_ID ATTACHMENT_ID --output - | less
+proton-cli mail messages attachments list MESSAGE_ID
+proton-cli mail messages attachments list --include-inline MESSAGE_ID
+proton-cli mail messages attachments download MESSAGE_ID ATTACHMENT_ID --output ./file.pdf
+proton-cli mail messages attachments download MESSAGE_ID --all --output-dir ./attachments/
+proton-cli mail messages attachments download MESSAGE_ID ATTACHMENT_ID --output - | less
 ```
 
 Existing files are never overwritten silently: names collide into `file (2).pdf`, or pass `--force`.
@@ -230,7 +232,7 @@ proton-cli mail settings set delay-send 10
 proton-cli mail settings set pm-signature off
 ```
 
-Every key has a fixed set of values, validated before anything is sent. Named values replace Proton's magic numbers, and the numbers still work:
+Every key has a fixed set of values, checked before anything is sent. Values can be given by name or by Proton's own number:
 
 ```console
 $ proton-cli mail settings set view-mode threads
@@ -261,13 +263,15 @@ Proton stores signatures as HTML. Plain text is escaped and its newlines become 
 ```bash
 proton-cli mail settings labels list
 proton-cli mail settings labels create --name Important --color "#8080FF"
-proton-cli mail settings labels create --name Projects --folder
-proton-cli mail settings labels create --name Clients --folder --parent PARENT_FOLDER_ID
+proton-cli mail settings folders create --name Projects
+proton-cli mail settings folders create --name Clients --parent PARENT_FOLDER_ID
 proton-cli mail settings labels update LABEL_ID --name Renamed --color "#DB60D6"
 proton-cli mail settings labels delete LABEL_ID...
 ```
 
-Colors have to be one of Proton's accent colors; an invalid value prints the allowed list. `--folder` and `--dest` on the message commands keep taking these names and IDs.
+Colors have to be one of Proton's accent colors; an invalid value prints the whole palette, and is refused before anything is sent.
+
+A message lives in exactly one folder and carries any number of labels. `move --into` takes what `folders list` shows; `label --label` takes what `labels list` shows.
 
 ### Filters
 
@@ -287,7 +291,7 @@ proton-cli mail settings filters delete FILTER_ID
 ### Auto-reply
 
 ```bash
-proton-cli mail settings autoreply                    # current schedule and message
+proton-cli mail settings autoreply get                    # current schedule and message
 proton-cli mail settings autoreply set --repeat fixed \
   --start 2026-07-01T09:00 --end 2026-07-14T18:00 \
   --message "I'm away until the 14th."
@@ -299,11 +303,11 @@ proton-cli mail settings autoreply enable
 
 | `--repeat` | `--start` / `--end` | Also takes |
 | --- | --- | --- |
-| `fixed` | `2026-07-01T09:00` — a date and time | `--zone` |
-| `daily` | `09:00` — a time of day | `--days mon,tue,wed`, `--zone` |
-| `weekly` | `mon:09:00` — a weekday and time | `--zone` |
-| `monthly` | `1:09:00` — a day of the month and time | `--zone` |
-| `permanent` | — | |
+| `fixed` | `2026-07-01T09:00` - a date and time | `--zone` |
+| `daily` | `09:00` - a time of day | `--days mon,tue,wed`, `--zone` |
+| `weekly` | `mon:09:00` - a weekday and time | `--zone` |
+| `monthly` | `1:09:00` - a day of the month and time | `--zone` |
+| `permanent` | *not used* | |
 
 `--zone` is any IANA name and defaults to your system's. `--message` takes `-` for stdin and is stored as HTML, so plain text is escaped with its newlines turned into line breaks unless you pass `--html`.
 

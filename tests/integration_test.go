@@ -151,14 +151,38 @@ func runJSON(t *testing.T, args ...string) map[string]interface{} {
 }
 
 // runJSONArray runs with `--output json` and parses stdout as a JSON array.
+// runJSONArray returns the rows of a collection.
+//
+// Every list is an envelope keyed by its plural noun - {"messages": [...],
+// "count": 3} - so this unwraps whichever array it finds rather than making every
+// caller know the noun. The count is checked against it, since the two disagreeing
+// would be a bug in the envelope itself.
 func runJSONArray(t *testing.T, args ...string) []interface{} {
 	t.Helper()
 	stdout := runOK(t, append(args, "--output", "json")...)
-	var result []interface{}
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("failed to parse JSON array: %v\nraw: %s", err, truncateOutput(stdout))
+	var env map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
+		t.Fatalf("collection output is not an envelope: %v\nraw: %s", err, truncateOutput(stdout))
 	}
-	return result
+	var rows []interface{}
+	found := ""
+	for key, value := range env {
+		if arr, ok := value.([]interface{}); ok {
+			if found != "" {
+				t.Fatalf("envelope has two arrays (%q and %q): %s", found, key, truncateOutput(stdout))
+			}
+			rows, found = arr, key
+		}
+	}
+	if found == "" {
+		t.Fatalf("envelope has no array of rows: %s", truncateOutput(stdout))
+	}
+	if count, ok := env["count"].(float64); !ok {
+		t.Errorf("envelope has no count: %s", truncateOutput(stdout))
+	} else if int(count) != len(rows) {
+		t.Errorf("count is %d but %q has %d rows", int(count), found, len(rows))
+	}
+	return rows
 }
 
 // ── Naming ──
@@ -529,7 +553,7 @@ func (f *sharedAttachMail) ensure() {
 			f.err = fmt.Errorf("shared attachment mail was not delivered")
 			return
 		}
-		out, _, code, e := runArgs(nil, "mail", "attachments", "list", f.msgID, "--output", "json")
+		out, _, code, e := runArgs(nil, "mail", "messages", "attachments", "list", f.msgID, "--output", "json")
 		if e != nil || code != 0 {
 			f.err = fmt.Errorf("list shared attachment failed (exit %d): %v", code, e)
 			return

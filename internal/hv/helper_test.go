@@ -170,13 +170,13 @@ func TestResolveProcessFailedToStart(t *testing.T) {
 	}
 }
 
-func TestResolveEmptyChallengeRejected(t *testing.T) {
+func TestResolveEmptyURLRejected(t *testing.T) {
 	_, err := Resolve(context.Background(), "")
 	if err == nil {
-		t.Fatal("expected error for empty challenge, got nil")
+		t.Fatal("expected error for an empty captcha url, got nil")
 	}
-	if !strings.Contains(err.Error(), "empty challenge") {
-		t.Errorf("err = %v, want 'empty challenge' message", err)
+	if !strings.Contains(err.Error(), "empty captcha url") {
+		t.Errorf("err = %v, want 'empty captcha url' message", err)
 	}
 }
 
@@ -186,7 +186,7 @@ func TestResolveStubHelperMissing(t *testing.T) {
 	if len(helperBinary) != 0 {
 		t.Skip("helper binary is embedded in this build; stub test irrelevant")
 	}
-	_, err := Resolve(context.Background(), "valid-challenge")
+	_, err := Resolve(context.Background(), "https://mail-api.proton.me/core/v4/captcha?Token=x")
 	if !errors.Is(err, ErrHelperMissing) {
 		t.Errorf("err = %v, want ErrHelperMissing", err)
 	}

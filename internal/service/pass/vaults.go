@@ -10,8 +10,8 @@ import (
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
 	"github.com/roman-16/proton-cli/internal/errs"
-	pb "github.com/roman-16/proton-cli/internal/proto"
 	"github.com/roman-16/proton-cli/internal/proton"
+	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -43,14 +43,14 @@ func TestMailDraftsLifecycle(t *testing.T) {
 	}
 
 	// Editing replaces only what was passed.
-	runOK(t, "mail", "drafts", "edit", "--body", "second version", "--", id)
-	read := runOK(t, "mail", "messages", "read", "--", id)
+	runOK(t, "mail", "drafts", "update", "--body", "second version", "--", id)
+	read := runOK(t, "mail", "messages", "get", "--", id)
 	assertContains(t, read, "second version")
 	assertNotContains(t, read, "first version")
 	assertField(t, read, "Subject:", subject)
 
-	runOK(t, "mail", "drafts", "edit", "--subject", subject+"-renamed", "--", id)
-	read = runOK(t, "mail", "messages", "read", "--", id)
+	runOK(t, "mail", "drafts", "update", "--subject", subject+"-renamed", "--", id)
+	read = runOK(t, "mail", "messages", "get", "--", id)
 	assertContains(t, read, subject+"-renamed")
 	assertContains(t, read, "second version")
 
@@ -62,14 +62,14 @@ func TestMailDraftsLifecycle(t *testing.T) {
 	}
 	cleanupRun(t, "Delete inbox copy: proton-cli mail messages delete "+inboxID,
 		"mail", "messages", "delete", "--", inboxID)
-	assertContains(t, runOK(t, "mail", "messages", "read", "--", inboxID), "second version")
+	assertContains(t, runOK(t, "mail", "messages", "get", "--", inboxID), "second version")
 }
 
 func TestMailDraftsCreateDryRunCreatesNothing(t *testing.T) {
 	subject := testID() + "-draft-dry"
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "drafts", "create",
 		"--to", selfEmail(), "--subject", subject, "--body", "x")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	if messageIDInFolder("drafts", subject) != "" {
 		t.Error("--dry-run created a draft")
 	}
@@ -88,18 +88,18 @@ func TestMailDraftsAttachAndDetach(t *testing.T) {
 	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
-	assertContains(t, runOK(t, "mail", "attachments", "list", id), "note.txt")
+	assertContains(t, runOK(t, "mail", "messages", "attachments", "list", id), "note.txt")
 
 	// --detach takes the file name, not just an ID.
-	runOK(t, "mail", "drafts", "edit", "--detach", "note.txt", "--", id)
-	assertNotContains(t, runOK(t, "mail", "attachments", "list", id), "note.txt")
+	runOK(t, "mail", "drafts", "update", "--detach", "note.txt", "--", id)
+	assertNotContains(t, runOK(t, "mail", "messages", "attachments", "list", id), "note.txt")
 }
 
 func TestMailDraftsEditRejectsASentMessage(t *testing.T) {
 	_, _, subject := plainMail(t)
 	// REF resolution for drafts is scoped to the Drafts folder, so a sent
 	// message's subject must not resolve.
-	_, _, code := run(t, "mail", "drafts", "edit", "--body", "nope", subject)
+	_, _, code := run(t, "mail", "drafts", "update", "--body", "nope", subject)
 	if code != 3 {
 		t.Errorf("expected exit 3 for a subject that is not a draft, got %d", code)
 	}
@@ -132,14 +132,14 @@ func TestMailMessagesReply(t *testing.T) {
 	cleanupRun(t, "Delete reply: proton-cli mail messages delete "+replyID,
 		"mail", "messages", "delete", "--", replyID)
 
-	body := runOK(t, "mail", "messages", "read", "--", replyID)
+	body := runOK(t, "mail", "messages", "get", "--", replyID)
 	assertField(t, body, "Subject:", "Re: "+subject)
 	assertContains(t, body, "My answer here.")
 	assertContains(t, body, "wrote:")
 	assertContains(t, body, "> Integration test body")
 
 	// --strip-quotes removes exactly the quote we just wrote.
-	stripped := runOK(t, "mail", "messages", "read", "--strip-quotes", "--", replyID)
+	stripped := runOK(t, "mail", "messages", "get", "--strip-quotes", "--", replyID)
 	assertContains(t, stripped, "My answer here.")
 	assertNotContains(t, stripped, "> Integration test body")
 
@@ -164,7 +164,7 @@ func TestMailMessagesReplyNoQuote(t *testing.T) {
 	cleanupRun(t, "Delete reply: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
-	body := runOK(t, "mail", "messages", "read", "--", id)
+	body := runOK(t, "mail", "messages", "get", "--", id)
 	assertContains(t, body, "Terse.")
 	assertNotContains(t, body, "wrote:")
 }
@@ -185,14 +185,14 @@ func TestMailMessagesReplyAsDraft(t *testing.T) {
 	if messageIDInFolder("drafts", "Re: "+subject) == "" {
 		t.Error("--draft did not leave the reply in Drafts")
 	}
-	assertContains(t, runOK(t, "mail", "messages", "read", "--", id), "Later.")
+	assertContains(t, runOK(t, "mail", "messages", "get", "--", id), "Later.")
 }
 
 func TestMailMessagesReplyDryRun(t *testing.T) {
 	msgID, _, _ := plainMail(t)
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "reply",
 		"--body", "x", "--", msgID)
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	assertContains(t, stderr, "would reply")
 }
 
@@ -208,7 +208,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 		"mail", "messages", "delete", "--", fwdID)
 
 	// The sent copy carries the forwarded headers and the original's attachment.
-	sent := runOK(t, "mail", "messages", "read", "--", fwdID)
+	sent := runOK(t, "mail", "messages", "get", "--", fwdID)
 	assertContains(t, sent, marker)
 	assertContains(t, sent, "Forwarded Message")
 	assertContains(t, sent, attName)
@@ -225,12 +225,12 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 	cleanupRun(t, "Delete received forward (alt): proton-cli --profile alt mail messages delete "+recvID,
 		alt("mail", "messages", "delete", recvID)...)
 
-	atts := runOK(t, alt("mail", "attachments", "list", recvID)...)
+	atts := runOK(t, alt("mail", "messages", "attachments", "list", recvID)...)
 	assertContains(t, atts, attName)
 
 	// And the bytes survived the re-keying rather than the upload.
 	dir := t.TempDir()
-	runOK(t, alt("mail", "attachments", "download", recvID, "--all", "--output-dir", dir)...)
+	runOK(t, alt("mail", "messages", "attachments", "download", recvID, "--all", "--output-dir", dir)...)
 	got, err := os.ReadFile(filepath.Join(dir, attName))
 	if err != nil {
 		t.Fatalf("read forwarded attachment: %v", err)
@@ -249,7 +249,7 @@ func TestMailMessagesForwardWithoutAttachments(t *testing.T) {
 	cleanupRun(t, "Delete forward: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
-	raw := runOK(t, "mail", "attachments", "list", id, "--output", "json")
+	raw := runOK(t, "mail", "messages", "attachments", "list", id, "--output", "json")
 	if strings.Contains(raw, attName) {
 		t.Errorf("--no-attachments still carried %s: %s", attName, raw)
 	}
@@ -273,14 +273,14 @@ func TestMailSendFromRejectsAnAddressYouDoNotOwn(t *testing.T) {
 	if code != 3 {
 		t.Errorf("expected exit 3 for an unknown --from, got %d", code)
 	}
-	assertContains(t, stderr, "can send mail")
+	assertContains(t, stderr, "Can Send")
 }
 
 func TestMailSendFromAcceptsYourOwnAddress(t *testing.T) {
 	subject := testID() + "-from"
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
 		"--from", selfEmail(), "--to", selfEmail(), "--subject", subject, "--body", "x")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	assertContains(t, stderr, selfEmail())
 }
 
@@ -310,13 +310,13 @@ func TestMailSignatureIsAppliedAndSuppressible(t *testing.T) {
 		"--to", selfEmail(), "--subject", subject, "--body", "Body text."))
 	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
-	assertContains(t, runOK(t, "mail", "messages", "read", "--", id), marker)
+	assertContains(t, runOK(t, "mail", "messages", "get", "--", id), marker)
 
 	bare := strings.TrimSpace(runOK(t, "mail", "drafts", "create",
 		"--to", selfEmail(), "--subject", subject+"-bare", "--body", "Body text.", "--no-signature"))
 	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+bare,
 		"mail", "messages", "delete", "--", bare)
-	assertNotContains(t, runOK(t, "mail", "messages", "read", "--", bare), marker)
+	assertNotContains(t, runOK(t, "mail", "messages", "get", "--", bare), marker)
 }
 
 // primaryAddressID returns the account's first address ID.

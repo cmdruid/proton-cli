@@ -13,10 +13,10 @@
 //
 // Contract:
 //
-//	proton-cli-hv <challenge-token>
+//	proton-cli-hv <captcha-page-url>
 //
 //	Exit codes
-//	  0   success; stdout = "<challenge>:<recaptcha_response>"
+//	  0   success; stdout = the solved token, verbatim
 //	  2   bad usage (wrong/missing argv)
 //	  3   webview unavailable on this system
 //	  4   user cancelled (window closed before solving)
@@ -47,35 +47,33 @@ import (
 )
 
 const (
-	verifyOrigin = "https://verify.proton.me"
-	verifyPath   = "/"
-
 	// Window times out after this long with no postMessage. Keeps
 	// helper from hanging forever in agent-driven contexts.
 	captureTimeout = 5 * time.Minute
 
-	// Init script: runs at the start of every page load. Listens for
-	// the HUMAN_VERIFICATION_SUCCESS postMessage that Verify.tsx
-	// broadcasts after the user solves the CAPTCHA. broadcast.ts uses
-	// `window.parent.postMessage(serialized, '*')`; for a top-level
-	// page in a webview, window.parent === window.self, so the message
-	// is dispatched on this same window where our listener is registered.
+	// Init script: runs at the start of every page load. Listens for the
+	// pm_captcha message the CAPTCHA page posts once the challenge is solved.
 	//
-	// Payload shape (from packages/components/.../HumanVerificationModal.tsx
-	// and applications/verify/src/app/broadcast.ts):
+	// The page posts to window.parent, expecting to be framed. Top-level in a
+	// webview, window.parent === window.self, so the message arrives on this
+	// same window, where the listener is registered.
 	//
-	//   JSON.stringify({
-	//     type: 'HUMAN_VERIFICATION_SUCCESS',
-	//     payload: { token: '<challenge>:<recaptcha_response>', type: 'captcha' }
-	//   })
+	// Payload shape, per the page's own sendToken():
+	//
+	//   { type: 'pm_captcha',         token: '<challenge>:<response>' }
+	//   { type: 'pm_captcha_expired', token: ... }   // solved too long ago
+	//   { type: 'pm_height',          height: <px> } // sizing, for an iframe
+	//
+	// The token is passed on verbatim: the web client puts exactly this string
+	// in x-pm-human-verification-token, so interpreting it is neither needed
+	// nor safe.
 	initScript = `
 (() => {
   window.addEventListener('message', (e) => {
     let d = e.data;
     if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) { return; } }
-    if (!d || d.type !== 'HUMAN_VERIFICATION_SUCCESS') return;
-    if (!d.payload || !d.payload.token) return;
-    try { window.captureToken(d.payload.token, d.payload.type || 'captcha'); }
+    if (!d || d.type !== 'pm_captcha' || !d.token) return;
+    try { window.captureToken(d.token, 'captcha'); }
     catch (err) { console.error('captureToken bind failed:', err); }
   }, false);
 })();
@@ -102,11 +100,16 @@ func fail(code int, category, detail string) {
 
 func main() {
 	if len(os.Args) != 2 {
-		fail(exitUsage, "usage", "expected exactly one argument: <challenge-token>")
+		fail(exitUsage, "usage", "expected exactly one argument: <captcha-page-url>")
 	}
-	challenge := os.Args[1]
-	if challenge == "" {
-		fail(exitUsage, "usage", "challenge token is empty")
+	// The parent decides which URL to open, because that depends on the API it
+	// is talking to. This process only renders it.
+	pageURL, err := url.Parse(os.Args[1])
+	if err != nil {
+		fail(exitUsage, "usage", "unparseable captcha url: "+err.Error())
+	}
+	if pageURL.Scheme != "https" && pageURL.Scheme != "http" {
+		fail(exitUsage, "usage", "captcha url must be http or https, got "+pageURL.Scheme)
 	}
 
 	// Linux-specific guard: bail before webkit even tries to init,
@@ -157,17 +160,7 @@ func main() {
 		}
 	}()
 
-	// Build URL: https://verify.proton.me/?methods=captcha&token=<challenge>
-	u, err := url.Parse(verifyOrigin + verifyPath)
-	if err != nil {
-		fail(exitNetwork, "network", "URL parse failed: "+err.Error())
-	}
-	q := u.Query()
-	q.Set("methods", "captcha")
-	q.Set("token", challenge)
-	u.RawQuery = q.Encode()
-
-	w.Navigate(u.String())
+	w.Navigate(pageURL.String())
 	w.Run()
 	close(timeoutDone)
 

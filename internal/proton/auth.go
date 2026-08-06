@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/ProtonMail/go-srp"
+	"github.com/roman-16/proton-cli/internal/errs"
 )
 
 type authInfo struct {
@@ -33,11 +34,25 @@ type authResp struct {
 	} `json:"2FA"`
 }
 
+// Two-factor methods, as the bitfield Proton returns in 2FA.Enabled.
+// Mirrors SETTINGS_2FA_ENABLED in WebClients
+// (packages/shared/lib/interfaces/UserSettings.ts).
+const (
+	twoFAOTP   = 1
+	twoFAFIDO2 = 2
+)
+
+// TOTPFunc supplies a two-factor code. It is called only when the server says
+// the account has TOTP enabled, so an account without two-factor never triggers
+// a prompt and a code is never asked for speculatively - which matters, because
+// a TOTP is only valid for thirty seconds.
+type TOTPFunc func() (string, error)
+
 // Login performs the full web-client auth flow (unauth session → SRP → 2FA).
 // On a Proton 9001 (human-verification) response from the SRP step, Login
 // consults the installed HVResolver (if any) and retries the auth POST once
 // with HV headers, redoing getAuthInfo to obtain a fresh SRPSession.
-func (c *Client) Login(ctx context.Context, username string, password []byte, totp string) error {
+func (c *Client) Login(ctx context.Context, username string, password []byte, totp TOTPFunc) error {
 	sess, err := c.createSession(ctx)
 	if err != nil {
 		return fmt.Errorf("login: %w", err)
@@ -68,41 +83,94 @@ func (c *Client) Login(ctx context.Context, username string, password []byte, to
 	c.uid, c.acc, c.ref = auth.UID, auth.AccessToken, auth.RefreshToken
 	c.mu.Unlock()
 
-	if auth.TwoFA.Enabled&1 != 0 {
-		if totp == "" {
-			return fmt.Errorf("account requires 2FA but no TOTP code provided")
+	switch {
+	case auth.TwoFA.Enabled&twoFAOTP != 0:
+		if totp == nil {
+			return fmt.Errorf("login: account requires a two-factor code")
 		}
-		if err := c.auth2FA(ctx, totp); err != nil {
+		code, err := totp()
+		if err != nil {
+			return err
+		}
+		if err := c.auth2FA(ctx, code); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}
+	case auth.TwoFA.Enabled&twoFAFIDO2 != 0:
+		// A security key needs a browser to talk WebAuthn, which a terminal has no
+		// way to do. Saying so is better than the stream of 401s that would follow
+		// a silently half-finished sign-in.
+		return errs.Problemf("This account signs in with a security key, which proton-cli cannot use.").
+			Hint("add a TOTP authenticator app at https://account.proton.me/mail/account-password,",
+				"then sign in with --totp or let proton-cli ask for the code.").Exit(2)
+	case auth.TwoFA.Enabled != 0:
+		return errs.Problemf("This account uses a two-factor method proton-cli does not support (0x%x).",
+			auth.TwoFA.Enabled).Exit(2)
 	}
 	return nil
 }
 
-// UnlockPasswordScope performs SRP re-auth within the current session,
-// unlocking the "locked" scope required for sensitive mutations.
-func (c *Client) UnlockPasswordScope(ctx context.Context, username string, password []byte) error {
-	info, err := c.getAuthInfo(ctx, username)
+// srpCall runs one SRP exchange against path within the current session and
+// validates the server's proof.
+//
+// It is the single SRP code path: signing in and elevating a scope differ only
+// in which endpoint they call and what they add to the body. Sharing it is what
+// guarantees both verify the server's proof, which is the half of SRP that
+// authenticates Proton to us.
+//
+// Mirrors srpAuth in WebClients (packages/shared/lib/srp.ts), whose
+// callAndValidate rejects an unexpected server proof for every caller.
+func (c *Client) srpCall(
+	ctx context.Context,
+	method, path, username string,
+	password []byte,
+	info *authInfo,
+	extra map[string]any,
+	hvToken, hvType string,
+) ([]byte, error) {
+	auth, err := srp.NewAuth(info.Version, username, password, info.Salt, info.Modulus, info.ServerEphemeral)
 	if err != nil {
-		return fmt.Errorf("scope unlock: %w", err)
+		return nil, fmt.Errorf("SRP setup: %w", err)
 	}
-	srpAuth, err := srp.NewAuth(info.Version, username, password, info.Salt, info.Modulus, info.ServerEphemeral)
+	proofs, err := auth.GenerateProofs(2048)
 	if err != nil {
-		return fmt.Errorf("scope unlock: %w", err)
+		return nil, fmt.Errorf("SRP proofs: %w", err)
 	}
-	proofs, err := srpAuth.GenerateProofs(2048)
-	if err != nil {
-		return fmt.Errorf("scope unlock: %w", err)
-	}
-	body, _ := json.Marshal(map[string]any{
+
+	payload := map[string]any{
 		"ClientProof":     base64.StdEncoding.EncodeToString(proofs.ClientProof),
 		"ClientEphemeral": base64.StdEncoding.EncodeToString(proofs.ClientEphemeral),
 		"SRPSession":      info.SRPSession,
-	})
-	if _, err := c.rawAuth(ctx, "PUT", "/core/v4/users/password", body); err != nil {
-		return err
 	}
-	return nil
+	for k, v := range extra {
+		payload[k] = v
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := c.rawAuthWithHV(ctx, method, path, body, hvToken, hvType)
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Code        int
+		ServerProof string
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return nil, fmt.Errorf("SRP response parse: %w", err)
+	}
+	if r.Code != 1000 {
+		return nil, parseAuthError(raw, r.Code)
+	}
+	serverProof, err := base64.StdEncoding.DecodeString(r.ServerProof)
+	if err != nil {
+		return nil, fmt.Errorf("server proof decode: %w", err)
+	}
+	if !bytes.Equal(serverProof, proofs.ExpectedServerProof) {
+		return nil, fmt.Errorf("server proof verification failed")
+	}
+	return raw, nil
 }
 
 func (c *Client) createSession(ctx context.Context) (*authResp, error) {
@@ -129,8 +197,21 @@ func (c *Client) createSession(ctx context.Context) (*authResp, error) {
 	return &r, nil
 }
 
-func (c *Client) getAuthInfo(ctx context.Context, username string) (*authInfo, error) {
-	body, _ := json.Marshal(map[string]string{"Username": username})
+// getAuthInfo fetches the SRP parameters for username.
+//
+// Intent identifies the sign-in flow, and ReauthScope tells the server which
+// elevation the following exchange is for; both are what the web clients send
+// (packages/shared/lib/api/auth.ts getInfo). reauthScope is empty for a fresh
+// sign-in.
+func (c *Client) getAuthInfo(ctx context.Context, username string, reauthScope Scope) (*authInfo, error) {
+	payload := map[string]any{"Intent": "Proton"}
+	if username != "" {
+		payload["Username"] = username
+	}
+	if reauthScope != "" {
+		payload["ReauthScope"] = string(reauthScope)
+	}
+	body, _ := json.Marshal(payload)
 	raw, err := c.rawAuth(ctx, "POST", "/core/v4/auth/info", body)
 	if err != nil {
 		return nil, err
@@ -148,45 +229,18 @@ func (c *Client) getAuthInfo(ctx context.Context, username string) (*authInfo, e
 // loginSRP runs getAuthInfo + the SRP POST /auth in one shot. When
 // hvToken/hvType are non-empty they're attached as HV headers on the auth POST.
 func (c *Client) loginSRP(ctx context.Context, username string, password []byte, hvToken, hvType string) (*authResp, error) {
-	info, err := c.getAuthInfo(ctx, username)
+	info, err := c.getAuthInfo(ctx, username, "")
 	if err != nil {
 		return nil, err
 	}
-	return c.srpLogin(ctx, username, password, info, hvToken, hvType)
-}
-
-func (c *Client) srpLogin(ctx context.Context, username string, password []byte, info *authInfo, hvToken, hvType string) (*authResp, error) {
-	srpAuth, err := srp.NewAuth(info.Version, username, password, info.Salt, info.Modulus, info.ServerEphemeral)
-	if err != nil {
-		return nil, fmt.Errorf("SRP setup: %w", err)
-	}
-	proofs, err := srpAuth.GenerateProofs(2048)
-	if err != nil {
-		return nil, fmt.Errorf("SRP proofs: %w", err)
-	}
-	body, _ := json.Marshal(map[string]any{
-		"Username":        username,
-		"ClientProof":     base64.StdEncoding.EncodeToString(proofs.ClientProof),
-		"ClientEphemeral": base64.StdEncoding.EncodeToString(proofs.ClientEphemeral),
-		"SRPSession":      info.SRPSession,
-	})
-	raw, err := c.rawAuthWithHV(ctx, "POST", "/core/v4/auth", body, hvToken, hvType)
+	raw, err := c.srpCall(ctx, "POST", "/core/v4/auth", username, password, info,
+		map[string]any{"Username": username}, hvToken, hvType)
 	if err != nil {
 		return nil, err
 	}
 	var r authResp
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, fmt.Errorf("auth parse: %w", err)
-	}
-	if r.Code != 1000 {
-		return nil, parseAuthError(raw, r.Code)
-	}
-	serverProof, err := base64.StdEncoding.DecodeString(r.ServerProof)
-	if err != nil {
-		return nil, fmt.Errorf("server proof decode: %w", err)
-	}
-	if !bytes.Equal(serverProof, proofs.ExpectedServerProof) {
-		return nil, fmt.Errorf("server proof verification failed")
 	}
 	return &r, nil
 }

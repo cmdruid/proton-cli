@@ -1,0 +1,105 @@
+package ui
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/roman-16/proton-cli/internal/errs"
+	"golang.org/x/term"
+)
+
+// This file is the only place in the CLI that reads from standard input for a
+// value the user is being asked for. Keeping it to one file is what makes the
+// scripting contract checkable: a command can only ever block on input if it
+// went through here.
+
+// ErrNoInput reports that a value was needed but could not be asked for.
+var ErrNoInput = errs.Problemf("input is required but the terminal is not interactive")
+
+// NoInput reports whether the environment forbids prompting, honouring
+// PROTON_NO_INPUT.
+//
+// Presence is what counts, whatever the value - the same rule NO_COLOR follows.
+// Two variables that both switch a behaviour off should not need two different
+// mental models, and `PROTON_NO_INPUT=` in a CI environment file reads as
+// intent either way.
+//
+// It is deliberately not profile-scoped, unlike most PROTON_ variables: whether
+// a terminal can be asked a question is a property of the machine, not of the
+// account being used on it.
+func NoInput() bool {
+	_, set := os.LookupEnv("PROTON_NO_INPUT")
+	return set
+}
+
+// CanPrompt reports whether asking a question is possible: input has to be a
+// terminal, and prompting must not have been forbidden.
+//
+// Everything else in the CLI stays non-interactive, so a cron job fails with a
+// message instead of hanging on a question nobody will answer.
+func (u *UI) CanPrompt() bool {
+	if u.NoInput {
+		return false
+	}
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// Prompter asks a related group of questions with their labels aligned. The
+// width is computed from the labels it was told about, so no prompt carries a
+// hand-tuned column.
+type Prompter struct {
+	u     *UI
+	width int
+	in    *bufio.Reader
+}
+
+// Ask returns a Prompter for the given label set. Labels not in the set still
+// work; they simply may not align.
+func (u *UI) Ask(labels ...string) *Prompter {
+	width := 0
+	for _, l := range labels {
+		if n := utf8.RuneCountInString(l); n > width {
+			width = n
+		}
+	}
+	return &Prompter{u: u, width: width + 1, in: bufio.NewReader(os.Stdin)}
+}
+
+// Line asks for a visible value.
+func (p *Prompter) Line(label string) (string, error) {
+	if !p.u.CanPrompt() {
+		return "", ErrNoInput
+	}
+	p.write(label)
+	s, err := p.in.ReadString('\n')
+	if err != nil && s == "" {
+		return "", err
+	}
+	return strings.TrimSpace(s), nil
+}
+
+// Secret asks for a value without echoing it. The bytes are never written
+// anywhere but the caller's variable.
+func (p *Prompter) Secret(label string) (string, error) {
+	if !p.u.CanPrompt() {
+		return "", ErrNoInput
+	}
+	p.write(label)
+	b, err := term.ReadPassword(int(os.Stdin.Fd()))
+	// ReadPassword swallows the newline the user typed; put it back so the next
+	// line of output does not land on the prompt.
+	_, _ = fmt.Fprintln(p.u.Err)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+// write emits the prompt on stderr, never stdout: a question is not an answer,
+// so redirecting the answer must not capture it.
+func (p *Prompter) write(label string) {
+	_, _ = fmt.Fprintf(p.u.Err, "%s ", p.u.errTheme.Hint(pad(label+":", p.width, false)))
+}

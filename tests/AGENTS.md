@@ -4,7 +4,15 @@
 
 All tests are **integration tests** that run the real `proton-cli` binary against the live Proton API. There are no mocks - every test creates real data, verifies it, and cleans up.
 
-Unit tests live alongside the code they test (e.g. `internal/render/html_test.go`).
+Unit tests live alongside the code they test (e.g. `internal/mailtext/html_test.go`).
+
+Three faster suites run with **no credentials and no network**, and they are the ones to reach for first - `just test-fast` runs all three in seconds:
+
+- **unit** tests, colocated with their source
+- **golden** tests in `internal/ui`, which pin the exact bytes of every response kind. Change how something looks and run `just golden`; the diff is the review.
+- the **conformance** test in `internal/cli`, which walks the whole command tree and checks the interface's rules: one verb per idea, one meaning per flag, groups that never act, nothing outside `internal/ui` touching a process stream.
+
+An inconsistency is far more likely to be caught there than here.
 
 ## Running Tests
 
@@ -57,13 +65,16 @@ tests/
 ├── calendar_test.go         calendars, events, scope-unlock delete
 ├── contacts_test.go         CRUD, REF resolution, exit codes
 ├── pass_test.go             vaults, items, alias, batch filters
-├── output_test.go           --output text / json / yaml
-├── exit_codes_test.go       0 / 1 / 3 / 4 mapping
+├── account_test.go          account, session, profiles, account settings
+├── contract_test.go         the response contract: envelopes, streams, exit
+│                            codes, --dry-run, stdout=ID
 ├── profile_test.go          --profile / PROTON_PROFILE multi-account
-├── api_test.go              raw `api` escape hatch
-├── dry_run_test.go          --dry-run does not mutate
-└── stdout_id_test.go        stdout=ID convention across creates
+├── short_ids_test.go        short-ID display and resolution
+├── leading_dash_ids_test.go IDs that begin with a dash
+└── api_test.go              raw `api` escape hatch
 ```
+
+`contract_test.go` is one file because the contract is one thing.
 
 ## How Tests Work
 
@@ -120,7 +131,7 @@ func TestDriveItemsFoo(t *testing.T) {
 | `runOKStderr(t, args...)` | Same as `runOK` but also returns stderr |
 | `runWithStdin(t, stdin, args...)` | Run with a custom stdin reader |
 | `runJSON(t, args...)` | Adds `--output json`, parses stdout as JSON **object** |
-| `runJSONArray(t, args...)` | Adds `--output json`, parses stdout as JSON **array** |
+| `runJSONArray(t, args...)` | Adds `--output json`, unwraps the collection envelope, returns the rows |
 | `testID()` | Unique `proton-cli-test-{ms}-{rand}` prefix |
 | `cleanupRun(t, desc, args...)` | Register cleanup that runs the CLI |
 | `cleanup(t, desc, func)` | Register cleanup with a custom function |
@@ -159,9 +170,9 @@ They are created lazily under `sync.Once` on first use, so the send+deliver wait
 - **Mutating** test (mark / star / move / trash) or a test of the **send path itself** (attachments, HTML, scheduled, expiring, EO) → send your own with `sendTestMail(t, subject)`.
 
 ```go
-func TestMailMessagesReadBodyOnly(t *testing.T) {
+func TestMailMessagesGetBodyOnly(t *testing.T) {
     msgID, _, subject := plainMail(t)    // shared, no send/poll
-    stdout := runOK(t, "mail", "messages", "read", "--body-only", msgID)
+    stdout := runOK(t, "mail", "messages", "get", "--body-only", msgID)
     assertContains(t, stdout, subject)
 }
 ```
@@ -200,39 +211,42 @@ This makes shell capture work: `ID=$(proton-cli ... create ...)`.
 
 ### Output format
 
-`--output text|json|yaml` (default `text`). JSON output uses `snake_case` keys (json tags); YAML respects the same tags via `goccy/go-yaml`'s json-tag fallback.
+`--output text|json|yaml` (default `text`).
+
+Every collection comes out as an envelope keyed by its plural noun, always with a `count`, so one consumer reads any list:
+
+```json
+{ "messages": [ … ], "count": 3, "total": 47, "page": 0, "page_size": 3, "has_more": true }
+```
+
+`runJSONArray` unwraps it and cross-checks the count. Keys are `snake_case`, enumerated values are names rather than Proton's numbers (`"type": "file"`, not `"type": 2`), and IDs are never shortened. A mutation emits a result object rather than a bare ID, so `--output json` always means JSON.
 
 ### REF arguments
 
 Every command that takes an ID also accepts a substring search term. Ambiguous matches return exit 4 with candidates listed on stderr.
 
-`drive trash restore` is the single exception - it requires explicit link IDs because trashed items have encrypted names.
+Two-ID references are one slash-separated token: `pass items get SHARE_ID/ITEM_ID`, `calendar events get CALENDAR_ID/EVENT_ID`. Short IDs work on both halves.
+
+**Drive addresses items by `PATH`**, because that is what Proton resolves and what a person means. Things with no place in the tree - trashed items, photos, albums - are addressed by the `REF` their list showed.
+
+### Local validation precedes the network
+
+Anything judgeable from the command line alone must fail without a session: an unknown setting key, a value outside a declared domain, a colour off Proton's palette, a missing required flag. A test for one of those should not need credentials to reach the error, and should assert the whole accepted domain appears in the message.
 
 ## Cobra and Positional IDs
 
-Proton IDs are Base64URL-encoded and can start with `-`. Two layers in the
-binary handle this automatically:
+Proton IDs are Base64URL-encoded and can start with `-`. Two layers in the binary handle this automatically:
 
-1. **Auto-`--` injection** (`internal/cli/dashids.go` `preprocessArgs`) detects a
-   leading-dash token shaped like a full Proton ID (≥60 chars, ends
-   `==`, URL-safe base64) and inserts `--` before it before cobra
-   parses argv.
-2. **Layer-C error rewrap** (`internal/cli/dashids.go` `rewrapFlagError`) replaces
-   cobra/pflag's flag-parse and "accepts N args" errors with a hint
-   mentioning `--` when a leading-dash ID is detected in argv.
+1. **Auto-`--` injection** (`internal/cli/dashids.go` `preprocessArgs`) detects a leading-dash token shaped like a full Proton ID (≥60 chars, ends `==`, URL-safe base64) and inserts `--` before it before cobra parses argv.
+2. **Layer-C error rewrap** (`internal/cli/dashids.go` `rewrapFlagError`) replaces cobra/pflag's flag-parse and "accepts N args" errors with a hint mentioning `--` when a leading-dash ID is detected in argv.
 
-In practice `--` is **no longer required** in tests - leading-dash full
-IDs parse cleanly via Layer 1; leading-dash *short* IDs (rare - ~1.5%
-of random base64 prefixes) need explicit `--` and are caught by Layer 2.
+In practice `--` is **not required** in tests - leading-dash full IDs parse cleanly via Layer 1; leading-dash *short* IDs (rare - ~1.5% of random base64 prefixes) need explicit `--` and are caught by Layer 2.
 
-Flags can be placed before OR after positionals on every command -
-same as any normal cobra CLI.
+Flags can be placed before OR after positionals on every command - same as any normal cobra CLI.
 
 ### `cleanupRun` descriptions
 
-The copy-pasteable commands surfaced on cleanup failure no longer need
-`--`; the user can paste them as-is even if the ID starts with a dash.
-Keeping `--` in those strings is harmless but unnecessary.
+The copy-pasteable commands surfaced on cleanup failure do not need `--`; the user can paste them as-is even if the ID starts with a dash.
 
 ## Naming
 
@@ -242,8 +256,8 @@ Keeping `--` in those strings is harmless but unnecessary.
 
 ## Known Limitations
 
-- `calendar calendars delete` requires `PROTON_PASSWORD` for the password-scope unlock - works in tests because the env var is set.
+- `calendar settings calendars delete` hits an endpoint Proton guards behind an elevated session. Nothing in the command arranges that: the client elevates when the server asks, using `PROTON_PASSWORD`, and drops the scope again. It works in tests because the variable is set.
 - `drive trash empty` may not clear items from non-default volumes (e.g. Photos share).
-- Proton only allows specific hex colors for labels and calendars (e.g. `#8080FF`, `#3CBB3A`) - see `ACCENT_COLORS` in the WebClients source.
+- Proton only allows specific hex colors for labels, folders, calendars and contact groups (e.g. `#8080FF`, `#3CBB3A`) - see `ACCENT_COLORS` in the WebClients source. The CLI refuses anything else locally, before a request.
 - `just test` runs serially; expect ~8-12 minutes (down from ~17) after the shared-fixture and polling work (30m timeout).
 - Mail-delivery latency is inherent: a self-mail's inbox copy lands a few seconds after send. Amortize it with a shared fixture rather than paying it per test.

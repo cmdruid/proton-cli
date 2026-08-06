@@ -11,7 +11,7 @@ import (
 
 func TestPassVaultsList(t *testing.T) {
 	stdout := runOK(t, "pass", "vaults", "list")
-	assertContains(t, stdout, "SHARE_ID")
+	assertContains(t, stdout, "ID")
 }
 
 func TestPassVaultsCRUD(t *testing.T) {
@@ -39,7 +39,7 @@ func TestPassItemsCRUDLogin(t *testing.T) {
 		"--name", name,
 		"--username", "tester",
 		"--password", "s3cret!",
-		"--url", url)
+		"--website", url)
 	itemID := strings.TrimSpace(stdout)
 	if !looksLikeID(itemID) {
 		t.Fatalf("expected bare item ID on stdout, got %q", stdout)
@@ -54,7 +54,7 @@ func TestPassItemsCRUDLogin(t *testing.T) {
 	assertField(t, got, "Password:", "s3cret!")
 
 	// Edit password
-	runOK(t, "pass", "items", "edit", name, "--password", "new-pass-v2")
+	runOK(t, "pass", "items", "update", name, "--password", "new-pass-v2")
 	got2 := runOK(t, "pass", "items", "get", name)
 	assertField(t, got2, "Password:", "new-pass-v2")
 }
@@ -151,7 +151,7 @@ func TestPassItemsTrashRestoreDelete(t *testing.T) {
 		"pass", "items", "delete", "--", shareID, itemID)
 
 	runOK(t, "pass", "items", "trash", name)
-	runOK(t, "pass", "items", "restore", "--", shareID, itemID)
+	runOK(t, "pass", "trash", "restore", "--", shareID, itemID)
 
 	// It should be searchable again
 	got := runOK(t, "pass", "items", "get", name)
@@ -172,7 +172,7 @@ func TestPassItemsListVaultFilter(t *testing.T) {
 // ── alias options (read-only) ──
 
 func TestPassAliasOptions(t *testing.T) {
-	stdout := runOK(t, "pass", "alias", "options")
+	stdout := runOK(t, "pass", "aliases", "options")
 	assertContains(t, stdout, "Suffixes")
 	assertContains(t, stdout, "Mailboxes")
 }
@@ -184,7 +184,7 @@ func TestPassBatchTrashDryRunByType(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("dry-run should succeed, got exit %d: %s", code, stderr)
 	}
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 func TestPassBatchTrashDryRunOlderThanYear(t *testing.T) {
@@ -211,7 +211,7 @@ func TestPassBatchTrashRequiresInput(t *testing.T) {
 	if code == 0 {
 		t.Error("expected error when no REF and no filter given")
 	}
-	assertContains(t, stderr, "no items selected")
+	assertContains(t, stderr, "Nothing selected")
 }
 
 func TestPassItemTypesAndFields(t *testing.T) {
@@ -249,7 +249,7 @@ func TestPassVaultRename(t *testing.T) {
 		"pass", "vaults", "delete", "--", sid)
 
 	newName := name + "-renamed"
-	runOK(t, "pass", "vaults", "rename", "--name", newName, sid)
+	runOK(t, "pass", "vaults", "update", "--name", newName, sid)
 	assertContains(t, runOK(t, "pass", "vaults", "list"), newName)
 }
 

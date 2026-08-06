@@ -19,13 +19,14 @@ type rawListMessage struct {
 	Time           int64
 	Sender         struct{ Name, Address string }
 	NumAttachments int
+	LabelIDs       []string
 }
 
 func toMessage(m rawListMessage) Message {
 	return Message{
 		ID: m.ID, Subject: m.Subject, Unread: m.Unread, Time: m.Time,
 		FromName: m.Sender.Name, FromAddress: m.Sender.Address,
-		NumAttachments: m.NumAttachments,
+		NumAttachments: m.NumAttachments, Labels: m.LabelIDs,
 	}
 }
 
@@ -87,6 +88,9 @@ func searchQuery(opts SearchOptions, recipients bool) url.Values {
 	}
 	q := url.Values{}
 	q.Set("LabelID", ResolveFolder(folder))
+	if opts.ID != "" {
+		q.Set("ID", opts.ID)
+	}
 	q.Set("Sort", "Time")
 	q.Set("Desc", "1")
 	q.Set("PageSize", fmt.Sprintf("%d", opts.Limit))
@@ -216,7 +220,8 @@ func (s *Service) decryptMessage(ctx context.Context, u *keys.Unlocked, m rawMes
 		})
 	}
 	return Full{
-		ID: m.ID, Subject: m.Subject, Sender: m.Sender, ToList: m.ToList,
+		ID: m.ID, Subject: m.Subject, Sender: m.Sender,
+		ToList: m.ToList, CCList: m.CCList, BCCList: m.BCCList,
 		Time: m.Time, Body: body, MIMEType: m.MIMEType, AddressID: m.AddressID,
 		Attachments: atts, Signature: sig,
 	}
@@ -292,53 +297,4 @@ func (s *Service) AssertMessageKind(ctx context.Context, id string) error {
 		return nil
 	}
 	return s.crossTableProbe(ctx, id, err, "messages")
-}
-
-func (s *Service) Trash(ctx context.Context, ids []string) error {
-	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": labelTrash, "IDs": ids}}, nil)
-}
-
-// Unschedule cancels the scheduled send for each message via cancel_send, which
-// pulls it out of the Scheduled queue and back to Drafts (the web client's
-// "Edit and reschedule" primitive). The message keeps its ID.
-func (s *Service) Unschedule(ctx context.Context, ids []string) error {
-	for _, id := range ids {
-		if err := s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/mail/v4/messages/" + id + "/cancel_send"}, nil); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Service) Delete(ctx context.Context, ids []string) error {
-	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/delete", Body: map[string]any{"IDs": ids}}, nil)
-}
-
-func (s *Service) Move(ctx context.Context, ids []string, folder string) error {
-	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": ResolveFolder(folder), "IDs": ids}}, nil)
-}
-
-func (s *Service) Mark(ctx context.Context, ids []string, read, unread, starred, unstar bool) error {
-	body := map[string]any{"IDs": ids}
-	if read {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/read", Body: body}, nil); err != nil {
-			return err
-		}
-	}
-	if unread {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/unread", Body: body}, nil); err != nil {
-			return err
-		}
-	}
-	if starred {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/label", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
-			return err
-		}
-	}
-	if unstar {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/messages/unlabel", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
-			return err
-		}
-	}
-	return nil
 }
