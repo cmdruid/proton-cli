@@ -23,30 +23,25 @@ Every type takes `--name`, optional `--vault`, `--note`, `--field NAME=VALUE`, a
 
 ```bash
 # Login (the default type)
-proton-cli pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" \
-  --url github.com --totp "otpauth://totp/GitHub?secret=..."
+proton-cli pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com --totp "otpauth://totp/GitHub?secret=..."
 
 # Note
 proton-cli pass items create --type note --name "Door codes" --note "Front: 1234"
 
 # Credit card
-proton-cli pass items create --type credit-card --name Visa \
-  --holder "Roman L" --number 4111111111111111 --expiry 2028-12 --cvv 123 --pin 4321
+proton-cli pass items create --type credit-card --name Visa --holder "Roman L" --number 4111111111111111 --expiry 2028-12 --cvv 123 --pin 4321
 
 # Wi-Fi
 proton-cli pass items create --type wifi --name Home --ssid MyNetwork --password pw --security WPA2
 
 # SSH key
-proton-cli pass items create --type ssh-key --name laptop \
-  --public-key "$(cat ~/.ssh/id_ed25519.pub)" --private-key "$(cat ~/.ssh/id_ed25519)"
+proton-cli pass items create --type ssh-key --name laptop --public-key "$(cat ~/.ssh/id_ed25519.pub)" --private-key "$(cat ~/.ssh/id_ed25519)"
 
 # Identity
-proton-cli pass items create --type identity --name Me --full-name "Jane Roe" \
-  --email jane@example.com --phone "+43 1 234567" --city Vienna --country Austria
+proton-cli pass items create --type identity --name Me --full-name "Jane Roe" --email jane@example.com --phone "+43 1 234567" --city Vienna --country Austria
 
 # Custom
-proton-cli pass items create --type custom --name "Staging server" \
-  --field "Host=10.0.0.5" --hidden "Root password=secret"
+proton-cli pass items create --type custom --name "Staging server" --field "Host=10.0.0.5" --hidden "Root password=secret"
 ```
 
 Custom fields work on any type:
@@ -103,6 +98,5 @@ Hide-my-email aliases that forward to one of your mailboxes.
 ```bash
 proton-cli pass aliases options                              # available suffixes and mailboxes
 proton-cli pass aliases create --prefix shop --mailbox me@proton.me
-proton-cli pass aliases create --prefix shop --suffix @passmail.net --mailbox me@proton.me \
-  --name "Online shops" --vault Personal
+proton-cli pass aliases create --prefix shop --suffix @passmail.net --mailbox me@proton.me --name "Online shops" --vault Personal
 ```

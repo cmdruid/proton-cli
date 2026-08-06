@@ -48,32 +48,26 @@ Text output includes a `Sig:` line with the verdict of the signature check on th
 
 ```bash
 proton-cli mail messages send --to alice@proton.me --subject Hi --body "Hello there"
-proton-cli mail messages send --to "Alice <alice@proton.me>" --cc b@example.com \
-  --bcc c@example.com --subject Hi --body Hello
+proton-cli mail messages send --to "Alice <alice@proton.me>" --cc b@example.com --bcc c@example.com --subject Hi --body Hello
 proton-cli mail messages send --to alice@proton.me --subject Hi --body "<b>Hi</b>" --html
-proton-cli mail messages send --to alice@proton.me --subject Report --body "See attached." \
-  --attach ./report.pdf --attach ./annex.xlsx
-proton-cli mail messages send --to alice@proton.me --subject Hi --body "<img src=cid:logo.png>" \
-  --html --attach-inline ./logo.png
+proton-cli mail messages send --to alice@proton.me --subject Report --body "See attached." --attach ./report.pdf --attach ./annex.xlsx
+proton-cli mail messages send --to alice@proton.me --subject Hi --body "<img src=cid:logo.png>" --html --attach-inline ./logo.png
 echo "Deployed." | proton-cli mail messages send --to me@proton.me --subject Deploy --body -
 ```
 
 On an account with several addresses, `--from` chooses which one it leaves from:
 
 ```bash
-proton-cli mail messages send --from work@example.com --to alice@proton.me \
-  --subject Hi --body Hello
+proton-cli mail messages send --from work@example.com --to alice@proton.me --subject Hi --body Hello
 proton-cli mail messages send --from me+shop@proton.me ...     # plus aliases work too
 ```
 
 Scheduling, expiry, and password-protected mail for recipients outside Proton:
 
 ```bash
-proton-cli mail messages send --to alice@proton.me --subject Standup --body Hi \
-  --send-at 2026-05-01T09:00                 # local time; confirms the resolved time
+proton-cli mail messages send --to alice@proton.me --subject Standup --body Hi --send-at 2026-05-01T09:00                 # local time; confirms the resolved time
 proton-cli mail messages send --to alice@proton.me --subject Secret --body Hi --expires 7d
-proton-cli mail messages send --to bob@gmail.com --subject Secret --body "..." \
-  --eo-password hunter2 --eo-password-hint "our usual"
+proton-cli mail messages send --to bob@gmail.com --subject Secret --body "..." --eo-password hunter2 --eo-password-hint "our usual"
 ```
 
 `send` prints the new message ID on stdout, so `ID=$(proton-cli mail messages send ...)` works.
@@ -279,8 +273,7 @@ Server-side [Sieve](https://en.wikipedia.org/wiki/Sieve_(mail_filtering_language
 
 ```bash
 proton-cli mail settings filters list
-proton-cli mail settings filters create --name "Archive invoices" \
-  --sieve 'require ["fileinto"]; if header :contains "Subject" "invoice" { fileinto "Archive"; }'
+proton-cli mail settings filters create --name "Archive invoices" --sieve 'require ["fileinto"]; if header :contains "Subject" "invoice" { fileinto "Archive"; }'
 proton-cli mail settings filters create --name Big --sieve - < filter.sieve
 proton-cli mail settings filters update FILTER_ID --name "New name"
 proton-cli mail settings filters disable FILTER_ID
@@ -292,9 +285,7 @@ proton-cli mail settings filters delete FILTER_ID
 
 ```bash
 proton-cli mail settings autoreply get                    # current schedule and message
-proton-cli mail settings autoreply set --repeat fixed \
-  --start 2026-07-01T09:00 --end 2026-07-14T18:00 \
-  --message "I'm away until the 14th."
+proton-cli mail settings autoreply set --repeat fixed --start 2026-07-01T09:00 --end 2026-07-14T18:00 --message "I'm away until the 14th."
 proton-cli mail settings autoreply disable
 proton-cli mail settings autoreply enable
 ```

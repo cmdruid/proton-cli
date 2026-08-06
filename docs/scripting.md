@@ -19,8 +19,7 @@ MSG=$(proton-cli mail messages send --to me@proton.me --subject Deploy --body "D
 proton-cli mail messages list --unread --output json | jq -r '.messages[].subject'
 
 # senders of everything older than a week, deduplicated
-proton-cli mail messages search --before 2026-04-08 --limit 200 --output json \
-  | jq -r '.messages[].from_address' | sort -u
+proton-cli mail messages search --before 2026-04-08 --limit 200 --output json | jq -r '.messages[].from_address' | sort -u
 
 # total size of a Drive folder
 proton-cli drive items list /Backup --output json | jq '[.items[].size] | add'
@@ -70,9 +69,7 @@ proton-cli mail messages send --eml ./message.eml --to someone-else@proton.me
 
 ```bash
 # acknowledge everything unread from a sender, then archive it
-proton-cli mail messages search --from alerts@example.com --unread --output json \
-  | jq -r '.messages[].id' \
-  | while read -r id; do
+proton-cli mail messages search --from alerts@example.com --unread --output json | jq -r '.messages[].id' | while read -r id; do
       proton-cli mail messages reply "$id" --body "Received, thanks." --no-signature
       proton-cli mail messages move "$id" --into archive
     done
@@ -120,8 +117,7 @@ proton-cli drive items download /report.pdf --output - | gpg --encrypt --recipie
 ### Nightly backup (cron)
 
 ```cron
-0 3 * * * PROTON_USER=me@proton.me PROTON_PASSWORD="$(cat ~/.proton-pw)" \
-  /usr/bin/proton-cli drive items upload --recursive /var/backups /Backups >/dev/null
+0 3 * * * PROTON_USER=me@proton.me PROTON_PASSWORD="$(cat ~/.proton-pw)" /usr/bin/proton-cli drive items upload --recursive /var/backups /Backups >/dev/null
 ```
 
 ### Keep the inbox tidy
@@ -163,10 +159,7 @@ WantedBy=timers.target
 ### Out of office
 
 ```bash
-proton-cli mail settings autoreply set --repeat fixed \
-  --start "$(date -d 'next monday 09:00' +%Y-%m-%dT%H:%M)" \
-  --end   "$(date -d 'next friday 18:00' +%Y-%m-%dT%H:%M)" \
-  --message "Away this week. For anything urgent, contact team@example.com."
+proton-cli mail settings autoreply set --repeat fixed --start "$(date -d 'next monday 09:00' +%Y-%m-%dT%H:%M)" --end "$(date -d 'next friday 18:00' +%Y-%m-%dT%H:%M)" --message "Away this week. For anything urgent, contact team@example.com."
 
 # and when you are back
 proton-cli mail settings autoreply disable

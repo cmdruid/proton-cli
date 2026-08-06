@@ -22,16 +22,13 @@ proton-cli calendar events get "Team sync"           # by title
 ```bash
 proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
 proton-cli calendar events create --title Conference --start 2026-04-20 --all-day
-proton-cli calendar events create --calendar Work --title "Quarterly sync" \
-  --start 2026-04-16T14:00 --duration 90m \
-  --location "Vienna HQ" --description "Numbers and roadmap"
+proton-cli calendar events create --calendar Work --title "Quarterly sync" --start 2026-04-16T14:00 --duration 90m --location "Vienna HQ" --description "Numbers and roadmap"
 ```
 
 Recurrence and reminders:
 
 ```bash
-proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m \
-  --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h
+proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h
 ```
 
 `--rrule` takes an iCal recurrence rule; `--remind` is repeatable.
@@ -39,8 +36,7 @@ proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --dur
 Attendees:
 
 ```bash
-proton-cli calendar events create --title Review --start 2026-04-16T14:00 \
-  --attendee alice@proton.me --attendee bob@example.com
+proton-cli calendar events create --title Review --start 2026-04-16T14:00 --attendee alice@proton.me --attendee bob@example.com
 ```
 
 Proton users are added directly; external addresses get an emailed invitation.

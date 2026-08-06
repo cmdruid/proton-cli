@@ -51,11 +51,11 @@ Two-factor code:  123456
 ✓ Signed in as you@proton.me.
 ```
 
-That's the whole setup. Signing in saves the session **and** unlocks your keys, so your password is needed once on this machine and not again. Every command documents itself with `--help`, and shell completion knows the whole tree:
+That's the whole setup. Signing in saves the session **and** unlocks your keys, so your password is needed once on this machine and not again. Every command documents itself with `--help`:
 
 ```bash
 proton-cli mail messages list
-proton-cli completion zsh > "${fpath[1]}/_proton-cli"
+proton-cli mail messages send --help
 ```
 
 Prefer the environment? `PROTON_USER` and `PROTON_PASSWORD` are used instead of being asked for. Juggling a personal and a work account? `proton-cli --profile work account login`. More in [Getting started](docs/getting-started.md).
@@ -70,8 +70,7 @@ Every command reads the same way - `proton-cli <app> <collection> <verb>` - and 
 proton-cli mail messages list --unread
 proton-cli mail messages search --from billing@example.com --after 2026-01-01
 proton-cli mail messages get "Invoice #2291"
-proton-cli mail messages send --to alice@proton.me --subject Report \
-  --body "See attached." --attach ./report.pdf
+proton-cli mail messages send --to alice@proton.me --subject Report --body "See attached." --attach ./report.pdf
 proton-cli mail messages reply "Invoice #2291" --body "Thanks, paid today."
 proton-cli mail messages forward "Invoice #2291" --to alice@proton.me
 proton-cli mail drafts create --to team@example.com --subject Standup --body "Notes to follow."
@@ -80,7 +79,7 @@ proton-cli mail messages export --folder archive --older-than 1y --output-dir ./
 proton-cli mail messages trash --unread --older-than 30d
 ```
 
-Threads, drafts, attachments, `.eml` export, folders and labels as separate things, Sieve filters, signatures, and an auto-reply. → [Mail](docs/commands/mail.md)
+Threads, attachments, filters, and auto-reply. → [Mail](docs/commands/mail.md)
 
 ### Drive
 
@@ -93,31 +92,29 @@ proton-cli drive share link /Documents/report.pdf --expires 7d --password hunter
 proton-cli drive items trash --pattern "*.tmp" --scope /Build --recursive
 ```
 
-Plus revisions, sharing with people, trash, and photo albums. → [Drive](docs/commands/drive.md)
+Revisions, sharing with people, and photo albums. → [Drive](docs/commands/drive.md)
 
 ### Calendar
 
 ```bash
 proton-cli calendar events list --start 2026-04-15 --end 2026-04-30
 proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
-proton-cli calendar events create --title Standup --start 2026-04-16T09:00 \
-  --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m
+proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m
 proton-cli calendar events respond "Team sync" --status accept
 ```
 
-Plus calendars of your own, all-day events, and attendees who get an invitation by email. → [Calendar](docs/commands/calendar.md)
+Your own calendars, all-day events, and attendees. → [Calendar](docs/commands/calendar.md)
 
 ### Pass
 
 ```bash
 proton-cli pass items list --vault Work
 proton-cli pass items get github.com
-proton-cli pass items create --name GitHub --username roman \
-  --password "$(openssl rand -base64 24)" --url github.com
+proton-cli pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com
 proton-cli pass aliases create --prefix shop --mailbox me@proton.me
 ```
 
-Logins, notes, cards, Wi-Fi, SSH keys, identities, custom items. → [Pass](docs/commands/pass.md)
+Notes, cards, SSH keys, and identities. → [Pass](docs/commands/pass.md)
 
 ### Contacts
 
@@ -128,7 +125,7 @@ proton-cli contacts keys pin jane --key jane-pubkey.asc
 proton-cli contacts groups add GROUP_ID jane
 ```
 
-Groups, several addresses per contact, and details like organization and birthday. → [Contacts](docs/commands/contacts.md)
+Multiple addresses, organizations, and birthdays. → [Contacts](docs/commands/contacts.md)
 
 ### Account
 
@@ -139,7 +136,7 @@ proton-cli account settings set locale de_AT
 proton-cli account logout --revoke
 ```
 
-Sessions across your devices, profiles on this machine, and settings scoped the way Proton scopes them: `proton-cli account settings` plus `mail`, `calendar` and `drive` settings per product. → [Account](docs/commands/account.md)
+Profiles and per-app settings. → [Account](docs/commands/account.md)
 
 [`proton-cli api`](docs/commands/api.md) reaches any endpoint the commands don't.
 

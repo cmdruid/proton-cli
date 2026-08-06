@@ -10,10 +10,7 @@ Contacts, their pinned encryption keys, and groups. Contact cards are encrypted 
 proton-cli contacts list
 proton-cli contacts get jane
 proton-cli contacts create --name "Jane Roe" --email jane@example.com --phone "+43 1 234567"
-proton-cli contacts create --name "John Doe" \
-  --email john@example.com --email john@work.example \
-  --job-title CTO --organization "Example GmbH" --birthday 1990-01-31 \
-  --address "Stephansplatz 1, 1010 Vienna" --website https://example.com --note "Met at conference"
+proton-cli contacts create --name "John Doe" --email john@example.com --email john@work.example --job-title CTO --organization "Example GmbH" --birthday 1990-01-31 --address "Stephansplatz 1, 1010 Vienna" --website https://example.com --note "Met at conference"
 proton-cli contacts update jane --email jane@newdomain.com
 proton-cli contacts delete jane
 ```
