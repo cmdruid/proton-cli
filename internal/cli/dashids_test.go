@@ -146,3 +146,27 @@ func equalSlice(a, b []string) bool {
 	}
 	return true
 }
+
+// An unrecognised flag is reported as a flag, wherever it appears. Cobra's
+// default is to give up routing and blame the subcommand, which sends a reader
+// looking for a command that is right there.
+func TestUnknownFlagIsReportedAsAFlag(t *testing.T) {
+	for _, args := range [][]string{
+		{"--verbose", "account", "get"},
+		{"account", "--verbose", "get"},
+		{"account", "get", "--verbose"},
+	} {
+		root := newRoot()
+		root.SetArgs(args)
+		root.SetOut(io.Discard)
+		root.SetErr(io.Discard)
+		err := root.Execute()
+		if err == nil {
+			t.Errorf("%v: want an error", args)
+			continue
+		}
+		if !strings.Contains(err.Error(), "unknown flag") {
+			t.Errorf("%v: error %q should name the flag", args, err)
+		}
+	}
+}

@@ -138,9 +138,13 @@ func TestShortIDCacheFilePopulated(t *testing.T) {
 	if len(ids) == 0 {
 		t.Errorf("cache should be non-empty after list command")
 	}
+	// The cache exists to turn a short prefix back into the whole thing, so what
+	// it stores must never itself be shortened. Not every Proton ID is base64
+	// ending in "==" - a session UID is 32 lowercase characters - so length is
+	// the invariant, not shape.
 	for _, id := range ids {
-		if !strings.HasSuffix(id, "==") {
-			t.Errorf("cached ID should be a full Proton ID, got %q", id)
+		if len(id) <= 8 {
+			t.Errorf("cached ID is not a full one: %q", id)
 		}
 	}
 }
@@ -152,7 +156,7 @@ func TestShortIDRoundTripMail(t *testing.T) {
 	runOK(t, "mail", "messages", "list", "--page-size", "20")
 
 	prefix := msgID[:8]
-	stdout, stderr, code := run(t, "mail", "messages", "read", prefix)
+	stdout, stderr, code := run(t, "mail", "messages", "get", prefix)
 	if code != 0 {
 		t.Fatalf("read by short prefix exit %d; stderr: %s", code, stderr)
 	}
@@ -170,7 +174,7 @@ func TestShortIDPrefixCacheMissOK(t *testing.T) {
 	// we still get a clean exit 3, but with the service's own "no X
 	// matching Y" message rather than a cache-specific hint.
 	prefix := "ZZZZ____" // 4 Z + 4 underscores; very unlikely to match
-	_, stderr, code := run(t, "mail", "messages", "read", prefix)
+	_, stderr, code := run(t, "mail", "messages", "get", prefix)
 	if code == 0 {
 		t.Errorf("expected non-zero exit on no-match prefix, got 0")
 	}
@@ -208,12 +212,12 @@ func TestShortIDAmbiguousErrors(t *testing.T) {
 		t.Fatalf("write cache: %v", err)
 	}
 
-	_, stderr, code := run(t, "mail", "messages", "read", "abcd1234")
+	_, stderr, code := run(t, "mail", "messages", "get", "abcd1234")
 	if code != 4 {
 		t.Errorf("expected exit 4 on ambiguous prefix, got %d", code)
 	}
-	if !strings.Contains(stderr, "ambiguous") {
-		t.Errorf("expected stderr to mention 'ambiguous', got: %s", stderr)
+	if !strings.Contains(stderr, "matches 2 cached IDs") {
+		t.Errorf("expected stderr to say the prefix matched several, got: %s", stderr)
 	}
 	if !strings.Contains(stderr, idA) || !strings.Contains(stderr, idB) {
 		t.Errorf("expected both candidate IDs in stderr, got: %s", stderr)
@@ -244,21 +248,18 @@ func TestShortIDRoundTripPass(t *testing.T) {
 	name := testID() + "-shortid-pass"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "note", "--name", name, "--note", "x")
-	itemID := strings.TrimSpace(stdout)
+	// Creating answers with SHARE_ID/ITEM_ID; a short ID works on either half.
+	shareID, itemID, ok := strings.Cut(strings.TrimSpace(stdout), "/")
+	if !ok {
+		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", stdout)
+	}
 	cleanupRun(t, "Delete pass item: proton-cli pass items delete "+name,
 		"pass", "items", "delete", name)
 
 	// Populate cache.
 	runOK(t, "pass", "items", "list")
 
-	// Get a vault SHARE_ID for the 2-arg path.
-	vaults := runJSONArray(t, "pass", "vaults", "list")
-	if len(vaults) == 0 {
-		t.Skip("no vaults")
-	}
-	shareID := vaults[0].(map[string]interface{})["share_id"].(string)
-
-	got := runOK(t, "pass", "items", "get", shareID[:8], itemID[:8])
+	got := runOK(t, "pass", "items", "get", shareID[:8]+"/"+itemID[:8])
 	if !strings.Contains(got, name) {
 		t.Errorf("pass items get by short prefixes should resolve; stdout:\n%s", got)
 	}

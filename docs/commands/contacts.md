@@ -10,10 +10,7 @@ Contacts, their pinned encryption keys, and groups. Contact cards are encrypted 
 proton-cli contacts list
 proton-cli contacts get jane
 proton-cli contacts create --name "Jane Roe" --email jane@example.com --phone "+43 1 234567"
-proton-cli contacts create --name "John Doe" \
-  --email john@example.com --email john@work.example \
-  --title CTO --org "Example GmbH" --birthday 1990-01-31 \
-  --address "Stephansplatz 1, 1010 Vienna" --url https://example.com --note "Met at conference"
+proton-cli contacts create --name "John Doe" --email john@example.com --email john@work.example --job-title CTO --organization "Example GmbH" --birthday 1990-01-31 --address "Stephansplatz 1, 1010 Vienna" --website https://example.com --note "Met at conference"
 proton-cli contacts update jane --email jane@newdomain.com
 proton-cli contacts delete jane
 ```
@@ -25,12 +22,12 @@ proton-cli contacts delete jane
 Pinning a public key to a contact means mail to that address is encrypted to the key *you* trust, not just whatever the server hands back.
 
 ```bash
-proton-cli contacts pin-key jane --key jane-pubkey.asc
-proton-cli contacts pin-key jane --email jane@example.com --key -    # armored key on stdin
-proton-cli contacts pin-key jane --key jane.asc --no-encrypt         # pin for verification only
-proton-cli contacts pin-key jane --key jane.asc --scheme pgp-inline  # default: pgp-mime
-proton-cli contacts unpin-key jane
-proton-cli contacts unpin-key jane --email jane@example.com
+proton-cli contacts keys pin jane --key jane-pubkey.asc
+proton-cli contacts keys pin jane --email jane@example.com --key -    # armored key on stdin
+proton-cli contacts keys pin jane --key jane.asc --no-encrypt         # pin for verification only
+proton-cli contacts keys pin jane --key jane.asc --scheme pgp-inline  # default: pgp-mime
+proton-cli contacts keys unpin jane
+proton-cli contacts keys unpin jane --email jane@example.com
 ```
 
 `--email` picks which of the contact's addresses the key applies to when there are several.

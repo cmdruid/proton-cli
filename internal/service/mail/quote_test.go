@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/render"
+	"github.com/roman-16/proton-cli/internal/mailtext"
 )
 
 func TestFormatSubjectAddsPrefixOnlyOnce(t *testing.T) {
@@ -151,7 +151,7 @@ func TestPlaintextReplyQuoteIsStrippableByOurOwnStripper(t *testing.T) {
 	// The whole point of matching the web client's markers: a body we compose is
 	// one our own --strip-quotes removes.
 	body := "My answer.\n\n" + quote
-	if got := render.StripPlaintextQuotes(body); strings.Contains(got, "the original body") {
+	if got := mailtext.StripPlaintextQuotes(body); strings.Contains(got, "the original body") {
 		t.Errorf("StripPlaintextQuotes left our own quote behind:\n%s", got)
 	} else if !strings.Contains(got, "My answer.") {
 		t.Errorf("StripPlaintextQuotes removed the new text too:\n%s", got)
@@ -175,7 +175,7 @@ func TestHTMLReplyQuoteIsStrippableByOurOwnStripper(t *testing.T) {
 	}
 
 	body := "<p>My answer.</p>" + quote
-	if got := render.StripHTMLQuotes(body); strings.Contains(got, "the original body") {
+	if got := mailtext.StripHTMLQuotes(body); strings.Contains(got, "the original body") {
 		t.Errorf("StripHTMLQuotes left our own quote behind:\n%s", got)
 	} else if !strings.Contains(got, "My answer.") {
 		t.Errorf("StripHTMLQuotes removed the new text too:\n%s", got)
@@ -196,7 +196,7 @@ func TestForwardQuoteCarriesTheOriginalHeaders(t *testing.T) {
 			t.Errorf("forward quote is missing %q:\n%s", want, quote)
 		}
 	}
-	if got := render.StripPlaintextQuotes("FYI.\n\n" + quote); strings.Contains(got, "the original body") {
+	if got := mailtext.StripPlaintextQuotes("FYI.\n\n" + quote); strings.Contains(got, "the original body") {
 		t.Errorf("our own forward marker was not stripped:\n%s", got)
 	}
 }

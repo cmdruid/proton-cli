@@ -139,10 +139,20 @@ func runOKStderr(t *testing.T, args ...string) (stdout, stderr string) {
 	return stdout, stderr
 }
 
+// asJSON puts `--output json` ahead of everything.
+//
+// It has to lead rather than trail: a Proton ID may begin with '-', which the
+// binary auto-protects with a `--`, and any flag after that becomes a positional
+// argument. Appending the flag would therefore break roughly one call in sixty,
+// depending on which ID the account happened to hand out.
+func asJSON(args []string) []string {
+	return append([]string{"--output", "json"}, args...)
+}
+
 // runJSON runs with `--output json` and parses stdout as a JSON object.
 func runJSON(t *testing.T, args ...string) map[string]interface{} {
 	t.Helper()
-	stdout := runOK(t, append(args, "--output", "json")...)
+	stdout := runOK(t, asJSON(args)...)
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("failed to parse JSON object: %v\nraw: %s", err, truncateOutput(stdout))
@@ -151,14 +161,38 @@ func runJSON(t *testing.T, args ...string) map[string]interface{} {
 }
 
 // runJSONArray runs with `--output json` and parses stdout as a JSON array.
+// runJSONArray returns the rows of a collection.
+//
+// Every list is an envelope keyed by its plural noun - {"messages": [...],
+// "count": 3} - so this unwraps whichever array it finds rather than making every
+// caller know the noun. The count is checked against it, since the two disagreeing
+// would be a bug in the envelope itself.
 func runJSONArray(t *testing.T, args ...string) []interface{} {
 	t.Helper()
-	stdout := runOK(t, append(args, "--output", "json")...)
-	var result []interface{}
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("failed to parse JSON array: %v\nraw: %s", err, truncateOutput(stdout))
+	stdout := runOK(t, asJSON(args)...)
+	var env map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
+		t.Fatalf("collection output is not an envelope: %v\nraw: %s", err, truncateOutput(stdout))
 	}
-	return result
+	var rows []interface{}
+	found := ""
+	for key, value := range env {
+		if arr, ok := value.([]interface{}); ok {
+			if found != "" {
+				t.Fatalf("envelope has two arrays (%q and %q): %s", found, key, truncateOutput(stdout))
+			}
+			rows, found = arr, key
+		}
+	}
+	if found == "" {
+		t.Fatalf("envelope has no array of rows: %s", truncateOutput(stdout))
+	}
+	if count, ok := env["count"].(float64); !ok {
+		t.Errorf("envelope has no count: %s", truncateOutput(stdout))
+	} else if int(count) != len(rows) {
+		t.Errorf("count is %d but %q has %d rows", int(count), found, len(rows))
+	}
+	return rows
 }
 
 // ── Naming ──
@@ -221,11 +255,14 @@ func cleanup(t *testing.T, description string, fn func() error) {
 }
 
 // cleanupRun registers a cleanup that invokes the CLI.
+// A cleanup's job is that nothing is left behind, so finding the thing already
+// gone - exit 3 - is the job done. A test whose subject is deletion would
+// otherwise raise the alarm every time it worked.
 func cleanupRun(t *testing.T, description string, args ...string) {
 	t.Helper()
 	cleanup(t, description, func() error {
 		_, stderr, code := run(t, args...)
-		if code != 0 {
+		if code != 0 && code != 3 {
 			return fmt.Errorf("exit %d: %s", code, strings.TrimSpace(stderr))
 		}
 		return nil
@@ -529,21 +566,23 @@ func (f *sharedAttachMail) ensure() {
 			f.err = fmt.Errorf("shared attachment mail was not delivered")
 			return
 		}
-		out, _, code, e := runArgs(nil, "mail", "attachments", "list", f.msgID, "--output", "json")
+		out, _, code, e := runArgs(nil, "mail", "messages", "attachments", "list", f.msgID, "--output", "json")
 		if e != nil || code != 0 {
 			f.err = fmt.Errorf("list shared attachment failed (exit %d): %v", code, e)
 			return
 		}
-		var atts []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+		var env struct {
+			Attachments []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"attachments"`
 		}
-		if json.Unmarshal([]byte(out), &atts) != nil || len(atts) == 0 {
+		if json.Unmarshal([]byte(out), &env) != nil || len(env.Attachments) == 0 {
 			f.err = fmt.Errorf("shared attachment not found after delivery")
 			return
 		}
-		f.attID = atts[0].ID
-		f.attName = atts[0].Name
+		f.attID = env.Attachments[0].ID
+		f.attName = env.Attachments[0].Name
 	})
 }
 

@@ -1,0 +1,6 @@
+== stdout ==
+To:       alice@proton.me
+          bob@example.com
+          carol@example.org
+Subject:  Quarterly numbers
+== stderr ==

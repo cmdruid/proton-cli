@@ -38,6 +38,21 @@ func (s *Service) GroupCreate(ctx context.Context, name, color string) (string, 
 	return r.Label.ID, nil
 }
 
+// GroupUpdate renames or recolours a group. Only the fields given are changed,
+// so a rename does not silently reset the colour.
+func (s *Service) GroupUpdate(ctx context.Context, id, name, color string) error {
+	body := map[string]any{}
+	if name != "" {
+		body["Name"] = name
+	}
+	if color != "" {
+		body["Color"] = color
+	}
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/core/v4/labels/" + id, Body: body,
+	}, nil)
+}
+
 func (s *Service) GroupDelete(ctx context.Context, id string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/core/v4/labels/" + id}, nil)
 }

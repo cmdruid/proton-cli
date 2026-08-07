@@ -72,14 +72,14 @@ func TestMailSettingsSetUnknownKey(t *testing.T) {
 	if code == 0 {
 		t.Error("an unknown key should be rejected")
 	}
-	assertContains(t, stderr, "unknown mail setting")
-	assertContains(t, stderr, "mail settings set")
+	assertContains(t, stderr, "no mail setting called")
+	assertContains(t, stderr, "mail settings list")
 }
 
 // With no arguments, `set` lists the writable keys grouped by the settings page
 // they come from.
 func TestMailSettingsSetListsKeysByPage(t *testing.T) {
-	stdout := runOK(t, "mail", "settings", "set")
+	stdout := runOK(t, "mail", "settings", "list")
 	for _, want := range []string{"General", "Email privacy", "view-mode", "hide-remote-images"} {
 		assertContains(t, stdout, want)
 	}
@@ -88,57 +88,71 @@ func TestMailSettingsSetListsKeysByPage(t *testing.T) {
 func TestMailSettingsSetDryRun(t *testing.T) {
 	orig := mailViewMode(t)
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "settings", "set", "view-mode", "messages")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 	if got := mailViewMode(t); got != orig {
 		t.Error("--dry-run changed the setting")
 	}
 }
 
 func TestAccountSettings(t *testing.T) {
-	stdout := runOK(t, "settings")
+	stdout := runOK(t, "account", "settings", "get")
 	for _, want := range []string{"Locale", "Date Format", "Time Format", "Week Start"} {
 		assertContains(t, stdout, want)
 	}
 }
 
+// The JSON is the view the command renders, in the CLI's own snake_case names,
+// not Proton's envelope passed through.
 func TestAccountSettingsJSON(t *testing.T) {
-	data := runJSON(t, "settings")
-	if _, ok := data["UserSettings"]; !ok {
-		t.Error("expected UserSettings key in JSON output")
+	data := runJSON(t, "account", "settings", "get")
+	for _, want := range []string{"locale", "date_format", "week_start", "two_factor"} {
+		if _, ok := data[want]; !ok {
+			t.Errorf("expected %q in JSON output, got keys %v", want, keysOf(data))
+		}
 	}
 }
 
-func TestAccountSettingsSetListsKeys(t *testing.T) {
-	stdout := runOK(t, "settings", "set")
+// `set` writes one key; `list` is what shows which keys there are.
+func TestAccountSettingsListsKeys(t *testing.T) {
+	stdout := runOK(t, "account", "settings", "list")
 	for _, want := range []string{"Language and time", "locale", "week-start"} {
 		assertContains(t, stdout, want)
 	}
 }
 
+func TestAccountSettingsSetNeedsAKeyAndValue(t *testing.T) {
+	_, stderr, code := run(t, "account", "settings", "set")
+	if code == 0 {
+		t.Error("set with nothing to set should be rejected")
+	}
+	assertContains(t, stderr, "account settings list")
+}
+
+// A display name belongs to an address, not to the mail settings page.
 func TestMailSettings(t *testing.T) {
-	stdout := runOK(t, "mail", "settings")
-	for _, want := range []string{"Display Name", "Page Size", "View Mode", "Auto-reply"} {
+	stdout := runOK(t, "mail", "settings", "get")
+	for _, want := range []string{"Page Size", "View Mode", "Draft Format", "Auto-reply"} {
 		assertContains(t, stdout, want)
 	}
 }
 
 func TestCalendarSettings(t *testing.T) {
-	stdout := runOK(t, "calendar", "settings")
-	assertContains(t, stdout, "Primary Timezone")
+	stdout := runOK(t, "calendar", "settings", "get")
+	assertContains(t, stdout, "Primary Time Zone")
 }
 
 func TestCalendarSettingsSetListsKeys(t *testing.T) {
-	stdout := runOK(t, "calendar", "settings", "set")
+	stdout := runOK(t, "calendar", "settings", "list")
 	assertContains(t, stdout, "primary-timezone")
 	assertContains(t, stdout, "week-numbers")
 }
 
 func TestDriveSettings(t *testing.T) {
-	stdout := runOK(t, "drive", "settings")
+	stdout := runOK(t, "drive", "settings", "get")
 	assertContains(t, stdout, "Version History")
 }
 
 func TestDriveSettingsSetListsKeys(t *testing.T) {
-	stdout := runOK(t, "drive", "settings", "set")
+	stdout := runOK(t, "drive", "settings", "list")
 	assertContains(t, stdout, "version-history")
 }

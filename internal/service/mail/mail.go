@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
@@ -38,8 +37,8 @@ func OppositeKind(k string) string {
 }
 
 // Built-in Proton system-label IDs. The mutation endpoints reference some of
-// these directly; MailboxLabelIDs is built from the same constants so the two
-// can never drift.
+// these directly; the mailbox lookup in mailboxes.go is built from the same
+// constants so the two can never drift.
 const (
 	labelInbox     = "0"
 	labelTrash     = "3"
@@ -51,27 +50,6 @@ const (
 	labelStarred   = "10"
 	labelScheduled = "12"
 )
-
-var MailboxLabelIDs = map[string]string{
-	"inbox":     labelInbox,
-	"drafts":    labelDrafts,
-	"sent":      labelSent,
-	"trash":     labelTrash,
-	"spam":      labelSpam,
-	"archive":   labelArchive,
-	"starred":   labelStarred,
-	"scheduled": labelScheduled,
-	"all":       labelAllMail,
-}
-
-// ResolveFolder passes unknown names through unchanged, so a raw label ID
-// works anywhere a folder alias does.
-func ResolveFolder(name string) string {
-	if id, ok := MailboxLabelIDs[strings.ToLower(name)]; ok {
-		return id
-	}
-	return name
-}
 
 type Service struct {
 	C proton.Doer
@@ -92,21 +70,28 @@ type Service struct {
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
 type Message struct {
-	ID             string `json:"id"`
-	Subject        string `json:"subject"`
-	FromName       string `json:"from_name,omitempty"`
-	FromAddress    string `json:"from_address"`
-	Time           int64  `json:"time"`
-	Unread         int    `json:"unread"`
-	NumAttachments int    `json:"num_attachments"`
+	ID             string   `json:"id"`
+	Subject        string   `json:"subject"`
+	FromName       string   `json:"from_name,omitempty"`
+	FromAddress    string   `json:"from_address"`
+	Time           int64    `json:"time"`
+	Unread         int      `json:"unread"`
+	NumAttachments int      `json:"num_attachments"`
+	Labels         []string `json:"labels,omitempty"`
 }
+
+// Starred reports whether the message carries the Starred label. A star is a
+// label like any other, so this is a lookup rather than a field of its own.
+func (m Message) Starred() bool { return hasLabel(m.Labels, labelStarred) }
 
 // Full carries a decrypted body, unlike the raw API envelope.
 type Full struct {
 	ID          string                 `json:"id"`
 	Subject     string                 `json:"subject"`
-	Sender      map[string]any         `json:"sender"`
-	ToList      []map[string]any       `json:"to_list"`
+	Sender      map[string]any         `json:"from"`
+	ToList      []map[string]any       `json:"to,omitempty"`
+	CCList      []map[string]any       `json:"cc,omitempty"`
+	BCCList     []map[string]any       `json:"bcc,omitempty"`
 	Time        int64                  `json:"time,omitempty"`
 	Body        string                 `json:"body"`
 	MIMEType    string                 `json:"mime_type"`
@@ -125,6 +110,18 @@ type Conversation struct {
 	Senders        []map[string]any `json:"senders,omitempty"`
 	Recipients     []map[string]any `json:"recipients,omitempty"`
 	Labels         []string         `json:"labels,omitempty"`
+}
+
+// Starred reports whether the thread carries the Starred label.
+func (c Conversation) Starred() bool { return hasLabel(c.Labels, labelStarred) }
+
+func hasLabel(labels []string, want string) bool {
+	for _, l := range labels {
+		if l == want {
+			return true
+		}
+	}
+	return false
 }
 
 type ConversationFull struct {
@@ -166,6 +163,9 @@ type SearchOptions struct {
 	Keyword, From, To, Subject, Folder, After, Before string
 	Limit                                             int
 	Unread                                            bool
+	// ID narrows the query to one message or thread, which is how a reference
+	// that is already an ID is turned back into a row.
+	ID string
 }
 
 // decryptBody decrypts an armored PGP body with decKR and, when verKR is
@@ -232,18 +232,36 @@ func convSenderAddr(c Conversation) string {
 }
 
 func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
-	if idcache.IsFullID(r) {
-		return r, nil
-	}
-	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
-	if err != nil {
-		return "", err
-	}
-	m, err := ref.Pick("message", r, msgs, msgID, msgLabel)
+	m, err := s.FindMessage(ctx, r)
 	if err != nil {
 		return "", err
 	}
 	return m.ID, nil
+}
+
+// FindMessage resolves a reference to the message itself, not just its ID.
+//
+// The row is what makes a dry run useful: showing a subject and a sender before
+// a bulk delete costs nothing here, because resolving already had to look the
+// message up.
+func (s *Service) FindMessage(ctx context.Context, r string) (Message, error) {
+	if idcache.IsFullID(r) {
+		msgs, _, err := s.Search(ctx, SearchOptions{ID: r, Folder: "all", Limit: 1})
+		if err != nil {
+			return Message{}, err
+		}
+		if len(msgs) == 1 {
+			return msgs[0], nil
+		}
+		// An ID the index has not caught up with is still addressable; report it
+		// with the identity we do have rather than refusing to act.
+		return Message{ID: r}, nil
+	}
+	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
+	if err != nil {
+		return Message{}, err
+	}
+	return ref.Pick("message", r, msgs, msgID, msgLabel)
 }
 
 // ResolveScheduled mirrors Resolve but scopes the keyword search to the
@@ -264,18 +282,30 @@ func (s *Service) ResolveScheduled(ctx context.Context, r string) (string, error
 }
 
 func (s *Service) ResolveConversation(ctx context.Context, r string) (string, error) {
-	if idcache.IsFullID(r) {
-		return r, nil
-	}
-	convs, _, err := s.ConversationsSearch(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
-	if err != nil {
-		return "", err
-	}
-	c, err := ref.Pick("conversation", r, convs,
-		func(c Conversation) string { return c.ID },
-		func(c Conversation) string { return convSenderAddr(c) + "  " + c.Subject })
+	c, err := s.FindConversation(ctx, r)
 	if err != nil {
 		return "", err
 	}
 	return c.ID, nil
+}
+
+// FindConversation resolves a reference to the thread itself.
+func (s *Service) FindConversation(ctx context.Context, r string) (Conversation, error) {
+	if idcache.IsFullID(r) {
+		convs, _, err := s.ConversationsSearch(ctx, SearchOptions{ID: r, Folder: "all", Limit: 1})
+		if err != nil {
+			return Conversation{}, err
+		}
+		if len(convs) == 1 {
+			return convs[0], nil
+		}
+		return Conversation{ID: r}, nil
+	}
+	convs, _, err := s.ConversationsSearch(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
+	if err != nil {
+		return Conversation{}, err
+	}
+	return ref.Pick("conversation", r, convs,
+		func(c Conversation) string { return c.ID },
+		func(c Conversation) string { return convSenderAddr(c) + "  " + c.Subject })
 }

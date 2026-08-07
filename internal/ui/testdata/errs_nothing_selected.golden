@@ -1,0 +1,5 @@
+== stdout ==
+== stderr ==
+Error: Nothing selected.
+Try:   pass a REF, or a filter such as --unread, --from, --older-than.
+       Use --all to target a whole folder.

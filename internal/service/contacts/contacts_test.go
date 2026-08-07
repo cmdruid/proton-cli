@@ -210,11 +210,9 @@ func TestUnpinKeyRemovesKeys(t *testing.T) {
 		t.Fatalf("UnpinKey: %v", err)
 	}
 	model := ical.ParseSignedVCard(putSignedCardText(t, d))
-	e := model.FindEmail("bob@example.com")
-	if e == nil {
-		t.Fatal("email should remain after unpin")
-	}
-	if len(e.KeyValues) != 0 || e.Encrypt != nil {
+	if e := model.FindEmail("bob@example.com"); e == nil {
+		t.Error("email should remain after unpin")
+	} else if len(e.KeyValues) != 0 || e.Encrypt != nil {
 		t.Errorf("keys/flags should be gone: %+v", e)
 	}
 }

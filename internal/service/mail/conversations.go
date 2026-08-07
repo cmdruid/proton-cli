@@ -113,59 +113,6 @@ func (s *Service) AssertConversationKind(ctx context.Context, id string) error {
 	return s.crossTableProbe(ctx, id, err, "conversations")
 }
 
-func (s *Service) ConversationsTrash(ctx context.Context, ids []string) error {
-	return s.C.Decode(ctx, proton.Request{
-		Method: "PUT", Path: "/mail/v4/conversations/label",
-		Body: map[string]any{"LabelID": labelTrash, "IDs": ids},
-	}, nil)
-}
-
-func (s *Service) ConversationsDelete(ctx context.Context, ids []string, folder string) error {
-	labelID := labelAllMail
-	if folder != "" {
-		labelID = ResolveFolder(folder)
-	}
-	return s.C.Decode(ctx, proton.Request{
-		Method: "PUT", Path: "/mail/v4/conversations/delete",
-		Body: map[string]any{"IDs": ids, "LabelID": labelID},
-	}, nil)
-}
-
-func (s *Service) ConversationsMove(ctx context.Context, ids []string, folder string) error {
-	return s.C.Decode(ctx, proton.Request{
-		Method: "PUT", Path: "/mail/v4/conversations/label",
-		Body: map[string]any{"LabelID": ResolveFolder(folder), "IDs": ids},
-	}, nil)
-}
-
-func (s *Service) ConversationsMark(ctx context.Context, ids []string, read, unread, starred, unstar bool, folder string) error {
-	if read {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/read", Body: map[string]any{"IDs": ids}}, nil); err != nil {
-			return err
-		}
-	}
-	if unread {
-		labelID := labelAllMail
-		if folder != "" {
-			labelID = ResolveFolder(folder)
-		}
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/unread", Body: map[string]any{"IDs": ids, "LabelID": labelID}}, nil); err != nil {
-			return err
-		}
-	}
-	if starred {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/label", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
-			return err
-		}
-	}
-	if unstar {
-		if err := s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/mail/v4/conversations/unlabel", Body: map[string]any{"LabelID": labelStarred, "IDs": ids}}, nil); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ConversationMessageIDs lists a thread's message IDs oldest first, which is the
 // order an exported thread reads in.
 func (s *Service) ConversationMessageIDs(ctx context.Context, convID string) ([]string, error) {

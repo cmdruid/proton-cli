@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/render"
+	"github.com/roman-16/proton-cli/internal/mailtext"
 )
 
 // AnswerSpec is what the user supplied for a reply or forward; the parent message
@@ -70,7 +70,7 @@ func (s *Service) Answer(ctx context.Context, u *keys.Unlocked, parentID string,
 		ReplyTos: recipientsFromRaw(raw.ReplyTos),
 		Subject:  raw.Subject,
 		Body:     body,
-		HTML:     render.IsHTML(raw.MIMEType),
+		HTML:     mailtext.IsHTML(raw.MIMEType),
 		Time:     raw.Time,
 		Sent:     raw.isSent(),
 	}

@@ -6,32 +6,78 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 )
 
+// Session is what one profile keeps on disk between runs.
+//
+// The fields mirror WebClients' DefaultPersistedSession
+// (packages/shared/lib/authentication/SessionInterface.ts): the tokens, the user
+// it belongs to, when it was written, and the sealed key password. Email is the
+// one addition, so listing profiles does not need an API call per profile.
 type Session struct {
 	UID          string `json:"uid"`
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	UserID       string `json:"user_id,omitempty"`
+	Email        string `json:"email,omitempty"`
 	// EncKeyBlob is the salted key password encrypted (AES-256-GCM) with a random
 	// client key that lives server-side (PUT/GET /auth/v4/sessions/local/key).
 	// Recovering the key password requires fetching that client key, so revoking
 	// the session renders this blob undecryptable.
-	EncKeyBlob string `json:"enc_key_blob,omitempty"`
-	AppVersion string `json:"app_version"`
-	BaseURL    string `json:"base_url"`
+	EncKeyBlob  string `json:"enc_key_blob,omitempty"`
+	PersistedAt int64  `json:"persisted_at,omitempty"`
+	AppVersion  string `json:"app_version"`
+	BaseURL     string `json:"base_url"`
 }
 
-// FromParts assembles a Session for persistence from a client's raw state,
-// keeping the transport client free of the persistence format.
-func FromParts(uid, acc, refresh, encKeyBlob, appVersion, baseURL string) *Session {
-	return &Session{
-		UID:          uid,
-		AccessToken:  acc,
-		RefreshToken: refresh,
-		EncKeyBlob:   encKeyBlob,
-		AppVersion:   appVersion,
-		BaseURL:      baseURL,
+// Unlocked reports whether the session can decrypt content without the account
+// password, which it can once the key password has been sealed into it.
+func (s *Session) Unlocked() bool { return s != nil && s.EncKeyBlob != "" }
+
+// Profile is one named session slot on this machine.
+type Profile struct {
+	Name        string `json:"name"`
+	Email       string `json:"email,omitempty"`
+	Unlocked    bool   `json:"unlocked"`
+	PersistedAt int64  `json:"persisted_at,omitempty"`
+}
+
+// Profiles lists the profiles that have a saved session, sorted by name.
+//
+// It reads the directory rather than any registry: the files are the state, so
+// there is nothing that can disagree with them.
+func Profiles() ([]Profile, error) {
+	d, err := Dir()
+	if err != nil {
+		return nil, err
 	}
+	entries, err := os.ReadDir(filepath.Join(d, "sessions"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []Profile
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), ".json")
+		s, err := Load(name)
+		if err != nil || s == nil {
+			continue
+		}
+		out = append(out, Profile{
+			Name: name, Email: s.Email,
+			Unlocked: s.Unlocked(), PersistedAt: s.PersistedAt,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
 }
 
 // Dir returns ~/.config/proton-cli.
@@ -89,6 +135,7 @@ func Save(profile string, s *Session) error {
 	if profile == "" {
 		profile = "default"
 	}
+	s.PersistedAt = time.Now().Unix()
 	d, err := Dir()
 	if err != nil {
 		return err

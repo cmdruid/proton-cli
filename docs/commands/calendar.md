@@ -11,7 +11,7 @@ Calendars and events, encrypted with your calendar key and signed with your addr
 ```bash
 proton-cli calendar events list
 proton-cli calendar events list --calendar Work --start 2026-04-15 --end 2026-04-30
-proton-cli calendar events get CALENDAR_ID EVENT_ID
+proton-cli calendar events get CALENDAR_ID/EVENT_ID
 proton-cli calendar events get "Team sync"           # by title
 ```
 
@@ -22,16 +22,13 @@ proton-cli calendar events get "Team sync"           # by title
 ```bash
 proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
 proton-cli calendar events create --title Conference --start 2026-04-20 --all-day
-proton-cli calendar events create --calendar Work --title "Quarterly sync" \
-  --start 2026-04-16T14:00 --duration 90m \
-  --location "Vienna HQ" --description "Numbers and roadmap"
+proton-cli calendar events create --calendar Work --title "Quarterly sync" --start 2026-04-16T14:00 --duration 90m --location "Vienna HQ" --description "Numbers and roadmap"
 ```
 
 Recurrence and reminders:
 
 ```bash
-proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m \
-  --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h
+proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h
 ```
 
 `--rrule` takes an iCal recurrence rule; `--remind` is repeatable.
@@ -39,8 +36,7 @@ proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --dur
 Attendees:
 
 ```bash
-proton-cli calendar events create --title Review --start 2026-04-16T14:00 \
-  --attendee alice@proton.me --attendee bob@example.com
+proton-cli calendar events create --title Review --start 2026-04-16T14:00 --attendee alice@proton.me --attendee bob@example.com
 ```
 
 Proton users are added directly; external addresses get an emailed invitation.
@@ -48,11 +44,11 @@ Proton users are added directly; external addresses get an emailed invitation.
 ### Update, respond, delete
 
 ```bash
-proton-cli calendar events update CALENDAR_ID EVENT_ID --title "New title"
-proton-cli calendar events update CALENDAR_ID EVENT_ID --start 2026-04-17T10:00 --duration 2h
-proton-cli calendar events respond CALENDAR_ID EVENT_ID --status accept
+proton-cli calendar events update CALENDAR_ID/EVENT_ID --title "New title"
+proton-cli calendar events update CALENDAR_ID/EVENT_ID --start 2026-04-17T10:00 --duration 2h
+proton-cli calendar events respond CALENDAR_ID/EVENT_ID --status accept
 proton-cli calendar events respond "Team sync" --status decline    # emails the organizer
-proton-cli calendar events delete CALENDAR_ID EVENT_ID
+proton-cli calendar events delete CALENDAR_ID/EVENT_ID
 proton-cli calendar events delete "Dentist"
 ```
 
@@ -100,7 +96,7 @@ proton-cli calendar settings set auto-import-invite on
 ```bash
 proton-cli calendar settings calendars list
 proton-cli calendar settings calendars create --name Work --color "#8080FF"
-proton-cli calendar settings calendars rename CALENDAR_ID --name Personal --color "#DB60D6"
+proton-cli calendar settings calendars update CALENDAR_ID --name Personal --color "#DB60D6"
 proton-cli calendar settings calendars delete CALENDAR_ID
 ```
 

@@ -1,5 +1,30 @@
 # Scripts
 
+Everything the maintainer or CI runs, in whatever language suits it: shell installers, a TypeScript generator, a Node publisher, a Go generator, and the demo recorder.
+
+| Directory or file | Role |
+| --- | --- |
+| `install.sh`, `install.ps1` | The installers users curl; referenced from the README |
+| `build-hv-helpers.sh` | Builds the CAPTCHA webview helpers that get embedded (`just build`) |
+| `gen-completions.sh` | Emits the shell completions shipped in releases |
+| `gendocs/` | Generates `docs/commands/README.md` from the command tree (`just docs`) |
+| `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source |
+| `terminal-demo/` | Records the README panel against a throwaway account (`just demo`) |
+| `publish-npm.mjs` | Publishes the npm package on release |
+| `release-helpers-check.sh` | Verifies a release's embedded helpers before publishing |
+
+## Command Reference Generator
+
+Writes `docs/commands/README.md` - every command in the tree, one row each - by walking the assembled Cobra tree rather than by reading the source or the prose.
+
+```bash
+just docs
+```
+
+The prose pages beside it are hand-written; only the index is generated. That split is deliberate: generated per-command pages read badly, but an index is exactly the thing that goes stale silently when a command is renamed. CI regenerates it and fails on a diff, so a command that exists is a command that is listed, under its current name.
+
+It shares the tree with `internal/cli/conformance_test.go`, which checks the same commands against the rules the interface is meant to obey. Both call `cli.Root()`.
+
 ## OpenAPI Generator
 
 Auto-generates `openapi.yaml` from [ProtonMail/WebClients](https://github.com/ProtonMail/WebClients) TypeScript source files using [ts-morph](https://github.com/dsherret/ts-morph) for full AST parsing with type resolution.

@@ -182,16 +182,3 @@ func TestClassifyErrorBody_HV(t *testing.T) {
 		t.Errorf("hv.WebURL = %q", hv.WebURL)
 	}
 }
-
-func TestAPIErrorExitCode(t *testing.T) {
-	cases := []struct {
-		status, want int
-	}{
-		{401, 2}, {403, 2}, {404, 3}, {409, 4}, {422, 4}, {500, 5}, {502, 5}, {400, 1},
-	}
-	for _, tc := range cases {
-		if got := (&APIError{HTTPStatus: tc.status}).ExitCode(); got != tc.want {
-			t.Errorf("status %d → exit %d, want %d", tc.status, got, tc.want)
-		}
-	}
-}

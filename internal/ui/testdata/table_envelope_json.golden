@@ -1,0 +1,15 @@
+== stdout ==
+{
+  "count": 3,
+  "has_more": true,
+  "messages": [
+    {
+      "id": "5bH2mQxK",
+      "subject": "Invoice #2291 is ready"
+    }
+  ],
+  "page": 0,
+  "page_size": 3,
+  "total": 312
+}
+== stderr ==

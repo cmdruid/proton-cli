@@ -39,13 +39,13 @@ func TestDriveShareLinkLifecycle(t *testing.T) {
 		t.Errorf("public link is missing the password fragment: %q", url)
 	}
 
-	status := runOK(t, "drive", "share", "status", folder)
-	assertContains(t, status, "Public links:")
+	status := runOK(t, "drive", "share", "get", folder)
+	assertContains(t, status, "Public Link:")
 	assertContains(t, status, tokenOf(t, url))
 
 	runOK(t, "drive", "share", "unlink", folder)
-	after := runOKStderr2(t, "drive", "share", "status", folder)
-	assertContains(t, after, "Not shared.")
+	after := runOKStderr2(t, "drive", "share", "get", folder)
+	assertField(t, after, "Shared:", "no")
 }
 
 // TestDriveShareLinkPublicHandshake guards the SRP-salt regression: a created
@@ -60,7 +60,7 @@ func TestDriveShareLinkPublicHandshake(t *testing.T) {
 
 	url := strings.TrimSpace(runOK(t, "drive", "share", "link", folder))
 	token := tokenOf(t, url)
-	linkID := strings.TrimSpace(runJSON(t, "drive", "items", "info", folder)["link_id"].(string))
+	linkID := strings.TrimSpace(runJSON(t, "drive", "items", "get", folder)["link_id"].(string))
 
 	info := runJSON(t, "api", "GET", "/drive/urls/"+token+"/info")
 	if code, _ := info["Code"].(float64); int(code) != 1000 {
@@ -111,13 +111,14 @@ func TestDriveShareLinkPassword(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	stdout, stderr := runOKStderr(t, "drive", "share", "link", folder, "--password", "hunter2")
-	if !strings.Contains(strings.TrimSpace(stdout), "#") {
+	// The record is the answer, so the custom password is reported there rather
+	// than in the confirmation on stderr.
+	stdout := runOK(t, "drive", "share", "link", folder, "--password", "hunter2")
+	if !strings.Contains(stdout, "#") {
 		t.Errorf("link should still carry a generated fragment: %q", stdout)
 	}
-	if !strings.Contains(stderr, "hunter2") {
-		t.Errorf("expected the custom password reported on stderr, got: %q", stderr)
-	}
+	assertField(t, stdout, "Password:", "hunter2")
+	assertField(t, runOK(t, "drive", "share", "get", folder), "Link Password:", "hunter2")
 }
 
 func TestDriveShareLinkDryRun(t *testing.T) {
@@ -127,10 +128,10 @@ func TestDriveShareLinkDryRun(t *testing.T) {
 		"drive", "items", "delete", folder)
 
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "share", "link", folder)
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 
-	status := runOKStderr2(t, "drive", "share", "status", folder)
-	assertContains(t, status, "Not shared.")
+	status := runOKStderr2(t, "drive", "share", "get", folder)
+	assertField(t, status, "Shared:", "no")
 }
 
 // ── members ──
@@ -157,7 +158,7 @@ func TestDriveShareAddDryRun(t *testing.T) {
 		"drive", "items", "delete", folder)
 
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "share", "add", folder, "someone@example.invalid")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 // TestDriveShareMemberRoundTrip invites a real Proton address, verifies it shows
@@ -176,12 +177,12 @@ func TestDriveShareMemberRoundTrip(t *testing.T) {
 	file := folder + "/m.txt"
 
 	runOK(t, "drive", "share", "add", file, invitee)
-	status := runOK(t, "drive", "share", "status", file)
+	status := runOK(t, "drive", "share", "get", file)
 	assertContains(t, status, invitee)
-	assertContains(t, status, "pending")
+	assertContains(t, status, "not yet accepted")
 
 	runOK(t, "drive", "share", "remove", file, invitee)
-	after := runOKStderr2(t, "drive", "share", "status", file)
+	after := runOKStderr2(t, "drive", "share", "get", file)
 	assertNotContains(t, after, invitee)
 }
 
@@ -210,9 +211,9 @@ func TestDriveInvitationsList(t *testing.T) {
 
 func TestDriveInvitationsAcceptRejectDryRun(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "invitations", "accept", "some-invitation-id")
-	assertContains(t, stderr, "dry-run")
-	_, stderr = runOKStderr(t, "--dry-run", "drive", "invitations", "reject", "some-invitation-id")
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
+	_, stderr = runOKStderr(t, "--dry-run", "drive", "invitations", "decline", "some-invitation-id")
+	assertContains(t, stderr, "Dry run")
 }
 
 // runOKStderr2 joins stdout+stderr because status prints "Not shared." to
@@ -273,7 +274,7 @@ func TestDriveShareInvitationRoundTrip(t *testing.T) {
 	// The primary now sees the alt as a member, not a pending invitee.
 	var members string
 	waitFor(30*time.Second, 3*time.Second, func() bool {
-		st := runJSON(t, "drive", "share", "status", folder)
+		st := runJSON(t, "drive", "share", "get", folder)
 		ms, _ := st["members"].([]interface{})
 		members = fmt.Sprintf("%v", ms)
 		return strings.Contains(members, altEmail())

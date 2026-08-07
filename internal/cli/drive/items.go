@@ -1,0 +1,530 @@
+package drive
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"time"
+
+	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/errs"
+	drivesvc "github.com/roman-16/proton-cli/internal/service/drive"
+	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/spf13/cobra"
+)
+
+func itemsCmd() *cobra.Command {
+	c := &cobra.Command{Use: "items", Short: "Files and folders"}
+	c.AddCommand(itemsListCmd(), itemsGetCmd(), itemsUploadCmd(), itemsDownloadCmd(),
+		itemsUpdateCmd(), itemsMoveCmd(), itemsCopyCmd(),
+		itemsTrashCmd(), itemsDeleteCmd(), revisionsCmd())
+	return c
+}
+
+func childColumns() []ui.Column[drivesvc.Child] {
+	return []ui.Column[drivesvc.Child]{
+		{Header: "ID", ID: true, Cell: func(ch drivesvc.Child) string { return ch.LinkID }},
+		{Header: "TYPE", Cell: func(ch drivesvc.Child) string { return itemType(ch.Type) }},
+		{Header: "SIZE", Right: true, Cell: func(ch drivesvc.Child) string {
+			// A folder has no size of its own. Blank is how every other column
+			// says "nothing here"; a placeholder glyph would read like a value.
+			if ch.Type == 1 {
+				return ""
+			}
+			return units.Size(ch.Size)
+		}},
+		{Header: "MODIFIED", Cell: func(ch drivesvc.Child) string { return units.Time(ch.ModifyTime) }},
+		{Header: "NAME", Flex: true, Cell: func(ch drivesvc.Child) string { return ch.Name }},
+	}
+}
+
+func itemsListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list [PATH]",
+		Short: "List what is in a folder",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			at := "/"
+			if len(c.Args) > 0 {
+				at = c.Args[0]
+			}
+			children, err := c.App.Drive.List(c.Ctx, dc, at)
+			if err != nil {
+				return err
+			}
+			return kit.List(c, ui.TableSpec[drivesvc.Child]{
+				Noun: "items", Columns: childColumns(),
+				Total: ui.Unknown, Page: ui.Unpaged,
+			}, children, func(ch drivesvc.Child) []string { return []string{ch.LinkID} })
+		}),
+	}
+}
+
+func itemsGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get PATH",
+		Short: "Show a file or folder's details",
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			info, err := c.App.Drive.Info(c.Ctx, dc, c.Args[0])
+			if err != nil {
+				return err
+			}
+			fields := []ui.Field{
+				{Label: "Name", Value: info.Name},
+				{Label: "Location", Value: info.Location},
+				{Label: "Type", Value: info.Type},
+				{Label: "MIME Type", Value: info.MIMEType},
+				{Label: "Created By", Value: info.CreatedBy},
+				{Label: "Signature", Value: info.Signature, Always: true},
+				{Label: "Uploaded", Value: units.Time(info.Uploaded)},
+				{Label: "Modified", Value: units.Time(info.Modified)},
+				{Label: "Size", Value: units.Size(info.Size)},
+			}
+			if info.OriginalSize != 0 && info.OriginalSize != info.Size {
+				fields = append(fields, ui.Field{Label: "Original Size", Value: units.Size(info.OriginalSize)})
+			}
+			fields = append(fields,
+				ui.Field{Label: "SHA-1", Value: info.SHA1},
+				ui.Field{Label: "Shared", Value: yesNo(info.Shared), Always: true},
+				ui.Field{Label: "ID", Value: info.LinkID, ID: true},
+			)
+			return kit.Show(c, ui.RecordSpec{Object: info, Fields: fields})
+		}),
+	}
+}
+
+// ── moving bytes ──
+
+func itemsUploadCmd() *cobra.Command {
+	var recursive bool
+	c := &cobra.Command{
+		Use:   "upload SRC [DEST]",
+		Short: "Upload a file or directory",
+		Long: "Upload a file or directory.\n\n" +
+			"SRC of - reads standard input, which needs DEST to name the file, since a\n" +
+			"stream has no name of its own.",
+		Args: cobra.RangeArgs(1, 2),
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			src := c.Args[0]
+			dest := "/"
+			if len(c.Args) >= 2 {
+				dest = c.Args[1]
+			}
+			if recursive {
+				if src == "-" {
+					return kit.Fail("--recursive cannot read from standard input.")
+				}
+				return uploadTree(c, dc, src, dest)
+			}
+			return uploadOne(c, dc, src, dest)
+		}),
+	}
+	c.Flags().BoolVar(&recursive, "recursive", false, "Upload a directory and everything under it")
+	return c
+}
+
+func uploadOne(c *kit.Invocation, dc *drivesvc.Context, src, dest string) error {
+	var r io.Reader
+	var size int64
+	var name string
+
+	if src == "-" {
+		r = os.Stdin
+		name = fmt.Sprintf("stdin-%d", time.Now().Unix())
+		// A stream has no name, so DEST carries it: an existing folder receives
+		// the generated name, and any other path is parent plus new file name.
+		resolved, err := c.App.Drive.ResolvePath(c.Ctx, dc, dest)
+		var notFound *errs.NotFound
+		if err != nil && !errors.As(err, &notFound) {
+			return err
+		}
+		if err != nil || !resolved.IsFolder {
+			name = path.Base(dest)
+			dest = path.Dir(dest)
+		}
+	} else {
+		fi, err := os.Stat(src)
+		if err != nil {
+			return err
+		}
+		if fi.IsDir() {
+			return kit.Fail("%s is a directory.", src).Hint("--recursive to upload it and its contents.")
+		}
+		f, err := os.Open(src)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = f.Close() }()
+		r, size, name = f, fi.Size(), filepath.Base(src)
+	}
+
+	return kit.Mutate(c, ui.ResultSpec{
+		Action: ui.Uploaded, Count: 1, Name: name,
+		Detail: "to " + dest, Extra: map[string]any{"size": size},
+	}, func() error {
+		return c.App.Drive.Upload(c.Ctx, dc, dest, name, r, drivesvc.UploadOptions{
+			Label: "Uploading " + name, Progress: ui.NewProgress(c.UI()), TotalHint: size,
+		})
+	})
+}
+
+// uploadTree mirrors a local directory into Drive, creating folders as it goes.
+func uploadTree(c *kit.Invocation, dc *drivesvc.Context, src, dest string) error {
+	srcAbs, err := filepath.Abs(src)
+	if err != nil {
+		return err
+	}
+	top := filepath.ToSlash(filepath.Join(dest, filepath.Base(srcAbs)))
+
+	// Walk first so the confirmation can report what was actually found, and so a
+	// dry run lists it without creating anything.
+	type upload struct {
+		local  string
+		remote string
+		dir    bool
+		size   int64
+	}
+	var plan []upload
+	if err := filepath.Walk(srcAbs, func(p string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if p == srcAbs {
+			return nil
+		}
+		rel, err := filepath.Rel(srcAbs, p)
+		if err != nil {
+			return err
+		}
+		plan = append(plan, upload{
+			local:  p,
+			remote: filepath.ToSlash(filepath.Join(top, rel)),
+			dir:    info.IsDir(),
+			size:   info.Size(),
+		})
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	files := 0
+	for _, u := range plan {
+		if !u.dir {
+			files++
+		}
+	}
+	return kit.Mutate(c, ui.ResultSpec{
+		Action: ui.Uploaded, Kind: "items", Count: files, Detail: "to " + top,
+	}, func() error {
+		if err := c.App.Drive.CreateFolder(c.Ctx, dc, top); err != nil {
+			return err
+		}
+		for _, u := range plan {
+			if u.dir {
+				if err := c.App.Drive.CreateFolder(c.Ctx, dc, u.remote); err != nil {
+					return err
+				}
+				continue
+			}
+			f, err := os.Open(u.local)
+			if err != nil {
+				return err
+			}
+			err = c.App.Drive.Upload(c.Ctx, dc, filepath.ToSlash(filepath.Dir(u.remote)),
+				filepath.Base(u.remote), f, drivesvc.UploadOptions{
+					Label:    "Uploading " + filepath.Base(u.remote),
+					Progress: ui.NewProgress(c.UI()), TotalHint: u.size,
+				})
+			_ = f.Close()
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func itemsDownloadCmd() *cobra.Command {
+	var dest kit.Destination
+	c := &cobra.Command{
+		Use:   "download PATH",
+		Short: "Download a file",
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			if err := dest.Validate(true); err != nil {
+				return err
+			}
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			src := c.Args[0]
+			name := path.Base(src)
+
+			if dest.Stdout() {
+				// Streaming to stdout means the bar would compete with the
+				// payload's own consumer for the terminal, so it stays off.
+				return c.App.Drive.Download(c.Ctx, dc, src, c.UI().Out, drivesvc.DownloadOptions{
+					Label: "Downloading " + name,
+				})
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Downloaded, Count: 1, Name: name,
+				Detail: "to " + dest.Describe(),
+			}, func() error {
+				target, err := dest.Reserve(name)
+				if err != nil {
+					return err
+				}
+				f, err := os.Create(target)
+				if err != nil {
+					return err
+				}
+				defer func() { _ = f.Close() }()
+				return c.App.Drive.Download(c.Ctx, dc, src, f, drivesvc.DownloadOptions{
+					Label: "Downloading " + name, Progress: ui.NewProgress(c.UI()),
+				})
+			})
+		}),
+	}
+	dest.Register(c)
+	return c
+}
+
+// ── organising ──
+
+func itemsUpdateCmd() *cobra.Command {
+	var name string
+	c := &cobra.Command{
+		Use:   "update PATH",
+		Short: "Rename a file or folder",
+		Long: "Rename a file or folder.\n\n" +
+			"A name is a field like any other, so changing it is `update --name` rather\n" +
+			"than a verb of its own. To put something somewhere else, use `move`.",
+		Args: cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Updated, Count: 1, Name: path.Base(c.Args[0]),
+				Detail: "to " + name,
+			}, func() error {
+				return c.App.Drive.Rename(c.Ctx, dc, c.Args[0], name)
+			})
+		}),
+	}
+	c.Flags().StringVar(&name, "name", "", "New name, without a path")
+	_ = c.MarkFlagRequired("name")
+	return c
+}
+
+func itemsMoveCmd() *cobra.Command {
+	return relocateCmd("move", "Move files or folders into another folder", ui.Moved,
+		func(c *kit.Invocation, dc *drivesvc.Context, src, into string) error {
+			return c.App.Drive.Move(c.Ctx, dc, src, into)
+		})
+}
+
+func itemsCopyCmd() *cobra.Command {
+	return relocateCmd("copy", "Copy files into another folder", ui.Copied,
+		func(c *kit.Invocation, dc *drivesvc.Context, src, into string) error {
+			return c.App.Drive.Copy(c.Ctx, dc, src, into)
+		})
+}
+
+// relocateCmd builds move and copy, which differ only in whether the original
+// stays. Both take the selection model, so a filtered move is as available as a
+// filtered trash.
+func relocateCmd(use, short string, action ui.Action,
+	apply func(*kit.Invocation, *drivesvc.Context, string, string) error) *cobra.Command {
+	var f filters
+	var into string
+	c := &cobra.Command{
+		Use:   use + " [PATH...]",
+		Short: short,
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			sel, err := selectItems(c, dc, &f)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: action, Kind: "items", Count: sel.Len(), IDs: sel.IDs,
+				Detail: "into " + into, Preview: sel.Preview(),
+			}, func() error {
+				for _, row := range sel.Rows {
+					if err := apply(c, dc, row.Path, into); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}),
+	}
+	c.Flags().StringVar(&into, "into", "", "Destination folder")
+	_ = c.MarkFlagRequired("into")
+	f.register(c)
+	return c
+}
+
+func itemsTrashCmd() *cobra.Command {
+	return removeCmd("trash", "Move files or folders to the trash", ui.Trashed, false)
+}
+
+func itemsDeleteCmd() *cobra.Command {
+	return removeCmd("delete", "Delete files or folders permanently", ui.Deleted, true)
+}
+
+func removeCmd(use, short string, action ui.Action, permanent bool) *cobra.Command {
+	var f filters
+	c := &cobra.Command{
+		Use:   use + " [PATH...]",
+		Short: short,
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			sel, err := selectItems(c, dc, &f)
+			if err != nil {
+				return err
+			}
+			detail := ""
+			if !permanent {
+				detail = "to trash"
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: action, Kind: "items", Count: sel.Len(), IDs: sel.IDs,
+				Detail: detail, Preview: sel.Preview(),
+			}, func() error {
+				for _, row := range sel.Rows {
+					if err := c.App.Drive.Delete(c.Ctx, dc, row.Path, permanent); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}),
+	}
+	f.register(c)
+	return c
+}
+
+// ── revisions ──
+
+func revisionsCmd() *cobra.Command {
+	c := &cobra.Command{Use: "revisions", Short: "Earlier versions of a file"}
+	c.AddCommand(revisionsListCmd(), revisionsRestoreCmd())
+	return c
+}
+
+func revisionState(state int) string {
+	switch state {
+	case 0:
+		return "draft"
+	case 1:
+		return "active"
+	case 2:
+		return "inactive"
+	}
+	return "unknown"
+}
+
+func revisionsListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list PATH",
+		Short: "List a file's earlier versions",
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			revs, err := c.App.Drive.RevisionsList(c.Ctx, dc, c.Args[0])
+			if err != nil {
+				return err
+			}
+			return kit.List(c, ui.TableSpec[drivesvc.Revision]{
+				Noun:  "revisions",
+				Total: ui.Unknown, Page: ui.Unpaged,
+				Columns: []ui.Column[drivesvc.Revision]{
+					{Header: "ID", ID: true, Cell: func(r drivesvc.Revision) string { return r.ID }},
+					{Header: "STATE", Cell: func(r drivesvc.Revision) string { return revisionState(r.State) }},
+					{Header: "SIZE", Right: true, Cell: func(r drivesvc.Revision) string { return units.Size(r.Size) }},
+					{Header: "CREATED", Cell: func(r drivesvc.Revision) string { return units.Time(r.CreateTime) }},
+				},
+			}, revs, func(r drivesvc.Revision) []string { return []string{r.ID} })
+		}),
+	}
+}
+
+func revisionsRestoreCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "restore PATH REVISION_REF",
+		Short: "Restore a file to an earlier version",
+		Args:  cobra.ExactArgs(2),
+		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Restored, Count: 1, Name: path.Base(c.Args[0]),
+				Detail: "to an earlier revision", IDs: []string{c.Args[1]},
+			}, func() error {
+				return c.App.Drive.RevisionRestore(c.Ctx, dc, c.Args[0], c.Args[1])
+			})
+		}),
+	}
+}
+
+// ── folders ──
+
+func foldersCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "folders",
+		Short: "Creating folders",
+		Long: "Creating folders.\n\n" +
+			"Every other folder operation is an item operation, because Drive treats files\n" +
+			"and folders alike: rename, move, trash and delete all live under `items`.",
+	}
+	c.AddCommand(&cobra.Command{
+		Use:   "create PATH",
+		Short: "Create a folder, and any missing folder above it",
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Created, Kind: "folders", Count: 1, Name: c.Args[0],
+			}, func() error {
+				return c.App.Drive.CreateFolder(c.Ctx, dc, c.Args[0])
+			})
+		}),
+	})
+	return c
+}

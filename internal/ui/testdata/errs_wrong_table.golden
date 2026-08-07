@@ -1,0 +1,4 @@
+== stdout ==
+== stderr ==
+Error: That ID is a conversation, not a message.
+Try:   proton-cli mail conversations get 5bH2mQxK

@@ -1,0 +1,12 @@
+== stdout ==
+Title:        Team sync
+Start:        2026-04-16 14:00
+End:          2026-04-16 15:00
+Duration:     1h
+Location:     Vienna HQ
+Description:  Numbers and roadmap
+Recurrence:   FREQ=WEEKLY;COUNT=10
+Calendar:     Work
+Signature:    verified
+ID:           ef56gh78/ab12cd34
+== stderr ==

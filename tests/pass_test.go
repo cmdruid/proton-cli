@@ -11,7 +11,7 @@ import (
 
 func TestPassVaultsList(t *testing.T) {
 	stdout := runOK(t, "pass", "vaults", "list")
-	assertContains(t, stdout, "SHARE_ID")
+	assertContains(t, stdout, "ID")
 }
 
 func TestPassVaultsCRUD(t *testing.T) {
@@ -41,8 +41,8 @@ func TestPassItemsCRUDLogin(t *testing.T) {
 		"--password", "s3cret!",
 		"--url", url)
 	itemID := strings.TrimSpace(stdout)
-	if !looksLikeID(itemID) {
-		t.Fatalf("expected bare item ID on stdout, got %q", stdout)
+	if !looksLikePairRef(itemID) {
+		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", stdout)
 	}
 	cleanupRun(t, fmt.Sprintf("Delete item: proton-cli pass items delete %s", name),
 		"pass", "items", "delete", name)
@@ -54,7 +54,7 @@ func TestPassItemsCRUDLogin(t *testing.T) {
 	assertField(t, got, "Password:", "s3cret!")
 
 	// Edit password
-	runOK(t, "pass", "items", "edit", name, "--password", "new-pass-v2")
+	runOK(t, "pass", "items", "update", name, "--password", "new-pass-v2")
 	got2 := runOK(t, "pass", "items", "get", name)
 	assertField(t, got2, "Password:", "new-pass-v2")
 }
@@ -68,8 +68,8 @@ func TestPassItemsCreateNote(t *testing.T) {
 		"--name", name,
 		"--note", "secret note content")
 	id := strings.TrimSpace(stdout)
-	if !looksLikeID(id) {
-		t.Fatalf("expected bare ID on stdout, got %q", stdout)
+	if !looksLikePairRef(id) {
+		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", stdout)
 	}
 	cleanupRun(t, fmt.Sprintf("Delete note: proton-cli pass items delete %s", name),
 		"pass", "items", "delete", name)
@@ -99,7 +99,7 @@ func TestPassItemsCreateCardShowsPIN(t *testing.T) {
 		"pass", "items", "delete", name)
 
 	got := runOK(t, "pass", "items", "get", name)
-	assertField(t, got, "Holder:", "Test Holder")
+	assertField(t, got, "Cardholder:", "Test Holder")
 	assertField(t, got, "Number:", "4111111111111111")
 	assertField(t, got, "Expiry:", "2029-01")
 	assertField(t, got, "CVV:", "123")
@@ -140,18 +140,15 @@ func TestPassItemsTrashRestoreDelete(t *testing.T) {
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "login", "--name", name,
 		"--username", "u", "--password", "p")
-	itemID := strings.TrimSpace(stdout)
-
-	// Need share ID for restore (trashed items don't appear in search)
-	vaults := runJSONArray(t, "pass", "vaults", "list")
-	shareID := vaults[0].(map[string]interface{})["share_id"].(string)
-
-	// Register a best-effort cleanup (permanent delete by IDs)
-	cleanupRun(t, fmt.Sprintf("Delete item: proton-cli pass items delete -- %s %s", shareID, itemID),
-		"pass", "items", "delete", "--", shareID, itemID)
+	// Creating answers with SHARE_ID/ITEM_ID, which is the reference every item
+	// verb takes - and the only way to reach a trashed item, since searching by
+	// name does not find one.
+	ref := strings.TrimSpace(stdout)
+	cleanupRun(t, fmt.Sprintf("Delete item: proton-cli pass items delete -- %s", ref),
+		"pass", "items", "delete", "--", ref)
 
 	runOK(t, "pass", "items", "trash", name)
-	runOK(t, "pass", "items", "restore", "--", shareID, itemID)
+	runOK(t, "pass", "trash", "restore", "--", ref)
 
 	// It should be searchable again
 	got := runOK(t, "pass", "items", "get", name)
@@ -172,9 +169,12 @@ func TestPassItemsListVaultFilter(t *testing.T) {
 // ── alias options (read-only) ──
 
 func TestPassAliasOptions(t *testing.T) {
-	stdout := runOK(t, "pass", "alias", "options")
-	assertContains(t, stdout, "Suffixes")
-	assertContains(t, stdout, "Mailboxes")
+	// Both kinds come back in one table, told apart by KIND rather than by two
+	// headed sections.
+	stdout := runOK(t, "pass", "aliases", "options")
+	assertContains(t, stdout, "KIND")
+	assertContains(t, stdout, "suffix")
+	assertContains(t, stdout, "mailbox")
 }
 
 // ── batch filters (all dry-run) ──
@@ -184,7 +184,7 @@ func TestPassBatchTrashDryRunByType(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("dry-run should succeed, got exit %d: %s", code, stderr)
 	}
-	assertContains(t, stderr, "dry-run")
+	assertContains(t, stderr, "Dry run")
 }
 
 func TestPassBatchTrashDryRunOlderThanYear(t *testing.T) {
@@ -211,7 +211,7 @@ func TestPassBatchTrashRequiresInput(t *testing.T) {
 	if code == 0 {
 		t.Error("expected error when no REF and no filter given")
 	}
-	assertContains(t, stderr, "no items selected")
+	assertContains(t, stderr, "Nothing selected")
 }
 
 func TestPassItemTypesAndFields(t *testing.T) {
@@ -249,7 +249,7 @@ func TestPassVaultRename(t *testing.T) {
 		"pass", "vaults", "delete", "--", sid)
 
 	newName := name + "-renamed"
-	runOK(t, "pass", "vaults", "rename", "--name", newName, sid)
+	runOK(t, "pass", "vaults", "update", "--name", newName, sid)
 	assertContains(t, runOK(t, "pass", "vaults", "list"), newName)
 }
 

@@ -38,12 +38,21 @@ lint:
 run *args:
     go run . {{args}}
 
-# Run unit tests (no API, no credentials - fast)
-test-unit:
+# Unit, golden and conformance tests: no API, no credentials, seconds not minutes
+test-fast:
     go test ./cmd/... ./internal/... -count=1
 
-# Run unit + integration tests (requires PROTON_USER and PROTON_PASSWORD)
-test: test-unit
+# Regenerate the golden files that pin every response's exact bytes
+golden:
+    go test ./internal/ui/ -update -count=1
+
+# Regenerate the command reference from the command tree
+docs:
+    go run ./scripts/gendocs
+
+# Run everything, including the live-API integration suite
+# (requires PROTON_USER and PROTON_PASSWORD)
+test: test-fast
     go test ./tests/ -v -count=1 -timeout 30m
 
 # Run a single test (or a `|`-separated regex of test names)

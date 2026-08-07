@@ -1,0 +1,11 @@
+== stdout ==
+{
+  "count": 3,
+  "limited": true,
+  "messages": [
+    {},
+    {},
+    {}
+  ]
+}
+== stderr ==

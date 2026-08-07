@@ -254,13 +254,44 @@ func TestResolveScheduledNotFound(t *testing.T) {
 	}
 }
 
-func TestMoveResolvesFolderAlias(t *testing.T) {
-	f := &fakeDoer{}
-	s := New(f)
-	if err := s.Move(context.Background(), []string{"a"}, "archive"); err != nil {
-		t.Fatalf("Move: %v", err)
+// Moving, starring and trashing are all one call with a different label, so the
+// test that matters is that each verb reaches for the right one.
+func TestOrganisingVerbsUseTheRightLabel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		call func(*Service) error
+		want string
+	}{
+		{"move to a folder alias", func(s *Service) error {
+			return s.Label(context.Background(), []string{"a"}, ResolveFolder("archive"))
+		}, labelArchive},
+		{"trash", func(s *Service) error {
+			return s.Trash(context.Background(), []string{"a"})
+		}, labelTrash},
+		{"star", func(s *Service) error {
+			return s.Label(context.Background(), []string{"a"}, StarredLabelID)
+		}, labelStarred},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeDoer{}
+			if err := tc.call(New(f)); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if got := bodyLabelID(t, f.last); got != tc.want {
+				t.Errorf("LabelID = %q, want %q", got, tc.want)
+			}
+		})
 	}
-	if got := bodyLabelID(t, f.last); got != labelArchive {
-		t.Errorf("Move to archive LabelID = %q, want %q", got, labelArchive)
+}
+
+// A raw label ID passes through, so anything the account has works wherever a
+// built-in name does.
+func TestResolveFolderPassesUnknownThrough(t *testing.T) {
+	const custom = "aBcD1234=="
+	if got := ResolveFolder(custom); got != custom {
+		t.Errorf("ResolveFolder(%q) = %q, want passthrough", custom, got)
+	}
+	if got := ResolveFolder("ARCHIVE"); got != labelArchive {
+		t.Errorf("ResolveFolder is case-insensitive: got %q", got)
 	}
 }

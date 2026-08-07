@@ -69,7 +69,7 @@ func TestAPIInvalidJSONBody(t *testing.T) {
 	if code == 0 {
 		t.Error("expected non-zero exit for invalid --body")
 	}
-	assertContains(t, strings.ToLower(stderr), "invalid json")
+	assertContains(t, strings.ToLower(stderr), "not valid json")
 }
 
 func TestAPIQueryBadSyntax(t *testing.T) {

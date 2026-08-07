@@ -49,7 +49,7 @@ func TestMailSettingsAddressesUpdateRequiresAField(t *testing.T) {
 	if code == 0 {
 		t.Error("an update with nothing to change should fail")
 	}
-	assertContains(t, stderr, "nothing to update")
+	assertContains(t, stderr, "Nothing to change")
 }
 
 func restoreSignature(t *testing.T, addrID, original string) {
@@ -117,7 +117,7 @@ func TestMailSettingsAutoreply(t *testing.T) {
 	}
 
 	// The status shows up on the settings overview too.
-	assertContains(t, runOK(t, "mail", "settings"), "Auto-reply:")
+	assertContains(t, runOK(t, "mail", "settings", "get"), "Auto-reply:")
 }
 
 func TestMailSettingsAutoreplyRejectsMismatchedSchedules(t *testing.T) {
@@ -129,8 +129,8 @@ func TestMailSettingsAutoreplyRejectsMismatchedSchedules(t *testing.T) {
 		{[]string{"--repeat", "daily", "--start", "09:00", "--end", "17:00", "--message", "x"}, "needs --days"},
 		{[]string{"--repeat", "weekly", "--start", "mon:09:00", "--end", "fri:17:00",
 			"--days", "mon", "--message", "x"}, "--days applies to --repeat daily"},
-		{[]string{"--repeat", "hourly", "--message", "x"}, "unknown repeat"},
-		{[]string{"--repeat", "permanent"}, "--message is required"},
+		{[]string{"--repeat", "hourly", "--message", "x"}, "--repeat accepts: fixed, daily, weekly, monthly, permanent"},
+		{[]string{"--repeat", "permanent"}, "A message is required"},
 	}
 	for _, tt := range tests {
 		_, stderr, code := run(t, append([]string{"mail", "settings", "autoreply", "set"}, tt.args...)...)
@@ -156,7 +156,7 @@ type autoReply struct {
 
 func autoReplyState(t *testing.T) autoReply {
 	t.Helper()
-	raw := runOK(t, "mail", "settings", "autoreply", "--output", "json")
+	raw := runOK(t, "mail", "settings", "autoreply", "get", "--output", "json")
 	var out autoReply
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
 		t.Fatalf("could not read the auto-reply: %v\n%s", err, truncateOutput(raw))

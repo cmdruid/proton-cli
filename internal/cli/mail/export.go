@@ -1,0 +1,161 @@
+package mail
+
+import (
+	"time"
+
+	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/roman-16/proton-cli/internal/cli/kit"
+	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/spf13/cobra"
+)
+
+// Export writes messages back out as RFC 822. Selection reuses the same
+// references and filters as trash and move, so "everything from this sender older
+// than a year" reads the same here as it does there.
+
+const (
+	formatEML  = "eml"
+	formatMbox = "mbox"
+)
+
+func exportCmd() *cobra.Command {
+	var f filters
+	var dest kit.Destination
+	var noAttachments bool
+	format := &kit.Enum{
+		Name: "format", Usage: "How to lay the messages down", Default: formatEML,
+		Values: []string{formatEML, formatMbox},
+	}
+	c := &cobra.Command{
+		Use:   "export [REF...]",
+		Short: "Write messages out as .eml or mbox files",
+		Long: "Write messages out as standalone RFC 822 documents, readable by any mail\n" +
+			"client, grep, or anything else.\n\n" +
+			"eml writes one file per message; mbox concatenates everything into one stream.\n" +
+			"Skipping attachments with --no-attachments is much faster for a large archive.\n\n" +
+			"Exported files are not encrypted - that is what exporting means. The original\n" +
+			"DKIM signatures will not verify against the rebuilt body either, exactly as\n" +
+			"with the web client's own export.",
+		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+			shape, err := format.Value()
+			if err != nil {
+				return err
+			}
+			sel, err := selectMessages(c, &f)
+			if err != nil {
+				return wrongTable(err, "export")
+			}
+			// One mbox is one stream whatever it contains, so the single-file
+			// check only applies to eml.
+			if err := dest.Validate(shape == formatMbox || sel.Len() == 1); err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Exported, Kind: "messages", Count: sel.Len(), IDs: sel.IDs,
+				Detail: "to " + dest.Describe(), Preview: sel.Preview(),
+			}, func() error {
+				u, err := c.App.Unlock(c.Ctx)
+				if err != nil {
+					return err
+				}
+				if shape == formatMbox {
+					return exportMbox(c, u, sel.IDs, &dest, !noAttachments)
+				}
+				return exportEML(c, u, sel.IDs, &dest, !noAttachments)
+			})
+		}),
+	}
+	format.Register(c)
+	dest.Register(c)
+	c.Flags().BoolVar(&noAttachments, "no-attachments", false, "Skip attachments, which is much faster")
+	f.register(c)
+	return c
+}
+
+// exportEML writes one document per message, named after when it arrived and what
+// it says, which sorts chronologically and stays readable.
+func exportEML(c *kit.Invocation, u *keys.Unlocked, ids []string, dest *kit.Destination, withAttachments bool) error {
+	for _, id := range ids {
+		doc, meta, err := c.App.Mail.Export(c.Ctx, u, id, withAttachments)
+		if err != nil {
+			return err
+		}
+		if _, err := dest.Write(c, exportName(meta), doc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// exportMbox concatenates every message into one stream.
+func exportMbox(c *kit.Invocation, u *keys.Unlocked, ids []string, dest *kit.Destination, withAttachments bool) error {
+	var stream []byte
+	for _, id := range ids {
+		doc, meta, err := c.App.Mail.Export(c.Ctx, u, id, withAttachments)
+		if err != nil {
+			return err
+		}
+		stream = append(stream, mailsvc.MboxEntry(doc, meta)...)
+	}
+	if dest.Stdout() {
+		_, err := c.UI().Out.Write(stream)
+		return err
+	}
+	_, err := dest.Write(c, "mail.mbox", stream)
+	return err
+}
+
+func exportName(meta *mailsvc.ExportMeta) string {
+	stamp := time.Unix(meta.Time, 0).Local().Format("2006-01-02 1504")
+	return kit.SafeFilename(stamp+" "+meta.Subject) + ".eml"
+}
+
+// conversationExportCmd writes a whole thread out, oldest first.
+func conversationExportCmd() *cobra.Command {
+	var dest kit.Destination
+	var noAttachments bool
+	format := &kit.Enum{
+		Name: "format", Usage: "How to lay the thread down", Default: formatMbox,
+		Values: []string{formatEML, formatMbox},
+	}
+	c := &cobra.Command{
+		Use:   "export REF",
+		Short: "Write a whole thread out as .eml files or one mbox",
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+			shape, err := format.Value()
+			if err != nil {
+				return err
+			}
+			convID, err := c.App.Mail.ResolveConversation(c.Ctx, c.Args[0])
+			if err != nil {
+				return wrongTable(err, "export")
+			}
+			ids, err := c.App.Mail.ConversationMessageIDs(c.Ctx, convID)
+			if err != nil {
+				return wrongTable(err, "export")
+			}
+			if err := dest.Validate(shape == formatMbox || len(ids) == 1); err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Exported, Kind: "messages", Count: len(ids), IDs: ids,
+				Detail: "to " + dest.Describe(),
+			}, func() error {
+				u, err := c.App.Unlock(c.Ctx)
+				if err != nil {
+					return err
+				}
+				if shape == formatMbox {
+					return exportMbox(c, u, ids, &dest, !noAttachments)
+				}
+				return exportEML(c, u, ids, &dest, !noAttachments)
+			})
+		}),
+	}
+	format.Register(c)
+	dest.Register(c)
+	c.Flags().BoolVar(&noAttachments, "no-attachments", false, "Skip attachments")
+	return c
+}

@@ -5,7 +5,7 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/render"
+	"github.com/roman-16/proton-cli/internal/mailtext"
 )
 
 // A message the CLI sends passes through three stages: Content describes what it
@@ -136,7 +136,7 @@ func (c Content) mimeType() string {
 // HTML (PGP-Inline) and for plaintext alternatives in exported MIME.
 func (c Content) plainBody() string {
 	if c.HTML {
-		return render.HTMLToText(c.Body)
+		return mailtext.HTMLToText(c.Body)
 	}
 	return c.Body
 }
@@ -183,7 +183,7 @@ func (c *Content) AppendSignature(signature, quote string) {
 			sig = `<div class="protonmail_signature_block">` + sig + `</div>`
 		}
 	} else if sig != "" {
-		sig = render.HTMLToText(sig)
+		sig = mailtext.HTMLToText(sig)
 	}
 	// An empty part is dropped rather than joined, so a forward with no covering
 	// note does not open with blank lines.

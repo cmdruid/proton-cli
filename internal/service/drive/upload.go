@@ -10,14 +10,16 @@ import (
 	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/progress"
 	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/render"
 )
 
 type UploadOptions struct {
-	MIMEType  string
-	Label     string
-	Quiet     bool
+	MIMEType string
+	// Label names the transfer for the progress report.
+	Label string
+	// Progress receives byte counts; nil discards them.
+	Progress  progress.Sink
 	TotalHint int64
 	// Photo, when set, marks the committed revision as a photo (added to the
 	// commit body verbatim, e.g. {MainPhotoLinkID, CaptureTime, ContentHash}).
@@ -120,13 +122,13 @@ func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string
 		return fmt.Errorf("decode verification: %w", err)
 	}
 
-	progress := &render.Progress{Total: opts.TotalHint, Label: opts.Label, Quiet: opts.Quiet}
-	progress.Start()
-	defer progress.Finish()
+	prog := progress.Of(opts.Progress)
+	prog.Start(opts.TotalHint, opts.Label)
+	defer prog.Done()
 
 	rawHashByIdx, tokenByIdx, err := s.streamBlocks(
 		ctx, parent.ShareID, linkID, revisionID, dc.AddrID,
-		sessionKey, nodeKR, dc.AddrKR, verCode, r, progress,
+		sessionKey, nodeKR, dc.AddrKR, verCode, r, prog,
 	)
 	if err != nil {
 		return err
@@ -166,7 +168,7 @@ func (s *Service) streamBlocks(
 	ctx context.Context,
 	shareID, linkID, revisionID, addrID string,
 	sessionKey *pgp.SessionKey, nodeKR, addrKR *pgp.KeyRing,
-	verCode []byte, r io.Reader, progress *render.Progress,
+	verCode []byte, r io.Reader, prog progress.Sink,
 ) (map[int][]byte, map[int]string, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -260,7 +262,7 @@ func (s *Service) streamBlocks(
 			mu.Lock()
 			tokenByIdx[blk.index] = tok
 			rawHashByIdx[blk.index] = blk.rawHash
-			progress.Add(int64(blk.size))
+			prog.Add(int64(blk.size))
 			mu.Unlock()
 			blk.data = nil // release the encrypted payload once uploaded
 		}()

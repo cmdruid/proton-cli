@@ -53,12 +53,12 @@ func TestContactsPinUnpinKey(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
 		"contacts", "delete", "--", id)
 
-	runOK(t, "contacts", "pin-key", "--key", writeGeneratedPubKey(t), "--email", email, id)
+	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", email, id)
 	if !strings.Contains(signedCardData(t, id), "KEY;") {
 		t.Error("expected a pinned KEY property in the signed card after pin-key")
 	}
 
-	runOK(t, "contacts", "unpin-key", "--email", email, id)
+	runOK(t, "contacts", "keys", "unpin", "--email", email, id)
 	if strings.Contains(signedCardData(t, id), "KEY;") {
 		t.Error("KEY property should be gone after unpin-key")
 	}
@@ -70,13 +70,13 @@ func TestContactsUpdatePreservesPinnedKey(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
 		"contacts", "delete", "--", id)
 
-	runOK(t, "contacts", "pin-key", "--key", writeGeneratedPubKey(t), "--email", email, id)
+	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", email, id)
 	if !strings.Contains(signedCardData(t, id), "KEY;") {
 		t.Fatal("setup: pinned key missing after pin-key")
 	}
 
 	// An unrelated field update must not drop the pinned key.
-	runOK(t, "contacts", "update", "--title", "Boss", id)
+	runOK(t, "contacts", "update", "--job-title", "Boss", id)
 	if !strings.Contains(signedCardData(t, id), "KEY;") {
 		t.Error("contacts update dropped the pinned key")
 	}
@@ -101,7 +101,7 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-altpin", "--email", altEmail()))
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
 		"contacts", "delete", "--", id)
-	runOK(t, "contacts", "pin-key", "--key", keyPath, "--email", altEmail(), id)
+	runOK(t, "contacts", "keys", "pin", "--key", keyPath, "--email", altEmail(), id)
 
 	subject := testID() + "-pinned-send"
 	body := "pinned-key body for " + subject
@@ -122,9 +122,9 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 	cleanupRun(t, "Delete received mail (alt): proton-cli --profile alt mail messages delete "+recvID,
 		alt("mail", "messages", "delete", recvID)...)
 
-	read := runOK(t, alt("mail", "messages", "read", recvID)...)
+	read := runOK(t, alt("mail", "messages", "get", recvID)...)
 	assertContains(t, read, body)
-	assertField(t, read, "Sig:", "verified")
+	assertField(t, read, "Signature:", "verified")
 }
 
 // TestMailSendPinnedMismatchRefused pins a wrong key on a contact for a Proton
@@ -137,7 +137,7 @@ func TestMailSendPinnedMismatchRefused(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
 		"contacts", "delete", "--", id)
 	// A freshly generated key is a valid PGP key but not the alt's primary.
-	runOK(t, "contacts", "pin-key", "--key", writeGeneratedPubKey(t), "--email", altEmail(), id)
+	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", altEmail(), id)
 
 	subject := testID() + "-mismatch"
 	_, stderr, code := run(t, "mail", "messages", "send", "--to", altEmail(), "--subject", subject, "--body", "nope")
@@ -181,7 +181,7 @@ func TestContactsCRUD(t *testing.T) {
 	assertField(t, got, "Name:", name)
 	assertField(t, got, "Email:", email)
 	// Signature: a contact we just created is signed with our own user key.
-	assertField(t, got, "Sig:", "verified")
+	assertField(t, got, "Signature:", "verified")
 	assertField(t, got, "Phone:", "+1234567890")
 
 	// Update phone
@@ -255,7 +255,7 @@ func TestContactsMultiValue(t *testing.T) {
 	e2 := testID() + "-2@example.com"
 	cid := strings.TrimSpace(runOK(t, "contacts", "create", "--name", name,
 		"--email", e1, "--email", e2, "--phone", "+1234567890",
-		"--title", "CTO", "--birthday", "1990-01-31", "--address", "Vienna", "--url", "https://x.example"))
+		"--job-title", "CTO", "--birthday", "1990-01-31", "--address", "Vienna", "--website", "https://x.example"))
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", cid),
 		"contacts", "delete", "--", cid)
 

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/roman-16/proton-cli/internal/errs"
@@ -28,5 +30,19 @@ func TestExitCode(t *testing.T) {
 		if got := exitCode(tc.err); got != tc.want {
 			t.Errorf("%s: exitCode = %d, want %d", tc.name, got, tc.want)
 		}
+	}
+}
+
+// Running out of time is a network failure, not the user changing their mind.
+// The two used to share an exit code, which told anyone whose connection stalled
+// that they had cancelled the command themselves.
+func TestTimeoutIsNotCancellation(t *testing.T) {
+	timedOut := &proton.NetworkError{Err: fmt.Errorf("awaiting headers: %w", context.DeadlineExceeded)}
+
+	if errors.Is(timedOut, context.Canceled) {
+		t.Error("a deadline must not read as a cancellation")
+	}
+	if got := exitCode(timedOut); got != 5 {
+		t.Errorf("exitCode = %d, want 5 (network)", got)
 	}
 }

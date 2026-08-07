@@ -4,7 +4,7 @@ Proton's anti-abuse system sometimes asks for a CAPTCHA at login, usually on a f
 
 ## What happens
 
-proton-cli opens a small window, you solve the challenge, and the command you ran retries automatically. Nothing extra to install: release binaries embed the webview helper.
+proton-cli opens a small window with Proton's CAPTCHA in it. Solve it, and the command you ran retries automatically. There is nothing extra to install.
 
 ## Requirements
 
@@ -21,9 +21,7 @@ Two situations have no window to draw in:
 - **Headless machines** - servers, containers, CI, anything without a display.
 - **`go install` builds** - they don't embed the helper. Use a [release binary](installation.md) instead.
 
-In both cases proton-cli explains what happened and how to get past it, then exits.
-
-The way around it is to authenticate somewhere with a display and reuse the session:
+Either way, sign in somewhere with a display and reuse the session:
 
 1. Run any command on a desktop machine with the same account, solving the CAPTCHA once.
 2. Copy `~/.config/proton-cli/sessions/<profile>.json` to the headless machine, preserving mode `0600`.

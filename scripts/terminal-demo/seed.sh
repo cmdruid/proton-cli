@@ -15,7 +15,7 @@ cd "$(dirname "$0")/../.."
 
 quiet() { "$bin" "$@" >/dev/null 2>&1 || true; }
 
-# exit code 3 is "not found" - see docs/concepts.md
+# exit code 3 is "not found" - see docs/output.md
 missing() {
 	local code=0
 	"$bin" "$@" >/dev/null 2>&1 || code=$?
@@ -40,12 +40,15 @@ for i in "${!subjects[@]}"; do
 	echo "  mail: ${subjects[$i]}"
 done
 
-if missing drive items info /Documents; then
+if missing drive items get /Documents; then
 	quiet drive folders create /Documents
 fi
 echo "  drive: /Documents"
 
-if ! "$bin" pass vaults list 2>/dev/null | grep -q "Personal"; then
+# Match the JSON rather than the table: the human output is laid out for reading
+# and may be truncated to the terminal, which is exactly what the CLI's own
+# documentation tells people not to grep.
+if ! "$bin" pass vaults list --output json 2>/dev/null | grep -q '"name": "Personal"'; then
 	quiet pass vaults create --name Personal
 fi
 quiet pass items trash --vault Personal --all

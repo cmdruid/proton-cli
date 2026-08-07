@@ -62,10 +62,15 @@ type salt struct {
 	KeySalt string
 }
 
-// Unlock fetches user/address keys and unlocks them using either the cached
-// salted key password on the client, or the provided password if none is
-// cached.
-func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, error) {
+// PasswordFunc supplies the account password. It is called only when the session
+// carries no sealed key password, so a resumed session unlocks without asking
+// for anything.
+type PasswordFunc func() (string, error)
+
+// Unlock fetches the user and address keys and unlocks them, using either the
+// key password sealed into the session or, on a first unlock, one derived from
+// the account password.
+func Unlock(ctx context.Context, c *proton.Client, password PasswordFunc) (*Unlocked, error) {
 	var skp string
 	if c.EncKeyBlob() != "" {
 		// Resume: recover the key password by unwrapping the on-disk blob with the
@@ -81,11 +86,16 @@ func Unlock(ctx context.Context, c *proton.Client, password string) (*Unlocked, 
 		}
 		skp = d
 	} else {
-		// First unlock: derive from the password, then wrap + persist.
-		if password == "" {
-			return nil, fmt.Errorf("password required for encrypted operations;\nset PROTON_PASSWORD or --password")
+		// First unlock: derive from the account password, then seal and persist so
+		// no later run has to ask again.
+		if password == nil {
+			return nil, fmt.Errorf("no password available to unlock the keys")
 		}
-		d, err := deriveSaltedKeyPass(ctx, c, password)
+		pw, err := password()
+		if err != nil {
+			return nil, err
+		}
+		d, err := deriveSaltedKeyPass(ctx, c, pw)
 		if err != nil {
 			return nil, fmt.Errorf("derive key password: %w", err)
 		}

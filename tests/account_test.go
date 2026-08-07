@@ -1,0 +1,184 @@
+package tests
+
+import (
+	"strings"
+	"testing"
+)
+
+// The account tree: the account itself, the session this machine holds, and the
+// profiles on it.
+
+func TestAccountGetReportsBothHalves(t *testing.T) {
+	stdout := runOK(t, "account", "get")
+	// The question people ask is "whose account, and can this machine act as it",
+	// so one command has to answer both.
+	for _, want := range []string{"Email:", "Storage:", "Profile:", "Session:", "Unlocked:"} {
+		assertContains(t, stdout, want)
+	}
+}
+
+func TestAccountGetJSON(t *testing.T) {
+	data := runJSON(t, "account", "get")
+	for _, key := range []string{"email", "used_space", "max_space", "profile", "session", "unlocked"} {
+		if _, ok := data[key]; !ok {
+			t.Errorf("missing %q in %v", key, keysOf(data))
+		}
+	}
+	if unlocked, ok := data["unlocked"].(bool); !ok {
+		t.Errorf("unlocked should be a boolean, got %T", data["unlocked"])
+	} else if !unlocked {
+		t.Error("the suite runs with an unlocked session, so this should be true")
+	}
+}
+
+// Storage is reported as a share of a total, which is how a person reads it.
+func TestAccountGetStorageIsHumanReadable(t *testing.T) {
+	stdout := runOK(t, "account", "get")
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.HasPrefix(line, "Storage:") {
+			if !strings.Contains(line, " of ") || !strings.Contains(line, "%") {
+				t.Errorf("storage should read as a share of a total: %q", line)
+			}
+			return
+		}
+	}
+	t.Error("no Storage line")
+}
+
+// Profiles are read off the filesystem, so this works without contacting Proton -
+// which is the point: you can see what is configured before signing in.
+func TestAccountProfilesList(t *testing.T) {
+	profiles := runJSONArray(t, "account", "profiles", "list")
+	if len(profiles) == 0 {
+		t.Skip("no saved session, so nothing to list")
+	}
+	found := false
+	for _, p := range profiles {
+		row, ok := p.(map[string]interface{})
+		if !ok {
+			t.Fatalf("unexpected row shape: %T", p)
+		}
+		for _, key := range []string{"name", "unlocked"} {
+			if _, ok := row[key]; !ok {
+				t.Errorf("missing %q in %v", key, keysOf(row))
+			}
+		}
+		if row["name"] == "default" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the default profile should be listed")
+	}
+}
+
+func TestAccountSessionsListMarksTheCurrentOne(t *testing.T) {
+	sessions := runJSONArray(t, "account", "sessions", "list")
+	if len(sessions) == 0 {
+		t.Fatal("a signed-in account has at least this session")
+	}
+	current := 0
+	for _, s := range sessions {
+		row := s.(map[string]interface{})
+		for _, key := range []string{"uid", "client_id", "create_time", "current"} {
+			if _, ok := row[key]; !ok {
+				t.Errorf("missing %q in %v", key, keysOf(row))
+			}
+		}
+		if row["current"] == true {
+			current++
+		}
+	}
+	if current != 1 {
+		t.Errorf("exactly one session is the current one, got %d", current)
+	}
+}
+
+// Revoking needs a target, and refuses to guess.
+func TestAccountSessionsRevokeNeedsATarget(t *testing.T) {
+	_, stderr, code := run(t, "account", "sessions", "revoke")
+	if code == 0 {
+		t.Error("revoking nothing should fail")
+	}
+	assertContains(t, stderr, "Nothing selected")
+}
+
+func TestAccountSessionsRevokeOthersTakesNoRef(t *testing.T) {
+	_, stderr, code := run(t, "account", "sessions", "revoke", "--others", "some-uid")
+	if code == 0 {
+		t.Error("--others with a REF should fail rather than doing both")
+	}
+	assertContains(t, stderr, "--others")
+}
+
+// ── settings ──
+
+func TestAccountSettingsGetAndList(t *testing.T) {
+	stdout := runOK(t, "account", "settings", "get")
+	for _, want := range []string{"Locale:", "Date Format:", "Telemetry:"} {
+		assertContains(t, stdout, want)
+	}
+
+	// The listing is a collection, so it comes out of --output json as one.
+	keys := runJSONArray(t, "account", "settings", "list")
+	if len(keys) == 0 {
+		t.Fatal("there are writable account settings")
+	}
+	seen := map[string]bool{}
+	for _, k := range keys {
+		row := k.(map[string]interface{})
+		for _, field := range []string{"key", "values", "page", "description"} {
+			if _, ok := row[field]; !ok {
+				t.Errorf("missing %q in %v", field, keysOf(row))
+			}
+		}
+		seen[row["key"].(string)] = true
+	}
+	for _, want := range []string{"locale", "date-format", "week-start", "telemetry"} {
+		if !seen[want] {
+			t.Errorf("expected %q among the writable keys", want)
+		}
+	}
+}
+
+// A settings value is declared, so it is judged locally - no session, no request.
+func TestAccountSettingsRejectsLocally(t *testing.T) {
+	t.Run("an unknown key", func(t *testing.T) {
+		_, stderr, code := run(t, "account", "settings", "set", "no-such-key", "on")
+		if code != 3 {
+			t.Errorf("exit %d, want 3 for something that does not exist", code)
+		}
+		assertContains(t, stderr, "no account setting called")
+		assertContains(t, stderr, "settings list")
+	})
+	t.Run("a value outside the domain", func(t *testing.T) {
+		_, stderr, code := run(t, "account", "settings", "set", "week-start", "funday")
+		if code != 1 {
+			t.Errorf("exit %d, want 1 for a bad value", code)
+		}
+		// The whole domain has to appear: a user who guessed wrong needs the list.
+		for _, want := range []string{"week-start accepts", "monday", "sunday"} {
+			assertContains(t, stderr, want)
+		}
+	})
+}
+
+// Reads and writes speak the same vocabulary: what `get` shows is what `set` takes.
+func TestAccountSettingsRoundTripsNames(t *testing.T) {
+	before := runJSON(t, "account", "settings", "get")
+	original, ok := before["week_start"].(string)
+	if !ok {
+		t.Fatalf("week_start should be a name, got %T", before["week_start"])
+	}
+	target := "monday"
+	if original == "monday" {
+		target = "saturday"
+	}
+	cleanupRun(t, "Restore week-start", "account", "settings", "set", "week-start", original)
+
+	runOK(t, "account", "settings", "set", "week-start", target)
+	after := runJSON(t, "account", "settings", "get")
+	if after["week_start"] != target {
+		t.Errorf("week_start = %v, want %q", after["week_start"], target)
+	}
+}
