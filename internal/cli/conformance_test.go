@@ -93,6 +93,22 @@ func TestGroupsNeverAct(t *testing.T) {
 	}
 }
 
+// A group holds commands, so a word it does not hold is a mistake worth
+// reporting. Cobra makes that check only at the root; unknownSubcommand makes
+// it everywhere, and this is what says so for every group in the tree.
+func TestGroupsRejectAnUnknownSubcommand(t *testing.T) {
+	_, groups := partition(t)
+	for _, c := range groups {
+		path := strings.Fields(c.CommandPath())[1:]
+		if err := unknownSubcommand(newRoot(), append(append([]string{}, path...), "nope")); err == nil {
+			t.Errorf("%s: takes an unknown subcommand without complaint", cmdPath(c))
+		}
+		if err := unknownSubcommand(newRoot(), path); err != nil {
+			t.Errorf("%s: rejects being called on its own: %v", cmdPath(c), err)
+		}
+	}
+}
+
 // ── rule 3: one placeholder set ──
 
 // placeholders are the only argument names the CLI uses. A new one means a new

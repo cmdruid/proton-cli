@@ -113,6 +113,7 @@ Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton
 | `--output text\|json\|yaml` | Output format (default `text`) |
 | `--profile NAME` | Which profile to use |
 | `--dry-run` | Preview a mutation without applying it |
+| `--yes` | Answer confirmation prompts with yes |
 | `--full-ids` | Don't shorten IDs in interactive output |
 | `--no-color` | Turn colored output off (env: `NO_COLOR`) |
 | `--quiet` | Suppress the non-essential stderr output |

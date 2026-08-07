@@ -158,6 +158,47 @@ func TestResultMachineIsAlwaysStructured(t *testing.T) {
 	check(t, "result_created_json", out, errb)
 }
 
+// One command produces one machine document. When the answer is a record shown
+// afterwards, the confirmation still reaches a reader but adds no second object
+// for a parser to choke on.
+func TestResultMachineIsSilentWhenTheAnswerFollows(t *testing.T) {
+	spec := ResultSpec{
+		Action: Linked, Kind: "links", Count: 1,
+		Detail: "for /Documents", AnswerFollows: true,
+	}
+
+	u, out, errb := fixture(t, Options{Format: FormatJSON})
+	if err := Result(u, spec); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 || errb.Len() != 0 {
+		t.Errorf("want no output, got stdout %q stderr %q", out.String(), errb.String())
+	}
+
+	// A dry run shows no record, so it still has to speak for itself.
+	dry := spec
+	dry.DryRun = true
+	u, out, _ = fixture(t, Options{Format: FormatJSON})
+	if err := Result(u, dry); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"dry_run": true`) {
+		t.Errorf("a dry run must report itself, got %q", out.String())
+	}
+
+	// Text mode is unchanged: the confirmation belongs on stderr.
+	u, out, errb = fixture(t, Options{})
+	if err := Result(u, spec); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout is the record's, got %q", out.String())
+	}
+	if !strings.Contains(errb.String(), "Created 1 link for /Documents.") {
+		t.Errorf("want the confirmation on stderr, got %q", errb.String())
+	}
+}
+
 func TestResultMachineDryRunIsFlagged(t *testing.T) {
 	u, out, _ := fixture(t, Options{Format: FormatJSON})
 	spec := ResultSpec{Action: Trashed, Kind: "messages", Count: 2, DryRun: true,

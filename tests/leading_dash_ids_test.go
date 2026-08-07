@@ -10,6 +10,10 @@ import (
 // which is fine - these tests only assert that argument parsing succeeds.
 const dashedSyntheticID = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A=="
 
+// dashedSyntheticPair is the same ID used as a two-part reference, which the CLI
+// takes as one slash-joined token.
+const dashedSyntheticPair = dashedSyntheticID + "/" + dashedSyntheticID
+
 // assertNotFlagParseError fails the test if stderr looks like cobra's
 // "unknown shorthand flag" complaint - i.e. arg parsing rejected the ID.
 func assertNotFlagParseError(t *testing.T, stderr string) {
@@ -49,13 +53,13 @@ func TestLeadingDashIDIsAccepted(t *testing.T) {
 		{"mail filters delete", []string{"mail", "settings", "filters", "delete", dashedSyntheticID}},
 		{"mail filters enable", []string{"mail", "settings", "filters", "enable", dashedSyntheticID}},
 		{"calendar calendars delete", []string{"calendar", "settings", "calendars", "delete", dashedSyntheticID}},
-		{"calendar events get", []string{"calendar", "events", "get", dashedSyntheticID, dashedSyntheticID}},
-		{"calendar events delete", []string{"calendar", "events", "delete", dashedSyntheticID, dashedSyntheticID}},
+		{"calendar events get", []string{"calendar", "events", "get", dashedSyntheticPair}},
+		{"calendar events delete", []string{"calendar", "events", "delete", dashedSyntheticPair}},
 		{"contacts get", []string{"contacts", "get", dashedSyntheticID}},
 		{"contacts delete", []string{"contacts", "delete", dashedSyntheticID}},
 		{"pass vaults delete", []string{"pass", "vaults", "delete", dashedSyntheticID}},
-		{"pass items get", []string{"pass", "items", "get", dashedSyntheticID, dashedSyntheticID}},
-		{"pass items delete", []string{"pass", "items", "delete", dashedSyntheticID, dashedSyntheticID}},
+		{"pass items get", []string{"pass", "items", "get", dashedSyntheticPair}},
+		{"pass items delete", []string{"pass", "items", "delete", dashedSyntheticPair}},
 		{"drive trash restore", []string{"drive", "trash", "restore", dashedSyntheticID}},
 	}
 	for _, tc := range cases {

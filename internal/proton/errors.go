@@ -34,8 +34,18 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("[HTTP %d] %s", e.HTTPStatus, e.Message)
 }
 
+// notFoundCode is Proton's NOT_FOUND (packages/shared/lib/errors.ts).
+//
+// It arrives with HTTP 422, which on its own reads as a conflict, so the Proton
+// code has the final say. Deleting something that is already gone has to exit 3
+// like every other miss, because that is the code scripts branch on.
+const notFoundCode = 2501
+
 // ExitCode maps an HTTP failure to the CLI's exit-code scheme.
 func (e *APIError) ExitCode() int {
+	if e.Code == notFoundCode {
+		return 3
+	}
 	switch e.HTTPStatus {
 	case 401, 403:
 		return 2

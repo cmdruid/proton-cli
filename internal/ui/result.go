@@ -91,6 +91,12 @@ type ResultSpec struct {
 	Preview func(*UI) error
 	// Extra adds fields to the machine-format object.
 	Extra map[string]any
+	// AnswerFollows says the command writes a record of its own after this
+	// result. The confirmation still goes to Err in text mode, but a machine
+	// format stays silent here, so the record is the one document the command
+	// produces rather than the second of two. A dry run writes no record, so it
+	// reports as usual.
+	AnswerFollows bool
 }
 
 // Result reports a mutation. In text mode the new ID (if any) goes to Out and
@@ -98,6 +104,9 @@ type ResultSpec struct {
 // format the whole result goes to Out, so --output json always means JSON.
 func Result(u *UI, spec ResultSpec) error {
 	if u.Format.Machine() {
+		if spec.AnswerFollows && !spec.DryRun {
+			return nil
+		}
 		return u.encode(spec.object())
 	}
 

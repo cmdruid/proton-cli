@@ -172,7 +172,7 @@ func TestAccountSettingsRoundTripsNames(t *testing.T) {
 	}
 	target := "monday"
 	if original == "monday" {
-		target = "tuesday"
+		target = "saturday"
 	}
 	cleanupRun(t, "Restore week-start", "account", "settings", "set", "week-start", original)
 

@@ -19,9 +19,17 @@ import (
 
 // ── list ──
 
+// A table draws no header when it has no rows, so the listing needs something
+// to list rather than whatever another test happened to leave behind.
 func TestDriveItemsList(t *testing.T) {
+	folder := "/" + testID() + "-list"
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete %s", folder),
+		"drive", "items", "delete", folder)
+
 	stdout := runOK(t, "drive", "items", "list")
 	assertContains(t, stdout, "NAME")
+	assertContains(t, stdout, strings.TrimPrefix(folder, "/"))
 }
 
 func TestDriveItemsListJSONFieldNames(t *testing.T) {
@@ -69,8 +77,8 @@ func TestDriveItemsInfo(t *testing.T) {
 
 	// Text mode renders the key/value block.
 	text := runOK(t, "drive", "items", "get", folder+"/doc.txt")
-	assertContains(t, text, "type:")
-	assertContains(t, text, "size:")
+	assertContains(t, text, "Type:")
+	assertContains(t, text, "Size:")
 }
 
 func TestDriveItemsInfoFolder(t *testing.T) {
@@ -351,7 +359,7 @@ func TestDriveItemsRename(t *testing.T) {
 		"drive", "items", "delete", folder)
 	runOK(t, "drive", "items", "upload", filepath.Join(tmp, "orig.txt"), folder)
 
-	runOK(t, "drive", "items", "rename", folder+"/orig.txt", "new.txt")
+	runOK(t, "drive", "items", "update", "--name", "new.txt", folder+"/orig.txt")
 
 	children := runJSONArray(t, "drive", "items", "list", folder)
 	found := false
@@ -386,7 +394,7 @@ func TestDriveItemsMove(t *testing.T) {
 		"drive", "items", "delete", dst)
 	runOK(t, "drive", "items", "upload", filepath.Join(tmp, "f.txt"), src)
 
-	runOK(t, "drive", "items", "move", src+"/f.txt", dst)
+	runOK(t, "drive", "items", "move", "--into", dst, src+"/f.txt")
 
 	children := runJSONArray(t, "drive", "items", "list", dst)
 	found := false
@@ -481,12 +489,16 @@ func TestDriveBatchDeleteRequiresInput(t *testing.T) {
 	assertContains(t, stderr, "Nothing selected")
 }
 
-func TestDriveBatchDeleteAllRequiresScope(t *testing.T) {
+// --all with nothing to narrow it covers the whole drive, so it is confirmed
+// rather than assumed. A test is not a terminal, so the only way through is
+// --yes, and its absence has to stop the command rather than hang it.
+func TestDriveBatchDeleteAllNeedsConfirming(t *testing.T) {
 	_, stderr, code := run(t, "drive", "items", "delete", "--all")
 	if code == 0 {
-		t.Error("expected --all alone to be rejected")
+		t.Error("expected --all alone to be stopped for confirmation")
 	}
 	assertContains(t, stderr, "--all")
+	assertContains(t, stderr, "--yes")
 }
 
 // ── folders ──
@@ -527,7 +539,7 @@ func TestDriveItemsCopy(t *testing.T) {
 	}
 	runOK(t, "drive", "items", "upload", src, base)
 
-	runOK(t, "drive", "items", "copy", base+"/f.txt", dest)
+	runOK(t, "drive", "items", "copy", "--into", dest, base+"/f.txt")
 	assertContains(t, runOK(t, "drive", "items", "list", dest), "f.txt")
 
 	out := filepath.Join(dir, "out.txt")
@@ -615,12 +627,12 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 
 	// Download round-trip via the unified model: explicit file, then output-dir.
 	outFile := filepath.Join(dir, "photo.out")
-	runOK(t, "drive", "photos", "download", photoID, "--output", outFile)
+	runOK(t, "drive", "photos", "download", "--output", outFile, photoID)
 	if fi, err := os.Stat(outFile); err != nil || fi.Size() == 0 {
 		t.Errorf("photos download --output produced no file: %v", err)
 	}
 	outDir := filepath.Join(dir, "pics")
-	runOK(t, "drive", "photos", "download", photoID, "--output-dir", outDir)
+	runOK(t, "drive", "photos", "download", "--output-dir", outDir, photoID)
 	if entries, err := os.ReadDir(outDir); err != nil || len(entries) == 0 {
 		t.Errorf("photos download --output-dir wrote no file: %v", err)
 	}
@@ -825,7 +837,8 @@ func TestDrivePhotosListTags(t *testing.T) {
 	if code == 0 {
 		t.Error("expected non-zero exit for an unknown --tags value")
 	}
-	assertContains(t, stderr, "unknown tag")
+	assertContains(t, stderr, "--tag accepts:")
+	assertContains(t, stderr, "favorites")
 	if _, _, code := run(t, "drive", "photos", "list", "--tag", "2"); code == 0 {
 		t.Error("expected non-zero exit for an integer --tags value (names only)")
 	}

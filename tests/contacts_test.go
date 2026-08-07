@@ -124,7 +124,7 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 
 	read := runOK(t, alt("mail", "messages", "get", recvID)...)
 	assertContains(t, read, body)
-	assertField(t, read, "Sig:", "verified")
+	assertField(t, read, "Signature:", "verified")
 }
 
 // TestMailSendPinnedMismatchRefused pins a wrong key on a contact for a Proton
@@ -181,7 +181,7 @@ func TestContactsCRUD(t *testing.T) {
 	assertField(t, got, "Name:", name)
 	assertField(t, got, "Email:", email)
 	// Signature: a contact we just created is signed with our own user key.
-	assertField(t, got, "Sig:", "verified")
+	assertField(t, got, "Signature:", "verified")
 	assertField(t, got, "Phone:", "+1234567890")
 
 	// Update phone

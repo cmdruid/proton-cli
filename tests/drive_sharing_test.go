@@ -40,12 +40,12 @@ func TestDriveShareLinkLifecycle(t *testing.T) {
 	}
 
 	status := runOK(t, "drive", "share", "get", folder)
-	assertContains(t, status, "Public links:")
+	assertContains(t, status, "Public Link:")
 	assertContains(t, status, tokenOf(t, url))
 
 	runOK(t, "drive", "share", "unlink", folder)
 	after := runOKStderr2(t, "drive", "share", "get", folder)
-	assertContains(t, after, "Not shared.")
+	assertField(t, after, "Shared:", "no")
 }
 
 // TestDriveShareLinkPublicHandshake guards the SRP-salt regression: a created
@@ -111,13 +111,14 @@ func TestDriveShareLinkPassword(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	stdout, stderr := runOKStderr(t, "drive", "share", "link", folder, "--password", "hunter2")
-	if !strings.Contains(strings.TrimSpace(stdout), "#") {
+	// The record is the answer, so the custom password is reported there rather
+	// than in the confirmation on stderr.
+	stdout := runOK(t, "drive", "share", "link", folder, "--password", "hunter2")
+	if !strings.Contains(stdout, "#") {
 		t.Errorf("link should still carry a generated fragment: %q", stdout)
 	}
-	if !strings.Contains(stderr, "hunter2") {
-		t.Errorf("expected the custom password reported on stderr, got: %q", stderr)
-	}
+	assertField(t, stdout, "Password:", "hunter2")
+	assertField(t, runOK(t, "drive", "share", "get", folder), "Link Password:", "hunter2")
 }
 
 func TestDriveShareLinkDryRun(t *testing.T) {
@@ -130,7 +131,7 @@ func TestDriveShareLinkDryRun(t *testing.T) {
 	assertContains(t, stderr, "Dry run")
 
 	status := runOKStderr2(t, "drive", "share", "get", folder)
-	assertContains(t, status, "Not shared.")
+	assertField(t, status, "Shared:", "no")
 }
 
 // ── members ──
@@ -178,7 +179,7 @@ func TestDriveShareMemberRoundTrip(t *testing.T) {
 	runOK(t, "drive", "share", "add", file, invitee)
 	status := runOK(t, "drive", "share", "get", file)
 	assertContains(t, status, invitee)
-	assertContains(t, status, "pending")
+	assertContains(t, status, "not yet accepted")
 
 	runOK(t, "drive", "share", "remove", file, invitee)
 	after := runOKStderr2(t, "drive", "share", "get", file)

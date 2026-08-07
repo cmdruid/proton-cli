@@ -110,6 +110,15 @@ Try:   pass a REF, or a filter such as --unread, --starred, --from or --older-th
        Use --all to target a whole folder.
 ```
 
+`--all` with nothing to narrow it covers a whole Drive, which is broad enough to be worth asking about:
+
+```console
+$ proton-cli drive items delete --all
+--all with no other filter covers your whole drive. Continue? [y/N]
+```
+
+A script has nobody to ask, so there the question is an error instead, and `--yes` is the answer given in advance.
+
 ## Dry runs
 
 Every command that changes something takes `--dry-run`. It resolves references, applies filters, and shows you **the things themselves** - not a count:

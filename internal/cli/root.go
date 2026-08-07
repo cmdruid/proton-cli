@@ -21,6 +21,7 @@ import (
 	mailcmd "github.com/roman-16/proton-cli/internal/cli/mail"
 	passcmd "github.com/roman-16/proton-cli/internal/cli/pass"
 	selfcmd "github.com/roman-16/proton-cli/internal/cli/self"
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
@@ -40,6 +41,7 @@ type globalFlags struct {
 	quiet      bool
 	logLevel   string
 	dryRun     bool
+	yes        bool
 	fullIDs    bool
 	noColor    bool
 	noInput    bool
@@ -83,6 +85,7 @@ func newRoot() *cobra.Command {
 	pf.StringVar(&g.logLevel, "log-level", "",
 		"Logging verbosity: "+strings.Join(ui.LogLevels, ", ")+" (env: PROTON_LOG_LEVEL)")
 	pf.BoolVar(&g.dryRun, "dry-run", false, "Preview mutations without applying them")
+	pf.BoolVar(&g.yes, "yes", false, "Answer confirmation prompts with yes")
 	pf.BoolVar(&g.fullIDs, "full-ids", false, "Show full IDs in interactive output (default: shortened to 8 chars on TTY)")
 	pf.BoolVar(&g.noColor, "no-color", false, "Disable colored output (env: NO_COLOR)")
 	pf.BoolVar(&g.noInput, "no-input", false, "Never prompt; a missing credential becomes an error (env: PROTON_NO_INPUT)")
@@ -118,6 +121,7 @@ func newRoot() *cobra.Command {
 			LogLevel:   level,
 			Quiet:      g.quiet,
 			DryRun:     g.dryRun,
+			Yes:        g.yes,
 			FullIDs:    g.fullIDs,
 			NoColor:    g.noColor,
 			NoInput:    g.noInput,
@@ -157,14 +161,24 @@ func Execute() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	root := newRoot()
 	os.Args = preprocessArgs(os.Args)
 
+	// Probed on a tree of its own, because Find and ParseFlags leave state
+	// behind and the tree that answers the command has to start clean.
+	if err := unknownSubcommand(newRoot(), os.Args[1:]); err != nil {
+		ui.WriteError(os.Stderr, err, ui.ThemeFor(os.Stderr))
+		os.Exit(exitCode(err))
+	}
+
+	root := newRoot()
 	err := root.ExecuteContext(ctx)
 	if err == nil {
 		return
 	}
-	if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	// A signal is the user changing their mind. A deadline is the request running
+	// out of time, which is a network failure and reports as one - saying
+	// "Cancelled." there would blame the user for a stalled connection.
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
 		fmt.Fprintln(os.Stderr, "\nCancelled.")
 		os.Exit(130)
 	}
@@ -175,6 +189,41 @@ func Execute() {
 	}
 	ui.WriteError(os.Stderr, rewrapFlagError(err, os.Args), errorTheme(root))
 	os.Exit(exitCode(err))
+}
+
+// unknownSubcommand reports a group addressed with a word that names none of its
+// subcommands, so that a typo fails instead of printing help.
+//
+// Cobra makes that check only at the root: its default argument validator
+// returns early for any command that has a parent, and ValidateArgs is skipped
+// entirely for a command that is not Runnable, which every group is. Left to
+// cobra, `proton-cli mail mesages list` writes help to stdout and exits 0.
+//
+// Find's error is the root-level half of the same complaint, phrased by cobra;
+// discarding it lets one wording answer for the whole tree.
+func unknownSubcommand(root *cobra.Command, args []string) error {
+	cmd, rest, _ := root.Find(args)
+	if !cmd.HasSubCommands() {
+		return nil
+	}
+	// A malformed flag is cobra's to report, in its own words.
+	if cmd.ParseFlags(rest) != nil {
+		return nil
+	}
+	extra := cmd.Flags().Args()
+	if len(extra) == 0 {
+		return nil
+	}
+	// Cobra seeds this inside ExecuteC, which a probe never reaches, and a
+	// distance of zero suggests nothing.
+	if cmd.SuggestionsMinimumDistance <= 0 {
+		cmd.SuggestionsMinimumDistance = 2
+	}
+	problem := errs.Problemf("There is no %s command called %q.", cmd.CommandPath(), extra[0])
+	for _, s := range cmd.SuggestionsFor(extra[0]) {
+		problem = problem.Hint(cmd.CommandPath() + " " + s)
+	}
+	return problem.Hint(cmd.CommandPath() + " --help")
 }
 
 // errorTheme is the palette for the final error. The app owns one, but a failure

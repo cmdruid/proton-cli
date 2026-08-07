@@ -33,18 +33,18 @@ func TestMailSettingsSetByName(t *testing.T) {
 	}
 	cleanup(t, fmt.Sprintf("Restore mail view mode: proton-cli mail settings set view-mode %s", origName),
 		func() error {
-			if _, _, code := run(t, "mail", "account", "settings", "set", "view-mode", origName); code != 0 {
+			if _, _, code := run(t, "mail", "settings", "set", "view-mode", origName); code != 0 {
 				return fmt.Errorf("restore exit %d", code)
 			}
 			return nil
 		})
 
-	runOK(t, "mail", "account", "settings", "set", "view-mode", targetName)
+	runOK(t, "mail", "settings", "set", "view-mode", targetName)
 	if got := mailViewMode(t); got != targetValue {
 		t.Errorf("ViewMode after setting %q: got %d want %d", targetName, got, targetValue)
 	}
 	// The numeric form Proton itself uses stays valid.
-	runOK(t, "mail", "account", "settings", "set", "view-mode", fmt.Sprintf("%d", targetValue))
+	runOK(t, "mail", "settings", "set", "view-mode", fmt.Sprintf("%d", targetValue))
 }
 
 func TestMailSettingsSetRejectsValuesOutsideTheDomain(t *testing.T) {
@@ -56,7 +56,7 @@ func TestMailSettingsSetRejectsValuesOutsideTheDomain(t *testing.T) {
 		{"draft-type", "text/markdown", "text/html, text/plain"},
 	}
 	for _, tt := range tests {
-		_, stderr, code := run(t, "mail", "account", "settings", "set", tt.key, tt.value)
+		_, stderr, code := run(t, "mail", "settings", "set", tt.key, tt.value)
 		if code == 0 {
 			t.Errorf("%s %s should have been rejected", tt.key, tt.value)
 			continue
@@ -68,11 +68,11 @@ func TestMailSettingsSetRejectsValuesOutsideTheDomain(t *testing.T) {
 }
 
 func TestMailSettingsSetUnknownKey(t *testing.T) {
-	_, stderr, code := run(t, "mail", "account", "settings", "set", "no-such-key", "1")
+	_, stderr, code := run(t, "mail", "settings", "set", "no-such-key", "1")
 	if code == 0 {
 		t.Error("an unknown key should be rejected")
 	}
-	assertContains(t, stderr, "unknown mail setting")
+	assertContains(t, stderr, "no mail setting called")
 	assertContains(t, stderr, "mail settings list")
 }
 
@@ -87,7 +87,7 @@ func TestMailSettingsSetListsKeysByPage(t *testing.T) {
 
 func TestMailSettingsSetDryRun(t *testing.T) {
 	orig := mailViewMode(t)
-	_, stderr := runOKStderr(t, "--dry-run", "mail", "account", "settings", "set", "view-mode", "messages")
+	_, stderr := runOKStderr(t, "--dry-run", "mail", "settings", "set", "view-mode", "messages")
 	assertContains(t, stderr, "Dry run")
 	if got := mailViewMode(t); got != orig {
 		t.Error("--dry-run changed the setting")
@@ -101,23 +101,37 @@ func TestAccountSettings(t *testing.T) {
 	}
 }
 
+// The JSON is the view the command renders, in the CLI's own snake_case names,
+// not Proton's envelope passed through.
 func TestAccountSettingsJSON(t *testing.T) {
 	data := runJSON(t, "account", "settings", "get")
-	if _, ok := data["UserSettings"]; !ok {
-		t.Error("expected UserSettings key in JSON output")
+	for _, want := range []string{"locale", "date_format", "week_start", "two_factor"} {
+		if _, ok := data[want]; !ok {
+			t.Errorf("expected %q in JSON output, got keys %v", want, keysOf(data))
+		}
 	}
 }
 
-func TestAccountSettingsSetListsKeys(t *testing.T) {
-	stdout := runOK(t, "account", "settings", "set")
+// `set` writes one key; `list` is what shows which keys there are.
+func TestAccountSettingsListsKeys(t *testing.T) {
+	stdout := runOK(t, "account", "settings", "list")
 	for _, want := range []string{"Language and time", "locale", "week-start"} {
 		assertContains(t, stdout, want)
 	}
 }
 
+func TestAccountSettingsSetNeedsAKeyAndValue(t *testing.T) {
+	_, stderr, code := run(t, "account", "settings", "set")
+	if code == 0 {
+		t.Error("set with nothing to set should be rejected")
+	}
+	assertContains(t, stderr, "account settings list")
+}
+
+// A display name belongs to an address, not to the mail settings page.
 func TestMailSettings(t *testing.T) {
 	stdout := runOK(t, "mail", "settings", "get")
-	for _, want := range []string{"Display Name", "Page Size", "View Mode", "Auto-reply"} {
+	for _, want := range []string{"Page Size", "View Mode", "Draft Format", "Auto-reply"} {
 		assertContains(t, stdout, want)
 	}
 }

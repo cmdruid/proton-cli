@@ -47,6 +47,27 @@ func (u *UI) CanPrompt() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
+// Confirm asks a yes/no question and reports whether the answer was yes.
+//
+// The default is no. A bare newline, an unreadable stdin or anything that is not
+// a plain yes all mean no, so the dangerous path is the one that has to be typed
+// out. Like every other prompt, the question goes to Err: it is not an answer.
+func (u *UI) Confirm(question string) (bool, error) {
+	if !u.CanPrompt() {
+		return false, ErrNoInput
+	}
+	_, _ = fmt.Fprintf(u.Err, "%s %s ", question, u.errTheme.Hint("[y/N]"))
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	}
+	return false, nil
+}
+
 // Prompter asks a related group of questions with their labels aligned. The
 // width is computed from the labels it was told about, so no prompt carries a
 // hand-tuned column.

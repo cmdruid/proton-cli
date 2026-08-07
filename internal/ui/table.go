@@ -78,7 +78,12 @@ func Table[T any](u *UI, spec TableSpec[T], items []T) error {
 // shape: the rows under their plural noun, plus the facts that were actually
 // established. Fields the request did not involve are omitted rather than
 // reported as zero.
+// An empty collection is an empty array, never null: a nil slice is how Go
+// spells "none", not how the contract does, and `.items[]` has to keep working.
 func envelope[T any](spec TableSpec[T], items []T) map[string]any {
+	if items == nil {
+		items = []T{}
+	}
 	var rows any = items
 	if spec.Rows != nil {
 		rows = spec.Rows

@@ -109,7 +109,7 @@ func shareLinkCmd() *cobra.Command {
 			var link *drivesvc.ShareLink
 			if err := kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Linked, Kind: "links", Count: 1,
-				Detail: "for " + c.Args[0],
+				Detail: "for " + c.Args[0], AnswerFollows: true,
 			}, func() error {
 				var err error
 				link, err = c.App.Drive.EnsureLink(c.Ctx, dc, c.Args[0], opts)

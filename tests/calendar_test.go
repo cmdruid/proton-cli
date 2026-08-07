@@ -41,12 +41,15 @@ func TestCalendarCalendarsCreateAndDelete(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	// Delete exercises the password-scope unlock path.
 	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete -- %s", id),
 		"calendar", "settings", "calendars", "delete", "--", id)
 
-	list := runOK(t, "calendar", "settings", "calendars", "list")
-	assertContains(t, list, name)
+	assertContains(t, runOK(t, "calendar", "settings", "calendars", "list"), name)
+
+	// Deleting is what exercises the scope-elevation path, so it is asserted here
+	// rather than left to cleanup, whose failure never fails a test.
+	runOK(t, "calendar", "settings", "calendars", "delete", "--", id)
+	assertNotContains(t, runOK(t, "calendar", "settings", "calendars", "list"), name)
 }
 
 // ── events ──
@@ -62,39 +65,28 @@ func TestCalendarEventsCRUDByIDs(t *testing.T) {
 
 	idOut := runOK(t, "calendar", "events", "create",
 		"--calendar", "Default",
-		"--job-title", title,
+		"--title", title,
 		"--start", start,
 		"--duration", "1h")
+	// An event lives in a calendar, so creating one answers with both halves as
+	// the single reference every event verb takes.
 	eventID := strings.TrimSpace(idOut)
-	if !looksLikeID(eventID) {
-		t.Fatalf("expected bare event ID on stdout, got %q", idOut)
+	if !looksLikePairRef(eventID) {
+		t.Fatalf("expected CALENDAR_ID/EVENT_ID on stdout, got %q", idOut)
 	}
-
-	// Need both calendar ID + event ID for explicit ops and cleanup.
-	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
-	var calID string
-	for _, c := range cals {
-		m := c.(map[string]interface{})
-		if n, _ := m["name"].(string); n == "Default" {
-			calID, _ = m["id"].(string)
-		}
-	}
-	if calID == "" {
-		t.Fatal("could not find Default calendar")
-	}
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s %s", calID, eventID),
-		"calendar", "events", "delete", "--", calID, eventID)
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", eventID),
+		"calendar", "events", "delete", "--", eventID)
 
 	// Get by IDs
-	got := runOK(t, "calendar", "events", "get", "--", calID, eventID)
+	got := runOK(t, "calendar", "events", "get", "--", eventID)
 	assertContains(t, got, title)
 	// Signature: an event we just created is signed with our own address key.
 	assertField(t, got, "Signature:", "verified")
 
 	// Update title + location
-	runOK(t, "calendar", "events", "update", "--job-title", title+"-updated", "--location", "Vienna",
-		"--", calID, eventID)
-	got2 := runOK(t, "calendar", "events", "get", "--", calID, eventID)
+	runOK(t, "calendar", "events", "update", "--title", title+"-updated", "--location", "Vienna",
+		"--", eventID)
+	got2 := runOK(t, "calendar", "events", "get", "--", eventID)
 	assertContains(t, got2, title+"-updated")
 	assertContains(t, got2, "Vienna")
 }
@@ -104,21 +96,12 @@ func TestCalendarEventsGetByTitleRef(t *testing.T) {
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	idOut := runOK(t, "calendar", "events", "create",
 		"--calendar", "Default",
-		"--job-title", title,
+		"--title", title,
 		"--start", start,
 		"--duration", "30m")
 	eventID := strings.TrimSpace(idOut)
-
-	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
-	var calID string
-	for _, c := range cals {
-		m := c.(map[string]interface{})
-		if n, _ := m["name"].(string); n == "Default" {
-			calID, _ = m["id"].(string)
-		}
-	}
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s %s", calID, eventID),
-		"calendar", "events", "delete", "--", calID, eventID)
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", eventID),
+		"calendar", "events", "delete", "--", eventID)
 
 	// REF = title substring
 	stdout := runOK(t, "calendar", "events", "get", title)
@@ -130,7 +113,7 @@ func TestCalendarEventsDeleteByTitleRef(t *testing.T) {
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	runOK(t, "calendar", "events", "create",
 		"--calendar", "Default",
-		"--job-title", title,
+		"--title", title,
 		"--start", start,
 		"--duration", "15m")
 
@@ -149,6 +132,17 @@ func TestCalendarEventsNotFound(t *testing.T) {
 	}
 }
 
+// eventPath is the raw API path for an event. The CLI hands an event's two
+// halves back as one reference, but the endpoint wants them apart.
+func eventPath(t *testing.T, ref string) string {
+	t.Helper()
+	cal, ev, ok := strings.Cut(ref, "/")
+	if !ok {
+		t.Fatalf("expected CALENDAR_ID/EVENT_ID, got %q", ref)
+	}
+	return "/calendar/v1/" + cal + "/events/" + ev
+}
+
 func firstCalendarID(t *testing.T) string {
 	t.Helper()
 	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
@@ -163,13 +157,13 @@ func TestCalendarEventRecurrenceAndDescription(t *testing.T) {
 
 	title := testID() + "-evt"
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
-		"--calendar", calID, "--job-title", title,
+		"--calendar", calID, "--title", title,
 		"--description", "quarterly sync", "--start", "2026-08-16T14:00", "--duration", "1h",
 		"--rrule", "FREQ=WEEKLY;COUNT=5", "--remind", "15m"))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
-		"calendar", "events", "delete", calID, eventID)
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+		"calendar", "events", "delete", eventID)
 
-	got := runOK(t, "calendar", "events", "get", calID, eventID)
+	got := runOK(t, "calendar", "events", "get", eventID)
 	assertContains(t, got, "quarterly sync")
 	assertContains(t, got, "FREQ=WEEKLY")
 }
@@ -179,12 +173,12 @@ func TestCalendarEventReminderNotification(t *testing.T) {
 
 	title := testID() + "-remind"
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
-		"--calendar", calID, "--job-title", title,
+		"--calendar", calID, "--title", title,
 		"--start", "2026-09-01T09:00", "--duration", "30m", "--remind", "15m"))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
-		"calendar", "events", "delete", calID, eventID)
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+		"calendar", "events", "delete", eventID)
 
-	data := runJSON(t, "api", "GET", "/calendar/v1/"+calID+"/events/"+eventID)
+	data := runJSON(t, "api", "GET", eventPath(t, eventID))
 	ev, _ := data["Event"].(map[string]interface{})
 	notifs, _ := ev["Notifications"].([]interface{})
 	found := false
@@ -205,17 +199,17 @@ func TestCalendarEventWithProtonAttendee(t *testing.T) {
 
 	title := testID() + "-attendee"
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
-		"--calendar", calID, "--job-title", title,
+		"--calendar", calID, "--title", title,
 		"--start", "2026-08-17T10:00", "--duration", "30m",
 		"--attendee", selfEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
-		"calendar", "events", "delete", calID, eventID)
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+		"calendar", "events", "delete", eventID)
 
 	if !looksLikeID(eventID) {
 		t.Errorf("expected an event ID on stdout, got %q", eventID)
 	}
 	// The server accepted the encrypted attendee parts; the event must read back.
-	runOK(t, "calendar", "events", "get", calID, eventID)
+	runOK(t, "calendar", "events", "get", eventID)
 }
 
 func TestCalendarCalendarsRename(t *testing.T) {
@@ -238,12 +232,12 @@ func TestCalendarCreateUsable(t *testing.T) {
 		"calendar", "settings", "calendars", "delete", calID)
 
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
-		"--calendar", calID, "--job-title", name+"-evt",
+		"--calendar", calID, "--title", name+"-evt",
 		"--start", "2026-08-20T10:00", "--duration", "1h"))
 	if !looksLikeID(eventID) {
 		t.Errorf("expected event ID on stdout, got %q", eventID)
 	}
-	assertContains(t, runOK(t, "calendar", "events", "get", calID, eventID), name+"-evt")
+	assertContains(t, runOK(t, "calendar", "events", "get", eventID), name+"-evt")
 }
 
 // ── events respond (RSVP) ──
@@ -267,16 +261,16 @@ func TestCalendarEventsRespondDryRun(t *testing.T) {
 	title := testID() + "-rsvp-dry"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
-		"--calendar", calID, "--job-title", title, "--start", start, "--duration", "30m",
+		"--calendar", calID, "--title", title, "--start", start, "--duration", "30m",
 		"--attendee", selfEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
-		"calendar", "events", "delete", calID, eventID)
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+		"calendar", "events", "delete", eventID)
 
 	_, stderr := runOKStderr(t, "--dry-run", "calendar", "events", "respond",
-		"--status", "accept", calID, eventID)
+		"--status", "accept", eventID)
 	assertContains(t, stderr, "Dry run")
 	// The event still reads back (no mutation happened).
-	assertContains(t, runOK(t, "calendar", "events", "get", calID, eventID), title)
+	assertContains(t, runOK(t, "calendar", "events", "get", eventID), title)
 }
 
 func TestCalendarEventsRespondRejectsOrganizer(t *testing.T) {
@@ -285,12 +279,12 @@ func TestCalendarEventsRespondRejectsOrganizer(t *testing.T) {
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	// We create the event, so we are its organizer; RSVP must be refused.
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
-		"--calendar", calID, "--job-title", title, "--start", start, "--duration", "30m",
+		"--calendar", calID, "--title", title, "--start", start, "--duration", "30m",
 		"--attendee", selfEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s %s", calID, eventID),
-		"calendar", "events", "delete", calID, eventID)
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+		"calendar", "events", "delete", eventID)
 
-	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "accept", calID, eventID)
+	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "accept", eventID)
 	if code != 1 {
 		t.Errorf("expected exit 1 responding to your own event, got %d (stderr: %s)", code, stderr)
 	}
@@ -339,12 +333,12 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 	title := testID() + "-rsvp-rt"
 	start := time.Now().Add(72 * time.Hour).Format("2006-01-02T15:04")
 	altEventID := strings.TrimSpace(runOK(t, alt("calendar", "events", "create",
-		"--calendar", altCal, "--job-title", title, "--start", start, "--duration", "30m",
+		"--calendar", altCal, "--title", title, "--start", start, "--duration", "30m",
 		"--attendee", selfEmail())...))
-	cleanupRun(t, fmt.Sprintf("Delete alt event: proton-cli --profile alt calendar events delete %s %s", altCal, altEventID),
-		alt("calendar", "events", "delete", altCal, altEventID)...)
+	cleanupRun(t, fmt.Sprintf("Delete alt event: proton-cli --profile alt calendar events delete %s", altEventID),
+		alt("calendar", "events", "delete", altEventID)...)
 
-	uid, _ := eventField(runJSON(t, alt("api", "GET", "/calendar/v1/"+altCal+"/events/"+altEventID)...), "UID").(string)
+	uid, _ := eventField(runJSON(t, alt("api", "GET", eventPath(t, altEventID))...), "UID").(string)
 	if uid == "" {
 		t.Fatal("could not read the alt event UID")
 	}
@@ -372,10 +366,13 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 	if primaryEventID == "" {
 		t.Fatal("invitation did not appear on the primary's calendar")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete primary event copy: proton-cli calendar events delete %s %s", primaryCal, primaryEventID),
-		"calendar", "events", "delete", primaryCal, primaryEventID)
+	// `events list` reports the two halves separately, so this one has to be
+	// joined into the single reference every event verb takes.
+	primaryRef := primaryCal + "/" + primaryEventID
+	cleanupRun(t, fmt.Sprintf("Delete primary event copy: proton-cli calendar events delete %s", primaryRef),
+		"calendar", "events", "delete", primaryRef)
 
-	runOK(t, "calendar", "events", "respond", primaryCal, primaryEventID, "--status", "accept")
+	runOK(t, "calendar", "events", "respond", "--status", "accept", primaryRef)
 
 	// The primary's own attendee record now shows ACCEPTED (ATTENDEE_STATUS_API 3).
 	got := runJSON(t, "api", "GET", "/calendar/v1/"+primaryCal+"/events/"+primaryEventID)

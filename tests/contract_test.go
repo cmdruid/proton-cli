@@ -196,7 +196,7 @@ func TestStdoutIDCalendarEventCreate(t *testing.T) {
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	stdout, _ := runOKStderr(t, "calendar", "events", "create",
 		"--calendar", "Default",
-		"--job-title", title,
+		"--title", title,
 		"--start", start,
 		"--duration", "30m")
 	_ = assertBareID(t, stdout, "events create")

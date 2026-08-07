@@ -192,8 +192,10 @@ func TestMailMessagesReplyDryRun(t *testing.T) {
 	msgID, _, _ := plainMail(t)
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "reply",
 		"--body", "x", "--", msgID)
-	assertContains(t, stderr, "Dry run")
-	assertContains(t, stderr, "would reply")
+	// A reply is a send, so it reports as one - naming the message it would put
+	// on the wire rather than the verb that composed it.
+	assertContains(t, stderr, "would send message")
+	assertContains(t, stderr, "Re: ")
 }
 
 // ── forward ──
@@ -230,7 +232,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 
 	// And the bytes survived the re-keying rather than the upload.
 	dir := t.TempDir()
-	runOK(t, alt("mail", "messages", "attachments", "download", recvID, "--all", "--output-dir", dir)...)
+	runOK(t, alt("mail", "messages", "attachments", "download", "--output-dir", dir, recvID)...)
 	got, err := os.ReadFile(filepath.Join(dir, attName))
 	if err != nil {
 		t.Fatalf("read forwarded attachment: %v", err)
@@ -249,9 +251,11 @@ func TestMailMessagesForwardWithoutAttachments(t *testing.T) {
 	cleanupRun(t, "Delete forward: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
-	raw := runOK(t, "mail", "messages", "attachments", "list", id, "--output", "json")
-	if strings.Contains(raw, attName) {
-		t.Errorf("--no-attachments still carried %s: %s", attName, raw)
+	for _, row := range runJSONArray(t, "mail", "messages", "attachments", "list", id) {
+		a, _ := row.(map[string]interface{})
+		if n, _ := a["name"].(string); n == attName {
+			t.Errorf("--no-attachments still carried %s", attName)
+		}
 	}
 }
 
@@ -273,15 +277,16 @@ func TestMailSendFromRejectsAnAddressYouDoNotOwn(t *testing.T) {
 	if code != 3 {
 		t.Errorf("expected exit 3 for an unknown --from, got %d", code)
 	}
-	assertContains(t, stderr, "Can Send")
+	assertContains(t, stderr, "can send mail")
+	assertContains(t, stderr, selfEmail())
 }
 
 func TestMailSendFromAcceptsYourOwnAddress(t *testing.T) {
 	subject := testID() + "-from"
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
 		"--from", selfEmail(), "--to", selfEmail(), "--subject", subject, "--body", "x")
-	assertContains(t, stderr, "Dry run")
-	assertContains(t, stderr, selfEmail())
+	assertContains(t, stderr, "would send message")
+	assertContains(t, stderr, subject)
 }
 
 // ── signature ──
@@ -323,19 +328,21 @@ func TestMailSignatureIsAppliedAndSuppressible(t *testing.T) {
 func primaryAddressID(t *testing.T) string {
 	t.Helper()
 	raw := runOK(t, "--full-ids", "mail", "settings", "addresses", "list", "--output", "json")
-	var addrs []struct {
-		ID    string `json:"id"`
-		Email string `json:"email"`
+	var env struct {
+		Addresses []struct {
+			ID    string `json:"id"`
+			Email string `json:"email"`
+		} `json:"addresses"`
 	}
-	if err := json.Unmarshal([]byte(raw), &addrs); err != nil || len(addrs) == 0 {
+	if err := json.Unmarshal([]byte(raw), &env); err != nil || len(env.Addresses) == 0 {
 		t.Fatalf("could not read the address list: %v\n%s", err, truncateOutput(raw))
 	}
-	for _, a := range addrs {
+	for _, a := range env.Addresses {
 		if a.Email == selfEmail() {
 			return a.ID
 		}
 	}
-	return addrs[0].ID
+	return env.Addresses[0].ID
 }
 
 func addressSignature(t *testing.T, addrID string) string {

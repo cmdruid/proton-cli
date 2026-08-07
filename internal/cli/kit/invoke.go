@@ -120,6 +120,31 @@ func Show(c *Invocation, spec ui.RecordSpec) error { return ui.Record(c.UI(), sp
 // Read renders decrypted content meant to be read.
 func Read(c *Invocation, spec ui.DocumentSpec) error { return ui.Document(c.UI(), spec) }
 
+// Confirm stops for a yes before something sweeping enough that a typo would be
+// expensive, and returns an error unless it gets one.
+//
+// --dry-run needs no answer, because it asks the same question in a safer form.
+// --yes is the answer given in advance, which is also the only way through in a
+// script: a prompt nobody can see is a hang, so an unattended run is told what
+// to add rather than left waiting.
+func Confirm(c *Invocation, question string) error {
+	if c.App.DryRun || c.App.Yes {
+		return nil
+	}
+	if !c.UI().CanPrompt() {
+		return Fail("%s", question).
+			Hint("--yes to confirm, or --dry-run to see what it would touch.")
+	}
+	ok, err := c.UI().Confirm(question)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return Fail("Cancelled.")
+	}
+	return nil
+}
+
 // Mutate performs a change and reports it - or, under --dry-run, reports what it
 // would have done and changes nothing.
 //
@@ -204,6 +229,27 @@ func Pair(ref string) (first, second string) {
 		return ref[:i], ref[i+1:]
 	}
 	return "", ref
+}
+
+// ExpandPair splits a compound reference and expands each half, so a short ID
+// works on either side of the slash.
+//
+// StepExpand cannot do this. A slash is not part of an ID, so a compound
+// reference never looks short to it - and a Drive path is full of slashes too,
+// so a step that applies to every argument would take paths apart as well. Only
+// a command that knows it is holding two IDs can safely separate them.
+func ExpandPair(a *app.App, ref string) (first, second string, err error) {
+	first, second = Pair(ref)
+	if first == "" {
+		return "", second, nil
+	}
+	if first, err = Expand(a, first); err != nil {
+		return "", "", err
+	}
+	if second, err = Expand(a, second); err != nil {
+		return "", "", err
+	}
+	return first, second, nil
 }
 
 // JoinPair renders a compound reference as the single token a user pastes back.

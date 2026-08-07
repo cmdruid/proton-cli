@@ -352,8 +352,10 @@ func (s *Service) ShareStatusOf(ctx context.Context, dc *Context, path string) (
 		raws, err := s.fetchShareURLs(ctx, sid)
 		if err == nil {
 			for _, u := range raws {
-				gen, _ := s.decryptURLPassword(dc, u)
-				st.Links = append(st.Links, u.toShareLink(gen))
+				gen, custom := s.decryptURLPassword(dc, u)
+				link := u.toShareLink(gen)
+				link.CustomPassword = custom
+				st.Links = append(st.Links, link)
 			}
 		}
 		if members, err := s.ListMembers(ctx, sid); err == nil {

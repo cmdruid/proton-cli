@@ -1,8 +1,12 @@
 package kit
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/roman-16/proton-cli/internal/app"
+	"github.com/roman-16/proton-cli/internal/idcache"
 )
 
 // A compound reference is one pasteable token. The separator is safe because
@@ -41,6 +45,45 @@ func TestPairRoundTrips(t *testing.T) {
 		if first != tc[0] || second != tc[1] {
 			t.Errorf("round trip of (%q, %q) gave (%q, %q) via %q", tc[0], tc[1], first, second, joined)
 		}
+	}
+}
+
+// A short ID has to work on either side of the slash, which is the promise the
+// reference documentation makes. StepExpand cannot keep it: a slash is not part
+// of an ID, so the whole token never looks short to it.
+func TestExpandPairExpandsBothHalves(t *testing.T) {
+	full := func(seed string) string {
+		return seed + strings.Repeat("A", 86-len(seed)) + "=="
+	}
+	share, item := full("shareAB1"), full("itemXY23")
+
+	dir := t.TempDir()
+	a := &app.App{IDCache: idcache.New(filepath.Join(dir, "ids.json"))}
+	if err := a.IDCache.Save(share, item); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name          string
+		ref           string
+		first, second string
+	}{
+		{"both halves short", "shareAB1/itemXY23", share, item},
+		{"only the second short", share + "/itemXY23", share, item},
+		{"only the first short", "shareAB1/" + item, share, item},
+		{"already full", share + "/" + item, share, item},
+		{"an uncached half is left alone", "shareAB1/notcache", share, "notcache"},
+		{"a handle is not a pair", "GitHub", "", "GitHub"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			first, second, err := ExpandPair(a, tc.ref)
+			if err != nil {
+				t.Fatalf("ExpandPair(%q): %v", tc.ref, err)
+			}
+			if first != tc.first || second != tc.second {
+				t.Errorf("ExpandPair(%q) = (%q, %q), want (%q, %q)", tc.ref, first, second, tc.first, tc.second)
+			}
+		})
 	}
 }
 

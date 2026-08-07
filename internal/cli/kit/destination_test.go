@@ -109,10 +109,16 @@ func TestValidateRejectsImpossibleCombinations(t *testing.T) {
 			t.Error("want a refusal")
 		}
 	})
-	t.Run("stdout takes any number", func(t *testing.T) {
+	t.Run("stdout for many items", func(t *testing.T) {
 		d := &Destination{output: "-"}
-		if err := d.Validate(false); err != nil {
-			t.Errorf("stdout is one stream whatever it carries: %v", err)
+		if err := d.Validate(false); err == nil {
+			t.Error("several files down one stream is one unusable run of bytes")
+		}
+	})
+	t.Run("stdout for one item", func(t *testing.T) {
+		d := &Destination{output: "-"}
+		if err := d.Validate(true); err != nil {
+			t.Errorf("one item is exactly what a stream carries: %v", err)
 		}
 	})
 }
@@ -136,6 +142,39 @@ func TestSafeFilename(t *testing.T) {
 	}
 	if n := len(SafeFilename(strings.Repeat("x", 500))); n > 120 {
 		t.Errorf("length not capped: %d", n)
+	}
+}
+
+// --output-dir names where the bytes go, so a directory that is not there yet is
+// a request to make it. Photo downloads open a temporary file in it before
+// anything else does, which is where this used to give way.
+func TestDirCreatesTheDestination(t *testing.T) {
+	nested := filepath.Join(t.TempDir(), "pics", "2026")
+	d := &Destination{outputDir: nested}
+
+	got, err := d.Dir()
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	if got != nested {
+		t.Errorf("got %q want %q", got, nested)
+	}
+	if fi, err := os.Stat(nested); err != nil || !fi.IsDir() {
+		t.Errorf("%s was not created: %v", nested, err)
+	}
+	if _, err := os.CreateTemp(got, ".probe-*"); err != nil {
+		t.Errorf("a temporary file cannot be opened there: %v", err)
+	}
+}
+
+// A file where the directory should be is a mistake worth naming, not a stack of
+// permission errors later on.
+func TestDirRefusesAPathThatIsAFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "not-a-dir")
+	write(t, path, "x")
+
+	if _, err := (&Destination{outputDir: path}).Dir(); err == nil {
+		t.Fatal("want an error for a destination that is a file")
 	}
 }
 

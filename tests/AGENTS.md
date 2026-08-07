@@ -242,7 +242,14 @@ Proton IDs are Base64URL-encoded and can start with `-`. Two layers in the binar
 
 In practice `--` is **not required** in tests - leading-dash full IDs parse cleanly via Layer 1; leading-dash *short* IDs (rare - ~1.5% of random base64 prefixes) need explicit `--` and are caught by Layer 2.
 
-Flags can be placed before OR after positionals on every command - same as any normal cobra CLI.
+**Put flags before the positionals.** Layer 1 protects the ID by inserting `--`, and everything after a `--` is positional - so a flag written after a leading-dash ID becomes an argument and the command fails with "accepts N arg(s)". Whether that happens depends on which ID the account handed out, so writing the flags last makes a test fail roughly one run in sixty rather than never:
+
+```go
+runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID)   // always works
+runOK(t, "mail", "messages", "attachments", "download", msgID, "--output-dir", dir)   // works until the ID starts with '-'
+```
+
+`runJSON` and `runJSONArray` put `--output json` in front for the same reason, so they are safe with any reference.
 
 ### `cleanupRun` descriptions
 

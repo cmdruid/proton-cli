@@ -32,8 +32,8 @@ func resolveEvent(c *kit.Invocation, ref string) (calendarID, eventID string, er
 	if err != nil {
 		return "", "", err
 	}
-	if first, second := kit.Pair(ref); first != "" {
-		return first, second, nil
+	if first, second, err := kit.ExpandPair(c.App, ref); err != nil || first != "" {
+		return first, second, err
 	}
 	return c.App.Calendar.ResolveEvent(c.Ctx, u, []string{ref})
 }

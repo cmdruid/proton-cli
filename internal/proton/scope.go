@@ -87,13 +87,25 @@ func (c *Client) getScopeResolver() ScopeResolver {
 const missingScopeCode = 9100
 
 // isMissingScope reports whether a response is the server asking for an elevated
-// session. The pair of status and code is what WebClients matches on.
+// session.
+//
+// WebClients matches on 9100 alone, which is not enough here: deleting a
+// calendar answers 403 with code 9101 and no name for it anywhere in their
+// source. What both answers share is Details.MissingScopes - the server saying
+// which scope it wants - so that is the surer signal, and the code is only a
+// fallback for an answer that names nothing.
 func isMissingScope(status int, body []byte) bool {
 	if status != http.StatusForbidden {
 		return false
 	}
-	var env struct{ Code int }
-	return json.Unmarshal(body, &env) == nil && env.Code == missingScopeCode
+	var env struct {
+		Code    int
+		Details struct{ MissingScopes []string }
+	}
+	if json.Unmarshal(body, &env) != nil {
+		return false
+	}
+	return len(env.Details.MissingScopes) > 0 || env.Code == missingScopeCode
 }
 
 // Elevate re-authenticates within the current session to obtain s.

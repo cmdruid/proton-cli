@@ -159,7 +159,11 @@ func photosDownloadCmd() *cobra.Command {
 				Action: ui.Downloaded, Kind: "photos", Count: 1,
 				Detail: "to " + dest.Describe(),
 			}, func() error {
-				tmp, err := os.CreateTemp(dest.Dir(), ".proton-cli-photo-*")
+				dir, err := dest.Dir()
+				if err != nil {
+					return err
+				}
+				tmp, err := os.CreateTemp(dir, ".proton-cli-photo-*")
 				if err != nil {
 					return err
 				}

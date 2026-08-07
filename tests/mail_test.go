@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,11 +59,13 @@ func TestMailMessagesListFooterSinglePage(t *testing.T) {
 	// rejected as "Invalid page size parameter".
 	_, stderr := runOKStderr(t, "mail", "messages", "list", "--page-size", "150")
 	last := lastNonEmpty(stderr)
-	if !strings.Contains(last, "single page") && !strings.Contains(last, "Showing") {
-		t.Errorf("expected single-page or showing footer, got: %q", last)
+	// One page holds everything, so the footer is a plain count: no "of", no
+	// next-page instruction, and never a page number the reader did not ask for.
+	if !strings.HasSuffix(last, "messages.") && !strings.HasSuffix(last, "message.") {
+		t.Errorf("expected a plain count footer, got: %q", last)
 	}
-	if strings.Contains(last, "page 0") {
-		t.Errorf("footer still has '(page 0)' wording: %q", last)
+	if strings.Contains(last, "--page") || strings.Contains(last, " of ") {
+		t.Errorf("a single page should not offer another: %q", last)
 	}
 }
 
@@ -94,9 +95,10 @@ func TestMailMessagesSearchFooterNoPageZero(t *testing.T) {
 	if strings.Contains(last, "page 0") {
 		t.Errorf("search footer still has '(page 0)': %q", last)
 	}
-	// Must look like one of the SearchFooter variants.
-	if !strings.Contains(last, "results") && !strings.Contains(last, "No results") {
-		t.Errorf("expected search-result footer, got: %q", last)
+	// Either the limit was reached and more may exist, or it was not and the
+	// count stands on its own.
+	if !strings.HasSuffix(last, "messages.") && !strings.HasSuffix(last, "raise --limit.") {
+		t.Errorf("expected a search footer, got: %q", last)
 	}
 }
 
@@ -104,8 +106,8 @@ func TestMailMessagesSearchEmptyFooter(t *testing.T) {
 	_, stderr := runOKStderr(t, "mail", "messages", "search",
 		"--keyword", "xyz-no-match-"+testID())
 	last := lastNonEmpty(stderr)
-	if !strings.Contains(last, "No results") {
-		t.Errorf("expected 'No results.' on empty search, got: %q", last)
+	if last != "No messages." {
+		t.Errorf("expected 'No messages.' on an empty search, got: %q", last)
 	}
 }
 
@@ -146,8 +148,8 @@ func TestMailMessagesSearchEmpty(t *testing.T) {
 func TestMailSearchFromZeroResultsHint(t *testing.T) {
 	needle := "no-such-sender-" + testID()
 	_, stderr := runOKStderr(t, "mail", "messages", "search", "--from", needle)
-	if !strings.Contains(stderr, "Hint:") {
-		t.Errorf("expected stderr to contain 'Hint:', got: %s", stderr)
+	if !strings.Contains(stderr, "--from matches the address only") {
+		t.Errorf("expected the --from hint, got: %s", stderr)
 	}
 	if !strings.Contains(stderr, "--keyword "+needle) {
 		t.Errorf("expected stderr to contain '--keyword %s', got: %s", needle, stderr)
@@ -157,8 +159,8 @@ func TestMailSearchFromZeroResultsHint(t *testing.T) {
 func TestMailSearchToZeroResultsHint(t *testing.T) {
 	needle := "no-such-rcpt-" + testID()
 	_, stderr := runOKStderr(t, "mail", "messages", "search", "--to", needle)
-	if !strings.Contains(stderr, "Hint:") {
-		t.Errorf("expected stderr to contain 'Hint:', got: %s", stderr)
+	if !strings.Contains(stderr, "--to matches the address only") {
+		t.Errorf("expected the --to hint, got: %s", stderr)
 	}
 	if !strings.Contains(stderr, "--keyword "+needle) {
 		t.Errorf("expected stderr to contain '--keyword %s', got: %s", needle, stderr)
@@ -169,7 +171,7 @@ func TestMailSearchFromKeywordSuppressesHint(t *testing.T) {
 	needle := "impossible-" + testID()
 	_, stderr := runOKStderr(t, "mail", "messages", "search",
 		"--from", needle, "--keyword", "alsoimpossible-"+testID())
-	if strings.Contains(stderr, "Hint:") {
+	if strings.Contains(stderr, "matches the address only") {
 		t.Errorf("hint should be suppressed when --keyword is set; got: %s", stderr)
 	}
 }
@@ -182,7 +184,7 @@ func TestMailSearchFromHitsNoHint(t *testing.T) {
 		_, s := runOKStderr(t, "mail", "messages", "search",
 			"--from", selfEmail(), "--limit", "5")
 		stderr = s
-		if !strings.Contains(s, "Hint:") {
+		if !strings.Contains(s, "matches the address only") {
 			return
 		}
 		time.Sleep(2 * time.Second)
@@ -193,19 +195,19 @@ func TestMailSearchFromHitsNoHint(t *testing.T) {
 func TestMailSearchFromQuietSuppressesHint(t *testing.T) {
 	_, stderr := runOKStderr(t, "--quiet", "mail", "messages", "search",
 		"--from", "no-such-sender-"+testID())
-	if strings.Contains(stderr, "Hint:") {
-		t.Errorf("--quiet should suppress 'Hint:'; got: %s", stderr)
+	if strings.Contains(stderr, "matches the address only") {
+		t.Errorf("--quiet should suppress the hint; got: %s", stderr)
 	}
 }
 
 func TestMailConversationsSearchFromZeroResultsHint(t *testing.T) {
 	needle := "no-such-sender-" + testID()
 	_, stderr := runOKStderr(t, "mail", "conversations", "search", "--from", needle)
-	if !strings.Contains(stderr, "Hint:") {
-		t.Errorf("expected stderr to contain 'Hint:', got: %s", stderr)
+	if !strings.Contains(stderr, "--from matches the address only") {
+		t.Errorf("expected the --from hint, got: %s", stderr)
 	}
-	if !strings.Contains(stderr, "proton-cli mail conversations search --keyword "+needle) {
-		t.Errorf("expected conversations-tree redirect, got: %s", stderr)
+	if !strings.Contains(stderr, "--keyword "+needle) {
+		t.Errorf("expected stderr to contain '--keyword %s', got: %s", needle, stderr)
 	}
 }
 
@@ -220,7 +222,7 @@ func TestMailMessagesSendAndReadText(t *testing.T) {
 	assertContains(t, stdout, selfEmail())
 	assertField(t, stdout, "Subject:", subject)
 	// Signature: mail we sent ourselves is signed by our own key.
-	assertField(t, stdout, "Sig:", "verified")
+	assertField(t, stdout, "Signature:", "verified")
 }
 
 func TestMailMessagesReadByRef(t *testing.T) {
@@ -262,7 +264,10 @@ func TestMailMessagesReadFormatInvalid(t *testing.T) {
 	if code == 0 {
 		t.Error("expected non-zero exit for unknown --format")
 	}
-	assertContains(t, stderr, "unknown --format")
+	assertContains(t, stderr, "--format accepts:")
+	for _, shape := range []string{"text", "html", "raw"} {
+		assertContains(t, stderr, shape)
+	}
 }
 
 func TestMailMessagesReadNotFound(t *testing.T) {
@@ -500,7 +505,7 @@ func TestMailAttachmentsListAndDownload(t *testing.T) {
 
 	// Download to tempdir
 	out := filepath.Join(t.TempDir(), "att")
-	runOK(t, "mail", "messages", "attachments", "download", msgID, attID, "--output", out)
+	runOK(t, "mail", "messages", "attachments", "download", "--output", out, msgID, attID)
 
 	info, err := os.Stat(out)
 	if err != nil {
@@ -528,13 +533,12 @@ func TestMailAttachmentsDownloadCollisionAutoSuffix(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	_, stderr := runOKStderr(t, "mail", "messages", "attachments", "download", msgID, attID,
-		"--output-dir", dir)
+	_, stderr := runOKStderr(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID, attID)
 
 	// Suffixed file must exist; placeholder must be untouched.
 	stem := strings.TrimSuffix(attName, filepath.Ext(attName))
 	ext := filepath.Ext(attName)
-	suffixed := filepath.Join(dir, stem+"_1"+ext)
+	suffixed := filepath.Join(dir, stem+" (2)"+ext)
 	if _, err := os.Stat(suffixed); err != nil {
 		t.Errorf("expected auto-suffixed file at %s, got: %v\nstderr: %s", suffixed, err, stderr)
 	}
@@ -550,8 +554,7 @@ func TestMailAttachmentsDownloadCollisionExplicitErrors(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("x"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	_, stderr, code := run(t, "mail", "messages", "attachments", "download", msgID, attID,
-		"--output", dest)
+	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "--output", dest, msgID, attID)
 	if code == 0 {
 		t.Errorf("expected non-zero exit on collision, got 0")
 	}
@@ -567,8 +570,7 @@ func TestMailAttachmentsDownloadForce(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("placeholder"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	runOK(t, "mail", "messages", "attachments", "download", msgID, attID,
-		"--output", dest, "--force")
+	runOK(t, "mail", "messages", "attachments", "download", "--output", dest, "--force", msgID, attID)
 	data, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatalf("read after force: %v", err)
@@ -582,7 +584,7 @@ func TestMailAttachmentsDownloadAll(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "messages", "attachments", "download", msgID, "--all", "--output-dir", dir)
+	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -593,24 +595,27 @@ func TestMailAttachmentsDownloadAll(t *testing.T) {
 	}
 }
 
-func TestMailAttachmentsDownloadAllRequiresDir(t *testing.T) {
-	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "any-msg-id", "--all")
+// Naming no attachment downloads them all, so --output - a single path cannot
+// say where they go. Both refusals are judgeable from the command line, so
+// neither needs the network to reach.
+func TestMailAttachmentsDownloadAllRejectsASinglePath(t *testing.T) {
+	_, stderr, code := run(t, "mail", "messages", "attachments", "download",
+		"--output", filepath.Join(t.TempDir(), "one.bin"), "any-msg-id")
 	if code == 0 {
-		t.Error("expected non-zero exit when --all is missing --output-dir")
+		t.Error("expected non-zero exit for --output with every attachment selected")
 	}
 	if !strings.Contains(stderr, "--output-dir") {
-		t.Errorf("expected stderr to mention --output-dir, got: %s", stderr)
+		t.Errorf("expected stderr to point at --output-dir, got: %s", stderr)
 	}
 }
 
 func TestMailAttachmentsDownloadAllRejectsStdout(t *testing.T) {
-	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "any-msg-id",
-		"--all", "--output", "-")
+	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "--output", "-", "any-msg-id")
 	if code == 0 {
-		t.Error("expected non-zero exit for --all --output -")
+		t.Error("expected non-zero exit for --output - with every attachment selected")
 	}
-	if !strings.Contains(stderr, "stdout") {
-		t.Errorf("expected stderr to mention stdout, got: %s", stderr)
+	if !strings.Contains(stderr, "--output-dir") {
+		t.Errorf("expected stderr to point at --output-dir, got: %s", stderr)
 	}
 }
 
@@ -618,7 +623,7 @@ func TestMailAttachmentsDownloadOutputDirAutoCreates(t *testing.T) {
 	msgID, attID, _ := findMessageWithAttachment(t)
 
 	dir := filepath.Join(t.TempDir(), "new", "deep", "nested")
-	runOK(t, "mail", "messages", "attachments", "download", msgID, attID, "--output-dir", dir)
+	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID, attID)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -652,12 +657,9 @@ func TestMailAttachmentsListFiltersInline(t *testing.T) {
 	}
 
 	// JSON: filtered, but each entry still has the disposition field.
-	defaultRaw := runOK(t, "mail", "messages", "attachments", "list", msgID, "--output", "json")
-	var defaultAtts []map[string]interface{}
-	if err := json.Unmarshal([]byte(defaultRaw), &defaultAtts); err != nil {
-		t.Fatalf("parse default JSON: %v", err)
-	}
-	for _, a := range defaultAtts {
+	defaultAtts := runJSONArray(t, "mail", "messages", "attachments", "list", msgID)
+	for _, row := range defaultAtts {
+		a, _ := row.(map[string]interface{})
 		if d, _ := a["disposition"].(string); d == "inline" {
 			t.Errorf("default list contains inline attachment: %v", a)
 		}
@@ -667,20 +669,16 @@ func TestMailAttachmentsListFiltersInline(t *testing.T) {
 	}
 
 	// --include-inline: text mode shows DISPOSITION column.
-	stdoutAll := runOK(t, "mail", "messages", "attachments", "list", msgID, "--include-inline")
+	stdoutAll := runOK(t, "mail", "messages", "attachments", "list", "--include-inline", msgID)
 	if !strings.Contains(stdoutAll, "DISPOSITION") {
 		t.Error("--include-inline text-mode list should show DISPOSITION column")
 	}
 
 	// --include-inline JSON has both kinds.
-	allRaw := runOK(t, "mail", "messages", "attachments", "list", msgID,
-		"--include-inline", "--output", "json")
-	var allAtts []map[string]interface{}
-	if err := json.Unmarshal([]byte(allRaw), &allAtts); err != nil {
-		t.Fatalf("parse --include-inline JSON: %v", err)
-	}
+	allAtts := runJSONArray(t, "mail", "messages", "attachments", "list", "--include-inline", msgID)
 	dispositions := map[string]bool{}
-	for _, a := range allAtts {
+	for _, row := range allAtts {
+		a, _ := row.(map[string]interface{})
 		if d, ok := a["disposition"].(string); ok {
 			dispositions[d] = true
 		}
@@ -700,15 +698,12 @@ func TestMailAttachmentsListFiltersInline(t *testing.T) {
 func TestMailAttachmentsListJSONHasDisposition(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 
-	raw := runOK(t, "mail", "messages", "attachments", "list", msgID, "--output", "json")
-	var atts []map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &atts); err != nil {
-		t.Fatalf("parse: %v", err)
-	}
+	atts := runJSONArray(t, "mail", "messages", "attachments", "list", msgID)
 	if len(atts) == 0 {
 		t.Skip("no attachments after default filter")
 	}
-	for _, a := range atts {
+	for _, row := range atts {
+		a, _ := row.(map[string]interface{})
 		d, ok := a["disposition"].(string)
 		if !ok {
 			t.Errorf("attachment missing 'disposition' field: %v", a)
@@ -722,7 +717,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 	msgID := findMessageWithMixedAttachments(t)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "messages", "attachments", "download", msgID, "--all", "--output-dir", dir)
+	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID)
 
 	written, err := os.ReadDir(dir)
 	if err != nil {
@@ -732,8 +727,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 
 	// --include-inline should yield strictly more files.
 	dir2 := t.TempDir()
-	runOK(t, "mail", "messages", "attachments", "download", msgID,
-		"--all", "--include-inline", "--output-dir", dir2)
+	runOK(t, "mail", "messages", "attachments", "download", "--include-inline", "--output-dir", dir2, msgID)
 	written2, err := os.ReadDir(dir2)
 	if err != nil {
 		t.Fatalf("readdir2: %v", err)
@@ -785,17 +779,21 @@ func TestMailConversationsReadSummary(t *testing.T) {
 		t.Skip("conversation has 0 messages")
 	}
 
+	// One line per message is a table, so the rows sit under a header and a rule.
 	stdout := runOK(t, "mail", "conversations", "get", "--summary", convID)
 	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
-	if len(lines) != wantCount {
-		t.Errorf("expected %d summary lines, got %d:\n%s", wantCount, len(lines), stdout)
+	if len(lines) != wantCount+2 {
+		t.Fatalf("expected a header, a rule and %d rows, got %d lines:\n%s", wantCount, len(lines), stdout)
+	}
+	for _, want := range []string{"#", "DATE", "FROM", "PREVIEW"} {
+		assertContains(t, lines[0], want)
 	}
 
-	// Each line must match: <N>/<M>  <YYYY-MM-DD HH:MM>  <addr>  <preview>
-	re := regexp.MustCompile(`^\d+/\d+\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}\s+\S+@\S+\s+`)
-	for i, line := range lines {
+	// Each row must match: <N>/<M>  <YYYY-MM-DD HH:MM>  <addr>  <preview>
+	re := regexp.MustCompile(`^\d+/\d+\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}\s+\S`)
+	for i, line := range lines[2:] {
 		if !re.MatchString(line) {
-			t.Errorf("line %d does not match summary shape: %q", i, line)
+			t.Errorf("row %d does not match summary shape: %q", i, line)
 		}
 	}
 }
@@ -804,17 +802,10 @@ func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 	stdout := runOK(t, "mail", "conversations", "get", "--summary", convID)
-	// Some line must end with `(N attachments)`.
-	re := regexp.MustCompile(`\(\d+ attachments\)\s*$`)
-	found := false
-	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
-		if re.MatchString(line) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected at least one summary line ending with `(N attachments)`:\n%s", truncateOutput(stdout))
+	// A row carrying an attachment is marked in the FLAGS column.
+	assertContains(t, stdout, "FLAGS")
+	if !strings.Contains(stdout, "\U0001F4CE") {
+		t.Errorf("expected a row flagged as carrying an attachment:\n%s", truncateOutput(stdout))
 	}
 }
 
@@ -904,12 +895,9 @@ func TestMailConversationsReadBodyOnly(t *testing.T) {
 func TestMailMessagesReadShowsAttachments(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 	stdout := runOK(t, "mail", "messages", "get", msgID)
-	if !strings.Contains(stdout, "\n---\n") {
-		t.Errorf("expected '---' separator before footer in:\n%s", truncateOutput(stdout))
-	}
-	if !strings.Contains(stdout, "Attachments (") {
-		t.Errorf("expected 'Attachments (N):' line, got:\n%s", truncateOutput(stdout))
-	}
+	assertContains(t, stdout, "Attachments")
+	assertContains(t, stdout, "NAME")
+	assertContains(t, stdout, "SIZE")
 }
 
 func TestMailMessagesReadNoAttachmentsNoFooter(t *testing.T) {
@@ -942,14 +930,16 @@ func TestMailMessagesReadFormatRawNoFooter(t *testing.T) {
 func TestMailMessagesReadIncludeInlineTags(t *testing.T) {
 	msgID := findMessageWithMixedAttachments(t)
 
+	// The attachments trailer is the same table the list verb draws, so an inline
+	// attachment shows up as a DISPOSITION column rather than a marker.
 	default1 := runOK(t, "mail", "messages", "get", msgID)
-	if strings.Contains(default1, "(inline)") {
-		t.Errorf("default footer should not show (inline) markers:\n%s", truncateOutput(default1))
+	if strings.Contains(default1, "DISPOSITION") {
+		t.Errorf("default footer should not show the DISPOSITION column:\n%s", truncateOutput(default1))
 	}
 
 	incl := runOK(t, "mail", "messages", "get", "--include-inline", msgID)
-	if !strings.Contains(incl, "(inline)") {
-		t.Errorf("--include-inline footer should show at least one (inline) marker:\n%s", truncateOutput(incl))
+	if !strings.Contains(incl, "DISPOSITION") || !strings.Contains(incl, "inline") {
+		t.Errorf("--include-inline footer should show an inline attachment:\n%s", truncateOutput(incl))
 	}
 }
 
@@ -957,9 +947,8 @@ func TestMailConversationsReadShowsAttachmentsPerMessage(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 	stdout := runOK(t, "mail", "conversations", "get", convID)
-	if !strings.Contains(stdout, "Attachments (") {
-		t.Errorf("conversation render should contain a per-message attachments footer:\n%s", truncateOutput(stdout))
-	}
+	assertContains(t, stdout, "Attachments")
+	assertContains(t, stdout, "NAME")
 }
 
 func TestMailConversationsReadIncludeInline(t *testing.T) {
@@ -967,13 +956,13 @@ func TestMailConversationsReadIncludeInline(t *testing.T) {
 	convID := findConversationFor(t, msgID)
 
 	default1 := runOK(t, "mail", "conversations", "get", convID)
-	if strings.Contains(default1, "(inline)") {
-		t.Errorf("default conv read should not include (inline):\n%s", truncateOutput(default1))
+	if strings.Contains(default1, "DISPOSITION") {
+		t.Errorf("default conv read should not show the DISPOSITION column:\n%s", truncateOutput(default1))
 	}
 
 	incl := runOK(t, "mail", "conversations", "get", "--include-inline", convID)
-	if !strings.Contains(incl, "(inline)") {
-		t.Errorf("--include-inline conv read should include (inline):\n%s", truncateOutput(incl))
+	if !strings.Contains(incl, "DISPOSITION") || !strings.Contains(incl, "inline") {
+		t.Errorf("--include-inline conv read should show an inline attachment:\n%s", truncateOutput(incl))
 	}
 }
 
@@ -991,15 +980,12 @@ func TestMailConversationsAttachmentsList(t *testing.T) {
 	}
 
 	// JSON: each entry carries message_id + disposition.
-	raw := runOK(t, "--output", "json", "mail", "conversations", "attachments", "list", convID)
-	var atts []map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &atts); err != nil {
-		t.Fatalf("parse JSON: %v", err)
-	}
+	atts := runJSONArray(t, "mail", "conversations", "attachments", "list", convID)
 	if len(atts) == 0 {
 		t.Skip("no attachments after default filter")
 	}
-	for _, a := range atts {
+	for _, row := range atts {
+		a, _ := row.(map[string]interface{})
 		if _, ok := a["message_id"].(string); !ok {
 			t.Errorf("attachment missing message_id: %v", a)
 		}
@@ -1024,15 +1010,14 @@ func TestMailConversationsAttachmentsDownloadAll(t *testing.T) {
 	convID := findConversationFor(t, msgID)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", convID,
-		"--all", "--output-dir", dir)
+	runOK(t, "mail", "conversations", "attachments", "download", "--output-dir", dir, convID)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("readdir: %v", err)
 	}
 	if len(entries) == 0 {
-		t.Error("--all wrote no files")
+		t.Error("downloading every attachment wrote no files")
 	}
 }
 
@@ -1041,13 +1026,11 @@ func TestMailConversationsAttachmentsDownloadAllSkipsInline(t *testing.T) {
 	convID := findConversationFor(t, msgID)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", convID,
-		"--all", "--output-dir", dir)
+	runOK(t, "mail", "conversations", "attachments", "download", "--output-dir", dir, convID)
 	default1, _ := os.ReadDir(dir)
 
 	dir2 := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", convID,
-		"--all", "--include-inline", "--output-dir", dir2)
+	runOK(t, "mail", "conversations", "attachments", "download", "--include-inline", "--output-dir", dir2, convID)
 	inclAll, _ := os.ReadDir(dir2)
 
 	if len(inclAll) <= len(default1) {
@@ -1061,8 +1044,7 @@ func TestMailConversationsAttachmentsDownloadOneByID(t *testing.T) {
 	convID := findConversationFor(t, msgID)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", convID, attID,
-		"--output-dir", dir)
+	runOK(t, "mail", "conversations", "attachments", "download", "--output-dir", dir, convID, attID)
 
 	dest := filepath.Join(dir, attName)
 	info, err := os.Stat(dest)
@@ -1083,16 +1065,20 @@ func TestMailConversationsAttachmentsDownloadUnknownID(t *testing.T) {
 	if code != 3 {
 		t.Errorf("expected exit 3 for unknown attachment, got %d", code)
 	}
-	if !strings.Contains(stderr, "not found in conversation") {
-		t.Errorf("expected 'not found in conversation' in stderr, got: %s", stderr)
-	}
+	assertContains(t, stderr, "in that thread")
 }
 
 // ── labels ──
 
 func TestMailLabelsList(t *testing.T) {
+	name := testID() + "-list"
+	id := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete %s", id),
+		"mail", "settings", "labels", "delete", "--", id)
+
 	stdout := runOK(t, "mail", "settings", "labels", "list")
 	assertContains(t, stdout, "NAME")
+	assertContains(t, stdout, name)
 }
 
 func TestMailLabelsCreateDeleteLabel(t *testing.T) {
@@ -1109,18 +1095,23 @@ func TestMailLabelsCreateDeleteLabel(t *testing.T) {
 
 	list := runOK(t, "mail", "settings", "labels", "list")
 	assertContains(t, list, name)
-	assertContains(t, list, "LABEL")
 }
 
-func TestMailLabelsCreateFolder(t *testing.T) {
+// A folder is its own collection, not a label wearing a flag.
+func TestMailFoldersCreateDelete(t *testing.T) {
 	name := testID() + "-folder"
-	stdout := runOK(t, "mail", "settings", "labels", "create", "--name", name, "--folder", "--color", "#8080FF")
+	stdout := runOK(t, "mail", "settings", "folders", "create", "--name", name, "--color", "#8080FF")
 	id := strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli mail settings labels delete -- %s", id),
-		"mail", "settings", "labels", "delete", "--", id)
-	list := runOK(t, "mail", "settings", "labels", "list")
+	if !looksLikeID(id) {
+		t.Fatalf("expected bare ID on stdout, got %q", stdout)
+	}
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli mail settings folders delete %s", id),
+		"mail", "settings", "folders", "delete", "--", id)
+
+	list := runOK(t, "mail", "settings", "folders", "list")
 	assertContains(t, list, name)
-	assertContains(t, list, "FOLDER")
+	assertContains(t, list, "PATH")
+	assertNotContains(t, runOK(t, "mail", "settings", "labels", "list"), name)
 }
 
 // ── filters ──
@@ -1137,15 +1128,35 @@ func TestMailFiltersCRUD(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail settings filters delete -- %s", id),
 		"mail", "settings", "filters", "delete", "--", id)
 
-	list := runOK(t, "mail", "settings", "filters", "list")
-	assertContains(t, list, name)
-	assertContains(t, list, "enabled")
+	assertContains(t, runOK(t, "mail", "settings", "filters", "list"), name)
+	if got := filterStatus(t, id); got != 1 {
+		t.Errorf("a new filter should be on, got status %d", got)
+	}
 
 	runOK(t, "mail", "settings", "filters", "disable", "--", id)
-	assertContains(t, runOK(t, "mail", "settings", "filters", "list"), "disabled")
+	if got := filterStatus(t, id); got != 0 {
+		t.Errorf("status after disable = %d, want 0", got)
+	}
 
 	runOK(t, "mail", "settings", "filters", "enable", "--", id)
-	assertContains(t, runOK(t, "mail", "settings", "filters", "list"), "enabled")
+	if got := filterStatus(t, id); got != 1 {
+		t.Errorf("status after enable = %d, want 1", got)
+	}
+}
+
+// filterStatus reads one filter's on/off state, which the table spells as a yes
+// or a no under ENABLED.
+func filterStatus(t *testing.T, id string) int {
+	t.Helper()
+	for _, row := range runJSONArray(t, "--full-ids", "mail", "settings", "filters", "list") {
+		f, _ := row.(map[string]interface{})
+		if f["id"] == id {
+			status, _ := f["status"].(float64)
+			return int(status)
+		}
+	}
+	t.Fatalf("filter %s is not in the list", id)
+	return -1
 }
 
 // ── addresses ──
@@ -1169,6 +1180,15 @@ func keysOf(m map[string]interface{}) []string {
 // looksLikeID matches a Proton base64 ID (~88 chars ending in ==).
 func looksLikeID(s string) bool {
 	return len(s) > 60 && strings.HasSuffix(s, "==")
+}
+
+// looksLikePairRef reports whether s is a two-part reference - the shape a Pass
+// item or a calendar event is addressed by, and the shape creating one answers
+// with. looksLikeID accepts it too, so asserting the halves is what tells the
+// two apart.
+func looksLikePairRef(s string) bool {
+	left, right, ok := strings.Cut(s, "/")
+	return ok && looksLikeID(left) && looksLikeID(right)
 }
 
 // findMessage polls a folder for a message with the given subject.
@@ -1214,7 +1234,7 @@ func TestMailSendWithAttachment(t *testing.T) {
 	if err := os.MkdirAll(dlDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runOK(t, "mail", "messages", "attachments", "download", inboxID, "--all", "--output-dir", dlDir)
+	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dlDir, inboxID)
 	got, err := os.ReadFile(filepath.Join(dlDir, "note.txt"))
 	if err != nil {
 		t.Fatalf("read downloaded attachment: %v", err)
@@ -1348,7 +1368,7 @@ func TestMailSendScheduledDryRunEchoesTime(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
 		"--to", selfEmail(), "--subject", subject,
 		"--body", "x", "--send-at", sendAt.Format("2006-01-02T15:04"))
-	assertContains(t, stderr, "Scheduled")
+	assertContains(t, stderr, "would schedule")
 	assertContains(t, stderr, sendAt.Format("2006-01-02"))
 	if messageIDInFolder("scheduled", subject) != "" {
 		t.Error("dry-run should not create a scheduled message")
@@ -1472,16 +1492,16 @@ func TestMailSendEncryptedForOutside(t *testing.T) {
 	}
 }
 
-func TestMailLabelsNestedFolderReportsParent(t *testing.T) {
+func TestMailFoldersNestedReportsParent(t *testing.T) {
 	parentName := testID() + "-parent"
-	parentID := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", parentName, "--folder", "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton-cli mail settings labels delete %s", parentID),
-		"mail", "settings", "labels", "delete", "--", parentID)
+	parentID := strings.TrimSpace(runOK(t, "mail", "settings", "folders", "create", "--name", parentName, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton-cli mail settings folders delete %s", parentID),
+		"mail", "settings", "folders", "delete", "--", parentID)
 
 	childName := testID() + "-child"
-	childID := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", childName, "--folder", "--parent", parentID, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete child folder: proton-cli mail settings labels delete %s", childID),
-		"mail", "settings", "labels", "delete", "--", childID)
+	childID := strings.TrimSpace(runOK(t, "mail", "settings", "folders", "create", "--name", childName, "--parent", parentID, "--color", "#8080FF"))
+	cleanupRun(t, fmt.Sprintf("Delete child folder: proton-cli mail settings folders delete %s", childID),
+		"mail", "settings", "folders", "delete", "--", childID)
 
 	data := runJSON(t, "api", "GET", "/core/v4/labels", "--query", "Type=3")
 	labels, _ := data["Labels"].([]interface{})
@@ -1547,5 +1567,5 @@ func TestMailCrossAccountDelivery(t *testing.T) {
 
 	read := runOK(t, alt("mail", "messages", "get", recvID)...)
 	assertContains(t, read, body)
-	assertField(t, read, "Sig:", "verified")
+	assertField(t, read, "Signature:", "verified")
 }

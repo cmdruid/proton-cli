@@ -45,11 +45,17 @@ var specs = map[string]kit.Setting{
 		Page: "Language and time", Desc: "Clock format",
 		Enum: kit.Ordered("locale", "24h", "12h"),
 	},
+	// Proton numbers all seven days but accepts only these four, which is also
+	// the set its own week-start selector offers.
 	"week-start": {
 		Path: settingsPath + "/weekstart", Field: "WeekStart",
 		Page: "Language and time", Desc: "First day of the week",
-		Enum: kit.Ordered("locale", "monday", "tuesday", "wednesday",
-			"thursday", "friday", "saturday", "sunday"),
+		Enum: []kit.Choice{
+			{Name: "locale", N: 0},
+			{Name: "monday", N: 1},
+			{Name: "saturday", N: 6},
+			{Name: "sunday", N: 7},
+		},
 	},
 }
 
@@ -88,7 +94,9 @@ func settingsCmd() *cobra.Command {
 				Telemetry    any
 				CrashReports any
 				HighSecurity struct{ Value any }
-				TwoFactor    struct{ Enabled any }
+				// Proton still answers with a scalar TwoFactor beside this, and an
+				// untagged field would bind to that one and fail to decode.
+				TwoFactor struct{ Enabled any } `json:"2FA"`
 			}
 		}
 		if err := json.Unmarshal(resp.Body, &env); err != nil {

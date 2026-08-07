@@ -40,8 +40,14 @@ func (d *Destination) Validate(single bool) error {
 		return Fail("--output and --output-dir cannot both be given.").
 			Hint("--output names one file; --output-dir names a directory to fill.")
 	}
-	if !single && d.output != "" && d.output != "-" {
-		return Fail("--output names one file, but several items were selected.").
+	if !single && d.output != "" {
+		// Several separate files down one stream arrive as one unusable run of
+		// bytes, so stdout is no more of an answer here than a single path is.
+		names := "--output names one file"
+		if d.output == "-" {
+			names = "--output - writes one stream"
+		}
+		return Fail("%s, but several items were selected.", names).
 			Hint("use --output-dir to write them all into a directory.")
 	}
 	return nil
@@ -210,14 +216,19 @@ func (d *Destination) Reserve(name string) (string, error) {
 	return freePath(target)
 }
 
-// Dir is the directory a download will land in, for callers that must create a
+// Dir is the directory a download will land in, for callers that must open a
 // temporary file beside the final destination.
-func (d *Destination) Dir() string {
+//
+// It creates the directory, because a caller reaches for it before Reserve has
+// had a chance to, and a temporary file cannot be opened in a directory that is
+// not there yet.
+func (d *Destination) Dir() (string, error) {
 	switch {
 	case d.output != "":
-		return filepath.Dir(d.output)
+		dir := filepath.Dir(d.output)
+		return dir, EnsureDir(dir)
 	case d.outputDir != "":
-		return d.outputDir
+		return d.outputDir, EnsureDir(d.outputDir)
 	}
-	return "."
+	return ".", nil
 }

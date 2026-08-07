@@ -42,6 +42,8 @@ type App struct {
 
 	DryRun  bool
 	FullIDs bool
+	// Yes answers every confirmation in advance, for scripts that mean it.
+	Yes bool
 
 	IDCache *idcache.Cache
 
@@ -73,6 +75,7 @@ type Options struct {
 	FullIDs    bool
 	NoColor    bool
 	NoInput    bool
+	Yes        bool
 }
 
 func New(opts Options) (*App, error) {
@@ -114,6 +117,7 @@ func New(opts Options) (*App, error) {
 		UI:       u,
 		DryRun:   opts.DryRun,
 		FullIDs:  opts.FullIDs,
+		Yes:      opts.Yes,
 		IDCache:  idcache.New(idCachePath(profileName)),
 		userID:   userID,
 		email:    email,

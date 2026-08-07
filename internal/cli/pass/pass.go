@@ -26,8 +26,8 @@ func itemRef(it passsvc.Item) string { return kit.JoinPair(it.ShareID, it.ItemID
 
 // resolveItem turns a reference into the share and item IDs the service needs.
 func resolveItem(c *kit.Invocation, ref string) (shareID, itemID string, err error) {
-	if first, second := kit.Pair(ref); first != "" {
-		return first, second, nil
+	if first, second, err := kit.ExpandPair(c.App, ref); err != nil || first != "" {
+		return first, second, err
 	}
 	return c.App.Pass.ResolveItem(c.Ctx, c.U, []string{ref})
 }

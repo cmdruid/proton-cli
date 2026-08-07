@@ -123,6 +123,17 @@ func TestTableRightAlign(t *testing.T) {
 	check(t, "table_right_align", out, errb)
 }
 
+// A collection that found nothing still answers with an array, so that reading
+// the rows out of any envelope works without a special case for "none".
+func TestTableEnvelopeIsAnArrayWhenEmpty(t *testing.T) {
+	u, out, errb := fixture(t, Options{Format: FormatJSON})
+	spec := TableSpec[message]{Noun: "messages", Columns: messageColumns(), Total: Unknown, Page: Unpaged}
+	if err := Table(u, spec, nil); err != nil {
+		t.Fatal(err)
+	}
+	check(t, "table_envelope_empty_json", out, errb)
+}
+
 // Every collection has the same envelope, so one consumer can read any list.
 func TestTableEnvelope(t *testing.T) {
 	u, out, errb := fixture(t, Options{Format: FormatJSON})
