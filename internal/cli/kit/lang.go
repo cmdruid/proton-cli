@@ -89,6 +89,16 @@ var Verbs = map[string]string{
 	"api":        "send a raw authenticated request",
 }
 
+// Irreversible lists the verbs whose work neither this CLI nor Proton's own
+// clients can take back. Every command whose verb is in here stops for a yes,
+// which kit.Mutate guarantees structurally from the action it reports.
+//
+// `uninstall` belongs beside the two removals because it is the strictest case
+// of the same thing: afterwards there is no proton-cli left to undo it with.
+var Irreversible = map[string]bool{
+	"delete": true, "empty": true, "uninstall": true,
+}
+
 // Mutating lists the verbs that change state. Every command whose verb is in
 // here has to honour --dry-run, which kit.Mutate guarantees structurally.
 var Mutating = map[string]bool{

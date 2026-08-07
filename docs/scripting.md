@@ -130,10 +130,12 @@ set -euo pipefail
 proton-cli mail messages move --into archive --from newsletter@example.com --older-than 7d
 
 # bin anything left in spam after a month
-proton-cli mail messages delete --folder spam --older-than 30d
+proton-cli mail messages delete --folder spam --older-than 30d --yes
 ```
 
 Run it once with `--dry-run` appended to each command before trusting it.
+
+The `--yes` is not optional there. A cron job has no terminal, so anything that removes permanently, or removes what a filter picked out, refuses rather than waits for an answer nobody can give. See [When it asks first](language.md#when-it-asks-first).
 
 ### Systemd timer
 

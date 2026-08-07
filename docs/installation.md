@@ -155,10 +155,10 @@ If you used a package manager, update with it (`apt upgrade`, `brew upgrade`, `w
 If you used the install script or a manual download, proton-cli updates itself:
 
 ```bash
-proton-cli update           # install the latest release
-proton-cli update --check   # only report whether an update exists
-proton-cli update 1.9.13    # install a specific version
-proton-cli update --force   # reinstall the current version
+proton-cli update             # install the latest release
+proton-cli update --check     # only report whether an update exists
+proton-cli update 1.9.13      # install a specific version
+proton-cli update --reinstall # install again even if already current
 ```
 
 ## Uninstalling
@@ -168,10 +168,13 @@ Package installs go out the way they came in (`apt remove proton-cli`, `brew uni
 Script and manual installs can remove themselves:
 
 ```bash
-proton-cli uninstall                 # dry run: show what would be removed
-proton-cli uninstall --yes           # remove the binary
+proton-cli uninstall --dry-run       # show what would be removed
+proton-cli uninstall                 # ask, then remove the binary
+proton-cli uninstall --yes           # remove it without asking
 proton-cli uninstall --yes --purge   # also delete saved sessions and the ID cache
 ```
+
+Uninstalling cannot be undone from here, so it asks first, like every other removal ([why](language.md#when-it-asks-first)). `--yes` is the answer given in advance.
 
 ## Building from source
 

@@ -110,14 +110,52 @@ Try:   pass a REF, or a filter such as --unread, --starred, --from or --older-th
        Use --all to target a whole folder.
 ```
 
-`--all` with nothing to narrow it covers a whole Drive, which is broad enough to be worth asking about:
+## When it asks first
+
+proton-cli asks before it removes something it cannot put back, and before it removes things you did not name. Nothing else ever stops to ask.
+
+Those are the two ways a removal surprises you: the wrong verb, and the wrong filter.
+
+| | you named it | a filter found it |
+| --- | --- | --- |
+| `delete` · `empty` · `uninstall` | asks | asks |
+| `trash` | just does it | asks |
+| everything else | just does it | just does it |
+
+The question shows the things themselves, never a count:
 
 ```console
-$ proton-cli drive items delete --all
---all with no other filter covers your whole drive. Continue? [y/N]
+$ proton-cli mail messages delete --from newsletter@example.com --older-than 90d
+Would delete 3 messages:
+
+ID        FROM          SUBJECT              DATE
+────────  ────────────  ───────────────────  ────────────────
+hR8sT2vW  Example News  January round-up     2026-01-08 06:00
+kM4nP9qL  Example News  December round-up    2025-12-08 06:00
+zC7bX1yE  Example News  November round-up    2025-11-08 06:00
+
+This cannot be undone. Continue? [y/N]
 ```
 
-A script has nobody to ask, so there the question is an error instead, and `--yes` is the answer given in advance.
+Only a permanent removal says *This cannot be undone*, because only a permanent removal cannot be. Trashing is recoverable, so it asks the shorter question and `restore` puts things back.
+
+Anything but a plain `y` means no, including pressing enter.
+
+### In a script
+
+A script has nobody to ask, so the question becomes an error and nothing is removed:
+
+```console
+$ proton-cli mail messages delete --folder spam --older-than 30d
+Error: Would delete 112 messages. This cannot be undone.
+Try:   --yes to confirm, or --dry-run to see what it would touch.
+```
+
+`--yes` is the answer given in advance:
+
+```bash
+proton-cli mail messages delete --folder spam --older-than 30d --yes
+```
 
 ## Dry runs
 

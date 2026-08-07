@@ -39,7 +39,7 @@ proton-cli contacts groups list
 proton-cli contacts groups create --name Team --color "#8080FF"
 proton-cli contacts groups add GROUP_ID jane john
 proton-cli contacts groups remove GROUP_ID jane
-proton-cli contacts groups delete GROUP_ID
+proton-cli contacts groups delete Team                # by name, or by group ID
 ```
 
 Group colors have to be Proton accent colors; an invalid value prints the allowed list.

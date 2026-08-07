@@ -10,6 +10,8 @@ import (
 	"testing"
 	"unicode"
 
+	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -359,21 +361,9 @@ func TestOnlyOnePlaceReadsCredentialsFromStdin(t *testing.T) {
 
 // ── the vocabulary is closed ──
 
-// verbs is every word that may end a command path. Adding one is a deliberate
-// act, not a side effect of writing a new command.
-var verbs = map[string]bool{
-	"list": true, "get": true, "search": true, "create": true, "update": true,
-	"delete": true, "trash": true, "restore": true, "empty": true, "move": true,
-	"copy": true, "upload": true, "download": true, "export": true, "send": true,
-	"reply": true, "forward": true, "unschedule": true, "label": true,
-	"unlabel": true, "star": true, "unstar": true, "read": true, "unread": true,
-	"enable": true, "disable": true, "link": true, "unlink": true, "add": true,
-	"remove": true, "accept": true, "decline": true, "favorite": true,
-	"unfavorite": true, "pin": true, "unpin": true, "respond": true, "set": true,
-	"login": true, "logout": true, "revoke": true, "options": true,
-	"update-self": true, "uninstall": true, "version": true, "completion": true,
-	"api": true,
-}
+// The vocabulary is read from kit rather than restated here. A test that keeps
+// its own copy of the list it is checking will eventually be checking the copy:
+// this one had drifted to hold a verb the CLI no longer has.
 
 func TestEveryVerbIsInTheVocabulary(t *testing.T) {
 	leaves, _ := partition(t)
@@ -381,8 +371,66 @@ func TestEveryVerbIsInTheVocabulary(t *testing.T) {
 		if c.Name() == "proton-cli" {
 			continue
 		}
-		if !verbs[c.Name()] {
+		if _, ok := kit.Verbs[c.Name()]; !ok {
 			t.Errorf("%s: %q is not in the declared verb vocabulary", cmdPath(c), c.Name())
+		}
+	}
+}
+
+// ── rule 12: what cannot be taken back is declared, not remembered ──
+
+// The CLI stops for a yes for one reason: something is about to be removed. The
+// verbs that can never be taken back and the actions that say so have to name
+// the same set, because the verb is what a user reads in the help and the action
+// is what actually decides at run time. Two lists that can disagree are one bug
+// away from a `delete` that never asks.
+func TestIrreversibleVerbsAndActionsAgree(t *testing.T) {
+	fromActions := map[string]bool{}
+	for _, a := range ui.Actions {
+		if a.Cost == ui.Forever {
+			fromActions[a.Verb] = true
+		}
+	}
+	for verb := range kit.Irreversible {
+		if !fromActions[verb] {
+			t.Errorf("%q is declared irreversible but no action reports it as Forever", verb)
+		}
+	}
+	for verb := range fromActions {
+		if !kit.Irreversible[verb] {
+			t.Errorf("an action reports %q as Forever, but the verb is not declared irreversible", verb)
+		}
+	}
+}
+
+// Every leaf named by an irreversible verb has to be reachable as one, so a
+// command cannot quietly sit outside the guard by being spelled differently.
+func TestIrreversibleVerbsAreMutatingVerbs(t *testing.T) {
+	for verb := range kit.Irreversible {
+		if _, ok := kit.Verbs[verb]; !ok {
+			t.Errorf("%q is declared irreversible but is not a verb", verb)
+		}
+		if !kit.Mutating[verb] {
+			t.Errorf("%q is declared irreversible but is not declared mutating", verb)
+		}
+	}
+}
+
+// Whether a change happens at all is settled globally, so no command may
+// redefine the two flags that settle it.
+//
+// A local --yes is not a naming clash to be tidied up; it is a command deciding
+// for itself what consent means, which is the one thing the guard cannot
+// survive. `uninstall` used to spell "actually do it" that way, leaving --yes
+// meaning "proceed without asking" everywhere except the command with the most
+// to lose.
+func TestNoCommandRedefinesConsent(t *testing.T) {
+	leaves, groups := partition(t)
+	for _, c := range append(leaves, groups...) {
+		for _, name := range []string{"yes", "dry-run"} {
+			if f := c.Flags().Lookup(name); f != nil && c.InheritedFlags().Lookup(name) == nil {
+				t.Errorf("%s declares its own --%s; that flag is the root's alone", cmdPath(c), name)
+			}
 		}
 	}
 }

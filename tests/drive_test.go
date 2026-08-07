@@ -423,22 +423,27 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Final delete: proton-cli drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
+	// Noted before the trash: a trashed item has no path any more, and its name
+	// arrives encrypted, so its own ID is the only thing that still identifies
+	// it. Picking the first folder in the trash instead would restore whatever
+	// else happened to be in there.
+	linkID, _ := runJSON(t, "drive", "items", "get", folder)["link_id"].(string)
+	if linkID == "" {
+		t.Fatal("drive items get should report the folder's link ID")
+	}
+
 	// Non-permanent → trash
 	runOK(t, "drive", "items", "trash", folder)
 
 	// Should appear in trash
-	entries := runJSONArray(t, "drive", "trash", "list")
-	var linkID string
-	for _, e := range entries {
-		m := e.(map[string]interface{})
-		typeCode, _ := m["type"].(float64)
-		if int(typeCode) == 1 {
-			linkID, _ = m["link_id"].(string)
-			break
+	found := false
+	for _, e := range runJSONArray(t, "drive", "trash", "list") {
+		if e.(map[string]interface{})["link_id"] == linkID {
+			found = true
 		}
 	}
-	if linkID == "" {
-		t.Fatal("expected at least one folder in trash after delete")
+	if !found {
+		t.Fatal("the trashed folder should appear in the trash")
 	}
 
 	// Restore (IDs only - trashed names are encrypted)
@@ -446,14 +451,14 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 
 	// It should be back in root
 	top := runJSONArray(t, "drive", "items", "list")
-	found := false
+	back := false
 	folderName := strings.TrimPrefix(folder, "/")
 	for _, c := range top {
 		if c.(map[string]interface{})["name"].(string) == folderName {
-			found = true
+			back = true
 		}
 	}
-	if !found {
+	if !back {
 		t.Error("restored folder should be back in root")
 	}
 }
@@ -489,16 +494,22 @@ func TestDriveBatchDeleteRequiresInput(t *testing.T) {
 	assertContains(t, stderr, "Nothing selected")
 }
 
-// --all with nothing to narrow it covers the whole drive, so it is confirmed
-// rather than assumed. A test is not a terminal, so the only way through is
-// --yes, and its absence has to stop the command rather than hang it.
+// Deleting is permanent, so it is confirmed rather than assumed - and never more
+// so than with --all, which covers the whole drive. A test is not a terminal, so
+// the only way through is --yes, and its absence has to stop the command rather
+// than hang it.
+//
+// This one runs without --yes on purpose. Nothing else in the suite does, and if
+// the guard ever stopped working this is the test standing between a stray --all
+// and the account's entire Drive.
 func TestDriveBatchDeleteAllNeedsConfirming(t *testing.T) {
 	_, stderr, code := run(t, "drive", "items", "delete", "--all")
-	if code == 0 {
-		t.Error("expected --all alone to be stopped for confirmation")
+	if code != 1 {
+		t.Fatalf("--all alone must be stopped for confirmation, got exit %d: %s", code, stderr)
 	}
-	assertContains(t, stderr, "--all")
+	assertContains(t, stderr, "cannot be undone")
 	assertContains(t, stderr, "--yes")
+	assertContains(t, stderr, "--dry-run")
 }
 
 // ── folders ──

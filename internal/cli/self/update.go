@@ -27,10 +27,10 @@ itself. If proton-cli was installed with a package manager (apt, dnf,
 apk, Homebrew, winget, npm, Nix), update it with that package manager.
 
 Examples:
-  proton-cli update            # update to the latest release
-  proton-cli update --check    # report whether an update is available
-  proton-cli update 1.9.11     # install a specific version
-  proton-cli update --force    # reinstall the latest even if up to date`,
+  proton-cli update             # update to the latest release
+  proton-cli update --check     # report whether an update is available
+  proton-cli update 1.9.11      # install a specific version
+  proton-cli update --reinstall # install the latest even if up to date`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			target := ""

@@ -107,6 +107,8 @@ proton-cli drive trash restore LINK_ID...
 proton-cli drive trash empty        # permanent, across all volumes
 ```
 
+`empty` lists what it would destroy and asks first. See [When it asks first](../language.md#when-it-asks-first).
+
 ## Photos
 
 ```bash
@@ -130,8 +132,8 @@ proton-cli drive photos albums create --name Holiday
 proton-cli drive photos list --album ALBUM_LINK_ID
 proton-cli drive photos albums add ALBUM_LINK_ID PHOTO_LINK_ID...
 proton-cli drive photos albums remove ALBUM_LINK_ID PHOTO_LINK_ID...
-proton-cli drive photos albums delete ALBUM_LINK_ID
-proton-cli drive photos albums delete ALBUM_LINK_ID --delete-photos
+proton-cli drive photos albums delete Holiday                    # by name, or by link ID
+proton-cli drive photos albums delete Holiday --delete-photos
 ```
 
 ## Settings

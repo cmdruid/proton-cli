@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
@@ -14,13 +15,35 @@ import (
 func filtersCmd() *cobra.Command {
 	c := &cobra.Command{Use: "filters", Short: "Server-side Sieve filters"}
 	c.AddCommand(
-		filtersListCmd(), filtersCreateCmd(), filtersUpdateCmd(), filtersDeleteCmd(),
-		filterToggleCmd("enable", "Enable filters", ui.Enabled,
+		filtersListCmd(), filtersCreateCmd(), filtersUpdateCmd(),
+		filterVerbCmd("delete", "Delete filters", ui.Deleted,
+			func(c *kit.Invocation, id string) error { return c.App.Mail.FilterDelete(c.Ctx, id) }),
+		filterVerbCmd("enable", "Enable filters", ui.Enabled,
 			func(c *kit.Invocation, id string) error { return c.App.Mail.FilterEnable(c.Ctx, id) }),
-		filterToggleCmd("disable", "Disable filters", ui.Disabled,
+		filterVerbCmd("disable", "Disable filters", ui.Disabled,
 			func(c *kit.Invocation, id string) error { return c.App.Mail.FilterDisable(c.Ctx, id) }),
 	)
 	return c
+}
+
+func filterColumns() []ui.Column[mailsvc.Filter] {
+	return []ui.Column[mailsvc.Filter]{
+		{Header: "ID", ID: true, Cell: func(f mailsvc.Filter) string { return f.ID }},
+		{Header: "NAME", Flex: true, Cell: func(f mailsvc.Filter) string { return f.Name }},
+		{Header: "ENABLED", Cell: func(f mailsvc.Filter) string { return yesNo(f.Status == 1) }},
+		{Header: "VERSION", Right: true, Cell: func(f mailsvc.Filter) string {
+			return strconv.Itoa(f.Version)
+		}},
+	}
+}
+
+func filterList(c *kit.Invocation) *kit.Lookup[mailsvc.Filter] {
+	return &kit.Lookup[mailsvc.Filter]{
+		Kind:   "filter",
+		Load:   func(ctx context.Context) ([]mailsvc.Filter, error) { return c.App.Mail.FiltersList(ctx) },
+		ID:     func(f mailsvc.Filter) string { return f.ID },
+		Handle: func(f mailsvc.Filter) string { return f.Name },
+	}
 }
 
 func filtersListCmd() *cobra.Command {
@@ -29,22 +52,14 @@ func filtersListCmd() *cobra.Command {
 		Short: "List your filters",
 		Args:  cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
-			filters, err := c.App.Mail.FiltersList(c.Ctx)
+			rows, err := filterList(c).Rows(c.Ctx)
 			if err != nil {
 				return err
 			}
 			return kit.List(c, ui.TableSpec[mailsvc.Filter]{
-				Noun:  "filters",
+				Noun: "filters", Columns: filterColumns(),
 				Total: ui.Unknown, Page: ui.Unpaged,
-				Columns: []ui.Column[mailsvc.Filter]{
-					{Header: "ID", ID: true, Cell: func(f mailsvc.Filter) string { return f.ID }},
-					{Header: "NAME", Flex: true, Cell: func(f mailsvc.Filter) string { return f.Name }},
-					{Header: "ENABLED", Cell: func(f mailsvc.Filter) string { return yesNo(f.Status == 1) }},
-					{Header: "VERSION", Right: true, Cell: func(f mailsvc.Filter) string {
-						return strconv.Itoa(f.Version)
-					}},
-				},
-			}, filters, func(f mailsvc.Filter) []string { return []string{f.ID} })
+			}, rows, func(f mailsvc.Filter) []string { return []string{f.ID} })
 		}),
 	}
 }
@@ -109,36 +124,25 @@ func filtersUpdateCmd() *cobra.Command {
 	return c
 }
 
-func filtersDeleteCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "delete REF...",
-		Short: "Delete filters",
-		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
-			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "filters", Count: len(c.Args), IDs: c.Args,
-			}, func() error {
-				for _, id := range c.Args {
-					if err := c.App.Mail.FilterDelete(c.Ctx, id); err != nil {
-						return err
-					}
-				}
-				return nil
-			})
-		}),
-	}
-}
-
-func filterToggleCmd(use, short string, action ui.Action, apply func(*kit.Invocation, string) error) *cobra.Command {
+// filterVerbCmd builds every verb that acts on named filters. They differ only
+// in what they do to each one, so they share how the filters are found - which
+// is what lets `delete Newsletters` work as well as `delete FILTER_ID`.
+func filterVerbCmd(use, short string, action ui.Action, apply func(*kit.Invocation, string) error) *cobra.Command {
 	return &cobra.Command{
 		Use:   use + " REF...",
 		Short: short,
 		Args:  cobra.MinimumNArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+			sel, err := kit.SelectFrom(c, "filters", filterColumns(), filterList(c))
+			if err != nil {
+				return err
+			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: action, Kind: "filters", Count: len(c.Args), IDs: c.Args,
+				Action: action, Kind: "filters", Count: sel.Len(), IDs: sel.IDs,
+				Name:    kit.Sole(sel.Rows, func(f mailsvc.Filter) string { return f.Name }),
+				Preview: sel.Preview(),
 			}, func() error {
-				for _, id := range c.Args {
+				for _, id := range sel.IDs {
 					if err := apply(c, id); err != nil {
 						return err
 					}

@@ -5,9 +5,31 @@ import (
 	"strings"
 )
 
-// Action names a mutation in the three grammatical forms the CLI needs: the
-// past tense for a confirmation, the infinitive for a dry-run preview, and a
-// stable key for machine output.
+// Consequence is how much a mutation is worth stopping for.
+//
+// The CLI prompts for exactly one reason: something is about to be removed. The
+// two hazards that makes real are different, so they are named separately - a
+// wrong verb (`delete` typed where `trash` was meant) is dangerous however few
+// things it touches, while a wrong filter is only dangerous because it selected
+// things the user never named.
+type Consequence int
+
+const (
+	// Ordinary changes are made without asking. Almost everything is ordinary:
+	// a move, a label, a star is cheap to look at and cheaper to reverse.
+	Ordinary Consequence = iota
+	// OutOfSight takes things out of the working set but leaves them
+	// recoverable. Worth a question only when a filter chose them, since a
+	// reference typed by hand carries no surprise.
+	OutOfSight
+	// Forever cannot be undone by this CLI or by Proton's own clients, so it is
+	// always asked about and always says so.
+	Forever
+)
+
+// Action names a mutation in the three grammatical forms the CLI needs - the
+// past tense for a confirmation, the infinitive for a preview, and a stable key
+// for machine output - plus how much it is worth stopping for.
 //
 // The set below is the complete vocabulary of things this CLI does. A command
 // that wants a word not in this list is a command that has invented one.
@@ -15,54 +37,65 @@ type Action struct {
 	Past string // "Moved"  → "✓ Moved 3 messages to trash."
 	Verb string // "move"   → "Dry run - would move 3 messages to trash:"
 	Key  string // "moved"  → {"action": "moved"}
+	Cost Consequence
 }
 
 var (
-	Created      = Action{"Created", "create", "created"}
-	Updated      = Action{"Updated", "update", "updated"}
-	Deleted      = Action{"Deleted", "delete", "deleted"}
-	Trashed      = Action{"Moved", "move", "trashed"}
-	Restored     = Action{"Restored", "restore", "restored"}
-	Emptied      = Action{"Emptied", "empty", "emptied"}
-	Moved        = Action{"Moved", "move", "moved"}
-	Copied       = Action{"Copied", "copy", "copied"}
-	Uploaded     = Action{"Uploaded", "upload", "uploaded"}
-	Downloaded   = Action{"Downloaded", "download", "downloaded"}
-	Exported     = Action{"Exported", "export", "exported"}
-	Sent         = Action{"Sent", "send", "sent"}
-	Scheduled    = Action{"Scheduled", "schedule", "scheduled"}
-	Unscheduled  = Action{"Unscheduled", "unschedule", "unscheduled"}
-	Saved        = Action{"Saved", "save", "saved"}
-	Labelled     = Action{"Labelled", "label", "labelled"}
-	Unlabelled   = Action{"Unlabelled", "unlabel", "unlabelled"}
-	Starred      = Action{"Starred", "star", "starred"}
-	Unstarred    = Action{"Unstarred", "unstar", "unstarred"}
-	MarkedRead   = Action{"Marked", "mark", "marked_read"}
-	MarkedUnread = Action{"Marked", "mark", "marked_unread"}
-	Enabled      = Action{"Enabled", "enable", "enabled"}
-	Disabled     = Action{"Disabled", "disable", "disabled"}
-	Linked       = Action{"Created", "create", "linked"}
-	Unlinked     = Action{"Removed", "remove", "unlinked"}
-	Added        = Action{"Added", "add", "added"}
-	Removed      = Action{"Removed", "remove", "removed"}
-	Accepted     = Action{"Accepted", "accept", "accepted"}
-	Declined     = Action{"Declined", "decline", "declined"}
-	Favorited    = Action{"Favorited", "favorite", "favorited"}
-	Unfavorited  = Action{"Unfavorited", "unfavorite", "unfavorited"}
-	Pinned       = Action{"Pinned", "pin", "pinned"}
-	Unpinned     = Action{"Removed", "remove", "unpinned"}
-	Responded    = Action{"Responded", "respond", "responded"}
-	Set          = Action{"Set", "set", "set"}
-	Invited      = Action{"Invited", "invite", "invited"}
-	Revoked      = Action{"Revoked", "revoke", "revoked"}
-	SignedIn     = Action{"Signed in", "sign in", "signed_in"}
-	SignedOut    = Action{"Signed out", "sign out", "signed_out"}
+	Created      = Action{"Created", "create", "created", Ordinary}
+	Updated      = Action{"Updated", "update", "updated", Ordinary}
+	Deleted      = Action{"Deleted", "delete", "deleted", Forever}
+	Trashed      = Action{"Moved", "move", "trashed", OutOfSight}
+	Restored     = Action{"Restored", "restore", "restored", Ordinary}
+	Emptied      = Action{"Emptied", "empty", "emptied", Forever}
+	Uninstalled  = Action{"Uninstalled", "uninstall", "uninstalled", Forever}
+	Moved        = Action{"Moved", "move", "moved", Ordinary}
+	Copied       = Action{"Copied", "copy", "copied", Ordinary}
+	Uploaded     = Action{"Uploaded", "upload", "uploaded", Ordinary}
+	Downloaded   = Action{"Downloaded", "download", "downloaded", Ordinary}
+	Exported     = Action{"Exported", "export", "exported", Ordinary}
+	Sent         = Action{"Sent", "send", "sent", Ordinary}
+	Scheduled    = Action{"Scheduled", "schedule", "scheduled", Ordinary}
+	Unscheduled  = Action{"Unscheduled", "unschedule", "unscheduled", Ordinary}
+	Saved        = Action{"Saved", "save", "saved", Ordinary}
+	Labelled     = Action{"Labelled", "label", "labelled", Ordinary}
+	Unlabelled   = Action{"Unlabelled", "unlabel", "unlabelled", Ordinary}
+	Starred      = Action{"Starred", "star", "starred", Ordinary}
+	Unstarred    = Action{"Unstarred", "unstar", "unstarred", Ordinary}
+	MarkedRead   = Action{"Marked", "mark", "marked_read", Ordinary}
+	MarkedUnread = Action{"Marked", "mark", "marked_unread", Ordinary}
+	Enabled      = Action{"Enabled", "enable", "enabled", Ordinary}
+	Disabled     = Action{"Disabled", "disable", "disabled", Ordinary}
+	Linked       = Action{"Created", "create", "linked", Ordinary}
+	Unlinked     = Action{"Removed", "remove", "unlinked", Ordinary}
+	Added        = Action{"Added", "add", "added", Ordinary}
+	Removed      = Action{"Removed", "remove", "removed", Ordinary}
+	Accepted     = Action{"Accepted", "accept", "accepted", Ordinary}
+	Declined     = Action{"Declined", "decline", "declined", Ordinary}
+	Favorited    = Action{"Favorited", "favorite", "favorited", Ordinary}
+	Unfavorited  = Action{"Unfavorited", "unfavorite", "unfavorited", Ordinary}
+	Pinned       = Action{"Pinned", "pin", "pinned", Ordinary}
+	Unpinned     = Action{"Removed", "remove", "unpinned", Ordinary}
+	Responded    = Action{"Responded", "respond", "responded", Ordinary}
+	Set          = Action{"Set", "set", "set", Ordinary}
+	Invited      = Action{"Invited", "invite", "invited", Ordinary}
+	Revoked      = Action{"Revoked", "revoke", "revoked", Ordinary}
+	SignedIn     = Action{"Signed in", "sign in", "signed_in", Ordinary}
+	SignedOut    = Action{"Signed out", "sign out", "signed_out", Ordinary}
 )
+
+// Asks reports whether a change with this action stops for a yes.
+//
+// There are two reasons to stop, and no others: the change cannot be taken
+// back, or it removes things a filter chose rather than things the user named.
+// computed says which of those a selection was.
+func (a Action) Asks(computed bool) bool {
+	return a.Cost == Forever || (a.Cost == OutOfSight && computed)
+}
 
 // Actions is the vocabulary, for the conformance test to check against.
 var Actions = []Action{
-	Created, Updated, Deleted, Trashed, Restored, Emptied, Moved, Copied,
-	Uploaded, Downloaded, Exported, Sent, Scheduled, Unscheduled, Saved,
+	Created, Updated, Deleted, Trashed, Restored, Emptied, Uninstalled, Moved,
+	Copied, Uploaded, Downloaded, Exported, Sent, Scheduled, Unscheduled, Saved,
 	Labelled, Unlabelled, Starred, Unstarred, MarkedRead, MarkedUnread,
 	Enabled, Disabled, Linked, Unlinked, Added, Removed, Accepted, Declined,
 	Favorited, Unfavorited, Pinned, Unpinned, Responded, Set, Invited, Revoked,
@@ -161,6 +194,16 @@ func (s ResultSpec) message() string {
 }
 
 func (s ResultSpec) dryRunLine() string {
+	return "Dry run - " + s.wouldLine("would", s.hasPreview())
+}
+
+// hasPreview reports whether there is a table of affected things to draw.
+func (s ResultSpec) hasPreview() bool { return s.Preview != nil && s.Count > 0 }
+
+// wouldLine describes the change in the conditional, which is the one sentence
+// a preview and a confirmation both need. It ends in a colon when a table is
+// about to follow and a full stop when nothing is.
+func (s ResultSpec) wouldLine(opening string, withTable bool) string {
 	subject := Quantity(s.Count, s.Kind)
 	if s.Name != "" && s.Count == 1 {
 		subject = s.Name
@@ -168,14 +211,55 @@ func (s ResultSpec) dryRunLine() string {
 			subject = Singular(s.Kind) + ` "` + s.Name + `"`
 		}
 	}
-	line := fmt.Sprintf("Dry run - would %s %s", s.Action.Verb, subject)
+	line := fmt.Sprintf("%s %s %s", opening, s.Action.Verb, subject)
 	if s.Detail != "" {
 		line += " " + s.Detail
 	}
-	if s.Preview != nil && s.Count > 0 {
+	if withTable {
 		return line + ":"
 	}
 	return line + "."
+}
+
+// Refusal is what a confirmation becomes when there is nobody to ask: the same
+// account of the change, stated rather than put as a question, so an unattended
+// run's log says what it declined to do.
+func (s ResultSpec) Refusal() string {
+	// There is nobody here to show a table to, so the sentence simply closes.
+	line := s.wouldLine("Would", false)
+	if s.Action.Cost == Forever {
+		line += " This cannot be undone."
+	}
+	return line
+}
+
+// Confirm describes what the change would do, shows the things it would touch,
+// and asks. It is the same account of the change a dry run gives, put as a
+// question instead of a report, so approving one means having read the other.
+//
+// Only Forever says the change cannot be undone, because only Forever is true:
+// a confirmation that overstated the stakes would be one people learn to skip.
+func Confirm(u *UI, spec ResultSpec) (bool, error) {
+	question := "Continue?"
+	if spec.Action.Cost == Forever {
+		question = "This cannot be undone. " + question
+	}
+	// A machine format has no table to offer: a dry run does not render one
+	// either, and a JSON document on stderr in front of a question would be for
+	// nobody. The question is asked all the same - what is worth stopping for is
+	// a property of the change, not of how its answer is printed.
+	withTable := !u.Format.Machine() && spec.hasPreview()
+	line := spec.wouldLine("Would", withTable)
+	if withTable {
+		_, _ = fmt.Fprintf(u.Err, "%s\n\n", line)
+		if err := spec.Preview(u.preview()); err != nil {
+			return false, err
+		}
+		_, _ = fmt.Fprintln(u.Err)
+	} else {
+		question = line + " " + question
+	}
+	return u.Confirm(question)
 }
 
 func (s ResultSpec) object() map[string]any {

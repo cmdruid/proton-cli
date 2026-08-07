@@ -97,7 +97,7 @@ proton-cli calendar settings set auto-import-invite on
 proton-cli calendar settings calendars list
 proton-cli calendar settings calendars create --name Work --color "#8080FF"
 proton-cli calendar settings calendars update CALENDAR_ID --name Personal --color "#DB60D6"
-proton-cli calendar settings calendars delete CALENDAR_ID
+proton-cli calendar settings calendars delete Work        # by name, or by calendar ID
 ```
 
 Colors have to be Proton accent colors; an invalid value prints the allowed list. Deleting a calendar is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a session already exists.

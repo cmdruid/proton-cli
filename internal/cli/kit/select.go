@@ -49,13 +49,30 @@ type Selection[T any] struct {
 func (s Selection[T]) Len() int { return len(s.IDs) }
 
 // Preview renders the selection as the table its list command would show. A dry
-// run uses it, so approving a bulk change means looking at the things themselves
-// rather than at a count.
-func (s Selection[T]) Preview() func(*ui.UI) error {
-	if len(s.Rows) == 0 {
+// run and a confirmation both use it, so approving a bulk change means looking
+// at the things themselves rather than at a count.
+func (s Selection[T]) Preview() func(*ui.UI) error { return Preview(s.noun, s.cols, s.Rows) }
+
+// Sole returns the one row's own name when exactly one thing was selected, and
+// "" otherwise.
+//
+// It is what lets a result say `Deleted label "Work"` instead of `Deleted 1
+// label` - the difference between a sentence a person can check and one they
+// can only count, which matters most in the question asked before the fact.
+func Sole[T any](rows []T, name func(T) string) string {
+	if len(rows) != 1 {
+		return ""
+	}
+	return name(rows[0])
+}
+
+// Preview renders rows as the table their list command would show, for a change
+// whose subject was never selected: `empty` acts on a whole collection rather
+// than on things a user picked out, and still has to show what it would take.
+func Preview[T any](noun string, cols []ui.Column[T], rows []T) func(*ui.UI) error {
+	if len(rows) == 0 {
 		return nil
 	}
-	rows, cols, noun := s.Rows, s.cols, s.noun
 	return func(u *ui.UI) error {
 		return ui.Table(u, ui.TableSpec[T]{
 			Noun: noun, Columns: cols,
@@ -91,6 +108,12 @@ func Select[T any](c *Invocation, s Selector[T]) (Selection[T], error) {
 		matched, err := s.ByFilter(c.Ctx)
 		if err != nil {
 			return sel, err
+		}
+		// Recording that a filter, not a person, chose something is what lets a
+		// removal ask about a selection nobody read while leaving a reference
+		// typed by hand alone. A filter that matched nothing chose nothing.
+		if len(matched) > 0 {
+			c.computed = true
 		}
 		sel.Rows = append(sel.Rows, matched...)
 	}

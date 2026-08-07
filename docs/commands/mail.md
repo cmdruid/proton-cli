@@ -260,8 +260,10 @@ proton-cli mail settings labels create --name Important --color "#8080FF"
 proton-cli mail settings folders create --name Projects
 proton-cli mail settings folders create --name Clients --parent PARENT_FOLDER_ID
 proton-cli mail settings labels update LABEL_ID --name Renamed --color "#DB60D6"
-proton-cli mail settings labels delete LABEL_ID...
+proton-cli mail settings labels delete Important        # by name, or by label ID
 ```
+
+Deleting a folder or label names it and asks first; the messages it held are not deleted. See [When it asks first](../language.md#when-it-asks-first).
 
 Colors have to be one of Proton's accent colors; an invalid value prints the whole palette, and is refused before anything is sent.
 
@@ -276,10 +278,12 @@ proton-cli mail settings filters list
 proton-cli mail settings filters create --name "Archive invoices" --sieve 'require ["fileinto"]; if header :contains "Subject" "invoice" { fileinto "Archive"; }'
 proton-cli mail settings filters create --name Big --sieve - < filter.sieve
 proton-cli mail settings filters update FILTER_ID --name "New name"
-proton-cli mail settings filters disable FILTER_ID
-proton-cli mail settings filters enable FILTER_ID
-proton-cli mail settings filters delete FILTER_ID
+proton-cli mail settings filters disable "Archive invoices"   # by name, or by filter ID
+proton-cli mail settings filters enable "Archive invoices"
+proton-cli mail settings filters delete "Archive invoices"
 ```
+
+A Sieve script is not recoverable once deleted, so `delete` names the filter and asks first.
 
 ### Auto-reply
 

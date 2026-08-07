@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"strings"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
@@ -211,18 +212,26 @@ func draftsDeleteCmd() *cobra.Command {
 		Short: "Delete drafts",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
-			ids := make([]string, 0, len(c.Args))
-			for _, arg := range c.Args {
-				id, err := c.App.Mail.ResolveDraft(c.Ctx, arg)
-				if err != nil {
-					return err
-				}
-				ids = append(ids, id)
+			sel, err := kit.Select(c, kit.Selector[mailsvc.Message]{
+				Noun:    "drafts",
+				Columns: draftColumns(),
+				IDOf:    func(m mailsvc.Message) string { return m.ID },
+				ByRef: func(ctx context.Context, ref string) (mailsvc.Message, error) {
+					id, err := c.App.Mail.ResolveDraft(ctx, ref)
+					if err != nil {
+						return mailsvc.Message{}, err
+					}
+					m, err := c.App.Mail.FindMessage(ctx, id)
+					return m, err
+				},
+			})
+			if err != nil {
+				return err
 			}
-			ids = kit.Dedupe(ids)
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "drafts", Count: len(ids), IDs: ids,
-			}, func() error { return c.App.Mail.Delete(c.Ctx, ids) })
+				Action: ui.Deleted, Kind: "drafts", Count: sel.Len(), IDs: sel.IDs,
+				Preview: sel.Preview(),
+			}, func() error { return c.App.Mail.Delete(c.Ctx, sel.IDs) })
 		}),
 	}
 }

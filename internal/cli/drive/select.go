@@ -56,9 +56,7 @@ const filterHint = "--pattern, --larger-than, --older-than or --scope"
 // whatever the filters matched under --scope.
 func selectItems(c *kit.Invocation, dc *drivesvc.Context, f *filters) (kit.Selection[drivesvc.Child], error) {
 	if f.unbounded() {
-		if err := kit.Confirm(c, "--all with no other filter covers your whole drive. Continue?"); err != nil {
-			return kit.Selection[drivesvc.Child]{}, err
-		}
+		c.Note("--all with no other filter covers your whole drive. Add --scope to narrow it.")
 	}
 	sel := kit.Selector[drivesvc.Child]{
 		Noun:       "items",

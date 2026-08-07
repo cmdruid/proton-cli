@@ -284,6 +284,15 @@ func trashCmd() *cobra.Command {
 	return c
 }
 
+func trashColumns() []ui.Column[drivesvc.TrashEntry] {
+	return []ui.Column[drivesvc.TrashEntry]{
+		{Header: "ID", ID: true, Cell: func(e drivesvc.TrashEntry) string { return e.LinkID }},
+		{Header: "TYPE", Cell: func(e drivesvc.TrashEntry) string { return itemType(e.Type) }},
+		{Header: "SIZE", Right: true, Cell: func(e drivesvc.TrashEntry) string { return units.Size(e.Size) }},
+		{Header: "TRASHED", Cell: func(e drivesvc.TrashEntry) string { return units.Time(e.Trashed) }},
+	}
+}
+
 func trashListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -299,14 +308,8 @@ func trashListCmd() *cobra.Command {
 				return err
 			}
 			return kit.List(c, ui.TableSpec[drivesvc.TrashEntry]{
-				Noun:  "items",
+				Noun: "items", Columns: trashColumns(),
 				Total: ui.Unknown, Page: ui.Unpaged,
-				Columns: []ui.Column[drivesvc.TrashEntry]{
-					{Header: "ID", ID: true, Cell: func(e drivesvc.TrashEntry) string { return e.LinkID }},
-					{Header: "TYPE", Cell: func(e drivesvc.TrashEntry) string { return itemType(e.Type) }},
-					{Header: "SIZE", Right: true, Cell: func(e drivesvc.TrashEntry) string { return units.Size(e.Size) }},
-					{Header: "TRASHED", Cell: func(e drivesvc.TrashEntry) string { return units.Time(e.Trashed) }},
-				},
 			}, entries, func(e drivesvc.TrashEntry) []string { return []string{e.LinkID} })
 		}),
 	}
@@ -350,7 +353,8 @@ func trashEmptyCmd() *cobra.Command {
 			}
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Emptied, Kind: "items", Count: len(entries),
-				Detail: "from the trash",
+				Detail:  "from the trash",
+				Preview: kit.Preview("items", trashColumns(), entries),
 			}, func() error { return c.App.Drive.TrashEmpty(c.Ctx, dc) })
 		}),
 	}

@@ -1,6 +1,7 @@
 package calendar
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -319,22 +320,32 @@ func eventsDeleteCmd() *cobra.Command {
 		Short: "Delete events",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			type target struct{ cal, event string }
-			targets := make([]target, 0, len(c.Args))
-			ids := make([]string, 0, len(c.Args))
-			for _, ref := range c.Args {
-				calID, eventID, err := resolveEvent(c, ref)
-				if err != nil {
-					return err
-				}
-				targets = append(targets, target{calID, eventID})
-				ids = append(ids, kit.JoinPair(calID, eventID))
+			sel, err := kit.Select(c, kit.Selector[calsvc.Event]{
+				Noun:    "events",
+				Columns: eventColumns(),
+				IDOf:    eventRef,
+				ByRef: func(ctx context.Context, ref string) (calsvc.Event, error) {
+					calID, eventID, err := resolveEvent(c, ref)
+					if err != nil {
+						return calsvc.Event{}, err
+					}
+					ev, err := c.App.Calendar.EventGet(ctx, c.U, calID, eventID)
+					if err != nil {
+						return calsvc.Event{}, err
+					}
+					return *ev, nil
+				},
+			})
+			if err != nil {
+				return err
 			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "events", Count: len(targets), IDs: ids,
+				Action: ui.Deleted, Kind: "events", Count: sel.Len(), IDs: sel.IDs,
+				Name:    kit.Sole(sel.Rows, func(e calsvc.Event) string { return e.Title }),
+				Preview: sel.Preview(),
 			}, func() error {
-				for _, t := range targets {
-					if err := c.App.Calendar.EventDelete(c.Ctx, c.U, t.cal, t.event); err != nil {
+				for _, e := range sel.Rows {
+					if err := c.App.Calendar.EventDelete(c.Ctx, c.U, e.CalendarID, e.ID); err != nil {
 						return err
 					}
 				}

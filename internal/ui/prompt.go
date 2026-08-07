@@ -40,11 +40,18 @@ func NoInput() bool {
 //
 // Everything else in the CLI stays non-interactive, so a cron job fails with a
 // message instead of hanging on a question nobody will answer.
+//
+// An In that is not a file is a test's buffer, which can always be read and
+// never blocks; that is what lets the confirmations be pinned by golden files
+// rather than trusted.
 func (u *UI) CanPrompt() bool {
 	if u.NoInput {
 		return false
 	}
-	return term.IsTerminal(int(os.Stdin.Fd()))
+	if f, ok := u.In.(*os.File); ok {
+		return term.IsTerminal(int(f.Fd()))
+	}
+	return u.In != nil
 }
 
 // Confirm asks a yes/no question and reports whether the answer was yes.
@@ -57,7 +64,7 @@ func (u *UI) Confirm(question string) (bool, error) {
 		return false, ErrNoInput
 	}
 	_, _ = fmt.Fprintf(u.Err, "%s %s ", question, u.errTheme.Hint("[y/N]"))
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	line, err := bufio.NewReader(u.In).ReadString('\n')
 	if err != nil && line == "" {
 		return false, nil
 	}
@@ -86,7 +93,7 @@ func (u *UI) Ask(labels ...string) *Prompter {
 			width = n
 		}
 	}
-	return &Prompter{u: u, width: width + 1, in: bufio.NewReader(os.Stdin)}
+	return &Prompter{u: u, width: width + 1, in: bufio.NewReader(u.In)}
 }
 
 // Line asks for a visible value.
@@ -104,12 +111,25 @@ func (p *Prompter) Line(label string) (string, error) {
 
 // Secret asks for a value without echoing it. The bytes are never written
 // anywhere but the caller's variable.
+//
+// Turning the echo off needs a terminal rather than a stream, so this reads the
+// descriptor directly when there is one and falls back to an ordinary line
+// otherwise - the fallback only being reachable from a test, since CanPrompt
+// has already refused a non-terminal file.
 func (p *Prompter) Secret(label string) (string, error) {
 	if !p.u.CanPrompt() {
 		return "", ErrNoInput
 	}
 	p.write(label)
-	b, err := term.ReadPassword(int(os.Stdin.Fd()))
+	f, isFile := p.u.In.(*os.File)
+	if !isFile {
+		s, err := p.in.ReadString('\n')
+		if err != nil && s == "" {
+			return "", err
+		}
+		return strings.TrimSpace(s), nil
+	}
+	b, err := term.ReadPassword(int(f.Fd()))
 	// ReadPassword swallows the newline the user typed; put it back so the next
 	// line of output does not land on the prompt.
 	_, _ = fmt.Fprintln(p.u.Err)

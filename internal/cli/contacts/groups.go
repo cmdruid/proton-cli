@@ -1,11 +1,30 @@
 package contacts
 
 import (
+	"context"
+
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	ctsvc "github.com/roman-16/proton-cli/internal/service/contacts"
 	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
+
+func groupColumns() []ui.Column[ctsvc.Group] {
+	return []ui.Column[ctsvc.Group]{
+		{Header: "ID", ID: true, Cell: func(g ctsvc.Group) string { return g.ID }},
+		{Header: "NAME", Flex: true, Cell: func(g ctsvc.Group) string { return g.Name }},
+		{Header: "COLOR", Cell: func(g ctsvc.Group) string { return g.Color }},
+	}
+}
+
+func groupList(c *kit.Invocation) *kit.Lookup[ctsvc.Group] {
+	return &kit.Lookup[ctsvc.Group]{
+		Kind:   "group",
+		Load:   func(ctx context.Context) ([]ctsvc.Group, error) { return c.App.Contacts.GroupsList(ctx) },
+		ID:     func(g ctsvc.Group) string { return g.ID },
+		Handle: func(g ctsvc.Group) string { return g.Name },
+	}
+}
 
 func groupsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "groups", Short: "Contact groups"}
@@ -22,18 +41,13 @@ func groupsListCmd() *cobra.Command {
 		Short: "List contact groups",
 		Args:  cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
-			groups, err := c.App.Contacts.GroupsList(c.Ctx)
+			groups, err := groupList(c).Rows(c.Ctx)
 			if err != nil {
 				return err
 			}
 			return kit.List(c, ui.TableSpec[ctsvc.Group]{
-				Noun:  "groups",
+				Noun: "groups", Columns: groupColumns(),
 				Total: ui.Unknown, Page: ui.Unpaged,
-				Columns: []ui.Column[ctsvc.Group]{
-					{Header: "ID", ID: true, Cell: func(g ctsvc.Group) string { return g.ID }},
-					{Header: "NAME", Flex: true, Cell: func(g ctsvc.Group) string { return g.Name }},
-					{Header: "COLOR", Cell: func(g ctsvc.Group) string { return g.Color }},
-				},
 			}, groups, func(g ctsvc.Group) []string { return []string{g.ID} })
 		}),
 	}
@@ -92,10 +106,16 @@ func groupsDeleteCmd() *cobra.Command {
 		Short: "Delete contact groups",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+			sel, err := kit.SelectFrom(c, "groups", groupColumns(), groupList(c))
+			if err != nil {
+				return err
+			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "groups", Count: len(c.Args), IDs: c.Args,
+				Action: ui.Deleted, Kind: "groups", Count: sel.Len(), IDs: sel.IDs,
+				Name:    kit.Sole(sel.Rows, func(g ctsvc.Group) string { return g.Name }),
+				Preview: sel.Preview(),
 			}, func() error {
-				for _, id := range c.Args {
+				for _, id := range sel.IDs {
 					if err := c.App.Contacts.GroupDelete(c.Ctx, id); err != nil {
 						return err
 					}

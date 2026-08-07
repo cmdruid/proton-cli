@@ -1,6 +1,7 @@
 package calendar
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 
@@ -130,27 +131,39 @@ func calendarsCmd() *cobra.Command {
 	return c
 }
 
+func calendarColumns() []ui.Column[calsvc.Calendar] {
+	return []ui.Column[calsvc.Calendar]{
+		{Header: "ID", ID: true, Cell: func(cal calsvc.Calendar) string { return cal.ID }},
+		{Header: "NAME", Flex: true, Cell: func(cal calsvc.Calendar) string { return cal.Name }},
+		{Header: "COLOR", Cell: func(cal calsvc.Calendar) string { return cal.Color }},
+		{Header: "MEMBERS", Right: true, Cell: func(cal calsvc.Calendar) string {
+			return strconv.Itoa(cal.MemberCount)
+		}},
+	}
+}
+
+func calendarList(c *kit.Invocation) *kit.Lookup[calsvc.Calendar] {
+	return &kit.Lookup[calsvc.Calendar]{
+		Kind:   "calendar",
+		Load:   func(ctx context.Context) ([]calsvc.Calendar, error) { return c.App.Calendar.CalendarsList(ctx) },
+		ID:     func(cal calsvc.Calendar) string { return cal.ID },
+		Handle: func(cal calsvc.Calendar) string { return cal.Name },
+	}
+}
+
 func calendarsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List your calendars",
 		Args:  cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
-			cals, err := c.App.Calendar.CalendarsList(c.Ctx)
+			cals, err := calendarList(c).Rows(c.Ctx)
 			if err != nil {
 				return err
 			}
 			return kit.List(c, ui.TableSpec[calsvc.Calendar]{
-				Noun:  "calendars",
+				Noun: "calendars", Columns: calendarColumns(),
 				Total: ui.Unknown, Page: ui.Unpaged,
-				Columns: []ui.Column[calsvc.Calendar]{
-					{Header: "ID", ID: true, Cell: func(cal calsvc.Calendar) string { return cal.ID }},
-					{Header: "NAME", Flex: true, Cell: func(cal calsvc.Calendar) string { return cal.Name }},
-					{Header: "COLOR", Cell: func(cal calsvc.Calendar) string { return cal.Color }},
-					{Header: "MEMBERS", Right: true, Cell: func(cal calsvc.Calendar) string {
-						return strconv.Itoa(cal.MemberCount)
-					}},
-				},
 			}, cals, func(cal calsvc.Calendar) []string { return []string{cal.ID} })
 		}),
 	}
@@ -212,14 +225,20 @@ func calendarsDeleteCmd() *cobra.Command {
 			"even when a saved session already exists.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+			sel, err := kit.SelectFrom(c, "calendars", calendarColumns(), calendarList(c))
+			if err != nil {
+				return err
+			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "calendars", Count: len(c.Args), IDs: c.Args,
+				Action: ui.Deleted, Kind: "calendars", Count: sel.Len(), IDs: sel.IDs,
+				Name:    kit.Sole(sel.Rows, func(cal calsvc.Calendar) string { return cal.Name }),
+				Preview: sel.Preview(),
 			}, func() error {
 				// Nothing here arranges the elevation: the client does it when the
 				// server asks, and drops the scope again afterwards. All this owes
 				// the user is a reason for the prompt.
 				ctx := app.WithScopeReason(c.Ctx, "delete a calendar")
-				for _, id := range c.Args {
+				for _, id := range sel.IDs {
 					if err := c.App.Calendar.CalendarDelete(ctx, id); err != nil {
 						return err
 					}

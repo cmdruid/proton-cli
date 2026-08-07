@@ -5,6 +5,146 @@ import (
 	"testing"
 )
 
+// ── confirmations ──
+//
+// The question asked before a removal is the last thing standing between a typo
+// and something irretrievable, so its exact bytes are pinned like every other
+// response. It has to name what would go, and it may only claim a change cannot
+// be undone when that is true - a warning that overstates the stakes is one
+// people learn to answer without reading.
+
+func TestConfirmShowsWhatWouldGo(t *testing.T) {
+	u, out, errb := fixture(t, Options{In: strings.NewReader("y\n")})
+	spec := ResultSpec{
+		Action: Deleted, Kind: "messages", Count: 3,
+		Preview: func(p *UI) error {
+			return Table(p, TableSpec[message]{
+				Noun: "messages", Columns: messageColumns()[:4],
+				Total: Unknown, Page: Unpaged,
+			}, messages())
+		},
+	}
+	ok, err := Confirm(u, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("a plain yes should be taken as one")
+	}
+	if out.Len() != 0 {
+		t.Errorf("a question is not an answer, got %q on stdout", out.String())
+	}
+	check(t, "confirm_forever_preview", out, errb)
+}
+
+func TestConfirmWithoutAPreviewIsOneLine(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		spec ResultSpec
+		want string
+	}{{
+		"forever says so",
+		ResultSpec{Action: Deleted, Kind: "labels", Count: 1, Name: "Work"},
+		`Would delete label "Work". This cannot be undone. Continue? [y/N] `,
+	}, {
+		"emptying a trash counts what it would take",
+		ResultSpec{Action: Emptied, Kind: "items", Count: 12, Detail: "from the trash"},
+		"Would empty 12 items from the trash. This cannot be undone. Continue? [y/N] ",
+	}, {
+		"uninstalling names the binary",
+		ResultSpec{Action: Uninstalled, Count: 1, Name: "/usr/local/bin/proton-cli"},
+		"Would uninstall /usr/local/bin/proton-cli. This cannot be undone. Continue? [y/N] ",
+	}, {
+		"a reversible removal does not claim otherwise",
+		ResultSpec{Action: Trashed, Kind: "messages", Count: 3, Detail: "to trash"},
+		"Would move 3 messages to trash. Continue? [y/N] ",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			u, _, errb := fixture(t, Options{In: strings.NewReader("y\n")})
+			if _, err := Confirm(u, tc.spec); err != nil {
+				t.Fatal(err)
+			}
+			if errb.String() != tc.want {
+				t.Errorf("got  %q\nwant %q", errb.String(), tc.want)
+			}
+		})
+	}
+}
+
+// --output json still asks - what is worth stopping for is a property of the
+// change, not of how its answer is printed - but it has no table to offer, so
+// the question stands on its own rather than trailing a JSON document nobody
+// asked to read.
+func TestConfirmInAMachineFormatSkipsTheTable(t *testing.T) {
+	u, out, errb := fixture(t, Options{Format: FormatJSON, In: strings.NewReader("y\n")})
+	spec := ResultSpec{
+		Action: Deleted, Kind: "messages", Count: 3,
+		Preview: func(*UI) error {
+			t.Error("a machine format should not render the preview")
+			return nil
+		},
+	}
+	ok, err := Confirm(u, spec)
+	if err != nil || !ok {
+		t.Fatalf("Confirm = (%v, %v)", ok, err)
+	}
+	want := "Would delete 3 messages. This cannot be undone. Continue? [y/N] "
+	if errb.String() != want {
+		t.Errorf("got  %q\nwant %q", errb.String(), want)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout is the document's alone, got %q", out.String())
+	}
+}
+
+// The dangerous path is the one that has to be typed out, so everything that is
+// not a plain yes means no - including the bare newline of someone pressing
+// enter to get their prompt back.
+func TestConfirmDefaultsToNo(t *testing.T) {
+	spec := ResultSpec{Action: Deleted, Kind: "messages", Count: 3}
+	for _, answer := range []string{"\n", "n\n", "no\n", "Y E S\n", "yeah\n", ""} {
+		u, _, _ := fixture(t, Options{In: strings.NewReader(answer)})
+		ok, err := Confirm(u, spec)
+		if err != nil {
+			t.Fatalf("%q: %v", answer, err)
+		}
+		if ok {
+			t.Errorf("%q should not have been taken as consent", answer)
+		}
+	}
+	for _, answer := range []string{"y\n", "Y\n", "yes\n", " YES \n"} {
+		u, _, _ := fixture(t, Options{In: strings.NewReader(answer)})
+		ok, err := Confirm(u, spec)
+		if err != nil {
+			t.Fatalf("%q: %v", answer, err)
+		}
+		if !ok {
+			t.Errorf("%q is a yes", answer)
+		}
+	}
+}
+
+// With nobody to ask, the same account of the change becomes the error, so an
+// unattended run's log says what it declined to do rather than only that it
+// wanted permission.
+func TestRefusalStatesTheChange(t *testing.T) {
+	for _, tc := range []struct {
+		spec ResultSpec
+		want string
+	}{
+		{ResultSpec{Action: Deleted, Kind: "messages", Count: 112},
+			"Would delete 112 messages. This cannot be undone."},
+		{ResultSpec{Action: Trashed, Kind: "messages", Count: 3, Detail: "to trash"},
+			"Would move 3 messages to trash."},
+		{ResultSpec{Action: Deleted, Kind: "messages", Count: 3, Preview: func(*UI) error { return nil }},
+			"Would delete 3 messages. This cannot be undone."},
+	} {
+		if got := tc.spec.Refusal(); got != tc.want {
+			t.Errorf("got  %q\nwant %q", got, tc.want)
+		}
+	}
+}
+
 // The three confirmation shapes, side by side. Each is chosen by what the caller
 // actually knows, and none of them ever prints "1 message(s)".
 func TestResultMessageShapes(t *testing.T) {
@@ -208,6 +348,32 @@ func TestResultMachineDryRunIsFlagged(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"dry_run": true`) {
 		t.Errorf("a dry run must be visible in machine output: %s", out.String())
+	}
+}
+
+// Only what cannot be taken back may be declared Forever, and both removals plus
+// uninstalling have to be. This is the list the guard reads at run time, so a
+// wrong entry here is a `delete` that never asks or a `move` that always does.
+func TestOnlyIrreversibleActionsAreForever(t *testing.T) {
+	forever := map[string]bool{}
+	for _, a := range Actions {
+		if a.Cost == Forever {
+			forever[a.Key] = true
+		}
+	}
+	want := map[string]bool{"deleted": true, "emptied": true, "uninstalled": true}
+	for key := range want {
+		if !forever[key] {
+			t.Errorf("%q cannot be undone and has to be Forever", key)
+		}
+	}
+	for key := range forever {
+		if !want[key] {
+			t.Errorf("%q is marked Forever; if that is right, say so here too", key)
+		}
+	}
+	if Trashed.Cost != OutOfSight {
+		t.Error("trashing takes things out of sight without destroying them")
 	}
 }
 

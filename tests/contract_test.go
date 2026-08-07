@@ -323,3 +323,81 @@ func TestDryRunContactsCreate(t *testing.T) {
 		t.Error("dry-run should not create the contact")
 	}
 }
+
+// ── consent ──
+//
+// `run` passes the command line through untouched, so these see what a cron job
+// sees: no terminal, and therefore a question that has to become an error rather
+// than a wait. The helpers that demand success add --yes, which is why the guard
+// needs checking on purpose here rather than incidentally everywhere else.
+
+// A permanent deletion refuses to happen unattended, and the thing it was asked
+// to delete is still there afterwards.
+func TestDeleteWithoutConsentRefusesAndChangesNothing(t *testing.T) {
+	name := testID() + "-consent"
+	runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF")
+	cleanupRun(t, "Delete: proton-cli mail settings labels delete "+name,
+		"mail", "settings", "labels", "delete", name)
+
+	_, stderr, code := run(t, "mail", "settings", "labels", "delete", name)
+	if code != 1 {
+		t.Fatalf("want exit 1 for a refused deletion, got %d (stderr: %s)", code, stderr)
+	}
+	assertContains(t, stderr, "cannot be undone")
+	assertContains(t, stderr, "--yes")
+	assertContains(t, stderr, "--dry-run")
+	// The refusal names the label: a question about "1 label" is one nobody can
+	// actually answer.
+	assertContains(t, stderr, name)
+
+	assertContains(t, runOK(t, "mail", "settings", "labels", "list"), name)
+}
+
+// Trashing something named by hand is not worth a question: it is reversible,
+// and the user typed the reference.
+func TestTrashOfANamedReferenceNeedsNoConsent(t *testing.T) {
+	path := "/" + testID() + "-consent-trash"
+	runOK(t, "drive", "folders", "create", path)
+	cleanupRun(t, "Delete: proton-cli drive items delete "+path,
+		"drive", "items", "delete", path)
+	// Taken before the trash, because a trashed item has no path any more - and
+	// its name arrives encrypted, so the ID is the only way back to this exact
+	// folder rather than to whatever else the suite has left in there.
+	linkID, _ := runJSON(t, "drive", "items", "get", path)["link_id"].(string)
+	if linkID == "" {
+		t.Fatal("drive items get should report the folder's link ID")
+	}
+
+	if _, stderr, code := run(t, "drive", "items", "trash", path); code != 0 {
+		t.Fatalf("trashing a named path should not ask, got exit %d: %s", code, stderr)
+	}
+
+	// Put it back, so the cleanup registered above can find it by path.
+	runOK(t, "drive", "trash", "restore", "--", linkID)
+}
+
+// Trashing what a filter found is, because the filter chose them and nobody has
+// read the list.
+func TestTrashOfAFilteredSelectionNeedsConsent(t *testing.T) {
+	_, stderr, code := run(t, "mail", "messages", "trash", "--unread", "--limit", "1")
+	if code == 0 {
+		// Nothing matched, so there was nothing to ask about.
+		assertContains(t, stderr, "Nothing to move")
+		return
+	}
+	if code != 1 {
+		t.Fatalf("want exit 1 for a refused filtered trash, got %d (stderr: %s)", code, stderr)
+	}
+	assertContains(t, stderr, "--yes")
+	// A trash is recoverable, so the refusal must not claim otherwise.
+	assertNotContains(t, stderr, "cannot be undone")
+}
+
+// --dry-run answers the question in a safer form, so it never has to ask it.
+func TestDryRunNeedsNoConsent(t *testing.T) {
+	_, stderr, code := run(t, "--dry-run", "mail", "messages", "delete", "--unread", "--limit", "1")
+	if code != 0 {
+		t.Fatalf("a dry run should never need consent, got exit %d: %s", code, stderr)
+	}
+	assertContains(t, stderr, "Dry run")
+}

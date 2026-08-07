@@ -82,14 +82,18 @@ proton-cli pass items delete --vault Temporary --all
 
 Filters: `--vault`, `--type`, `--older-than`, `--newer-than`, `--all`. Add `--dry-run` to check first.
 
+`delete` and `trash empty` are permanent, so they show what would go and ask. So does a filtered `trash`, since the filter chose them rather than you. See [When it asks first](../language.md#when-it-asks-first).
+
 ## Vaults
 
 ```bash
 proton-cli pass vaults list
 proton-cli pass vaults create --name Work
 proton-cli pass vaults update SHARE_ID --name Personal
-proton-cli pass vaults delete SHARE_ID
+proton-cli pass vaults delete Work            # by name, or by share ID
 ```
+
+Deleting a vault takes everything in it, so it names the vault and asks first.
 
 ## Aliases
 

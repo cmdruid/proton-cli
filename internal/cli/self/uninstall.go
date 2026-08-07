@@ -1,20 +1,26 @@
 package self
 
 import (
-	"fmt"
-	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/roman-16/proton-cli/internal/account/session"
+	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/selfmanage"
+	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 // UninstallCmd removes a manually installed binary.
+//
+// It is a mutation like any other, so it reports through kit.Mutate and inherits
+// what that guarantees: --dry-run describes it without doing it, and being
+// unable to take it back is what makes it stop for a yes. There is no local
+// --yes here; the global one means "proceed without asking" everywhere,
+// including here.
 func UninstallCmd() *cobra.Command {
-	var yes, purge bool
+	var purge bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove a curl/PowerShell-installed proton-cli",
@@ -28,32 +34,25 @@ Only the binary is removed by default. Pass --purge to also delete local
 data (saved sessions and the ID cache) under your config directory.
 
 Examples:
-  proton-cli uninstall          # preview what would be removed
-  proton-cli uninstall --yes    # remove the binary
+  proton-cli uninstall --dry-run       # show what would be removed
+  proton-cli uninstall --yes           # remove the binary without asking
   proton-cli uninstall --yes --purge   # also remove local data`,
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
-			return runUninstall(c, yes, purge)
+			return runUninstall(c, purge)
 		}),
 	}
-	cmd.Flags().BoolVar(&yes, "yes", false, "Actually remove (without it, prints what would be removed)")
 	cmd.Flags().BoolVar(&purge, "purge", false, "Also remove local data (saved sessions and ID cache)")
 	return cmd
 }
 
-type uninstallResult struct {
-	Binary  string `json:"binary"`
-	Data    string `json:"data,omitempty"`
-	Removed bool   `json:"removed"`
-}
-
-func runUninstall(c *kit.Invocation, yes, purge bool) error {
-	u := c.UI()
-
+func runUninstall(c *kit.Invocation, purge bool) error {
 	exe, err := resolveExe()
 	if err != nil {
 		return err
 	}
+	// A package-managed install is refused before anything else, so the question
+	// is never asked about a removal that was never going to happen.
 	if err := guardManaged(exe, actionUninstall); err != nil {
 		return err
 	}
@@ -64,44 +63,38 @@ func runUninstall(c *kit.Invocation, yes, purge bool) error {
 			dataDir = d
 		}
 	}
+	detail := ""
+	if dataDir != "" {
+		detail = "with its saved sessions and ID cache"
+	}
 
-	confirmed := yes && !c.App.DryRun
-	if !confirmed {
-		if u.Format.Machine() {
-			return kit.Object(c, uninstallResult{Binary: exe, Data: dataDir, Removed: false})
+	if err := kit.Mutate(c, ui.ResultSpec{
+		Action: ui.Uninstalled, Count: 1, Name: exe, Detail: detail,
+		Extra: map[string]any{"binary": exe, "data": dataDir},
+	}, func() error {
+		if err := selfmanage.Remove(exe, dedicatedDir(exe)); err != nil {
+			return selfManageError(err, exe, actionUninstall)
 		}
-		u.Note("Would remove:")
-		u.Note("  " + exe)
 		if dataDir != "" {
-			u.Note("  " + dataDir + " (saved sessions, ID cache)")
+			if err := os.RemoveAll(dataDir); err != nil {
+				c.Note("warning: could not remove %s: %v", dataDir, err)
+			}
 		}
-		if !c.App.DryRun {
-			u.Note("Re-run with --yes to remove.")
-		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if c.App.DryRun {
 		return nil
 	}
 
-	if err := selfmanage.Remove(exe, dedicatedDir(exe)); err != nil {
-		return selfManageError(err, exe, actionUninstall)
-	}
-	if dataDir != "" {
-		if err := os.RemoveAll(dataDir); err != nil {
-			u.Note(fmt.Sprintf("warning: could not remove %s: %v", dataDir, err))
-		}
-	}
-
-	if u.Format.Machine() {
-		return kit.Object(c, uninstallResult{Binary: exe, Data: dataDir, Removed: true})
-	}
-	u.Note("Removed " + exe)
 	if runtime.GOOS == "windows" {
-		u.Note("A temporary copy will be cleaned up after this process exits.")
+		c.Note("A temporary copy will be cleaned up after this process exits.")
 	}
 	if dataDir != "" {
-		u.Note("Removed " + dataDir)
-		u.Note("Sign out this session from Proton (web/app) to invalidate any tokens it held.")
+		c.Note("Sign out this session from Proton (web/app) to invalidate any tokens it held.")
 	} else {
-		u.Note("Saved sessions and cache were left in place (use --purge to remove them).")
+		c.Note("Saved sessions and cache were left in place (use --purge to remove them).")
 	}
 	return nil
 }

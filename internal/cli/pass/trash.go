@@ -143,13 +143,5 @@ func refsOf(items []passsvc.Item) []string {
 }
 
 func previewOf(items []passsvc.Item) func(*ui.UI) error {
-	if len(items) == 0 {
-		return nil
-	}
-	return func(u *ui.UI) error {
-		return ui.Table(u, ui.TableSpec[passsvc.Item]{
-			Noun: "items", Columns: itemColumns(),
-			Total: ui.Unknown, Page: ui.Unpaged,
-		}, items)
-	}
+	return kit.Preview("items", itemColumns(), items)
 }

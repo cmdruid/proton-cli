@@ -26,6 +26,11 @@ type Invocation struct {
 	// Cmd is the running command, so a handler can tell a flag left alone from
 	// one explicitly set to its zero value.
 	Cmd *cobra.Command
+
+	// computed records that a filter, rather than the user, chose something to
+	// act on. Select sets it and Mutate reads it, so no command has to pass the
+	// fact along - the same reason --dry-run needs nothing from a handler.
+	computed bool
 }
 
 // UI is the renderer for this invocation. It is the only way a command produces
@@ -120,22 +125,44 @@ func Show(c *Invocation, spec ui.RecordSpec) error { return ui.Record(c.UI(), sp
 // Read renders decrypted content meant to be read.
 func Read(c *Invocation, spec ui.DocumentSpec) error { return ui.Document(c.UI(), spec) }
 
-// Confirm stops for a yes before something sweeping enough that a typo would be
-// expensive, and returns an error unless it gets one.
+// Mutate performs a change and reports it - or, under --dry-run, reports what it
+// would have done and changes nothing.
 //
-// --dry-run needs no answer, because it asks the same question in a safer form.
+// Routing every mutation through here is what makes both --dry-run and the
+// confirmations properties of the CLI rather than flags each command has to
+// remember to check. What is worth asking about is read off the action the
+// command reports, so a command cannot describe a deletion and then perform it
+// unannounced.
+func Mutate(c *Invocation, spec ui.ResultSpec, apply func() error) error {
+	if c.App.DryRun {
+		spec.DryRun = true
+		return ui.Result(c.UI(), spec)
+	}
+	if err := confirm(c, spec); err != nil {
+		return err
+	}
+	if err := apply(); err != nil {
+		return err
+	}
+	return ui.Result(c.UI(), spec)
+}
+
+// confirm stops for a yes before a change that cannot be taken back, or that
+// would remove things the user never named.
+//
 // --yes is the answer given in advance, which is also the only way through in a
 // script: a prompt nobody can see is a hang, so an unattended run is told what
-// to add rather than left waiting.
-func Confirm(c *Invocation, question string) error {
-	if c.App.DryRun || c.App.Yes {
+// to add rather than left waiting. A change that affects nothing is not worth a
+// question, so an empty selection passes.
+func confirm(c *Invocation, spec ui.ResultSpec) error {
+	if c.App.Yes || spec.Count == 0 || !spec.Action.Asks(c.computed) {
 		return nil
 	}
 	if !c.UI().CanPrompt() {
-		return Fail("%s", question).
+		return Fail("%s", spec.Refusal()).
 			Hint("--yes to confirm, or --dry-run to see what it would touch.")
 	}
-	ok, err := c.UI().Confirm(question)
+	ok, err := ui.Confirm(c.UI(), spec)
 	if err != nil {
 		return err
 	}
@@ -143,22 +170,6 @@ func Confirm(c *Invocation, question string) error {
 		return Fail("Cancelled.")
 	}
 	return nil
-}
-
-// Mutate performs a change and reports it - or, under --dry-run, reports what it
-// would have done and changes nothing.
-//
-// Routing every mutation through here is what makes --dry-run a property of the
-// CLI rather than a flag each command has to remember to check.
-func Mutate(c *Invocation, spec ui.ResultSpec, apply func() error) error {
-	if c.App.DryRun {
-		spec.DryRun = true
-		return ui.Result(c.UI(), spec)
-	}
-	if err := apply(); err != nil {
-		return err
-	}
-	return ui.Result(c.UI(), spec)
 }
 
 // Create makes one thing and reports its new ID.

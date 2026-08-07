@@ -162,6 +162,8 @@ proton-cli mail messages trash --from newsletter@example.com --older-than 90d --
 
 Data goes to stdout and progress to stderr, so redirects stay clean. Exit codes tell user error, auth failure, not-found, ambiguity, and network trouble apart, so scripts can react to each. → [Scripting](docs/scripting.md)
 
+Anything that removes permanently, or that removes what a filter picked out rather than what you named, shows the rows and asks first. Off a terminal it refuses instead, so an unattended run fails safe until you add `--yes`. → [When it asks first](docs/language.md#when-it-asks-first)
+
 ## Encryption you can verify
 
 Your password never reaches Proton: login is SRP, and the key password it derives stays local and unlocks your PGP keys in memory. Mail, files, events, contacts, and Pass items are decrypted after they arrive and encrypted before they leave, with the same key hierarchy the web clients use. Signatures on incoming mail are checked and reported.

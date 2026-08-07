@@ -88,6 +88,7 @@ type UI struct {
 	Format Format
 	Out    io.Writer
 	Err    io.Writer
+	In     io.Reader
 	Log    *slog.Logger
 
 	// Quiet suppresses confirmations, notes and progress on Err.
@@ -109,11 +110,12 @@ type UI struct {
 	errTheme Theme
 }
 
-// Options configures a UI. Out and Err default to the process streams.
+// Options configures a UI. Out, Err and In default to the process streams.
 type Options struct {
 	Format   Format
 	Out      io.Writer
 	Err      io.Writer
+	In       io.Reader
 	LogLevel slog.Level
 	Quiet    bool
 	NoColor  bool
@@ -123,12 +125,15 @@ type Options struct {
 }
 
 func New(opts Options) *UI {
-	out, errw := opts.Out, opts.Err
+	out, errw, in := opts.Out, opts.Err, opts.In
 	if out == nil {
 		out = os.Stdout
 	}
 	if errw == nil {
 		errw = os.Stderr
+	}
+	if in == nil {
+		in = os.Stdin
 	}
 	var theme, errTheme Theme
 	if opts.Format == FormatText && !opts.NoColor {
@@ -138,6 +143,7 @@ func New(opts Options) *UI {
 		Format:   opts.Format,
 		Out:      out,
 		Err:      errw,
+		In:       in,
 		Log:      slog.New(slog.NewTextHandler(errw, &slog.HandlerOptions{Level: opts.LogLevel})),
 		Quiet:    opts.Quiet,
 		NoInput:  opts.NoInput || NoInput(),

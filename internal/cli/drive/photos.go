@@ -1,6 +1,7 @@
 package drive
 
 import (
+	stdctx "context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -241,14 +242,28 @@ func photosRemoveCmd(use, short string, action ui.Action, permanent bool) *cobra
 			if err != nil {
 				return err
 			}
+			// A photo has no name of its own, so the only way to show which ones
+			// would go is to fetch them - and a permanent removal is exactly the
+			// case where a link ID is not something a person can check.
+			sel, err := kit.SelectFrom(c, "photos", photoColumns(), &kit.Lookup[drivesvc.Photo]{
+				Kind: "photo",
+				Load: func(ctx stdctx.Context) ([]drivesvc.Photo, error) {
+					return c.App.Drive.PhotosList(ctx, dc, 0, false)
+				},
+				ID: func(p drivesvc.Photo) string { return p.LinkID },
+			})
+			if err != nil {
+				return err
+			}
 			detail := ""
 			if !permanent {
 				detail = "to trash"
 			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: action, Kind: "photos", Count: len(c.Args), IDs: c.Args, Detail: detail,
+				Action: action, Kind: "photos", Count: sel.Len(), IDs: sel.IDs, Detail: detail,
+				Preview: sel.Preview(),
 			}, func() error {
-				return c.App.Drive.PhotosDelete(c.Ctx, dc, c.Args, permanent)
+				return c.App.Drive.PhotosDelete(c.Ctx, dc, sel.IDs, permanent)
 			})
 		}),
 	}
@@ -264,6 +279,27 @@ func albumsCmd() *cobra.Command {
 	return c
 }
 
+func albumColumns() []ui.Column[drivesvc.Album] {
+	return []ui.Column[drivesvc.Album]{
+		{Header: "ID", ID: true, Cell: func(a drivesvc.Album) string { return a.LinkID }},
+		{Header: "NAME", Flex: true, Cell: func(a drivesvc.Album) string { return a.Name }},
+		{Header: "PHOTOS", Right: true, Cell: func(a drivesvc.Album) string {
+			return strconv.Itoa(a.PhotoCount)
+		}},
+	}
+}
+
+func albumList(c *kit.Invocation, dc *drivesvc.Context) *kit.Lookup[drivesvc.Album] {
+	return &kit.Lookup[drivesvc.Album]{
+		Kind: "album",
+		Load: func(ctx stdctx.Context) ([]drivesvc.Album, error) {
+			return c.App.Drive.AlbumsList(ctx, dc)
+		},
+		ID:     func(a drivesvc.Album) string { return a.LinkID },
+		Handle: func(a drivesvc.Album) string { return a.Name },
+	}
+}
+
 func albumsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -274,20 +310,13 @@ func albumsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			albums, err := c.App.Drive.AlbumsList(c.Ctx, dc)
+			albums, err := albumList(c, dc).Rows(c.Ctx)
 			if err != nil {
 				return err
 			}
 			return kit.List(c, ui.TableSpec[drivesvc.Album]{
-				Noun:  "albums",
+				Noun: "albums", Columns: albumColumns(),
 				Total: ui.Unknown, Page: ui.Unpaged,
-				Columns: []ui.Column[drivesvc.Album]{
-					{Header: "ID", ID: true, Cell: func(a drivesvc.Album) string { return a.LinkID }},
-					{Header: "NAME", Flex: true, Cell: func(a drivesvc.Album) string { return a.Name }},
-					{Header: "PHOTOS", Right: true, Cell: func(a drivesvc.Album) string {
-						return strconv.Itoa(a.PhotoCount)
-					}},
-				},
 			}, albums, func(a drivesvc.Album) []string { return []string{a.LinkID} })
 		}),
 	}
@@ -325,14 +354,20 @@ func albumsDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			sel, err := kit.SelectFrom(c, "albums", albumColumns(), albumList(c, dc))
+			if err != nil {
+				return err
+			}
 			detail := "keeping their photos"
 			if withPhotos {
 				detail = "and trashing their photos"
 			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "albums", Count: len(c.Args), IDs: c.Args, Detail: detail,
+				Action: ui.Deleted, Kind: "albums", Count: sel.Len(), IDs: sel.IDs, Detail: detail,
+				Name:    kit.Sole(sel.Rows, func(a drivesvc.Album) string { return a.Name }),
+				Preview: sel.Preview(),
 			}, func() error {
-				for _, id := range c.Args {
+				for _, id := range sel.IDs {
 					if err := c.App.Drive.AlbumDelete(c.Ctx, dc, id, withPhotos); err != nil {
 						return err
 					}

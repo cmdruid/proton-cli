@@ -91,6 +91,11 @@ func run(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
 // runArgs executes the CLI without a *testing.T, so suite-level fixtures and
 // cleanup (which run outside a test) can invoke it. It returns stdout, stderr,
 // the exit code, and a non-nil error only when the process failed to start.
+//
+// It passes the arguments through untouched. Consent is added by the helpers
+// that demand success, never here: a runner that quietly agreed to everything
+// would make `run` unable to observe a command being refused, which is the one
+// thing the tests about refusal have to see.
 func runArgs(stdin io.Reader, args ...string) (stdout, stderr string, exitCode int, err error) {
 	var outBuf, errBuf bytes.Buffer
 	cmd := exec.Command(binaryPath, args...)
@@ -117,10 +122,25 @@ func runWithStdin(t *testing.T, stdin io.Reader, args ...string) (stdout, stderr
 	return stdout, stderr, exitCode
 }
 
+// consenting puts --yes ahead of everything.
+//
+// The suite has no terminal, so anything that stops to ask before removing
+// something would be refused here with nobody to answer. Every helper that
+// demands success is doing setup or clearing up after itself, and means yes.
+// `run` is deliberately left without it, so a test can still watch a command
+// decline to act.
+//
+// The flag leads for the same reason --output json does: a Proton ID may begin
+// with a dash, and anything after the `--` the binary then inserts would be read
+// as an argument.
+func consenting(args []string) []string {
+	return append([]string{"--yes"}, args...)
+}
+
 // runOK runs a command and fails the test on non-zero exit.
 func runOK(t *testing.T, args ...string) string {
 	t.Helper()
-	stdout, stderr, code := run(t, args...)
+	stdout, stderr, code := run(t, consenting(args)...)
 	if code != 0 {
 		t.Fatalf("command %v failed (exit %d):\nstdout: %s\nstderr: %s",
 			args, code, truncateOutput(stdout), truncateOutput(stderr))
@@ -131,7 +151,7 @@ func runOK(t *testing.T, args ...string) string {
 // runOKStderr runs a command and returns both stdout + stderr on success.
 func runOKStderr(t *testing.T, args ...string) (stdout, stderr string) {
 	t.Helper()
-	stdout, stderr, code := run(t, args...)
+	stdout, stderr, code := run(t, consenting(args)...)
 	if code != 0 {
 		t.Fatalf("command %v failed (exit %d):\nstdout: %s\nstderr: %s",
 			args, code, truncateOutput(stdout), truncateOutput(stderr))
@@ -261,7 +281,7 @@ func cleanup(t *testing.T, description string, fn func() error) {
 func cleanupRun(t *testing.T, description string, args ...string) {
 	t.Helper()
 	cleanup(t, description, func() error {
-		_, stderr, code := run(t, args...)
+		_, stderr, code := run(t, consenting(args)...)
 		if code != 0 && code != 3 {
 			return fmt.Errorf("exit %d: %s", code, strings.TrimSpace(stderr))
 		}
@@ -418,7 +438,7 @@ func registerSuiteCleanup(description string, args ...string) {
 	suiteCleanupMu.Lock()
 	defer suiteCleanupMu.Unlock()
 	suiteCleanupFns = append(suiteCleanupFns, func() {
-		if _, stderr, code, err := runArgs(nil, args...); err != nil || code != 0 {
+		if _, stderr, code, err := runArgs(nil, consenting(args)...); err != nil || code != 0 {
 			fmt.Fprintf(os.Stderr, "\n"+
 				"╔══════════════════════════════════════════════════════════════╗\n"+
 				"║  ⚠️  CLEANUP FAILED - MANUAL ACTION REQUIRED                ║\n"+
