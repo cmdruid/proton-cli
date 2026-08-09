@@ -217,14 +217,19 @@ func calendarsUpdateCmd() *cobra.Command {
 }
 
 func calendarsDeleteCmd() *cobra.Command {
-	return &cobra.Command{
+	var reauth kit.Reauth
+	c := &cobra.Command{
 		Use:   "delete REF...",
 		Short: "Delete calendars, and every event in them",
 		Long: "Delete calendars, and every event in them.\n\n" +
 			"Proton guards this behind an elevated session, so it asks for your password\n" +
-			"even when a saved session already exists.",
+			"even when a saved session already exists. With no terminal to ask, pass\n" +
+			"--password-file or --password-stdin.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+			if err := reauth.Supply(c); err != nil {
+				return err
+			}
 			sel, err := kit.SelectFrom(c, "calendars", calendarColumns(), calendarList(c))
 			if err != nil {
 				return err
@@ -247,4 +252,6 @@ func calendarsDeleteCmd() *cobra.Command {
 			})
 		}),
 	}
+	reauth.Declare(c)
+	return c
 }

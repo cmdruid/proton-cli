@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -33,6 +34,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
 		os.Exit(1)
 	}
+	workDir = dir
 	// Build the per-platform proton-cli-hv helper into
 	// internal/hv/assets/ so the main build's //go:embed picks it up.
 	helpers := exec.Command("bash", "../scripts/build-hv-helpers.sh")
@@ -51,6 +53,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	writePasswordFiles()
+	seed()
+
 	code := m.Run()
 
 	// Shared fixtures outlive individual tests, so their teardown runs here
@@ -61,17 +66,54 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// ── Credential gate ──
+// ── The two accounts ──
 
-// requireCredentials verifies both the primary and alt Proton accounts are
-// configured before any test runs, exiting instantly (ahead of the expensive
-// binary build) if either is incomplete. The whole suite needs both: most tests
-// act as the primary account and a handful drive the `alt` second account.
+// The suite creates, mutates and deletes real data, so it runs on accounts kept
+// for that and nothing else. Most tests act as `primary`; the handful that need
+// two Proton users bring in `secondary`.
+//
+// These are the harness's own variables, not the CLI's: proton-cli takes an
+// account from a signed-in profile, which signIn establishes below. The
+// PROTON_CLI_TEST_ prefix keeps them clear of anything the binary reads.
+const (
+	primary   = "primary"
+	secondary = "secondary"
+)
+
+// workDir is the per-run temp directory, where the password files live.
+var workDir string
+
+type testAccount struct {
+	profile      string
+	userVar      string
+	passwordVar  string
+	passwordFile string
+}
+
+var accounts = map[string]*testAccount{
+	primary: {
+		profile:     primary,
+		userVar:     "PROTON_CLI_TEST_PRIMARY_USER",
+		passwordVar: "PROTON_CLI_TEST_PRIMARY_PASSWORD",
+	},
+	secondary: {
+		profile:     secondary,
+		userVar:     "PROTON_CLI_TEST_SECONDARY_USER",
+		passwordVar: "PROTON_CLI_TEST_SECONDARY_PASSWORD",
+	},
+}
+
+// requireCredentials verifies both accounts are configured before any test runs,
+// exiting instantly - ahead of the expensive binary build - if either is
+// incomplete.
 func requireCredentials() {
 	var missing []string
-	for _, v := range []string{"PROTON_USER", "PROTON_PASSWORD", "PROTON_ALT_USER", "PROTON_ALT_PASSWORD"} {
-		if os.Getenv(v) == "" {
-			missing = append(missing, v)
+	for _, name := range []string{primary, secondary} {
+		a := accounts[name]
+		for _, v := range []string{a.userVar, a.passwordVar} {
+			if os.Getenv(v) == "" {
+				missing = append(missing, v)
+			}
 		}
 	}
 	if len(missing) > 0 {
@@ -80,29 +122,81 @@ func requireCredentials() {
 	}
 }
 
+// writePasswordFiles puts each account's password where runAs can hand it to
+// the one command Proton guards behind an elevated session.
+//
+// A session cannot carry elevation: Proton re-authenticates over SRP, and the
+// key blob sealed at login is a one-way derivation of the password rather than
+// the password itself.
+func writePasswordFiles() {
+	for _, name := range []string{primary, secondary} {
+		a := accounts[name]
+		a.passwordFile = filepath.Join(workDir, a.profile+".password")
+		if err := os.WriteFile(a.passwordFile, []byte(os.Getenv(a.passwordVar)), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to write the %s password file: %v\n", a.profile, err)
+			os.Exit(1)
+		}
+	}
+}
+
+// seed signs both accounts in and brings them to the state the fixture declares.
+//
+// Whole assertions here are guarded by a skip when a collection is empty - no
+// contacts, no vaults, no calendars - which is what that data is for. Each datum
+// is judged before it is touched, so an account already in shape costs reads.
+func seed() {
+	cmd := exec.Command("go", "run", "./scripts/seed")
+	cmd.Dir = ".."
+	cmd.Env = append(os.Environ(), "PROTON_CLI="+binaryPath)
+	out, err := cmd.CombinedOutput()
+	fmt.Fprint(os.Stderr, string(out))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to seed the accounts: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 // ── Running the binary ──
 
-// run executes the CLI with args and returns stdout, stderr, exit code.
+// run executes the CLI as the primary account and returns stdout, stderr, exit
+// code.
 func run(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	return runWithStdin(t, nil, args...)
 }
 
-// runArgs executes the CLI without a *testing.T, so suite-level fixtures and
-// cleanup (which run outside a test) can invoke it. It returns stdout, stderr,
+// runArgs executes the CLI as the primary account without a *testing.T, so
+// suite-level fixtures and cleanup (which run outside a test) can invoke it.
+func runArgs(stdin io.Reader, args ...string) (stdout, stderr string, exitCode int, err error) {
+	return runAs(primary, stdin, args...)
+}
+
+// runAs executes the CLI as one of the two accounts. It returns stdout, stderr,
 // the exit code, and a non-nil error only when the process failed to start.
 //
-// It passes the arguments through untouched. Consent is added by the helpers
-// that demand success, never here: a runner that quietly agreed to everything
-// would make `run` unable to observe a command being refused, which is the one
-// thing the tests about refusal have to see.
-func runArgs(stdin io.Reader, args ...string) (stdout, stderr string, exitCode int, err error) {
+// The child environment is built from an allowlist rather than inherited. This
+// is the one place a target account is chosen, so it is the one place the choice
+// can be enforced: whatever a developer happens to have exported, the binary
+// under test sees a stated environment and can act only as the profile named
+// here.
+//
+// The arguments are otherwise passed through untouched. Consent is added by the
+// helpers that demand success, never here: a runner that quietly agreed to
+// everything would make `run` unable to observe a command being refused, which
+// is the one thing the tests about refusal have to see.
+func runAs(profile string, stdin io.Reader, args ...string) (stdout, stderr string, exitCode int, err error) {
+	a, ok := accounts[profile]
+	if !ok {
+		return "", "", -1, fmt.Errorf("unknown test profile %q", profile)
+	}
+	args = withPassword(a, args)
+
 	var outBuf, errBuf bytes.Buffer
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 	cmd.Stdin = stdin
-	cmd.Env = os.Environ()
+	cmd.Env = childEnv(profile)
 	if runErr := cmd.Run(); runErr != nil {
 		if exitErr, ok := runErr.(*exec.ExitError); ok {
 			return outBuf.String(), errBuf.String(), exitErr.ExitCode(), nil
@@ -110,6 +204,87 @@ func runArgs(stdin io.Reader, args ...string) (stdout, stderr string, exitCode i
 		return outBuf.String(), errBuf.String(), -1, runErr
 	}
 	return outBuf.String(), errBuf.String(), 0, nil
+}
+
+// reauthCommands are the commands Proton may ask to re-authenticate, and so the
+// ones that carry the credential flags. It mirrors the set the CLI declares,
+// which internal/cli/conformance_test.go pins.
+var reauthCommands = [][]string{
+	{"calendar", "settings", "calendars", "delete"},
+	{"mail", "settings", "autoreply", "set"},
+}
+
+// withPassword hands such a command the profile's password file.
+//
+// It goes directly after the command's own words: the flag belongs to that
+// command rather than to the root, so it is unknown before the subcommand, and
+// anything after the `--` the binary inserts ahead of a leading-dash ID would be
+// read as an argument.
+func withPassword(a *testAccount, args []string) []string {
+	if a.passwordFile == "" {
+		return args
+	}
+	for _, cmd := range reauthCommands {
+		at := indexOfRun(args, cmd...)
+		if at < 0 {
+			continue
+		}
+		out := make([]string, 0, len(args)+2)
+		out = append(out, args[:at+len(cmd)]...)
+		out = append(out, "--password-file", a.passwordFile)
+		return append(out, args[at+len(cmd):]...)
+	}
+	return args
+}
+
+// indexOfRun reports where args holds the words in order and adjacent, or -1.
+// That is how a command is recognised once the helpers have put their own flags
+// in front of it.
+func indexOfRun(args []string, run ...string) int {
+	for i := 0; i+len(run) <= len(args); i++ {
+		if slices.Equal(args[i:i+len(run)], run) {
+			return i
+		}
+	}
+	return -1
+}
+
+// childEnv is the whole environment the binary under test runs in: what it needs
+// to find its toolchain, its home and its session store, plus the profile to act
+// as. Nothing else is carried over.
+func childEnv(profile string) []string {
+	env := []string{
+		"PROTON_PROFILE=" + profile,
+		// There is no terminal here, so a missing credential should be an error
+		// rather than a question asked of nobody.
+		"PROTON_NO_INPUT=1",
+	}
+	for _, k := range []string{
+		"PATH", "HOME", "TMPDIR", "USER", "LANG", "TZ",
+		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR",
+		"DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS",
+	} {
+		if v, ok := os.LookupEnv(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	return env
+}
+
+// withEnv overrides entries in a child environment by name, so a caller never
+// has to reason about which of two settings of the same variable wins.
+func withEnv(env []string, overrides map[string]string) []string {
+	out := make([]string, 0, len(env)+len(overrides))
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if _, replaced := overrides[name]; !replaced {
+			out = append(out, kv)
+		}
+	}
+	for k, v := range overrides {
+		out = append(out, k+"="+v)
+	}
+	return out
 }
 
 // runWithStdin is run() with arbitrary stdin bytes attached.
@@ -120,6 +295,27 @@ func runWithStdin(t *testing.T, stdin io.Reader, args ...string) (stdout, stderr
 		t.Fatalf("failed to run command %v: %v", args, err)
 	}
 	return stdout, stderr, exitCode
+}
+
+// runWithEnv runs the CLI with extra env vars layered on top of os.Environ().
+// Returns stdout, stderr, exit code.
+func runWithEnv(t *testing.T, env map[string]string, args ...string) (stdout, stderr string, exit int) {
+	t.Helper()
+	cmd := exec.Command(binaryPath, withPassword(accounts[primary], args)...)
+	cmd.Env = withEnv(childEnv(primary), env)
+	var outB, errB strings.Builder
+	cmd.Stdout = &outB
+	cmd.Stderr = &errB
+	err := cmd.Run()
+	exit = 0
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			exit = ee.ExitCode()
+		} else {
+			t.Fatalf("run %v: %v", args, err)
+		}
+	}
+	return outB.String(), errB.String(), exit
 }
 
 // consenting puts --yes ahead of everything.
@@ -172,7 +368,11 @@ func asJSON(args []string) []string {
 // runJSON runs with `--output json` and parses stdout as a JSON object.
 func runJSON(t *testing.T, args ...string) map[string]interface{} {
 	t.Helper()
-	stdout := runOK(t, asJSON(args)...)
+	return parseJSONObject(t, runOK(t, asJSON(args)...))
+}
+
+func parseJSONObject(t *testing.T, stdout string) map[string]interface{} {
+	t.Helper()
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("failed to parse JSON object: %v\nraw: %s", err, truncateOutput(stdout))
@@ -189,7 +389,11 @@ func runJSON(t *testing.T, args ...string) map[string]interface{} {
 // would be a bug in the envelope itself.
 func runJSONArray(t *testing.T, args ...string) []interface{} {
 	t.Helper()
-	stdout := runOK(t, asJSON(args)...)
+	return parseJSONArray(t, runOK(t, asJSON(args)...))
+}
+
+func parseJSONArray(t *testing.T, stdout string) []interface{} {
+	t.Helper()
 	var env map[string]interface{}
 	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
 		t.Fatalf("collection output is not an envelope: %v\nraw: %s", err, truncateOutput(stdout))
@@ -298,23 +502,73 @@ func truncateOutput(s string) string {
 	return s
 }
 
-// selfEmail returns PROTON_USER.
-func selfEmail() string { return os.Getenv("PROTON_USER") }
+// selfEmail returns the primary account's address.
+func selfEmail() string { return os.Getenv(accounts[primary].userVar) }
 
-// altEmail returns the second account's address (PROTON_ALT_USER).
-func altEmail() string { return os.Getenv("PROTON_ALT_USER") }
+// secondaryEmail returns the second account's address.
+func secondaryEmail() string { return os.Getenv(accounts[secondary].userVar) }
 
-// alt prefixes CLI args with `--profile alt`, so the command runs as the second
-// account. Combine with any runner: runOK(t, alt("mail","addresses","list")...).
-func alt(args ...string) []string {
-	return append([]string{"--profile", "alt"}, args...)
+// The secondary-account runners. A scenario needs one whenever it genuinely
+// takes two Proton users: accepting a share invitation, receiving mail, or
+// organizing an invite the primary RSVPs to.
+//
+// Run order matters - the primary invites or sends, the secondary accepts or
+// receives - and a mutation made as one account registers its cleanup as the
+// same one.
+
+func runSecondary(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+	stdout, stderr, exitCode, err := runAs(secondary, nil, args...)
+	if err != nil {
+		t.Fatalf("failed to run command %v as the secondary account: %v", args, err)
+	}
+	return stdout, stderr, exitCode
 }
 
-// externalRecipient is the non-Proton (GMX) alt address, used by tests that
-// must deliver to a real external mailbox (see tests/AGENTS.md "Test Alt
-// Accounts"). Sending to a fake @example.com address instead bounces
-// (nullMX), littering the inbox with MAILER-DAEMON returns.
-const externalRecipient = "rl00@gmx.at"
+func runOKSecondary(t *testing.T, args ...string) string {
+	t.Helper()
+	stdout, stderr, code := runSecondary(t, consenting(args)...)
+	if code != 0 {
+		t.Fatalf("command %v failed as the secondary account (exit %d):\nstdout: %s\nstderr: %s",
+			args, code, truncateOutput(stdout), truncateOutput(stderr))
+	}
+	return stdout
+}
+
+func runJSONSecondary(t *testing.T, args ...string) map[string]interface{} {
+	t.Helper()
+	return parseJSONObject(t, runOKSecondary(t, asJSON(args)...))
+}
+
+func runJSONArraySecondary(t *testing.T, args ...string) []interface{} {
+	t.Helper()
+	return parseJSONArray(t, runOKSecondary(t, asJSON(args)...))
+}
+
+// cleanupRunSecondary is cleanupRun for something the secondary account owns.
+func cleanupRunSecondary(t *testing.T, description string, args ...string) {
+	t.Helper()
+	cleanup(t, description, func() error {
+		_, stderr, code := runSecondary(t, consenting(args)...)
+		if code != 0 && code != 3 {
+			return fmt.Errorf("exit %d: %s", code, strings.TrimSpace(stderr))
+		}
+		return nil
+	})
+}
+
+// externalRecipient is a non-Proton mailbox, for tests that must deliver outside
+// Proton. Sending to a fake @example.com address instead bounces (nullMX),
+// littering the inbox with MAILER-DAEMON returns, so a test that needs one skips
+// when none is configured.
+func externalRecipient(t *testing.T) string {
+	t.Helper()
+	v := os.Getenv("PROTON_CLI_TEST_EXTERNAL_RECIPIENT")
+	if v == "" {
+		t.Skip("PROTON_CLI_TEST_EXTERNAL_RECIPIENT is not set")
+	}
+	return v
+}
 
 // ── mail delivery + polling ──
 
@@ -697,4 +951,33 @@ func tinyPNG() []byte {
 	var b bytes.Buffer
 	_ = png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 1, 1)))
 	return b.Bytes()
+}
+
+// ── the runner is the only way in ──
+
+// TestEveryInvocationGoesThroughTheRunner keeps the binary from being spawned
+// anywhere but here.
+//
+// runAs is the one place that chooses which account a command acts as and builds
+// the environment it runs in. A test that starts the process itself inherits
+// whatever the developer has exported and acts as whatever profile that names -
+// which is how a stdin upload once landed in a personal Drive instead of the
+// primary account's, and reported an empty folder rather than a failure.
+func TestEveryInvocationGoesThroughTheRunner(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read the test directory: %v", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") || e.Name() == "integration_test.go" {
+			continue
+		}
+		src, err := os.ReadFile(e.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		if strings.Contains(string(src), "exec.Command(binaryPath") {
+			t.Errorf("%s starts the binary itself; go through run, runOK or runAs so the account is chosen in one place", e.Name())
+		}
+	}
 }

@@ -9,7 +9,7 @@ import (
 type TrashEntry struct {
 	ShareID string `json:"share_id"`
 	LinkID  string `json:"link_id"`
-	Type    int    `json:"type"`
+	Type    string `json:"type"`
 	Size    int64  `json:"size"`
 	Trashed int64  `json:"trashed"`
 }
@@ -35,7 +35,7 @@ func (s *Service) TrashList(ctx context.Context, dc *Context) ([]TrashEntry, err
 				out = append(out, TrashEntry{ShareID: t.ShareID, LinkID: id})
 				continue
 			}
-			out = append(out, TrashEntry{ShareID: t.ShareID, LinkID: id, Type: l.Type, Size: l.Size})
+			out = append(out, TrashEntry{ShareID: t.ShareID, LinkID: id, Type: linkType(l.Type), Size: l.Size})
 		}
 	}
 	return out, nil

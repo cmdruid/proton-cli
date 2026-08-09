@@ -1253,6 +1253,32 @@ func TestMailLabelsUpdate(t *testing.T) {
 	newName := name + "-renamed"
 	runOK(t, "mail", "settings", "labels", "update", "--name", newName, "--color", "#DB60D6", id)
 	assertContains(t, runOK(t, "mail", "settings", "labels", "list"), newName)
+
+	// Proton replaces the whole label rather than patching it, so a change to one
+	// field has to carry the rest back: a recolour must not rename, and a rename
+	// must not reset the colour.
+	runOK(t, "mail", "settings", "labels", "update", "--color", "#3CBB3A", id)
+	assertLabel(t, id, newName, "#3CBB3A")
+
+	again := newName + "-again"
+	runOK(t, "mail", "settings", "labels", "update", "--name", again, id)
+	assertLabel(t, id, again, "#3CBB3A")
+}
+
+// assertLabel checks one label's whole record, for the fields an update replaces.
+func assertLabel(t *testing.T, id, name, color string) {
+	t.Helper()
+	for _, row := range runJSONArray(t, "mail", "settings", "labels", "list") {
+		m := row.(map[string]interface{})
+		if m["id"] != id {
+			continue
+		}
+		if m["name"] != name || m["color"] != color {
+			t.Errorf("label is %v/%v, want %v/%v", m["name"], m["color"], name, color)
+		}
+		return
+	}
+	t.Errorf("label %s is not in the list", id)
 }
 
 func TestMailFiltersUpdate(t *testing.T) {
@@ -1459,21 +1485,21 @@ func TestMailSendExpiringHasExpirationTime(t *testing.T) {
 
 func TestMailSendEncryptedForOutsideDryRun(t *testing.T) {
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
-		"--to", externalRecipient, "--subject", testID()+"-eo-dry",
+		"--to", externalRecipient(t), "--subject", testID()+"-eo-dry",
 		"--body", "secret", "--eo-password", "hunter2", "--eo-password-hint", "the usual")
 	assertContains(t, stderr, "Dry run")
 }
 
 // TestMailSendEncryptedForOutside exercises the encrypted-for-outside (password)
 // send path end to end. It delivers to a real external (non-Proton) mailbox -
-// the GMX alt, per tests/AGENTS.md - so a non-zero exit means either an
+// an external mailbox, per tests/AGENTS.md - so a non-zero exit means either an
 // EO-packaging regression or a server-side address policy. (Sending to a fake
 // @example.com address instead would bounce with a MAILER-DAEMON return.)
 func TestMailSendEncryptedForOutside(t *testing.T) {
 	subject := testID() + "-eo-real"
 
 	runOK(t, "mail", "messages", "send",
-		"--to", externalRecipient, "--subject", subject, "--body", "encrypted outside body",
+		"--to", externalRecipient(t), "--subject", subject, "--body", "encrypted outside body",
 		"--eo-password", "hunter2", "--eo-password-hint", "the usual")
 
 	sentID := findMessage(t, "sent", subject)
@@ -1519,15 +1545,15 @@ func TestMailFoldersNestedReportsParent(t *testing.T) {
 
 // ── cross-account delivery (internal E2EE) ──
 //
-// Needs the "Proton Alt" second account (the `alt` profile): the primary sends
-// to the alt, which decrypts the body and verifies the sender signature.
+// Needs the second account (the `secondary` profile): the primary sends to it,
+// and it decrypts the body and verifies the sender signature.
 
-// altMailContaining finds an inbox message on the alt account from `from` whose
+// secondaryMailContaining finds an inbox message on the second account from `from` whose
 // decrypted body contains `needle`, returning its ID (or ""). Shared with the
 // calendar RSVP round-trip, which checks the organizer's reply email.
-func altMailContaining(t *testing.T, from, needle string) string {
+func secondaryMailContaining(t *testing.T, from, needle string) string {
 	t.Helper()
-	list := runJSON(t, alt("mail", "messages", "list", "--folder", "inbox", "--page-size", "20")...)
+	list := runJSONSecondary(t, "mail", "messages", "list", "--folder", "inbox", "--page-size", "20")
 	msgs, _ := list["messages"].([]interface{})
 	for _, m := range msgs {
 		mm := m.(map[string]interface{})
@@ -1535,7 +1561,7 @@ func altMailContaining(t *testing.T, from, needle string) string {
 			continue
 		}
 		id, _ := mm["id"].(string)
-		if body, _, code := run(t, alt("mail", "messages", "get", "--body-only", id)...); code == 0 && strings.Contains(body, needle) {
+		if body, _, code := runSecondary(t, "mail", "messages", "get", "--body-only", id); code == 0 && strings.Contains(body, needle) {
 			return id
 		}
 	}
@@ -1545,27 +1571,27 @@ func altMailContaining(t *testing.T, from, needle string) string {
 func TestMailCrossAccountDelivery(t *testing.T) {
 	subject := testID() + "-x2acct"
 	body := "cross-account e2ee body for " + subject
-	runOK(t, "mail", "messages", "send", "--to", altEmail(), "--subject", subject, "--body", body)
+	runOK(t, "mail", "messages", "send", "--to", secondaryEmail(), "--subject", subject, "--body", body)
 
 	if sentID := findMessage(t, "sent", subject); sentID != "" {
 		cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+sentID,
 			"mail", "messages", "delete", sentID)
 	}
 
-	// The alt receives it, decrypts the body, and the sender signature verifies
+	// The second account receives it, decrypts the body, and the signature verifies
 	// (internal Proton-to-Proton mail is signed with the sender's address key).
 	var recvID string
 	waitFor(45*time.Second, 3*time.Second, func() bool {
-		recvID = altMailContaining(t, selfEmail(), body)
+		recvID = secondaryMailContaining(t, selfEmail(), body)
 		return recvID != ""
 	})
 	if recvID == "" {
-		t.Fatal("alt did not receive the cross-account mail")
+		t.Fatal("the second account did not receive the cross-account mail")
 	}
-	cleanupRun(t, "Delete received mail (alt): proton-cli --profile alt mail messages delete "+recvID,
-		alt("mail", "messages", "delete", recvID)...)
+	cleanupRunSecondary(t, "Delete received mail (secondary): proton-cli --profile secondary mail messages delete "+recvID,
+		"mail", "messages", "delete", recvID)
 
-	read := runOK(t, alt("mail", "messages", "get", recvID)...)
+	read := runOKSecondary(t, "mail", "messages", "get", recvID)
 	assertContains(t, read, body)
 	assertField(t, read, "Signature:", "verified")
 }

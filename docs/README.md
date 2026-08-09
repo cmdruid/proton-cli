@@ -16,7 +16,7 @@
 | --- | --- |
 | [Command reference](commands/README.md) | Every command in the tree (generated) |
 | [Mail](commands/mail.md) · [Drive](commands/drive.md) · [Calendar](commands/calendar.md) · [Contacts](commands/contacts.md) · [Pass](commands/pass.md) · [Account](commands/account.md) · [API](commands/api.md) | One page per app |
-| [Configuration](configuration.md) | Credentials, profiles, sessions, environment |
+| [Configuration](configuration.md) | Signing in, profiles, sessions, environment variables |
 | [Scripting](scripting.md) | Pipelines, `jq`, cron and systemd |
 
 ## Understanding it

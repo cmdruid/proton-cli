@@ -2,9 +2,7 @@ package calendar
 
 import (
 	"context"
-	"crypto/sha1"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -16,7 +14,10 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-type Service struct{ C proton.Doer }
+type Service struct {
+	C         proton.Doer
+	canonical map[string]canonicalAddr
+}
 
 func New(c proton.Doer) *Service { return &Service{C: c} }
 
@@ -25,16 +26,6 @@ type calKeys struct {
 	addrKR   *pgp.KeyRing
 	memberID string
 	email    string
-}
-
-func canonicalEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
-}
-
-// attendeeToken is the Proton attendee token: hex SHA-1 of UID+canonicalEmail.
-func attendeeToken(uid, email string) string {
-	sum := sha1.Sum([]byte(uid + canonicalEmail(email)))
-	return hex.EncodeToString(sum[:])
 }
 
 func (s *Service) unlockCalendar(ctx context.Context, u *keys.Unlocked, calendarID string) (*calKeys, error) {

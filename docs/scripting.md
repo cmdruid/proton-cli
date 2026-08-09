@@ -117,7 +117,18 @@ proton-cli drive items download /report.pdf --output - | gpg --encrypt --recipie
 ### Nightly backup (cron)
 
 ```cron
-0 3 * * * PROTON_USER=me@proton.me PROTON_PASSWORD="$(cat ~/.proton-pw)" /usr/bin/proton-cli drive items upload --recursive /var/backups /Backups >/dev/null
+0 3 * * * /usr/local/bin/proton-backup >/dev/null
+```
+
+```bash
+#!/usr/bin/env bash
+# /usr/local/bin/proton-backup
+set -euo pipefail
+
+# Signing in again as the same account does nothing, so running this every time
+# costs nothing and recovers on its own from a session that expired.
+proton-cli account login --user me@proton.me --password-file ~/.proton-pw
+proton-cli drive items upload --recursive /var/backups /Backups
 ```
 
 ### Keep the inbox tidy
@@ -143,8 +154,9 @@ The `--yes` is not optional there. A cron job has no terminal, so anything that 
 # ~/.config/systemd/user/proton-backup.service
 [Service]
 Type=oneshot
-Environment=PROTON_USER=me@proton.me
-EnvironmentFile=%h/.config/proton-cli/credentials
+Environment=PROTON_NO_INPUT=1
+LoadCredential=proton:%h/.proton-pw
+ExecStart=/usr/bin/proton-cli account login --user me@proton.me --password-file %d/proton
 ExecStart=/usr/bin/proton-cli drive items upload --recursive %h/Documents /Backups
 ```
 
@@ -178,8 +190,9 @@ alias newsletter-xyz
 
 ## Automation notes
 
-- **Credentials**: keep them out of your shell history. Read them from a password manager (`PROTON_PASSWORD=$(pass show proton/password)`) or a file only your user can read.
-- **2FA**: `PROTON_TOTP` is only consulted during a fresh login. For unattended jobs, log in once interactively so the session file exists, then let the job reuse it.
+- **Credentials**: an account is attached to a profile by `account login`. Hand the password over with `--password-file`, from a path only your user can read - systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all give you one.
+- **2FA**: `--totp` is only consulted during a fresh login. For unattended jobs, sign in once interactively so the session file exists, then let the job reuse it.
+- **Elevation**: Proton asks for the password again before `calendar settings calendars delete` and `mail settings autoreply set`. A session cannot answer for it, so those commands take `--password-file` and `--password-stdin` of their own.
 - **CAPTCHA**: a login on a headless machine can hit human verification, which needs a desktop. Log in on a desktop first and copy the session, or run the job somewhere with a display. See [Human verification](human-verification.md).
 - **`--quiet`** silences the `✓` lines and progress bars, useful in cron.
 - **Rate limits**: bulk commands page through Proton's API and respect its caps (150 messages per page). Long-running loops should sleep between iterations.

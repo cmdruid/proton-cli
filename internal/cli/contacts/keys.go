@@ -103,7 +103,7 @@ func keysPinCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			armored, err := readKey(keyPath)
+			armored, err := readKey(c, keyPath)
 			if err != nil {
 				return err
 			}
@@ -188,9 +188,13 @@ func pickEmail(c *kit.Invocation, id, flag string) (string, error) {
 		Hint(lines...).Exit(4)
 }
 
-func readKey(path string) (string, error) {
+func readKey(c *kit.Invocation, path string) (string, error) {
 	if path == "-" {
-		data, err := io.ReadAll(os.Stdin)
+		r, err := c.App.Stdin("--key -")
+		if err != nil {
+			return "", err
+		}
+		data, err := io.ReadAll(r)
 		if err != nil {
 			return "", err
 		}

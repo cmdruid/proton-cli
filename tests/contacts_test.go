@@ -82,30 +82,30 @@ func TestContactsUpdatePreservesPinnedKey(t *testing.T) {
 	}
 }
 
-// TestMailSendToPinnedContactStillDelivers pins the alt's real public key on a
+// TestMailSendToPinnedContactStillDelivers pins the second account's real public key on a
 // contact and sends to it: a matching pin must not break E2EE delivery, and
-// the alt must still decrypt the body with a verified signature.
+// the second account must still decrypt the body with a verified signature.
 func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
-	data := runJSON(t, "api", "GET", "/core/v4/keys/all", "--query", "Email="+altEmail(), "--query", "InternalOnly=0")
+	data := runJSON(t, "api", "GET", "/core/v4/keys/all", "--query", "Email="+secondaryEmail(), "--query", "InternalOnly=0")
 	addr, _ := data["Address"].(map[string]interface{})
 	ks, _ := addr["Keys"].([]interface{})
 	if len(ks) == 0 {
-		t.Skip("no public key published for the alt account")
+		t.Skip("no public key published for the second account")
 	}
 	pub, _ := ks[0].(map[string]interface{})["PublicKey"].(string)
-	keyPath := filepath.Join(t.TempDir(), "alt.asc")
+	keyPath := filepath.Join(t.TempDir(), "secondary.asc")
 	if err := os.WriteFile(keyPath, []byte(pub), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-altpin", "--email", altEmail()))
+	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-altpin", "--email", secondaryEmail()))
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
 		"contacts", "delete", "--", id)
-	runOK(t, "contacts", "keys", "pin", "--key", keyPath, "--email", altEmail(), id)
+	runOK(t, "contacts", "keys", "pin", "--key", keyPath, "--email", secondaryEmail(), id)
 
 	subject := testID() + "-pinned-send"
 	body := "pinned-key body for " + subject
-	runOK(t, "mail", "messages", "send", "--to", altEmail(), "--subject", subject, "--body", body)
+	runOK(t, "mail", "messages", "send", "--to", secondaryEmail(), "--subject", subject, "--body", body)
 	if sentID := findMessage(t, "sent", subject); sentID != "" {
 		cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+sentID,
 			"mail", "messages", "delete", sentID)
@@ -113,16 +113,16 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 
 	var recvID string
 	waitFor(45*time.Second, 3*time.Second, func() bool {
-		recvID = altMailContaining(t, selfEmail(), body)
+		recvID = secondaryMailContaining(t, selfEmail(), body)
 		return recvID != ""
 	})
 	if recvID == "" {
-		t.Fatal("alt did not receive the pinned-key mail")
+		t.Fatal("the second account did not receive the pinned-key mail")
 	}
-	cleanupRun(t, "Delete received mail (alt): proton-cli --profile alt mail messages delete "+recvID,
-		alt("mail", "messages", "delete", recvID)...)
+	cleanupRunSecondary(t, "Delete received mail (secondary): proton-cli --profile secondary mail messages delete "+recvID,
+		"mail", "messages", "delete", recvID)
 
-	read := runOK(t, alt("mail", "messages", "get", recvID)...)
+	read := runOKSecondary(t, "mail", "messages", "get", recvID)
 	assertContains(t, read, body)
 	assertField(t, read, "Signature:", "verified")
 }
@@ -133,14 +133,14 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 // a regression guard for the send-abort cleanup, which used the wrong HTTP
 // method and silently leaked drafts on any aborted send.
 func TestMailSendPinnedMismatchRefused(t *testing.T) {
-	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-mismatch", "--email", altEmail()))
+	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-mismatch", "--email", secondaryEmail()))
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
 		"contacts", "delete", "--", id)
-	// A freshly generated key is a valid PGP key but not the alt's primary.
-	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", altEmail(), id)
+	// A freshly generated key is a valid PGP key but not the second account's.
+	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", secondaryEmail(), id)
 
 	subject := testID() + "-mismatch"
-	_, stderr, code := run(t, "mail", "messages", "send", "--to", altEmail(), "--subject", subject, "--body", "nope")
+	_, stderr, code := run(t, "mail", "messages", "send", "--to", secondaryEmail(), "--subject", subject, "--body", "nope")
 	if code != 1 {
 		t.Errorf("expected exit 1 on a pinned-key mismatch, got %d (stderr: %s)", code, stderr)
 	}
@@ -268,7 +268,17 @@ func TestContactsMultiValue(t *testing.T) {
 
 func TestContactsGroups(t *testing.T) {
 	gname := testID() + "-group"
-	gid := strings.TrimSpace(runOK(t, "contacts", "groups", "create", "--name", gname, "--color", "#8080FF"))
+	stdout, stderr, code := run(t, "contacts", "groups", "create", "--name", gname, "--color", "#8080FF")
+	if code != 0 {
+		// Proton answers 2027 when the account's plan does not include contact
+		// groups. Matched on the code rather than the sentence, which is Proton's
+		// to reword.
+		if strings.Contains(stderr, "2027") {
+			t.Skip("contact groups need a paid plan and this account does not have one")
+		}
+		t.Fatalf("groups create failed (exit %d): %s", code, truncateOutput(stderr))
+	}
+	gid := strings.TrimSpace(stdout)
 	cleanupRun(t, fmt.Sprintf("Delete group: proton-cli contacts groups delete %s", gid),
 		"contacts", "groups", "delete", "--", gid)
 

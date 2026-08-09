@@ -69,9 +69,9 @@ func selectItems(c *kit.Invocation, dc *drivesvc.Context, f *filters) (kit.Selec
 			if err != nil {
 				return drivesvc.Child{}, err
 			}
-			kind := 2
+			kind := drivesvc.TypeFile
 			if res.IsFolder {
-				kind = 1
+				kind = drivesvc.TypeFolder
 			}
 			return drivesvc.Child{
 				LinkID: res.LinkID, Name: filepath.Base(ref),
@@ -139,7 +139,7 @@ func matchItems(ctx stdctx.Context, c *kit.Invocation, dc *drivesvc.Context, f *
 		if !f.recursive && depthBelow(root, ch.Path) > 1 {
 			continue
 		}
-		isFile := ch.Type != 1
+		isFile := ch.Type != drivesvc.TypeFolder
 		if fileOnly && !isFile {
 			continue
 		}

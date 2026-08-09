@@ -28,11 +28,11 @@ func itemsCmd() *cobra.Command {
 func childColumns() []ui.Column[drivesvc.Child] {
 	return []ui.Column[drivesvc.Child]{
 		{Header: "ID", ID: true, Cell: func(ch drivesvc.Child) string { return ch.LinkID }},
-		{Header: "TYPE", Cell: func(ch drivesvc.Child) string { return itemType(ch.Type) }},
+		{Header: "TYPE", Cell: func(ch drivesvc.Child) string { return ch.Type }},
 		{Header: "SIZE", Right: true, Cell: func(ch drivesvc.Child) string {
 			// A folder has no size of its own. Blank is how every other column
 			// says "nothing here"; a placeholder glyph would read like a value.
-			if ch.Type == 1 {
+			if ch.Type == drivesvc.TypeFolder {
 				return ""
 			}
 			return units.Size(ch.Size)
@@ -146,7 +146,11 @@ func uploadOne(c *kit.Invocation, dc *drivesvc.Context, src, dest string) error 
 	var name string
 
 	if src == "-" {
-		r = os.Stdin
+		stdin, err := c.App.Stdin("SRC -")
+		if err != nil {
+			return err
+		}
+		r = stdin
 		name = fmt.Sprintf("stdin-%d", time.Now().Unix())
 		// A stream has no name, so DEST carries it: an existing folder receives
 		// the generated name, and any other path is parent plus new file name.

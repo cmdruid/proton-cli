@@ -9,11 +9,29 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
+// The kinds a link can be. A response says what a thing is rather than which
+// number Proton files it under.
+const (
+	TypeFolder = "folder"
+	TypeFile   = "file"
+)
+
+// linkType names Proton's numeric link kind.
+func linkType(t int) string {
+	if t == protonFolder {
+		return TypeFolder
+	}
+	return TypeFile
+}
+
+// protonFolder is Proton's number for a folder link.
+const protonFolder = 1
+
 type Child struct {
 	LinkID     string `json:"link_id"`
 	Name       string `json:"name"`
 	Path       string `json:"path,omitempty"`
-	Type       int    `json:"type"`
+	Type       string `json:"type"`
 	Size       int64  `json:"size"`
 	CreateTime int64  `json:"create_time,omitempty"`
 	ModifyTime int64  `json:"modify_time,omitempty"`
@@ -37,7 +55,7 @@ func (s *Service) List(ctx context.Context, dc *Context, path string) ([]Child, 
 		if err != nil {
 			name = "(decrypt failed)"
 		}
-		out = append(out, Child{LinkID: r.LinkID, Name: name, Type: r.Type, Size: r.Size, CreateTime: r.CreateTime, ModifyTime: r.ModifyTime})
+		out = append(out, Child{LinkID: r.LinkID, Name: name, Type: linkType(r.Type), Size: r.Size, CreateTime: r.CreateTime, ModifyTime: r.ModifyTime})
 	}
 	return out, nil
 }
@@ -67,7 +85,7 @@ func (s *Service) walk(ctx context.Context, shareID, linkID string, parentKR *pg
 			name = "(decrypt failed)"
 		}
 		full := prefix + "/" + name
-		out = append(out, Child{LinkID: r.LinkID, Name: name, Path: full, Type: r.Type, Size: r.Size, CreateTime: r.CreateTime, ModifyTime: r.ModifyTime})
+		out = append(out, Child{LinkID: r.LinkID, Name: name, Path: full, Type: linkType(r.Type), Size: r.Size, CreateTime: r.CreateTime, ModifyTime: r.ModifyTime})
 		if r.Type == 1 {
 			childKR, err := unlockNode(&r, parentKR, nil)
 			if err != nil {

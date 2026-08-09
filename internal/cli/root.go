@@ -32,9 +32,6 @@ var version = "dev"
 
 type globalFlags struct {
 	profile    string
-	user       string
-	password   string
-	totp       string
 	apiURL     string
 	appVersion string
 	output     string
@@ -74,12 +71,9 @@ func newRoot() *cobra.Command {
 	}
 
 	pf := root.PersistentFlags()
-	pf.StringVar(&g.profile, "profile", "", "Profile to use (env: PROTON_PROFILE; default: default)")
-	pf.StringVar(&g.user, "user", "", "Proton account email (env: PROTON_USER, or PROTON_<PROFILE>_USER)")
-	pf.StringVar(&g.password, "password", "", "Account password (env: PROTON_PASSWORD, or PROTON_<PROFILE>_PASSWORD)")
-	pf.StringVar(&g.totp, "totp", "", "TOTP 2FA code (env: PROTON_TOTP, or PROTON_<PROFILE>_TOTP)")
-	pf.StringVar(&g.apiURL, "api-url", "", "API base URL (env: PROTON_API_URL, or PROTON_<PROFILE>_API_URL)")
-	pf.StringVar(&g.appVersion, "app-version", "", "App version header (env: PROTON_APP_VERSION, or PROTON_<PROFILE>_APP_VERSION)")
+	pf.StringVar(&g.profile, "profile", "", "Profile to act as (env: PROTON_PROFILE; default: default)")
+	pf.StringVar(&g.apiURL, "api-url", "", "API base URL (env: PROTON_API_URL)")
+	pf.StringVar(&g.appVersion, "app-version", "", "App version header (env: PROTON_APP_VERSION)")
 	pf.StringVar(&g.output, "output", "text", "Output format: text, json, yaml")
 	pf.BoolVar(&g.quiet, "quiet", false, "Suppress non-essential stderr output")
 	pf.StringVar(&g.logLevel, "log-level", "",
@@ -111,9 +105,6 @@ func newRoot() *cobra.Command {
 		}
 		a, err := app.New(app.Options{
 			Profile:    g.profile,
-			User:       g.user,
-			Password:   g.password,
-			TOTP:       g.totp,
 			APIURL:     g.apiURL,
 			AppVersion: g.appVersion,
 			Version:    version,

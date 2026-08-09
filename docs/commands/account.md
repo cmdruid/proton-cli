@@ -27,9 +27,9 @@ proton-cli account logout --revoke     # also invalidate it at Proton
 proton-cli account logout --all        # every profile on this machine
 ```
 
-`login` asks for whatever the environment has not already supplied, as long as it is running in a terminal. It also unlocks your keys, so your password is needed **once** per machine and not again - later commands read and write encrypted content without it.
+`login` asks for whatever a flag has not already supplied, as long as it is running in a terminal. Without one, name the account with `--user` and hand the password over with `--password-file` or `--password-stdin`. It also unlocks your keys, so your password is needed **once** per machine and not again - later commands read and write encrypted content without it.
 
-Two-factor codes rotate every thirty seconds, so letting `login` ask is usually easier than exporting `PROTON_TOTP`.
+Signing in again as the same account changes nothing, so an unattended job can run it ahead of its real work and recover on its own from a session that expired or was revoked.
 
 Security keys are not supported: they need a browser. If your account uses one, add an authenticator app in Proton's settings and sign in with that code.
 
@@ -39,7 +39,7 @@ proton-cli account login --no-input    # fail instead of asking
 
 ## Profiles
 
-A profile is a named session slot on this machine. With an interactive login, a second account needs no environment variables at all:
+A profile is a named session slot on this machine. An account gets into one by signing in:
 
 ```console
 $ proton-cli --profile work account login

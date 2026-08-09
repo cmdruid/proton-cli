@@ -100,4 +100,4 @@ proton-cli calendar settings calendars update CALENDAR_ID --name Personal --colo
 proton-cli calendar settings calendars delete Work        # by name, or by calendar ID
 ```
 
-Colors have to be Proton accent colors; an invalid value prints the allowed list. Deleting a calendar is a password-scoped operation, so `PROTON_PASSWORD` has to be set even when a session already exists.
+Colors have to be Proton accent colors; an invalid value prints the allowed list. Deleting a calendar is a password-scoped operation, so it asks for your password even when a session already exists. With no terminal to ask, it takes `--password-file` or `--password-stdin`.

@@ -287,7 +287,7 @@ func trashCmd() *cobra.Command {
 func trashColumns() []ui.Column[drivesvc.TrashEntry] {
 	return []ui.Column[drivesvc.TrashEntry]{
 		{Header: "ID", ID: true, Cell: func(e drivesvc.TrashEntry) string { return e.LinkID }},
-		{Header: "TYPE", Cell: func(e drivesvc.TrashEntry) string { return itemType(e.Type) }},
+		{Header: "TYPE", Cell: func(e drivesvc.TrashEntry) string { return e.Type }},
 		{Header: "SIZE", Right: true, Cell: func(e drivesvc.TrashEntry) string { return units.Size(e.Size) }},
 		{Header: "TRASHED", Cell: func(e drivesvc.TrashEntry) string { return units.Time(e.Trashed) }},
 	}

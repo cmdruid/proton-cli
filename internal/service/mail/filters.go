@@ -24,11 +24,16 @@ func (s *Service) FiltersList(ctx context.Context) ([]Filter, error) {
 	return r.Filters, nil
 }
 
-func (s *Service) FilterCreate(ctx context.Context, name, sieve string, status int) (string, error) {
+// FilterCreate adds a filter, turned on.
+//
+// Proton has no say over that at creation - the endpoint takes a name, a script
+// and a version, and nothing else - so a filter that should start off is turned
+// off afterwards with FilterDisable.
+func (s *Service) FilterCreate(ctx context.Context, name, sieve string) (string, error) {
 	var r struct{ Filter struct{ ID string } }
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "POST", Path: "/mail/v4/filters",
-		Body: map[string]any{"Name": name, "Sieve": sieve, "Version": sieveVersion, "Status": status},
+		Body: map[string]any{"Name": name, "Sieve": sieve, "Version": sieveVersion},
 	}, &r); err != nil {
 		return "", err
 	}

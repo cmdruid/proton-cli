@@ -164,7 +164,7 @@ func TestDriveShareAddDryRun(t *testing.T) {
 // TestDriveShareMemberRoundTrip invites a real Proton address, verifies it shows
 // as pending, then revokes it.
 func TestDriveShareMemberRoundTrip(t *testing.T) {
-	invitee := altEmail()
+	invitee := secondaryEmail()
 	folder := "/" + testID() + "-memberrt"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "m.txt")
@@ -226,7 +226,7 @@ func runOKStderr2(t *testing.T, args ...string) string {
 
 // ── incoming invitations: two-account accept round-trip ──
 //
-// Needs the "Proton Alt" second account (the `alt` profile): the primary shares
+// Needs the second account (the `secondary` profile): the primary shares
 // an item with the alt, the alt accepts the invitation, and the primary then
 // sees the alt as a member. Exercises the real accept crypto (session-key
 // unwrap + signature), which the single-account tests can only dry-run.
@@ -234,7 +234,7 @@ func runOKStderr2(t *testing.T, args ...string) string {
 func altInvitationIDs(t *testing.T) map[string]bool {
 	t.Helper()
 	set := map[string]bool{}
-	for _, i := range runJSONArray(t, alt("drive", "invitations", "list")...) {
+	for _, i := range runJSONArraySecondary(t, "drive", "invitations", "list") {
 		if id, ok := i.(map[string]interface{})["invitation_id"].(string); ok {
 			set[id] = true
 		}
@@ -251,9 +251,9 @@ func TestDriveShareInvitationRoundTrip(t *testing.T) {
 
 	before := altInvitationIDs(t)
 
-	runOK(t, "drive", "share", "add", folder, altEmail(), "--edit")
-	cleanupRun(t, fmt.Sprintf("Revoke member: proton-cli drive share remove %s %s", folder, altEmail()),
-		"drive", "share", "remove", folder, altEmail())
+	runOK(t, "drive", "share", "add", folder, secondaryEmail(), "--edit")
+	cleanupRun(t, fmt.Sprintf("Revoke member: proton-cli drive share remove %s %s", folder, secondaryEmail()),
+		"drive", "share", "remove", folder, secondaryEmail())
 
 	// The alt sees the new pending invitation and accepts it.
 	var invID string
@@ -269,7 +269,7 @@ func TestDriveShareInvitationRoundTrip(t *testing.T) {
 	if invID == "" {
 		t.Fatal("alt did not receive the share invitation")
 	}
-	runOK(t, alt("drive", "invitations", "accept", invID)...)
+	runOKSecondary(t, "drive", "invitations", "accept", invID)
 
 	// The primary now sees the alt as a member, not a pending invitee.
 	var members string
@@ -277,9 +277,9 @@ func TestDriveShareInvitationRoundTrip(t *testing.T) {
 		st := runJSON(t, "drive", "share", "get", folder)
 		ms, _ := st["members"].([]interface{})
 		members = fmt.Sprintf("%v", ms)
-		return strings.Contains(members, altEmail())
+		return strings.Contains(members, secondaryEmail())
 	})
-	if !strings.Contains(members, altEmail()) {
+	if !strings.Contains(members, secondaryEmail()) {
 		t.Errorf("alt is not listed as a member after accepting; members=%s", members)
 	}
 }

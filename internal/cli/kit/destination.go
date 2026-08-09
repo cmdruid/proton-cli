@@ -180,12 +180,17 @@ func exists(path string) bool {
 
 // ReadTextArg resolves a text flag that may be "-", meaning stdin. Centralising
 // the convention is what makes `--body -`, `--sieve -`, `--message -` and
-// `--signature -` all behave the same.
-func ReadTextArg(value, flag string) (string, error) {
+// `--signature -` all behave the same - and what lets stdin have one owner, so
+// this and --password-stdin cannot quietly drain the same stream.
+func ReadTextArg(c *Invocation, value, flag string) (string, error) {
 	if value != "-" {
 		return value, nil
 	}
-	b, err := io.ReadAll(os.Stdin)
+	r, err := c.App.Stdin(flag + " -")
+	if err != nil {
+		return "", err
+	}
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return "", Fail("could not read %s from stdin: %v", flag, err)
 	}

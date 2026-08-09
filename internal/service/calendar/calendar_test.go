@@ -14,9 +14,8 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-func TestAttendeeTokenMatchesSHA1OfUIDAndCanonicalEmail(t *testing.T) {
-	// Casing/whitespace are canonicalised away, so these inputs hash identically.
-	got := attendeeToken("event-uid-42", "  Alice@Proton.me ")
+func TestAttendeeTokenMatchesSHA1OfUIDAndCanonicalAddress(t *testing.T) {
+	got := attendeeToken("event-uid-42", "alice@proton.me")
 
 	sum := sha1.Sum([]byte("event-uid-42" + "alice@proton.me")) //nolint:gosec
 	want := hex.EncodeToString(sum[:])
@@ -26,6 +25,21 @@ func TestAttendeeTokenMatchesSHA1OfUIDAndCanonicalEmail(t *testing.T) {
 	}
 	if len(got) != 40 {
 		t.Errorf("expected a 40-char hex SHA-1, got %d chars", len(got))
+	}
+}
+
+// The address is hashed as Proton reduces it, not as it was written. This pair
+// is a real event: protonalt.sessions986@proton.me carries the dot, and the
+// token Proton resolves an attendee by is the one without it. Hashing the
+// written form yields 5adccfab…, which no endpoint accepts.
+func TestAttendeeTokenHashesWhatProtonReducedTheAddressTo(t *testing.T) {
+	const uid = "1786119460522844246@proton-cli"
+
+	if got, want := attendeeToken(uid, "protonaltsessions986@proton.me"), "150cedec796a1a9fbd35097bc6a63154ad59541e"; got != want {
+		t.Errorf("attendeeToken(canonical) = %q, want %q", got, want)
+	}
+	if got := attendeeToken(uid, "protonalt.sessions986@proton.me"); got == "150cedec796a1a9fbd35097bc6a63154ad59541e" {
+		t.Error("the written and canonical forms must not hash alike, or this test proves nothing")
 	}
 }
 
@@ -125,19 +139,68 @@ func TestFindSelfAttendee(t *testing.T) {
 	attendees := []rawAttendee{{ID: "other", Token: "deadbeef"}, {ID: "mine", Token: mine, Status: 0}}
 
 	t.Run("matches my token", func(t *testing.T) {
-		id, email, ok := findSelfAttendee(uid, []keys.Address{{Email: "me@proton.me"}}, attendees)
+		id, email, ok := findSelfAttendee(map[string]string{mine: "me@proton.me"}, attendees)
 		if !ok || id != "mine" || email != "me@proton.me" {
 			t.Errorf("got (%q,%q,%v), want (mine,me@proton.me,true)", id, email, ok)
 		}
 	})
-	t.Run("canonicalizes case", func(t *testing.T) {
-		if _, _, ok := findSelfAttendee(uid, []keys.Address{{Email: "ME@Proton.ME"}}, attendees); !ok {
-			t.Error("expected a case-insensitive token match")
+	t.Run("no match", func(t *testing.T) {
+		stranger := attendeeToken(uid, "someone@else.com")
+		if _, _, ok := findSelfAttendee(map[string]string{stranger: "someone@else.com"}, attendees); ok {
+			t.Error("expected no match for an unrelated address")
 		}
 	})
-	t.Run("no match", func(t *testing.T) {
-		if _, _, ok := findSelfAttendee(uid, []keys.Address{{Email: "someone@else.com"}}, attendees); ok {
-			t.Error("expected no match for an unrelated address")
+}
+
+// selfTokens asks the server what each of the account's addresses reduces to,
+// so an account whose address carries a dot is named by the same token Proton
+// would compute for it.
+func TestSelfTokensNamesAddressesByTheirCanonicalForm(t *testing.T) {
+	d := &routeDoer{handler: func(r proton.Request) ([]byte, error) {
+		return canonicalJSON(map[string]string{"my.self@proton.me": "myself@proton.me"}), nil
+	}}
+
+	got, err := New(d).selfTokens(context.Background(), "uid-9", []keys.Address{{Email: "my.self@proton.me"}})
+	if err != nil {
+		t.Fatalf("selfTokens: %v", err)
+	}
+	want := attendeeToken("uid-9", "myself@proton.me")
+	if email, ok := got[want]; !ok || email != "my.self@proton.me" {
+		t.Errorf("expected the canonical token %q to name my.self@proton.me, got %v", want, got)
+	}
+	if _, ok := got[attendeeToken("uid-9", "my.self@proton.me")]; ok {
+		t.Error("the address as written must not produce a token")
+	}
+}
+
+func TestCanonicalEmailsAsksOnceAndRefusesAnUnanswerableAddress(t *testing.T) {
+	t.Run("batches and caches", func(t *testing.T) {
+		calls := 0
+		d := &routeDoer{handler: func(r proton.Request) ([]byte, error) {
+			calls++
+			return canonicalJSON(map[string]string{"a.b@proton.me": "ab@proton.me", "c@x.test": "c@x.test"}), nil
+		}}
+		s := New(d)
+		if _, err := s.canonicalEmails(context.Background(), []string{"a.b@proton.me", "c@x.test", "a.b@proton.me"}); err != nil {
+			t.Fatalf("canonicalEmails: %v", err)
+		}
+		if _, err := s.canonicalEmails(context.Background(), []string{"a.b@proton.me"}); err != nil {
+			t.Fatalf("canonicalEmails again: %v", err)
+		}
+		if calls != 1 {
+			t.Errorf("asked the server %d times, want 1", calls)
+		}
+		if q := d.reqs[0].Query["Emails[]"]; len(q) != 2 {
+			t.Errorf("asked for %v, want both addresses once each", q)
+		}
+	})
+
+	t.Run("an unanswered address is an error, not the address as written", func(t *testing.T) {
+		d := &routeDoer{handler: func(r proton.Request) ([]byte, error) {
+			return canonicalJSON(nil), nil
+		}}
+		if _, err := New(d).canonicalEmails(context.Background(), []string{"who@x.test"}); err == nil {
+			t.Fatal("expected an error when the server does not answer for an address")
 		}
 	})
 }
@@ -181,6 +244,19 @@ func (d *routeDoer) putTo(substr string) (proton.Request, bool) {
 	return proton.Request{}, false
 }
 
+// canonicalJSON builds the canonical-address endpoint's answer.
+func canonicalJSON(m map[string]string) []byte {
+	var responses []map[string]any
+	for email, canonical := range m {
+		responses = append(responses, map[string]any{
+			"Email":    email,
+			"Response": map[string]any{"CanonicalEmail": canonical, "Code": 1000},
+		})
+	}
+	b, _ := json.Marshal(map[string]any{"Code": 1001, "Responses": responses})
+	return b
+}
+
 // eventJSON builds a canned single-event GET body with one attendee.
 func eventJSON(t *testing.T, uid string, isOrganizer int, attendees []map[string]any) []byte {
 	t.Helper()
@@ -206,6 +282,8 @@ func TestEventRespondUpdatesPartstat(t *testing.T) {
 			return event, nil
 		case r.Method == "PUT" && strings.Contains(r.Path, "/attendees/att1"):
 			return []byte(`{"Code":1000}`), nil
+		case strings.Contains(r.Path, "/addresses/canonical"):
+			return canonicalJSON(map[string]string{"me@proton.me": "me@proton.me"}), nil
 		default:
 			// Members lookup etc.: empty so the best-effort reply build bails.
 			return []byte(`{}`), nil
@@ -257,7 +335,12 @@ func TestEventRespondRejectsOrganizer(t *testing.T) {
 func TestEventRespondNotAttendee(t *testing.T) {
 	uid := "uid-1"
 	event := eventJSON(t, uid, 0, []map[string]any{{"ID": "someoneelse", "Token": "deadbeef", "Status": 0}})
-	d := &routeDoer{handler: func(r proton.Request) ([]byte, error) { return event, nil }}
+	d := &routeDoer{handler: func(r proton.Request) ([]byte, error) {
+		if strings.Contains(r.Path, "/addresses/canonical") {
+			return canonicalJSON(map[string]string{"me@proton.me": "me@proton.me"}), nil
+		}
+		return event, nil
+	}}
 	u := &keys.Unlocked{Addresses: []keys.Address{{Email: "me@proton.me"}}}
 
 	_, err := New(d).EventRespond(context.Background(), u, "cal1", "ev1", partstatAccepted)

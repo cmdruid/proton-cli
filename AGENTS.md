@@ -37,7 +37,7 @@ After making code changes, run these in order. Stop on the first failure and fix
 
 ## Testing
 
-Tests are **integration tests** that run against the live Proton API. They require `PROTON_USER` and `PROTON_PASSWORD` environment variables.
+Tests are **integration tests** that run against the live Proton API. They run on the primary and secondary test accounts, and require `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`.
 
 - **`just test-fast` is always safe** - no API, no credentials, seconds to run
 - **Never run the full test suite** (`just test` / `go test ./tests/...`) - only the user triggers that manually

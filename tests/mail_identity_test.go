@@ -80,7 +80,8 @@ func TestMailSettingsAutoreply(t *testing.T) {
 		"--zone", "Europe/Vienna",
 		"--message", "Out of office (integration test).")
 	if code != 0 {
-		if strings.Contains(stderr, "upgrade") || strings.Contains(stderr, "paid") {
+		if strings.Contains(stderr, "upgrade") || strings.Contains(stderr, "paid") ||
+			strings.Contains(stderr, "subscription") {
 			t.Skip("auto-reply is a paid feature and this account does not have it")
 		}
 		t.Fatalf("autoreply set failed (exit %d): %s", code, stderr)

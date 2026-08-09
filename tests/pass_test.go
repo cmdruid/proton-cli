@@ -258,7 +258,7 @@ func TestPassLoginTOTPRoundTrips(t *testing.T) {
 	secret := "JBSWY3DPEHPK3PXP"
 	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "login",
 		"--name", name, "--username", "me@example.com",
-		"--totp", "otpauth://totp/Example:me?secret="+secret+"&issuer=Example"))
+		"--totp-uri", "otpauth://totp/Example:me?secret="+secret+"&issuer=Example"))
 	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", ref),
 		"pass", "items", "delete", "--", ref)
 

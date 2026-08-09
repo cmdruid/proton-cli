@@ -23,7 +23,7 @@ Every type takes `--name`, optional `--vault`, `--note`, `--field NAME=VALUE`, a
 
 ```bash
 # Login (the default type)
-proton-cli pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com --totp "otpauth://totp/GitHub?secret=..."
+proton-cli pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com --totp-uri "otpauth://totp/GitHub?secret=..."
 
 # Note
 proton-cli pass items create --type note --name "Door codes" --note "Front: 1234"
@@ -56,7 +56,7 @@ Types: `login`, `note`, `credit-card`, `wifi`, `ssh-key`, `identity`, `custom`. 
 
 ```bash
 proton-cli pass items update github.com --password "new-secret"
-proton-cli pass items update github.com --totp "otpauth://totp/..."
+proton-cli pass items update github.com --totp-uri "otpauth://totp/..."
 proton-cli pass items update "Staging server" --name "Staging server (eu-1)"
 ```
 

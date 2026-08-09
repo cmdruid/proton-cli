@@ -6,6 +6,8 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"unicode"
@@ -235,6 +237,8 @@ var flagMeanings = map[string]string{
 	"page-size":        "how many results per page",
 	"parent":           "the containing folder",
 	"password":         "a password",
+	"password-file":    "where to read the account password from",
+	"password-stdin":   "read the account password from stdin",
 	"pattern":          "select by glob against the name",
 	"phone":            "a phone number",
 	"pin":              "a payment card PIN",
@@ -266,7 +270,8 @@ var flagMeanings = map[string]string{
 	"tag":              "the photo tag to select",
 	"title":            "a title: an event's, or a person's job title",
 	"to":               "an email recipient: compose sets one, a filter matches one",
-	"totp":             "a TOTP URI or secret",
+	"totp":             "a two-factor code",
+	"totp-uri":         "a TOTP URI or secret, stored on a Pass login",
 	"type":             "the kind of thing to create or select",
 	"unread":           "select unread things",
 	"url":              "a URL",
@@ -356,6 +361,78 @@ func TestOnlyOnePlaceReadsCredentialsFromStdin(t *testing.T) {
 		if !allowed[f] {
 			t.Errorf("%s reads a secret from stdin; that belongs in internal/ui/prompt.go", f)
 		}
+	}
+}
+
+// ── rule 13: no environment variable may name an account ──
+
+// An account is attached to a profile by `account login` and nowhere else. The
+// moment a credential can arrive through the environment as well, a command can
+// act as an account nobody named on the command line, which is how a profile
+// ends up quietly meaning a different one.
+func TestNoEnvironmentVariableCarriesACredential(t *testing.T) {
+	forbidden := []string{"PROTON_USER", "PROTON_PASSWORD", "PROTON_TOTP"}
+	offenders := grepGo(t, []string{"../cli", "../app", "../service", "../account", "../proton"},
+		func(src string) bool {
+			for _, v := range forbidden {
+				if strings.Contains(src, v) {
+					return true
+				}
+			}
+			return false
+		})
+	for _, f := range offenders {
+		t.Errorf("%s takes an account from the environment; sign in with `account login` instead", f)
+	}
+}
+
+// ── rule 14: standard input has one owner ──
+
+// Two things want stdin: --password-stdin for the account password, and `-` for
+// a body, a key, or a file to upload. Whichever read it second would find an
+// empty stream and fail somewhere further along with a puzzle.
+//
+// So every reader goes through App.Stdin, which hands it out once and names both
+// claimants when they collide. That is what lets --password-stdin be a global
+// flag rather than a privilege one command holds: any command can be the one
+// Proton asks to re-authenticate, and none of them has to know which.
+func TestStandardInputHasOneOwner(t *testing.T) {
+	// internal/ui owns the process streams (rule 7) and supplies the reader that
+	// App.Stdin hands out.
+	allowed := map[string]bool{"../ui/ui.go": true}
+	offenders := grepGo(t, []string{"../cli", "../app", "../service", "../account", "../proton", "../ui"},
+		func(src string) bool { return strings.Contains(src, "os.Stdin") })
+	for _, f := range offenders {
+		if !allowed[f] {
+			t.Errorf("%s reads os.Stdin directly; go through App.Stdin so stdin keeps one owner", f)
+		}
+	}
+}
+
+// ── rule 15: the commands that can be asked to re-authenticate are declared ──
+
+// Proton guards a few endpoints behind an elevated session and grants that only
+// for another SRP exchange, so the commands reaching one carry the credentials
+// to answer with. Which endpoints those are is Proton's to decide and not
+// discoverable from here, so the set is written down: adding to it is a decision
+// rather than a reflex, and the integration harness keeps the same list.
+func TestReauthCommandsAreDeclared(t *testing.T) {
+	want := []string{
+		"proton-cli account login",
+		"proton-cli calendar settings calendars delete",
+		"proton-cli mail settings autoreply set",
+	}
+	leaves, _ := partition(t)
+	var got []string
+	for _, c := range leaves {
+		if c.Flags().Lookup("password-file") != nil {
+			got = append(got, cmdPath(c))
+		}
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("commands carrying the credential flags are:\n  %s\nwant:\n  %s",
+			strings.Join(got, "\n  "), strings.Join(want, "\n  "))
 	}
 }
 

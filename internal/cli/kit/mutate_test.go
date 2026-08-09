@@ -139,10 +139,17 @@ func TestDryRunNeitherAsksNorApplies(t *testing.T) {
 
 // A filter that matched nothing has nothing to confirm, and asking would make
 // `delete --older-than 10y` a question on an account with no old mail.
-func TestNothingSelectedIsNotWorthAsking(t *testing.T) {
+//
+// It has nothing to perform either. Proton answers a request to act on no IDs
+// by complaining about the request - "The IDs is required" - which reads as a
+// failure when the truth is that there was nothing to do.
+func TestNothingSelectedIsNeitherAskedAboutNorApplied(t *testing.T) {
 	spec := ui.ResultSpec{Action: ui.Deleted, Kind: "messages", Count: 0}
 	applied, err := mutation(t, &app.App{}, noTerminal, spec, true)
-	if !applied || err != nil {
-		t.Errorf("an empty change should pass: applied=%v err=%v", applied, err)
+	if err != nil {
+		t.Errorf("an empty change should not fail: %v", err)
+	}
+	if applied {
+		t.Error("an empty change was sent to Proton")
 	}
 }

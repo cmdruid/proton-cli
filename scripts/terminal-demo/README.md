@@ -1,15 +1,11 @@
 # Terminal demo
 
-The panel in the README is a recording of a real session, not a mock-up. `record.sh` runs proton-cli against a demo account inside a pty, and [freeze](https://github.com/charmbracelet/freeze) renders the captured ANSI into `assets/demo-dark.svg` and `assets/demo-light.svg`.
+The panel in the README is a recording of a real session, not a mock-up. `record.sh` runs proton-cli against the primary account inside a pty, and [freeze](https://github.com/charmbracelet/freeze) renders the captured ANSI into `assets/demo-dark.svg` and `assets/demo-light.svg`.
 
-It runs against the `alt` profile, so its credentials come from the same profile-scoped variables every other profile uses. Point them at a throwaway account, never your own:
+It records as `primary`, the same account the integration suite runs on, so it needs no credentials of its own:
 
 ```bash
-export PROTON_ALT_USER=throwaway@proton.me
-export PROTON_ALT_PASSWORD=...
-
-just demo-seed   # once: give the account something tidy to show
-just demo        # record and render
+just demo        # seed, record, render
 ```
 
 ## What's here
@@ -17,15 +13,15 @@ just demo        # record and render
 | File | Role |
 | --- | --- |
 | `record.sh` | Runs the session and writes it, ANSI and all, to stdout |
-| `seed.sh` | Puts the messages, folder, and Pass items that the session shows into the account |
-| `profile.sh` | Resolves the demo account, sourced by both scripts |
 | `dark.json`, `light.json` | freeze window styling per theme |
 
 ## How it stays honest and stable
 
 - **Real output.** Every line below a prompt comes from the binary. Edit `record.sh` to change what is shown, never the captured text.
+- **The data is the suite's.** `scripts/seed` fills the account, and its names read like somebody's account for this reason. Change what the panel shows by changing the fixture there.
+- **The inbox is staged, not owned.** An account receives share notifications and Proton's own marketing, and neither can be kept out. `just demo` marks the inbox read and re-sends the three the panel shows, so they are the only unread mail whatever else has arrived.
 - **One layout everywhere.** The tables, the confirmation, the progress bar and the dry-run preview are all drawn by `internal/ui`, so the panel shows the same shapes the rest of the CLI uses. `internal/ui`'s golden tests pin those bytes, which means a change visible in the SVG shows up in a failing test first.
-- **A demo account, explicitly.** The session sends a message and uploads a file, and what it shows ends up in the README. Profile-scoped variables normally fall back to the unscoped `PROTON_USER` / `PROTON_PASSWORD`, so the scripts refuse to run unless `PROTON_ALT_USER` and `PROTON_ALT_PASSWORD` are both set. The account's Drive needs to have been opened once, since a brand-new account has no volume yet.
+- **The primary account, named here.** The session sends a message and uploads a file, and what it shows ends up in the README, so `just demo` seeds and stages `primary` before recording. The account's Drive needs to have been opened once, since a brand-new account has no volume yet.
 - **The profile comes from the environment**, not a `--profile` flag, so the recorded commands stay free of demo plumbing.
 - **Fixed window.** `record.sh` sets the pty to 84 columns, so column widths don't depend on the machine that records.
 - **Login happens before recording.** `account login` runs first, so the transcript opens on a command rather than an authentication notice. It also unlocks the key hierarchy, so no recorded panel pauses to do that halfway through.

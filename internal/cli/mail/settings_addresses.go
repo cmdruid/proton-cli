@@ -108,7 +108,7 @@ func addressesUpdateCmd() *cobra.Command {
 				empty := ""
 				sigPtr = &empty
 			case setSig:
-				text, err := kit.ReadTextArg(signature, "--signature")
+				text, err := kit.ReadTextArg(c, signature, "--signature")
 				if err != nil {
 					return err
 				}

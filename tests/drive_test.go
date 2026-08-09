@@ -10,7 +10,6 @@ import (
 	"image/png"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -125,12 +124,9 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 		"drive", "items", "delete", folder)
 
 	payload := []byte("piped payload\n")
-	cmd := exec.Command(binaryPath, "drive", "items", "upload", "-", folder)
-	cmd.Stdin = bytes.NewReader(payload)
-	cmd.Env = os.Environ()
-	b, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("stdin upload failed: %v\noutput: %s", err, string(b))
+	if _, stderr, code := runWithStdin(t, bytes.NewReader(payload),
+		"drive", "items", "upload", "-", folder); code != 0 {
+		t.Fatalf("stdin upload failed (exit %d): %s", code, truncateOutput(stderr))
 	}
 
 	// Find the uploaded file (name is stdin-<ts>)

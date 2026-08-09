@@ -33,12 +33,9 @@ just clean
 
 ## README demo images
 
-The terminal panel in the README is a recording of a real session against a throwaway demo account, rendered with [freeze](https://github.com/charmbracelet/freeze):
+The terminal panel in the README is a recording of a real session, rendered with [freeze](https://github.com/charmbracelet/freeze). It records as `primary`, the same account the integration tests use, so it needs no credentials of its own:
 
 ```bash
-export PROTON_ALT_USER=throwaway@proton.me    # never your own account
-export PROTON_ALT_PASSWORD=...
-just demo-seed   # once
 just demo
 ```
 
@@ -46,20 +43,27 @@ just demo
 
 ## Tests
 
-`just test-unit` runs the fast, offline tests and is safe to run any time:
+`just test-fast` runs the unit, golden and conformance tests. No credentials, no network, seconds to finish, safe to run any time:
 
 ```bash
-just test-unit
+just test-fast
 ```
 
-The suite under `tests/` is different: those are **integration tests against the live Proton API**. They need `PROTON_USER` and `PROTON_PASSWORD`, create and delete real data in that account, and take several minutes.
+The suite under `tests/` is different: those are **integration tests against the live Proton API**. They run on the primary and secondary accounts, create and delete real data in them, and take several minutes.
 
 ```bash
+export PROTON_CLI_TEST_PRIMARY_USER=primary@proton.me      # never your own account
+export PROTON_CLI_TEST_PRIMARY_PASSWORD=...
+export PROTON_CLI_TEST_SECONDARY_USER=secondary@proton.me
+export PROTON_CLI_TEST_SECONDARY_PASSWORD=...
+
 just test-one TestMailSendAndRead    # a single integration test
-just test                            # everything, only with a throwaway account
+just test                            # everything
 ```
 
-Never point them at an account you care about. Credentials can go in a local `.env` file (see `.env.example`), which the devbox shell loads automatically.
+`just login` and `just seed` sign the accounts in and fill them, for working with them by hand.
+
+Never point any of this at an account you care about. Credentials can go in a local `.env` file (see `.env.example`), which the devbox shell loads automatically.
 
 Unit test files are named after the file they test (`size.go` → `size_test.go`). The integration tests are grouped by feature area instead.
 
@@ -99,7 +103,7 @@ A weekly workflow does the same thing and opens a PR when upstream changes. See 
 ## Pull requests
 
 - Keep the change focused, and match the surrounding style.
-- Run `just lint` and `just test-unit`.
+- Run `just lint` and `just test-fast`.
 - Add or adjust integration tests when you touch behaviour that they cover.
 - Update `docs/` and, when it's user-facing, the README.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `build:`, …); the release notes are generated from them.

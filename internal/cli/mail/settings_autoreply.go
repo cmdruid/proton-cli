@@ -3,6 +3,7 @@ package mail
 import (
 	"strings"
 
+	"github.com/roman-16/proton-cli/internal/app"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/mailtext"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
@@ -48,6 +49,7 @@ func autoreplyGetCmd() *cobra.Command {
 func autoreplySetCmd() *cobra.Command {
 	var ar mailsvc.AutoReply
 	var html bool
+	var reauth kit.Reauth
 	repeat := &kit.Enum{
 		Name: "repeat", Usage: "How the schedule repeats", Default: "fixed",
 		Values: mailsvc.RepeatNames(),
@@ -66,12 +68,15 @@ func autoreplySetCmd() *cobra.Command {
 			"change it, so neither does proton-cli. Auto-reply is a paid feature.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			if err := reauth.Supply(c); err != nil {
+				return err
+			}
 			mode, err := repeat.Value()
 			if err != nil {
 				return err
 			}
 			ar.Repeat = mode
-			msg, err := kit.ReadTextArg(ar.Message, "--message")
+			msg, err := kit.ReadTextArg(c, ar.Message, "--message")
 			if err != nil {
 				return err
 			}
@@ -86,7 +91,11 @@ func autoreplySetCmd() *cobra.Command {
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Enabled, Kind: "settings", Count: 1, Name: "auto-reply",
 				Detail: "on a " + mode + " schedule",
-			}, func() error { return c.App.Mail.AutoReplySet(c.Ctx, ar) })
+			}, func() error {
+				// Nothing here arranges the elevation: the client does it when the
+				// server asks. All this owes the user is a reason for the prompt.
+				return c.App.Mail.AutoReplySet(app.WithScopeReason(c.Ctx, "change your auto-reply"), ar)
+			})
 		}),
 	}
 	repeat.Register(c)
@@ -96,6 +105,7 @@ func autoreplySetCmd() *cobra.Command {
 	c.Flags().StringVar(&ar.Zone, "zone", "", "IANA time zone the schedule is read in (default: the system zone)")
 	c.Flags().StringVar(&ar.Message, "message", "", "Reply body (- reads stdin)")
 	c.Flags().BoolVar(&html, "html", false, "Treat the message as HTML rather than escaping it")
+	reauth.Declare(c)
 	return c
 }
 

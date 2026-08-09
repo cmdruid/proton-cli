@@ -58,7 +58,7 @@ proton-cli mail messages list
 proton-cli mail messages send --help
 ```
 
-Prefer the environment? `PROTON_USER` and `PROTON_PASSWORD` are used instead of being asked for. Juggling a personal and a work account? `proton-cli --profile work account login`. More in [Getting started](docs/getting-started.md).
+Scripting it? `proton-cli account login --user you@proton.me --password-file /run/secrets/proton` needs no terminal. Juggling a personal and a work account? `proton-cli account login --profile work`. More in [Getting started](docs/getting-started.md).
 
 ## What you can do
 

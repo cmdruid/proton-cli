@@ -72,7 +72,7 @@ func filtersCreateCmd() *cobra.Command {
 		Short: "Create a Sieve filter",
 		Args:  cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
-			script, err := kit.ReadTextArg(sieve, "--sieve")
+			script, err := kit.ReadTextArg(c, sieve, "--sieve")
 			if err != nil {
 				return err
 			}
@@ -80,14 +80,14 @@ func filtersCreateCmd() *cobra.Command {
 				return kit.Fail("A filter needs a name and a script.").
 					Hint("--name \"Archive invoices\"", "--sieve '…', or --sieve - to read stdin.")
 			}
-			status := 1
-			if disabled {
-				status = 0
-			}
 			return kit.Create(c, ui.ResultSpec{
 				Action: ui.Created, Kind: "filters", Name: name,
 			}, func() (string, error) {
-				return c.App.Mail.FilterCreate(c.Ctx, name, script, status)
+				id, err := c.App.Mail.FilterCreate(c.Ctx, name, script)
+				if err != nil || !disabled {
+					return id, err
+				}
+				return id, c.App.Mail.FilterDisable(c.Ctx, id)
 			})
 		}),
 	}
@@ -104,7 +104,7 @@ func filtersUpdateCmd() *cobra.Command {
 		Short: "Change a filter's name or script",
 		Args:  cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
-			script, err := kit.ReadTextArg(sieve, "--sieve")
+			script, err := kit.ReadTextArg(c, sieve, "--sieve")
 			if err != nil {
 				return err
 			}

@@ -72,14 +72,27 @@ func replySubject(start time.Time, allDay bool) string {
 	return "Re: Invitation for an event starting on " + start.Local().Format("2006-01-02 15:04")
 }
 
-// findSelfAttendee returns the attendee ID and matched email for the account's
-// own attendee record, matching each address's deterministic X-PM token
-// (hex SHA-1 of UID+canonicalEmail) against the event's attendee list.
-func findSelfAttendee(uid string, addrs []keys.Address, attendees []rawAttendee) (attendeeID, selfEmail string, ok bool) {
+// selfTokens maps each of the account's addresses to the deterministic X-PM
+// token that names it on an event, keyed by token.
+func (s *Service) selfTokens(ctx context.Context, uid string, addrs []keys.Address) (map[string]string, error) {
+	emails := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		emails = append(emails, a.Email)
+	}
+	canonical, err := s.canonicalEmails(ctx, emails)
+	if err != nil {
+		return nil, err
+	}
 	tokenToEmail := make(map[string]string, len(addrs))
 	for _, a := range addrs {
-		tokenToEmail[attendeeToken(uid, a.Email)] = a.Email
+		tokenToEmail[attendeeToken(uid, canonical[a.Email])] = a.Email
 	}
+	return tokenToEmail, nil
+}
+
+// findSelfAttendee returns the attendee ID and matched email for the account's
+// own attendee record, matching its token against the event's attendee list.
+func findSelfAttendee(tokenToEmail map[string]string, attendees []rawAttendee) (attendeeID, selfEmail string, ok bool) {
 	for _, at := range attendees {
 		if email, found := tokenToEmail[at.Token]; found {
 			return at.ID, email, true
@@ -91,7 +104,7 @@ func findSelfAttendee(uid string, addrs []keys.Address, attendees []rawAttendee)
 // findSelfAttendeePaged walks the paginated attendees endpoint (page 0 is
 // already in the event's AttendeesInfo) when an event has more attendees than
 // the inline list carried.
-func (s *Service) findSelfAttendeePaged(ctx context.Context, calendarID, eventID, uid string, addrs []keys.Address) (attendeeID, selfEmail string, ok bool, err error) {
+func (s *Service) findSelfAttendeePaged(ctx context.Context, calendarID, eventID string, tokenToEmail map[string]string) (attendeeID, selfEmail string, ok bool, err error) {
 	for page := 1; ; page++ {
 		var r struct {
 			Attendees     []rawAttendee
@@ -104,7 +117,7 @@ func (s *Service) findSelfAttendeePaged(ctx context.Context, calendarID, eventID
 		}, &r); err != nil {
 			return "", "", false, err
 		}
-		if id, email, found := findSelfAttendee(uid, addrs, r.Attendees); found {
+		if id, email, found := findSelfAttendee(tokenToEmail, r.Attendees); found {
 			return id, email, true, nil
 		}
 		if r.MoreAttendees != 1 || len(r.Attendees) == 0 {
@@ -142,11 +155,13 @@ func (s *Service) EventRespond(ctx context.Context, u *keys.Unlocked, calendarID
 		return nil, errs.WithExit(1, fmt.Errorf("you are the organizer of this event; RSVP is for attendees"))
 	}
 
-	attendeeID, selfEmail, ok := findSelfAttendee(ev.UID, u.Addresses, ev.AttendeesInfo.Attendees)
+	tokenToEmail, err := s.selfTokens(ctx, ev.UID, u.Addresses)
+	if err != nil {
+		return nil, err
+	}
+	attendeeID, selfEmail, ok := findSelfAttendee(tokenToEmail, ev.AttendeesInfo.Attendees)
 	if !ok && ev.AttendeesInfo.MoreAttendees == 1 {
-		var err error
-		attendeeID, selfEmail, ok, err = s.findSelfAttendeePaged(ctx, calendarID, eventID, ev.UID, u.Addresses)
-		if err != nil {
+		if attendeeID, selfEmail, ok, err = s.findSelfAttendeePaged(ctx, calendarID, eventID, tokenToEmail); err != nil {
 			return nil, err
 		}
 	}

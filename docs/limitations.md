@@ -16,7 +16,7 @@ To confirm a change, run `get` on the ID the command printed instead of searchin
 
 ### Some operations need your password again
 
-Proton asks for your password again before its most destructive operations, even though you are already signed in. `calendar settings calendars delete` is the one the CLI reaches today. It asks in a terminal, or reads `PROTON_PASSWORD`.
+Proton asks for your password again before some operations, even though you are already signed in. `calendar settings calendars delete` and `mail settings autoreply set` are the ones the CLI reaches today. It asks in a terminal, or takes `--password-file` / `--password-stdin`. The key password sealed into the session cannot stand in: it is a one-way derivation, and Proton re-authenticates against the password itself.
 
 ### Signing in needs an authenticator app, not a security key
 

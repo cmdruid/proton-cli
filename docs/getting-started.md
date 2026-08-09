@@ -13,15 +13,15 @@ Two-factor code:  123456
 
 That is the whole setup. Signing in saves the session **and** unlocks your keys, so your password is needed once on this machine and not again.
 
-Anything already in the environment is used instead of being asked for:
+No terminal to answer the prompts? Name the account and point at the password:
 
 ```bash
-export PROTON_USER=you@proton.me
-export PROTON_PASSWORD='your-password'
-proton-cli account login
+proton-cli account login --user you@proton.me --password-file /run/secrets/proton
 ```
 
-Two-factor codes rotate every thirty seconds, so `PROTON_TOTP` is rarely useful - let proton-cli ask.
+A password is never a flag value, because argv is readable by every user on the machine through `ps`. Use `--password-file`, or pipe it in with `--password-stdin`.
+
+Two-factor codes rotate every thirty seconds, so `--totp` is only useful at the moment you sign in - otherwise let proton-cli ask.
 
 Check where you stand at any time:
 

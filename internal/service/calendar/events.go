@@ -134,14 +134,26 @@ type Invite struct {
 // AddedProtonAttendees (the shared session key wrapped to each Proton
 // attendee's key) and the list of external (non-Proton) attendee emails.
 func (s *Service) buildAttendees(ctx context.Context, uid string, emails []string, sk *pgp.SessionKey) (atts []ical.Attendee, clear, added []map[string]any, external []string, err error) {
-	seen := map[string]bool{}
+	written := make([]string, 0, len(emails))
 	for _, raw := range emails {
-		email := strings.TrimSpace(raw)
-		if email == "" || seen[canonicalEmail(email)] {
+		if e := strings.TrimSpace(raw); e != "" {
+			written = append(written, e)
+		}
+	}
+	canonical, err := s.canonicalEmails(ctx, written)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	seen := map[canonicalAddr]bool{}
+	for _, email := range written {
+		// Two addresses Proton reduces to the same one are the same person, so
+		// the canonical form is what decides a duplicate.
+		if seen[canonical[email]] {
 			continue
 		}
-		seen[canonicalEmail(email)] = true
-		token := attendeeToken(uid, email)
+		seen[canonical[email]] = true
+		token := attendeeToken(uid, canonical[email])
 		atts = append(atts, ical.Attendee{Email: email, Token: token})
 		clear = append(clear, map[string]any{"Token": token, "Status": 0})
 

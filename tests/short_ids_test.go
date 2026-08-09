@@ -3,35 +3,10 @@ package tests
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-// runWithEnv runs the CLI with extra env vars layered on top of os.Environ().
-// Returns stdout, stderr, exit code.
-func runWithEnv(t *testing.T, env map[string]string, args ...string) (stdout, stderr string, exit int) {
-	t.Helper()
-	cmd := exec.Command(binaryPath, args...)
-	cmd.Env = os.Environ()
-	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
-	var outB, errB strings.Builder
-	cmd.Stdout = &outB
-	cmd.Stderr = &errB
-	err := cmd.Run()
-	exit = 0
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			exit = ee.ExitCode()
-		} else {
-			t.Fatalf("run %v: %v", args, err)
-		}
-	}
-	return outB.String(), errB.String(), exit
-}
 
 // firstIDLineCell extracts the first cell of the first non-header table row.
 // Returns "" when no row is found.
@@ -110,23 +85,24 @@ func TestShortIDJSONAlwaysFull(t *testing.T) {
 	}
 }
 
-// idcachePathForDefault returns the production cache file path for the
-// default profile. Tests inspect this file directly to verify cache
-// population and to set up ambiguous-prefix scenarios.
-func idcachePathForDefault(t *testing.T) string {
+// idcachePath returns the production cache file path for the
+// profile the suite acts as. Tests inspect this file directly to verify cache
+// population and to set up ambiguous-prefix scenarios, so it has to name the
+// same profile the runner does.
+func idcachePath(t *testing.T) string {
 	t.Helper()
 	cd, err := os.UserConfigDir()
 	if err != nil {
 		t.Fatalf("UserConfigDir: %v", err)
 	}
-	return filepath.Join(cd, "proton-cli", "idcache", "default.json")
+	return filepath.Join(cd, "proton-cli", "idcache", primary+".json")
 }
 
 func TestShortIDCacheFilePopulated(t *testing.T) {
 	// Run any list command to populate the cache.
 	runOK(t, "mail", "messages", "list", "--page-size", "1")
 
-	path := idcachePathForDefault(t)
+	path := idcachePath(t)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read cache: %v", err)
@@ -190,7 +166,7 @@ func TestShortIDPrefixCacheMissOK(t *testing.T) {
 
 func TestShortIDAmbiguousErrors(t *testing.T) {
 	// Hand-craft a cache file with two IDs that share an 8-char prefix.
-	path := idcachePathForDefault(t)
+	path := idcachePath(t)
 	backup := path + ".bak-" + testID()
 	if _, err := os.Stat(path); err == nil {
 		if err := os.Rename(path, backup); err != nil {
@@ -259,7 +235,9 @@ func TestShortIDRoundTripPass(t *testing.T) {
 	// Populate cache.
 	runOK(t, "pass", "items", "list")
 
-	got := runOK(t, "pass", "items", "get", shareID[:8]+"/"+itemID[:8])
+	// `--` guards against the ~1.5% of IDs whose 8-char prefix starts with '-'
+	// (which cobra would otherwise read as a flag), as the contacts case does.
+	got := runOK(t, "pass", "items", "get", "--", shareID[:8]+"/"+itemID[:8])
 	if !strings.Contains(got, name) {
 		t.Errorf("pass items get by short prefixes should resolve; stdout:\n%s", got)
 	}

@@ -99,9 +99,12 @@ func TestMailDraftsEditRejectsASentMessage(t *testing.T) {
 	_, _, subject := plainMail(t)
 	// REF resolution for drafts is scoped to the Drafts folder, so a sent
 	// message's subject must not resolve.
-	_, _, code := run(t, "mail", "drafts", "update", "--body", "nope", subject)
+	_, stderr, code := run(t, "mail", "drafts", "update", "--body", "nope", subject)
+	// Exit 4 means something in Drafts answered to this subject, and which
+	// messages those were is the whole story - stderr names them.
 	if code != 3 {
-		t.Errorf("expected exit 3 for a subject that is not a draft, got %d", code)
+		t.Errorf("expected exit 3 for a subject that is not a draft, got %d\nstderr: %s",
+			code, truncateOutput(stderr))
 	}
 }
 
@@ -205,7 +208,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 	marker := testID() + "-forwarded"
 
 	fwdID := strings.TrimSpace(runOK(t, "mail", "messages", "forward",
-		"--to", altEmail(), "--body", marker, "--", msgID))
+		"--to", secondaryEmail(), "--body", marker, "--", msgID))
 	cleanupRun(t, "Delete forward: proton-cli mail messages delete "+fwdID,
 		"mail", "messages", "delete", "--", fwdID)
 
@@ -215,24 +218,24 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 	assertContains(t, sent, "Forwarded Message")
 	assertContains(t, sent, attName)
 
-	// The alt account receives it, attachment and all.
+	// The second account receives it, attachment and all.
 	var recvID string
 	waitFor(45*time.Second, 3*time.Second, func() bool {
-		recvID = altMailContaining(t, selfEmail(), marker)
+		recvID = secondaryMailContaining(t, selfEmail(), marker)
 		return recvID != ""
 	})
 	if recvID == "" {
-		t.Fatal("the alt account never received the forward")
+		t.Fatal("the second account never received the forward")
 	}
-	cleanupRun(t, "Delete received forward (alt): proton-cli --profile alt mail messages delete "+recvID,
-		alt("mail", "messages", "delete", recvID)...)
+	cleanupRunSecondary(t, "Delete received forward (secondary): proton-cli --profile secondary mail messages delete "+recvID,
+		"mail", "messages", "delete", recvID)
 
-	atts := runOK(t, alt("mail", "messages", "attachments", "list", recvID)...)
+	atts := runOKSecondary(t, "mail", "messages", "attachments", "list", recvID)
 	assertContains(t, atts, attName)
 
 	// And the bytes survived the re-keying rather than the upload.
 	dir := t.TempDir()
-	runOK(t, alt("mail", "messages", "attachments", "download", "--output-dir", dir, recvID)...)
+	runOKSecondary(t, "mail", "messages", "attachments", "download", "--output-dir", dir, recvID)
 	got, err := os.ReadFile(filepath.Join(dir, attName))
 	if err != nil {
 		t.Fatalf("read forwarded attachment: %v", err)

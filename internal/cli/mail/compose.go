@@ -84,13 +84,15 @@ func (f *composeFlags) localAttachments() ([]mailsvc.LocalAttachment, error) {
 }
 
 // resolvedBody reads the body, honouring "-" for stdin.
-func (f *composeFlags) resolvedBody() (string, error) { return kit.ReadTextArg(f.body, "--body") }
+func (f *composeFlags) resolvedBody(c *kit.Invocation) (string, error) {
+	return kit.ReadTextArg(c, f.body, "--body")
+}
 
 // content assembles a fresh message: recipients, subject and body from the flags
 // (or from --eml, which the flags then override), the resolved sending address,
 // and the signature unless suppressed.
 func (f *composeFlags) content(c *kit.Invocation, u *keys.Unlocked) (mailsvc.Content, error) {
-	body, err := f.resolvedBody()
+	body, err := f.resolvedBody(c)
 	if err != nil {
 		return mailsvc.Content{}, err
 	}
@@ -151,7 +153,7 @@ func (f *composeFlags) applyTo(c *kit.Invocation, u *keys.Unlocked, draft *mails
 		out.Subject = f.subject
 	}
 	if c.Changed("body") {
-		body, err := f.resolvedBody()
+		body, err := f.resolvedBody(c)
 		if err != nil {
 			return out, err
 		}
@@ -430,7 +432,7 @@ func answerCmd(use, short, long string, forward bool) *cobra.Command {
 
 func buildAnswer(c *kit.Invocation, u *keys.Unlocked, id string, f *composeFlags,
 	action int, noQuote, noAttachments bool) (mailsvc.Content, error) {
-	body, err := f.resolvedBody()
+	body, err := f.resolvedBody(c)
 	if err != nil {
 		return mailsvc.Content{}, err
 	}

@@ -4,13 +4,17 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/account/session"
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/service/account"
@@ -55,16 +59,19 @@ type App struct {
 	mu    sync.Mutex
 	cache *keys.Unlocked
 
+	stdinMu    sync.Mutex
+	stdinClaim string
+
 	sessionMu sync.Mutex
 	userID    string
 	email     string
 }
 
+// defaultProfile is the profile a command acts as when none is named.
+const defaultProfile = "default"
+
 type Options struct {
 	Profile    string
-	User       string
-	Password   string
-	TOTP       string
 	APIURL     string
 	AppVersion string
 	Version    string
@@ -79,10 +86,10 @@ type Options struct {
 }
 
 func New(opts Options) (*App, error) {
-	profileName := firstNonEmpty(opts.Profile, os.Getenv("PROTON_PROFILE"), "default")
+	profileName := firstNonEmpty(opts.Profile, os.Getenv("PROTON_PROFILE"), defaultProfile)
 
-	apiURL := firstNonEmpty(opts.APIURL, envForProfile(profileName, "API_URL"))
-	appVer := firstNonEmpty(opts.AppVersion, envForProfile(profileName, "APP_VERSION"))
+	apiURL := firstNonEmpty(opts.APIURL, os.Getenv("PROTON_API_URL"))
+	appVer := firstNonEmpty(opts.AppVersion, os.Getenv("PROTON_APP_VERSION"))
 	userAgent := defaultUserAgent(opts.Version)
 
 	u := ui.New(ui.Options{
@@ -106,7 +113,7 @@ func New(opts Options) (*App, error) {
 
 	a := &App{
 		Profile:  profileName,
-		Creds:    newCredentials(profileName, u, opts.User, opts.Password, opts.TOTP),
+		Creds:    newCredentials(u, email),
 		API:      c,
 		Account:  account.New(c),
 		Mail:     mail.New(c),
@@ -126,8 +133,27 @@ func New(opts Options) (*App, error) {
 	// mid-request refresh); it stays free of the persistence format by calling
 	// back into saveSession, which owns the DTO assembly.
 	c.SetPersistHook(func() { _ = a.saveSession() })
+	a.Creds.stdinOwner = a.Stdin
 	a.installScopeResolver()
 	return a, nil
+}
+
+// Stdin hands out the process's standard input, which only one reader may have.
+//
+// Two things want it: --password-stdin for the account password, and `-` for a
+// body, a key, or a file to upload. Whichever asked second would find an empty
+// stream and fail somewhere further along with a puzzle, so it is told here
+// instead, in terms of the two flags that collided.
+func (a *App) Stdin(claim string) (io.Reader, error) {
+	a.stdinMu.Lock()
+	defer a.stdinMu.Unlock()
+	if a.stdinClaim != "" {
+		return nil, errs.Problemf("%s and %s both read standard input, which can only be read once.",
+			a.stdinClaim, claim).
+			Hint("pass the password with --password-file instead")
+	}
+	a.stdinClaim = claim
+	return a.UI.In, nil
 }
 
 // saveSession writes the current client state to the profile's session file,
@@ -170,25 +196,59 @@ func idCachePath(profile string) string {
 	return filepath.Join(cd, "proton-cli", "idcache", profile+".json")
 }
 
-// Authenticate makes sure the client holds a usable session, signing in when it
-// does not. It is a no-op once a session exists, which is why a saved session
-// means later commands never ask for anything.
-func (a *App) Authenticate(ctx context.Context) error {
-	if uid, _, _ := a.API.Tokens(); uid != "" {
-		return nil
-	}
-	return a.Login(ctx)
+// SignedIn reports whether this profile holds a session.
+func (a *App) SignedIn() bool {
+	uid, _, _ := a.API.Tokens()
+	return uid != ""
 }
 
-// Login signs in and saves the session, replacing any existing one.
+// Authenticate makes sure the profile is signed in.
 //
-// It also unlocks the key hierarchy, which seals the key password into the
-// session file. Doing both here is what makes the password a one-time cost: a
-// login that only stored tokens would leave the very next command asking again.
-func (a *App) Login(ctx context.Context) error {
-	user, err := a.Creds.User()
-	if err != nil {
-		return err
+// An account reaches the CLI one way: `account login` attaches it to a profile
+// and saves the session. A command acts as whichever profile it was given, so
+// when that profile has no session it is said here, before anything reaches the
+// network.
+func (a *App) Authenticate(context.Context) error {
+	if a.SignedIn() {
+		return nil
+	}
+	if a.Profile == defaultProfile {
+		return errs.Problemf("You are not signed in.").
+			Hint("proton-cli account login").Exit(2)
+	}
+	return errs.Problemf("Profile %q is not signed in.", a.Profile).
+		Hint(fmt.Sprintf("proton-cli account login --profile %s", a.Profile)).Exit(2)
+}
+
+// Login attaches an account to this profile and saves the session.
+//
+// Signing in also unlocks the key hierarchy, which seals the key password into
+// the session file. Doing both here is what makes the password a one-time cost:
+// a login that only stored tokens would leave the very next command asking
+// again.
+//
+// It is idempotent. A profile already signed in as the same account is left
+// alone, so an unattended caller can run it unconditionally before its real
+// work and recover by itself from a session that expired or was revoked.
+//
+// user is the account to attach, empty to ask for one. It is passed rather than
+// resolved from the environment because this is the only place that names an
+// account: everything else acts as whichever profile it was given.
+func (a *App) Login(ctx context.Context, user string) error {
+	if a.SignedIn() {
+		if err := a.refuseRepoint(user); err != nil {
+			return err
+		}
+		if a.resume(ctx) {
+			return nil
+		}
+		// The saved session no longer works, so sign in again over the top of it.
+	}
+	if user == "" {
+		var err error
+		if user, err = a.Creds.User(); err != nil {
+			return err
+		}
 	}
 	password, err := a.Creds.Password("sign in")
 	if err != nil {
@@ -204,6 +264,29 @@ func (a *App) Login(ctx context.Context) error {
 		return err
 	}
 	return a.saveSession()
+}
+
+// refuseRepoint stops a profile being pointed at a second account behind its
+// own back. Re-pointing is a fine thing to want; it just has to be said out
+// loud, because the profile names the account everywhere else.
+func (a *App) refuseRepoint(wanted string) error {
+	if wanted == "" || a.email == "" || strings.EqualFold(wanted, a.email) {
+		return nil
+	}
+	return errs.Problemf("Profile %q is signed in as %s.", a.Profile, a.email).
+		Hint(fmt.Sprintf("proton-cli account logout --profile %s", a.Profile)).Exit(4)
+}
+
+// resume reports whether the saved session still works, unlocking it so the
+// caller is left in the state a fresh sign-in would have produced.
+func (a *App) resume(ctx context.Context) bool {
+	if _, err := a.Account.Get(ctx); err != nil {
+		return false
+	}
+	if _, err := a.Unlock(ctx); err != nil {
+		return false
+	}
+	return a.saveSession() == nil
 }
 
 // Unlock returns the decrypted key hierarchy, memoised for the invocation.

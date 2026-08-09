@@ -9,7 +9,7 @@ Everything the maintainer or CI runs, in whatever language suits it: shell insta
 | `gen-completions.sh` | Emits the shell completions shipped in releases |
 | `gendocs/` | Generates `docs/commands/README.md` from the command tree (`just docs`) |
 | `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source |
-| `terminal-demo/` | Records the README panel against a throwaway account (`just demo`) |
+| `terminal-demo/` | Records the README panel against the primary account (`just demo`) |
 | `publish-npm.mjs` | Publishes the npm package on release |
 | `release-helpers-check.sh` | Verifies a release's embedded helpers before publishing |
 

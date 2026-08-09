@@ -3,6 +3,7 @@ package contacts
 import (
 	"context"
 
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -38,19 +39,52 @@ func (s *Service) GroupCreate(ctx context.Context, name, color string) (string, 
 	return r.Label.ID, nil
 }
 
-// GroupUpdate renames or recolours a group. Only the fields given are changed,
-// so a rename does not silently reset the colour.
+// GroupUpdate renames or recolours a group.
+//
+// A group is a label to Proton, and updating one replaces the whole record
+// rather than patching it - a body without a Name is refused - so the current
+// one is read and the change is laid over it.
 func (s *Service) GroupUpdate(ctx context.Context, id, name, color string) error {
-	body := map[string]any{}
+	cur, err := s.groupByID(ctx, id)
+	if err != nil {
+		return err
+	}
 	if name != "" {
-		body["Name"] = name
+		cur.Name = name
 	}
 	if color != "" {
-		body["Color"] = color
+		cur.Color = color
 	}
 	return s.C.Decode(ctx, proton.Request{
-		Method: "PUT", Path: "/core/v4/labels/" + id, Body: body,
+		Method: "PUT", Path: "/core/v4/labels/" + id,
+		Body: map[string]any{
+			"Name": cur.Name, "Color": cur.Color,
+			"Notify": cur.Notify, "Sticky": cur.Sticky,
+			"Expanded": cur.Expanded, "Display": cur.Display,
+		},
 	}, nil)
+}
+
+// rawGroup is a contact group as Proton keeps it, with the fields its update
+// replaces.
+type rawGroup struct {
+	ID, Name, Color                   string
+	Notify, Sticky, Expanded, Display int
+}
+
+func (s *Service) groupByID(ctx context.Context, id string) (rawGroup, error) {
+	var r struct{ Labels []rawGroup }
+	if err := s.C.Decode(ctx, proton.Request{
+		Method: "GET", Path: "/core/v4/labels", Query: proton.Query("Type", "2"),
+	}, &r); err != nil {
+		return rawGroup{}, err
+	}
+	for _, g := range r.Labels {
+		if g.ID == id {
+			return g, nil
+		}
+	}
+	return rawGroup{}, &errs.NotFound{Kind: "contact group", Ref: id}
 }
 
 func (s *Service) GroupDelete(ctx context.Context, id string) error {

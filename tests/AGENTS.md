@@ -17,39 +17,38 @@ An inconsistency is far more likely to be caught there than here.
 ## Running Tests
 
 ```bash
-# All integration tests (require credentials in env)
-just test
-
-# Single test
-just test-one TestDriveItemsMove
+just test                             # all integration tests
+just test-one TestDriveItemsMove      # a single one
 ```
 
-The suite requires all four of `PROTON_USER`, `PROTON_PASSWORD`, `PROTON_ALT_USER`, and `PROTON_ALT_PASSWORD` (the primary account plus the `alt` second account).
+`just login` and `just seed` sign the accounts in and fill them, for working with them by hand.
 
-## Test Alt Accounts
+The suite requires all four of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`.
 
-Two secondary addresses are available as recipients when a test needs to send to someone other than the account under test:
+## The two accounts
 
-- **`PROTON_ALT_USER`** ("Proton Alt") - a Proton alt address, read via the `altEmail()` helper. Use it when the recipient must be a Proton address (e.g. drive sharing invitations). Mail may also be sent to it.
-- **`rl00@gmx.at`** - a non-Proton (GMX) alt. Use it when a test needs to send to an external, non-Proton mailbox.
+The suite creates, mutates and deletes real data, so it runs on two accounts kept for that and nothing else. Most tests act as **`primary`**; the handful that genuinely need two Proton users bring in **`secondary`**.
 
-### The "Proton Alt" second account (`alt` profile)
+These are the harness's own variables, not the CLI's: proton-cli takes an account from a signed-in profile, which `TestMain` establishes. The `PROTON_CLI_TEST_` prefix keeps them clear of anything the binary reads.
 
-"Proton Alt" is also a **full second account** the tests can act *as*, not just send *to*. Use it whenever a scenario genuinely needs two Proton users - accepting a share invitation, receiving and reading mail, or organizing a calendar invite that the primary account RSVPs to.
+`TestMain` signs both profiles in before any test runs, over stdin, and writes each password to a `0600` file for the rest of the run. The file is needed because a session cannot carry elevation: Proton re-authenticates over SRP for its guarded operations, `calendar settings calendars delete` among them, and that needs the password itself - the key blob sealed at login is a one-way derivation of it. `account login` is idempotent, so a run that reuses an existing session pays nothing.
 
-It's wired through the CLI's per-profile env handling: the `alt` profile reads `PROTON_ALT_USER` / `PROTON_ALT_PASSWORD` (profile-scoped `PROTON_<PROFILE>_X` beats plain `PROTON_X`), with its own session at `~/.config/proton-cli/sessions/alt.json`. Drive commands as the alt run with `--profile alt`:
+`runAs` builds the child environment from an **allowlist** rather than inheriting one. It is the single place a target account is chosen, so it is the single place the choice can be enforced: whatever you happen to have exported, the binary under test sees a stated environment and can act only as the profile named there.
+
+### Acting as the second account
+
+Use it whenever a scenario genuinely needs two Proton users - accepting a share invitation, receiving and reading mail, or organizing a calendar invite the primary RSVPs to.
 
 ```go
 func TestSecondAccountFoo(t *testing.T) {
-    runOK(t, alt("mail", "settings", "addresses", "list")...)    // runs the CLI as the second account
-    // ... primary (default profile) and alt interact ...
+    runOKSecondary(t, "mail", "settings", "addresses", "list")   // runs as the second account
+    // ... primary and secondary interact ...
 }
 ```
 
-- `altEmail()` - the second account's address (`PROTON_ALT_USER`); always configured, since `TestMain` enforces the alt creds up front.
-- `alt(args...)` - prefixes `--profile alt`; combine with any runner, e.g. `runOK(t, alt(...)...)`, `runJSON(t, alt(...)...)`.
+Run order matters: the *primary* invites or sends, then the *secondary* accepts or receives, then verify on whichever side the state landed. Register cleanup on **both** sides - a mutation made as the secondary needs `cleanupRunSecondary`.
 
-Run order matters: the *primary* invites/sends, then the *alt* accepts/receives, then verify on whichever side the state landed. Register cleanup on **both** sides (each `alt(...)` mutation needs an `alt(...)` cleanup).
+An **external, non-Proton** recipient comes from `PROTON_CLI_TEST_EXTERNAL_RECIPIENT`. Tests that need one skip when it is unset. Sending to a fake `@example.com` address instead bounces (nullMX) and litters the inbox with MAILER-DAEMON returns.
 
 ## Layout
 
@@ -80,8 +79,9 @@ tests/
 
 1. `TestMain` in `integration_test.go` builds the binary once into a temp directory.
 2. Each test calls the binary as a subprocess via `run()` / `runOK()` / `runJSON()`.
-3. The binary picks up `PROTON_USER` / `PROTON_PASSWORD` from the environment; the session is persisted per profile and reused across invocations.
-4. Tests are **sequential** (no `t.Parallel()`) to avoid rate limits and shared-state conflicts.
+3. `TestMain` signs both profiles in and runs `scripts/seed/seed.sh`; each checks before it acts, so an account already in shape costs a read.
+4. Each invocation names its profile through `PROTON_PROFILE` in a scrubbed child environment, and the session is reused across invocations.
+5. Tests are **sequential** (no `t.Parallel()`) to avoid rate limits and shared-state conflicts.
 
 The cost of an integration test is almost entirely **network latency** - process spawn is ~4ms, but a single authenticated call is ~150-300ms and an unlock-requiring one ~0.5-1.7s. The dominant cost is tests sending a self-mail and polling for delivery. Two mechanisms below cut that: **shared fixtures** (send once, reuse) and **check-first polling**.
 
@@ -144,10 +144,11 @@ func TestDriveItemsFoo(t *testing.T) {
 | `waitFor(timeout, interval, check)` | Poll `check` (checks first, then sleeps) until true or timeout |
 | `messageIDInFolder(folder, subject)` | `t`-free: first message ID in a folder matching subject, or `""` |
 | `registerSuiteCleanup(desc, args...)` | Queue a CLI cleanup to run once at suite teardown (for shared fixtures) |
-| `selfEmail()` | Return `PROTON_USER` |
+| `selfEmail()` | The primary account's address |
 | `looksLikeID(s)` | Heuristic: Proton base64 IDs end in `==` |
-| `altEmail()` | Return `PROTON_ALT_USER` (the second account's address) |
-| `alt(args...)` | Prefix `--profile alt`; run a command as the second account, e.g. `runOK(t, alt(...)...)` |
+| `secondaryEmail()` | The second account's address |
+| `runSecondary` / `runOKSecondary` / `runJSONSecondary` / `runJSONArraySecondary` / `cleanupRunSecondary` | The same runners, as the second account |
+| `externalRecipient(t)` | A non-Proton recipient; skips the test when none is configured |
 
 ## Performance: shared fixtures & polling
 
@@ -261,10 +262,23 @@ The copy-pasteable commands surfaced on cleanup failure do not need `--`; the us
 - This makes them identifiable in the Proton UI if cleanup ever fails.
 - Never use short or common names that could collide with real data.
 
+## Paid-plan features
+
+The accounts are free ones, and Proton gates some features behind a plan. A test that reaches one skips rather than fails, because no seeding can make a free account able to do it:
+
+| Feature | How it refuses |
+| --- | --- |
+| Contact groups | HTTP 401, Proton code `2027` |
+| Auto-reply | a message naming "upgrade", "paid" or "subscription" |
+
+Match the code where there is one; the sentence is Proton's to reword.
+
+Auto-reply is worth a note: Proton refuses it with 9100, the same code it uses for a missing scope, so the CLI elevates the session first and only then hears the real reason. That is why `mail settings autoreply set` carries the credential flags even though the answer is a subscription and not a password.
+
 ## Known Limitations
 
-- `calendar settings calendars delete` hits an endpoint Proton guards behind an elevated session. Nothing in the command arranges that: the client elevates when the server asks, using `PROTON_PASSWORD`, and drops the scope again. It works in tests because the variable is set.
+- `calendar settings calendars delete` hits an endpoint Proton guards behind an elevated session. Nothing in the command arranges that: the client elevates when the server asks, using the password `runAs` supplies through `--password-file`, and drops the scope again.
 - `drive trash empty` may not clear items from non-default volumes (e.g. Photos share).
 - Proton only allows specific hex colors for labels, folders, calendars and contact groups (e.g. `#8080FF`, `#3CBB3A`) - see `ACCENT_COLORS` in the WebClients source. The CLI refuses anything else locally, before a request.
-- `just test` runs serially; expect ~8-12 minutes (down from ~17) after the shared-fixture and polling work (30m timeout).
+- `just test` runs serially; expect ~15-20 minutes after the shared-fixture and polling work (30m timeout).
 - Mail-delivery latency is inherent: a self-mail's inbox copy lands a few seconds after send. Amortize it with a shared fixture rather than paying it per test.

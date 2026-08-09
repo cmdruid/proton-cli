@@ -98,16 +98,32 @@ func yesNo(b bool) string {
 // ── account login / logout ──
 
 func loginCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		user   string
+		reauth kit.Reauth
+	)
+	c := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in and save the session for this profile",
 		Long: "Sign in and save the session for this profile.\n\n" +
-			"Anything not already set by a flag or an environment variable is asked for,\n" +
-			"as long as this is a terminal. Signing in also unlocks your keys, so the\n" +
-			"password is needed once per machine and not again.",
+			"This is how an account reaches the CLI, and the only way: it is attached to\n" +
+			"a profile here, and every later command acts as whichever profile it names.\n" +
+			"Signing in also unlocks your keys, so the password is needed once per machine\n" +
+			"and not again.\n\n" +
+			"Anything not already set by a flag is asked for, as long as this is a\n" +
+			"terminal. Signing in again as the same account changes nothing, so an\n" +
+			"unattended job can run this ahead of its real work and recover on its own\n" +
+			"from a session that expired or was revoked.",
+		Example: "  proton-cli account login\n" +
+			"  proton-cli account login --profile work\n" +
+			"  printf '%s' \"$PW\" | proton-cli account login --user me@proton.me --password-stdin\n" +
+			"  proton-cli account login --user me@proton.me --password-file /run/secrets/proton",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
-			if err := c.App.Login(c.Ctx); err != nil {
+			if err := reauth.Supply(c); err != nil {
+				return err
+			}
+			if err := c.App.Login(c.Ctx, user); err != nil {
 				return err
 			}
 			acct, err := c.App.Account.Get(c.Ctx)
@@ -124,6 +140,11 @@ func loginCmd() *cobra.Command {
 			}, func() error { return nil })
 		}),
 	}
+	// Naming an account belongs here. Every other command acts as whichever
+	// profile it was given, and already knows the address from its session.
+	c.Flags().StringVar(&user, "user", "", "Proton account email to sign in as")
+	reauth.Declare(c)
+	return c
 }
 
 func logoutCmd() *cobra.Command {

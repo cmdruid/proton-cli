@@ -45,13 +45,6 @@ func photosContext(c *kit.Invocation) (*drivesvc.Context, error) {
 
 // itemType names what a link is, in Proton's own words rather than in the API's
 // integers. No padding: alignment is the table's job, not the value's.
-func itemType(t int) string {
-	if t == 1 {
-		return "folder"
-	}
-	return "file"
-}
-
 func yesNo(b bool) string {
 	if b {
 		return "yes"

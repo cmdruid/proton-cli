@@ -151,7 +151,7 @@ func (d *fields) register(c *cobra.Command, verb string) {
 	f.StringVar(&d.nc.Password, "password", "", verb+" the password (login, wifi)")
 	f.StringVar(&d.nc.Email, "email", "", verb+" the email address (login)")
 	f.StringVar(&d.nc.URL, "url", "", verb+" the URL (login)")
-	f.StringVar(&d.nc.TOTP, "totp", "", verb+" the TOTP URI or secret (login)")
+	f.StringVar(&d.nc.TOTP, "totp-uri", "", verb+" the TOTP URI or secret (login)")
 	f.StringVar(&d.nc.Note, "note", "", verb+" the note")
 	f.StringVar(&d.nc.Holder, "holder", "", verb+" the cardholder's name (credit-card)")
 	f.StringVar(&d.nc.Number, "number", "", verb+" the card number (credit-card)")

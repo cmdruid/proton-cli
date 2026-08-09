@@ -141,6 +141,13 @@ func Mutate(c *Invocation, spec ui.ResultSpec, apply func() error) error {
 	if err := confirm(c, spec); err != nil {
 		return err
 	}
+	// A change that affects nothing is not made. A selection that matched nothing
+	// would otherwise reach Proton as a request to act on no IDs, which it answers
+	// by complaining about the request rather than saying the one true thing:
+	// there was nothing to do.
+	if spec.Count == 0 {
+		return ui.Result(c.UI(), spec)
+	}
 	if err := apply(); err != nil {
 		return err
 	}

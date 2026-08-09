@@ -1,34 +1,61 @@
 # Configuration
 
-## Credentials
+## Signing in
 
-proton-cli reads your credentials from the environment:
+An account reaches proton-cli one way:
 
 ```bash
-export PROTON_USER=alice@proton.me
-export PROTON_PASSWORD=your-password
-export PROTON_TOTP=123456      # only if two-factor authentication is enabled
+proton-cli account login
 ```
+
+It asks for your email, password and two-factor code, attaches the account to a profile, and saves the session. Every later command acts as whichever profile it names.
 
 Your password never leaves your machine: it derives the keys that decrypt your data locally. See [How it works](how-it-works.md).
 
-Put those lines in a password-manager-backed shell snippet rather than your shell profile if you can, for example:
+### Handing over the password without a terminal
+
+A password is read from a pipe or a file, never from a flag value: argv is readable by every user on the machine through `ps`, and it survives in shell history and in unit files.
 
 ```bash
-export PROTON_PASSWORD=$(pass show proton/password)
+# a pipe
+printf '%s' "$PW" | proton-cli account login --user alice@proton.me --password-stdin
+
+# a file
+proton-cli account login --user alice@proton.me --password-file /run/secrets/proton
 ```
 
-Every variable also has a flag equivalent (`--user`, `--password`, `--totp`), which is handy for one-off overrides but leaves credentials in your shell history.
+`account login` performs the exchange that attaches an account to a profile. The others reach an endpoint Proton guards behind an elevated session, which it grants only for another one - today `calendar settings calendars delete` and `mail settings autoreply set`:
+
+```bash
+printf '%s' "$PW" | proton-cli calendar settings calendars delete Work --password-stdin
+```
+
+`--password-file` is usually the one to reach for on a machine, since systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all hand you a path already.
+
+`--password-stdin` takes standard input for the password and nothing else, so it cannot be combined with a `-` argument that wants the same stream:
+
+```console
+$ printf '%s' "$PW" | proton-cli --password-stdin mail messages send --body - ...
+Error: --password-stdin and --body - both read standard input, which can only be read once.
+Try:   pass the password with --password-file instead
+```
+
+Signing in again as the same account changes nothing, so an unattended job can run it ahead of its real work and recover on its own from a session that expired or was revoked:
+
+```bash
+proton-cli account login --user "$ACCOUNT" --password-file "$CRED"
+proton-cli drive items upload backup.zst /backups
+```
 
 ## Sessions
 
-`proton-cli account login` saves the session to `~/.config/proton-cli/sessions/<profile>.json` (mode `0600`) and reuses it, so later commands don't re-authenticate.
+`account login` saves the session to `~/.config/proton-cli/sessions/<profile>.json` (mode `0600`) and reuses it, so later commands don't re-authenticate.
 
 Signing in also unlocks your keys and seals the key password into that file, encrypted with a key that lives on Proton's side. **So your password is needed once per machine and not again** - reading and writing encrypted content afterwards asks for nothing.
 
 Two exceptions:
 
-- Proton guards a few destructive endpoints behind an elevated session, and asks for your password at the moment you hit one. Deleting a calendar is the one the CLI reaches today. It prompts, or reads `PROTON_PASSWORD`, and drops the elevation again immediately.
+- Proton guards a few destructive endpoints behind an elevated session, and asks for your password at the moment you hit one. Deleting a calendar is the one the CLI reaches today. It prompts, or reads `--password-file` / `--password-stdin`, and drops the elevation again immediately. The sealed key password cannot stand in: it is a one-way derivation, and Proton re-authenticates against the password itself.
 - A session revoked or expired elsewhere means signing in again.
 
 ```bash
@@ -38,30 +65,16 @@ proton-cli account logout --revoke    # and invalidate it at Proton
 
 Revoking is what makes a leaked copy of the file worthless: the sealed key password cannot be opened without the session. See [Security](../SECURITY.md).
 
-## Environment variables
-
-| Variable | Description |
-| --- | --- |
-| `PROTON_USER` | Account email |
-| `PROTON_PASSWORD` | Account password |
-| `PROTON_TOTP` | Current TOTP code, when 2FA is on |
-| `PROTON_PROFILE` | Active profile (default: `default`) |
-| `PROTON_API_URL` | API base URL (default: `https://mail.proton.me/api`) |
-| `PROTON_APP_VERSION` | App version header (default: `Other`) |
-| `NO_COLOR` | Set to any value, even empty, to turn colored output off ([no-color.org](https://no-color.org)) |
-| `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
-| `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
-
 ## Profiles: more than one account
 
-A profile is just a name. Each one keeps its own session file and its own set of environment variables, so a personal and a work account never mix.
+A profile is a name with an account behind it. Each keeps its own session file, so a personal and a work account never mix.
 
 ```bash
-proton-cli --profile work account login
+proton-cli account login --profile work
 proton-cli --profile work mail messages list
 ```
 
-With an interactive login a second account needs no variables at all. To see what is signed in here:
+To see what is signed in here - answered from disk, with no API call:
 
 ```bash
 proton-cli account profiles list
@@ -74,28 +87,34 @@ export PROTON_PROFILE=work
 proton-cli mail messages list
 ```
 
-Every setting except `NO_COLOR`, `PROTON_NO_INPUT` and `PROTON_LOG_LEVEL` can be scoped to a profile by putting the profile name into the variable: `PROTON_<PROFILE>_USER`, `PROTON_<PROFILE>_PASSWORD`, and so on. The profile name is upper-cased with anything non-alphanumeric replaced by `_` (`work` → `WORK`, `my-work` → `MY_WORK`).
+A profile nobody signed in acts as nobody, and says so before it reaches the network:
 
-```bash
-export PROTON_USER=alice@proton.me            # default profile
-export PROTON_PASSWORD=personal-password
-
-export PROTON_WORK_USER=alice@company.com     # work profile
-export PROTON_WORK_PASSWORD=work-password
-
-proton-cli mail messages list                 # personal
-proton-cli --profile work mail messages list  # work
+```console
+$ proton-cli --profile work mail messages list
+Error: Profile "work" is not signed in.
+Try:   proton-cli account login --profile work
 ```
 
-### Resolution order
+Pointing a profile at a different account is a fine thing to want; it just has to be said out loud, since the name means that account everywhere else:
 
-For every setting, the most specific source wins:
+```console
+$ proton-cli account login --profile work --user someone@else.com
+Error: Profile "work" is signed in as alice@company.com.
+Try:   proton-cli account logout --profile work
+```
 
-1. the flag (`--user`, `--password`, …)
-2. the profile-scoped variable (`PROTON_WORK_USER`)
-3. the plain variable (`PROTON_USER`)
+## Environment variables
 
-That means shared values can live in `PROTON_*` while only the differences need a profile-scoped variable.
+Six, and none of them can name an account.
+
+| Variable | Description |
+| --- | --- |
+| `PROTON_PROFILE` | Active profile (default: `default`) |
+| `PROTON_API_URL` | API base URL (default: `https://mail.proton.me/api`) |
+| `PROTON_APP_VERSION` | App version header (default: `Other`) |
+| `NO_COLOR` | Set to any value, even empty, to turn colored output off ([no-color.org](https://no-color.org)) |
+| `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
+| `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
 
 ## Files on disk
 
@@ -111,7 +130,7 @@ Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton
 | Flag | Effect |
 | --- | --- |
 | `--output text\|json\|yaml` | Output format (default `text`) |
-| `--profile NAME` | Which profile to use |
+| `--profile NAME` | Which profile to act as |
 | `--dry-run` | Preview a mutation without applying it |
 | `--yes` | Answer confirmation prompts with yes; needed by a script that removes things ([why](language.md#when-it-asks-first)) |
 | `--full-ids` | Don't shorten IDs in interactive output |

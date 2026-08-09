@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -21,9 +22,13 @@ type Label struct {
 	Path  string `json:"path,omitempty"`
 }
 
+// rawLabel is a label as Proton keeps it. Updating one replaces the whole
+// record, so every field it accepts is read even though the CLI only changes
+// three of them.
 type rawLabel struct {
-	ID, Name, Color, Path string
-	Type                  int
+	ID, Name, Color, Path, ParentID   string
+	Type                              int
+	Notify, Sticky, Expanded, Display int
 }
 
 func (s *Service) LabelsList(ctx context.Context) ([]Label, []Label, error) {
@@ -69,20 +74,57 @@ func (s *Service) LabelCreate(ctx context.Context, name, color string, isFolder 
 	return r.Label.ID, nil
 }
 
-// LabelUpdate changes a label/folder's name, color and/or parent. Empty fields
-// are left unchanged.
+// LabelUpdate changes a label or folder's name, color and/or parent.
+//
+// Proton replaces the whole record rather than patching it - a body without a
+// Name is refused - so the current one is read and the changes are laid over it.
+// Everything else travels back unchanged, which is what stops a recolour
+// clearing whether a folder notifies or where it sits.
 func (s *Service) LabelUpdate(ctx context.Context, id, name, color, parentID string) error {
-	body := map[string]any{}
-	if name != "" {
-		body["Name"] = name
+	cur, err := s.labelByID(ctx, id)
+	if err != nil {
+		return err
 	}
-	if color != "" {
-		body["Color"] = color
+	body := map[string]any{
+		"Name":     pick(name, cur.Name),
+		"Color":    pick(color, cur.Color),
+		"Notify":   cur.Notify,
+		"Sticky":   cur.Sticky,
+		"Expanded": cur.Expanded,
+		"Display":  cur.Display,
 	}
-	if parentID != "" {
-		body["ParentID"] = parentID
+	if p := pick(parentID, cur.ParentID); p != "" {
+		body["ParentID"] = p
 	}
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/core/v4/labels/" + id, Body: body}, nil)
+}
+
+// labelByID finds a label or a folder. They are one resource to Proton, listed
+// apart only by type.
+func (s *Service) labelByID(ctx context.Context, id string) (rawLabel, error) {
+	for _, t := range []int{labelTypeLabel, labelTypeFolder} {
+		var r struct{ Labels []rawLabel }
+		if err := s.C.Decode(ctx, proton.Request{
+			Method: "GET", Path: "/core/v4/labels",
+			Query: proton.Query("Type", strconv.Itoa(t)),
+		}, &r); err != nil {
+			return rawLabel{}, err
+		}
+		for _, l := range r.Labels {
+			if l.ID == id {
+				return l, nil
+			}
+		}
+	}
+	return rawLabel{}, &errs.NotFound{Kind: "folder or label", Ref: id}
+}
+
+// pick is the change if one was asked for, else what is already there.
+func pick(want, current string) string {
+	if want != "" {
+		return want
+	}
+	return current
 }
 
 func (s *Service) LabelDelete(ctx context.Context, ids []string) error {
