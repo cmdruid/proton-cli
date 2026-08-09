@@ -54,7 +54,7 @@ type Credentials struct {
 	haveTOTP             bool
 }
 
-// The prompt labels, declared together so they align in a login sequence.
+// The prompt labels.
 const (
 	labelEmail    = "Email"
 	labelPassword = "Password"
@@ -106,8 +106,8 @@ func (c *Credentials) User() (string, error) {
 }
 
 // Password returns the account password. reason completes the sentence "Your
-// password is required to <reason>", so it reads as a clause: "sign in",
-// "unlock your keys", "delete a calendar".
+// password is required to <reason>" reported when there is nobody to ask, so it
+// reads as a clause: "sign in", "unlock your keys", "delete a calendar".
 func (c *Credentials) Password(reason string) (string, error) {
 	if c.havePassword {
 		return c.password, nil
@@ -140,11 +140,6 @@ func (c *Credentials) readPassword(reason string) (string, error) {
 			return v, nil
 		}
 		return "", errs.Problemf("No password arrived on stdin.")
-	}
-	// Say why before asking. A password prompt appearing mid-command with no
-	// explanation is indistinguishable from something going wrong.
-	if c.ui.CanPrompt() {
-		c.ui.Notef("Your password is required to %s.", reason)
 	}
 	return c.ask(labelPassword, true,
 		errs.Problemf("Your password is required to %s.", reason).
@@ -187,7 +182,7 @@ func (c *Credentials) ask(label string, secret bool, missing error) (string, err
 	if !c.ui.CanPrompt() {
 		return "", missing
 	}
-	p := c.ui.Ask(labelEmail, labelPassword, labelTOTP)
+	p := c.ui.Ask()
 	var (
 		v   string
 		err error

@@ -53,7 +53,7 @@ func TestCanPromptRespectsBothTheFlagAndTheEnvironment(t *testing.T) {
 func TestPromptRefusalIsActionable(t *testing.T) {
 	t.Setenv("PROTON_NO_INPUT", "1")
 	u, _, errb := fixture(t, Options{})
-	if _, err := u.Ask("Password").Secret("Password"); err == nil {
+	if _, err := u.Ask().Secret("Password"); err == nil {
 		t.Fatal("want a refusal")
 	}
 	if errb.Len() != 0 {

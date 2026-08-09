@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/roman-16/proton-cli/internal/errs"
 	"golang.org/x/term"
@@ -75,25 +74,16 @@ func (u *UI) Confirm(question string) (bool, error) {
 	return false, nil
 }
 
-// Prompter asks a related group of questions with their labels aligned. The
-// width is computed from the labels it was told about, so no prompt carries a
-// hand-tuned column.
+// Prompter asks a sequence of questions over one reader, so a value typed ahead
+// of the question that wants it is not lost between prompts.
 type Prompter struct {
-	u     *UI
-	width int
-	in    *bufio.Reader
+	u  *UI
+	in *bufio.Reader
 }
 
-// Ask returns a Prompter for the given label set. Labels not in the set still
-// work; they simply may not align.
-func (u *UI) Ask(labels ...string) *Prompter {
-	width := 0
-	for _, l := range labels {
-		if n := utf8.RuneCountInString(l); n > width {
-			width = n
-		}
-	}
-	return &Prompter{u: u, width: width + 1, in: bufio.NewReader(u.In)}
+// Ask returns a Prompter reading from this UI's input.
+func (u *UI) Ask() *Prompter {
+	return &Prompter{u: u, in: bufio.NewReader(u.In)}
 }
 
 // Line asks for a visible value.
@@ -142,5 +132,5 @@ func (p *Prompter) Secret(label string) (string, error) {
 // write emits the prompt on stderr, never stdout: a question is not an answer,
 // so redirecting the answer must not capture it.
 func (p *Prompter) write(label string) {
-	_, _ = fmt.Fprintf(p.u.Err, "%s ", p.u.errTheme.Hint(pad(label+":", p.width, false)))
+	_, _ = fmt.Fprintf(p.u.Err, "%s ", p.u.errTheme.Hint(label+":"))
 }
