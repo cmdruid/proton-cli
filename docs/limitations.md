@@ -34,15 +34,6 @@ Proton exposes no endpoint, to any client, that ingests a message file into an e
 
 Export decrypts, so the files it writes are readable by anything. The original `DKIM-Signature` and `ARC-*` headers no longer verify, since the body they signed was the encrypted one. The web client's own export behaves the same way.
 
-## Not implemented yet
-
-- **Mail**: no encryption and key management, no IMAP/SMTP tokens, no custom domains, no snooze.
-- **Drive**: no search, no downloading an earlier revision (only restoring one), no renaming an album.
-- **Calendar**: no calendar sharing, no subscribed (ICS) calendars, no import or export.
-- **Contacts**: no vCard import or export.
-- **Pass**: no item or vault sharing, no secure links, no password history.
-- **Account**: no plan, billing, or user management. No password, two-factor or recovery changes. No **Easy Switch**, Proton's mailbox migration from Gmail and other IMAP providers. All of these are done at [account.proton.me](https://account.proton.me).
-
 ## Out of scope
 
 proton-cli mirrors the Proton web clients for Mail, Drive, Calendar, Pass, and Contacts. Other Proton products (VPN, Wallet, Docs, Meet, Lumo, Authenticator) are not covered, and neither are endpoints that exist in the API but have no equivalent action in a web client.
