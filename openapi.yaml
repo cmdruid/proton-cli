@@ -239,7 +239,7 @@ components:
   # NOTIFICATION_WHEN: -=BEFORE, =AFTER
   # ORGANIZATION_FLAGS: 1=LOYAL, 2=COVID, 4=SMTP_SUBMISSION, 8=NO_CYCLE_SCHEDULED, 64=DISSIDENT, 128=PROTON, 256=PHONE_SUPPORT, 512=TO_MIGRATE_ORG_KEY, 2048=DELETION_WHITELISTED
   # ORGANIZATION_POLICY_ENFORCED: 0=NO, 1=YES
-  # ORGANIZATION_STATE: 1=ACTIVE, 2=DELINQUENT
+  # ORGANIZATION_STATE: 0=DISABLED, 1=ACTIVE, 2=DELINQUENT
   # ORGANIZATION_TWOFA_SETTING: 0=NOT_REQUIRED, 1=REQUIRED_ADMIN_ONLY, 2=REQUIRED_ALL
   # OrganizationKeyMode: 0=Legacy, 1=Passwordless
   # OrganizationKeyState: 0=NoKey, 1=Setup, 2=Activate, 3=Inactive, 4=Active
@@ -283,7 +283,7 @@ components:
   # SEND_MESSAGE_DIRECT_ACTION: 0=REPLY, 1=REPLY_ALL, 2=FORWARD, 3=AUTO_RESPONSE, 4=READ_RECEIPT
   # SentryCalendarInitiatives: rsvp-note=RSVP_NOTE, bookings=BOOKINGS
   # SentryCommonInitiatives: post-subscription=POST_SUBSCRIPTION, encrypted-search=ENCRYPTED_SEARCH, contact-import=CONTACT_IMPORT
-  # SentryMailInitiatives: assistant=ASSISTANT, attachment-encryption-error=ATTACHMENT_ENCRYPTION_ERROR, attachment-upload-error=ATTACHMENT_UPLOAD_ERROR, composer=COMPOSER, drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, mail-onboarding=MAIL_ONBOARDING, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL, move-actions=MOVE_ACTIONS, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS, mailbox-redirect=MAILBOX_REDIRECT
+  # SentryMailInitiatives: assistant=ASSISTANT, attachment-encryption-error=ATTACHMENT_ENCRYPTION_ERROR, attachment-upload-error=ATTACHMENT_UPLOAD_ERROR, composer=COMPOSER, drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, mail-onboarding=MAIL_ONBOARDING, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL, move-actions=MOVE_ACTIONS, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS, mailbox-redirect=MAILBOX_REDIRECT, categories-view=CATEGORIES_VIEW
   # SentryMailPerformanceInitiatives: apply-location-performance=APPLY_LOCATION_PERFORMANCE
   # SentryRealtimeInitiatives: realtime-sdk-switch=SDK_SWITCH
   # SERVER_FEATURES: 1=SECURE_CORE, 2=TOR, 4=P2P, 8=XOR, 16=IPV6, 32=RESTRICTED, 64=PARTNER, 128=DOUBLE_RESTRICTION
@@ -361,7 +361,7 @@ components:
   # TelemetryMailPagingControlsEvents: move_to_previous_page=move_to_previous_page, move_to_next_page=move_to_next_page, clicked_load_more_search_results=clicked_load_more_search_results, move_to_custom_page=move_to_custom_page
   # TelemetryMailSelectAllEvents: button_move_to_archive=button_move_to_archive, button_move_to_trash=button_move_to_trash, banner_move_to=banner_move_to, banner_label_as=banner_label_as, banner_mark_as_read=banner_mark_as_read, banner_mark_as_unread=banner_mark_as_unread, banner_permanent_delete=banner_permanent_delete
   # TelemetryMailTrial2024UpsellModal: no_thanks=noThanks, close_modal=closeModal, upsell=upsell
-  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.safety_review_ctr=accountSafetyReviewCtr, account.web.safety_review_score_diff=accountSafetyReviewScoreDiff, account.web.recovery_settings=accountRecoverySettings, account.web.password_reminder=accountPasswordReminder, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, account.web.upgrade_page=accountUpgradePage, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, meet.web.meet_funnel_telemetry=meetFunnelTelemetry, account.web.cancellation=accountCancellation, account.web.cancellation_feedback_first=accountCancellationFeedbackFirst, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.expand_blockquotes=mailExpandBlockquotes, any.web.categories_view=categoriesView, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, account.web.explore_apps=accountExploreApps, any.web.prevent_wasm_loading=preventWasmLoading, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage, vpn.any.tv_signin=vpnTv, vpn.web.always_on_policy=vpnAlwaysOnPolicy
+  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.safety_review_ctr=accountSafetyReviewCtr, account.web.safety_review_score_diff=accountSafetyReviewScoreDiff, account.web.recovery_settings=accountRecoverySettings, account.web.password_reminder=accountPasswordReminder, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, account.web.upgrade_page=accountUpgradePage, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, meet.web.meet_funnel_telemetry=meetFunnelTelemetry, account.web.cancellation=accountCancellation, account.web.cancellation_feedback_first=accountCancellationFeedbackFirst, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.expand_blockquotes=mailExpandBlockquotes, mail.any.categories_view=categoriesView, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, account.web.explore_apps=accountExploreApps, any.web.prevent_wasm_loading=preventWasmLoading, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage, vpn.any.tv_signin=vpnTv, vpn.web.always_on_policy=vpnAlwaysOnPolicy, vpn.web.b2b_user_activity=vpnB2bUserActivity
   # TelemetryMeetFunnelTelemetry: spotlight_displayed=spotlight_displayed, explore_meet_clicked=explore_meet_clicked, meeting_created=meeting_created, meet_opened=meet_opened
   # TelemetryPaidUsersNudge: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, close_offer=closeOffer, user_subscribed=userSubscribed, click_hide_offer=clickHideOffer
   # TelemetryPassExtensionEvents: fe.pass_extension_installed=pass_extension_installed
@@ -383,7 +383,8 @@ components:
   # TelemetryUnlimitedOffer2025: click_top_navbar=clickTopNavbar, click_upsell_button=clickUpsellButton, close_offer=closeOffer, user_subscribed=userSubscribed, click_hide_offer=clickHideOffer
   # TelemetryUnlimitedToDuoOffer: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, user_subscribed=userSubscribed, close_offer=closeOffer, click_hide_offer=clickHideOffer
   # TelemetryUpgradePageEvents: page_load=page_load, cta_click=cta_click, subscription_success=subscription_success
-  # TelemetryVpnAlwaysOnPolicyEvents: configure_opened=configureOpened, generate_start=generateStart, generate_success=generateSuccess, generate_failure=generateFailure, instructions_viewed=instructionsViewed, remove_modal_opened=removeModalOpened
+  # TelemetryVpnAlwaysOnPolicyEvents: configure_opened=configureOpened, generate_start=generateStart, generate_success=generateSuccess, generate_failure=generateFailure, instructions_viewed=instructionsViewed, learn_more_clicked=learnMoreClicked, remove_modal_opened=removeModalOpened, download_latest_clicked=downloadLatestClicked, client_download_clicked=clientDownloadClicked
+  # TelemetryVpnB2bUserActivityEvents: upsell_shown=upsell_shown, upsell_learn_more_clicked=upsell_learn_more_clicked, upsell_upgrade_started=upsell_upgrade_started, upsell_upgrade_success=upsell_upgrade_success, upsell_dismissed=upsell_dismissed, enable_clicked=enable_clicked
   # TelemetryVPNDrawerEvents: tooltip_displayed=tooltip_displayed, tooltip_clicked=tooltip_clicked, tooltip_dismissed=tooltip_dismissed, drawer_displayed=drawer_displayed, download_clicked=download_clicked, status_changed=status_changed
   # TelemetryVpnTvEvents: tv_auth_initiated=tvAuthInitiated
   # ThemeFeatureSetting: 0=DEFAULT, 1=SCROLLBARS_OFF, 2=ANIMATIONS_OFF
@@ -4206,24 +4207,6 @@ paths:
       tags: [Core]
       summary: Get Group Membership
       operationId: getGroupMembership
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-  /core/v4/groups/members/{groupID}:
-    delete:
-      tags: [Core]
-      summary: Delete All Group Members
-      operationId: deleteAllGroupMembers
-      parameters:
-        - name: groupID
-          in: path
-          required: true
-          schema:
-            type: string
       responses:
         "200":
           description: Success
@@ -17124,6 +17107,23 @@ paths:
       tags: [Tests]
       summary: Ping
       operationId: ping
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /vpn/v1/business/members/usage:
+    post:
+      tags: [Vpn]
+      summary: Query Members Usage
+      operationId: queryMembersUsage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         "200":
           description: Success
