@@ -16,9 +16,25 @@ func atVienna(t *testing.T, month, day, hour int) time.Time {
 	return time.Date(2026, time.Month(month), day, hour, 0, 0, 0, loc)
 }
 
+// readingIn fixes the zone a test reads occurrence references in.
+func readingIn(t *testing.T, loc *time.Location) {
+	t.Helper()
+	saved := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = saved })
+}
+
+// seriesStored builds the weekly series the window tests expand, read from the
+// zone it is anchored to.
+//
+// The reading matters as much as the series. An occurrence reference is the local
+// reading of an instant, so a test that writes one as a literal is writing it as
+// read from somewhere; left to the machine, that somewhere is whoever runs the
+// test.
 func seriesStored(t *testing.T, rule string) stored {
 	t.Helper()
 	start := atVienna(t, 4, 6, 9)
+	readingIn(t, start.Location())
 	return stored{
 		raw: rawEvent{ID: "master", CalendarID: "cal1", UID: "uid-1"},
 		model: ical.VEvent{

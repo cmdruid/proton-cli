@@ -115,7 +115,9 @@ A weekly workflow does the same thing and commits when upstream changes. See [`s
 
 ## Releases
 
-Running the **Release** workflow with a version tags it, builds the CAPTCHA helper on a native runner per platform, and hands the lot to GoReleaser, which builds every target, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
+Running the **Release** workflow with a version runs the same checks a pull request faces against the commit being released, builds the CAPTCHA helper on a native runner per platform, and only then tags. The tag is pushed last on purpose: it is fetched by users, resolved by `go install`, and the version GoReleaser derives, so nothing that outlives a failed run happens until everything that can fail has passed. GoReleaser then builds every target, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
+
+Re-running the workflow with the same version and `skip-tag-check` resumes from the existing tag, and re-checks that tag's own commit rather than whatever `main` has become since.
 
 `just snapshot` runs the same GoReleaser pipeline locally without publishing, so a packaging mistake surfaces before the tag rather than after it. It builds the helper for your platform and stands in placeholders for the other four, since those need native runners: the artifacts in `dist/` prove the packaging, not the helper bytes, and the foreign binaries in there are not runnable.
 

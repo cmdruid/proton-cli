@@ -186,6 +186,3 @@ func TestMailCapable(t *testing.T) {
 		t.Error("FLAG_EMAIL_NO_ENCRYPT should make a key non-mail-capable")
 	}
 }
-
-// TestAttachmentPasswordKeyPacketsRoundTrip proves an EO attachment key packet
-// decrypts back to the original session key with the password.

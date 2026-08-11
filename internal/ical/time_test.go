@@ -25,10 +25,13 @@ func TestDateTimeRendersItsOwnAnchor(t *testing.T) {
 	}
 }
 
-// The reference form is what a list prints and a command reads back, so it stays
-// the wall clock in the value's own anchor.
-func TestStringIsTheWallClockInItsOwnAnchor(t *testing.T) {
+// The reference form is what a list prints beside its local columns and what a
+// person types back off that row, so it is the local reading rather than the
+// value's own anchor. Here the two agree because the reading is declared to be
+// from Vienna, which is where the series is anchored.
+func TestStringIsTheLocalReadingOfTheInstant(t *testing.T) {
 	loc := vienna(t)
+	readingIn(t, loc)
 	at := time.Date(2026, 4, 16, 9, 0, 0, 0, loc)
 	if got := Timed(at, "Europe/Vienna").String(); got != "2026-04-16T09:00" {
 		t.Errorf("String = %q", got)

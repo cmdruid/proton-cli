@@ -170,8 +170,13 @@ func TestAttachmentPasswordKeyPacketsRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(got.Key, sk.Key) {
 		t.Error("round-tripped session key does not match the original")
 	}
-	if _, err := pgp.DecryptSessionKeyWithPassword(packet, []byte("wrong")); err == nil {
-		t.Error("decrypting with the wrong password should fail")
+	// The wrong password must not recover the session key. That it also *errors*
+	// cannot be asserted: a symmetric-key encrypted session key packet carries no
+	// integrity check, so a wrong password yields bytes that now and then parse as
+	// a valid session key. What the packet promises is that they are not this one,
+	// and the data they would go on to decrypt is what carries the tag that fails.
+	if wrong, err := pgp.DecryptSessionKeyWithPassword(packet, []byte("wrong")); err == nil && reflect.DeepEqual(wrong.Key, sk.Key) {
+		t.Error("the wrong password recovered the session key")
 	}
 }
 

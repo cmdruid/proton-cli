@@ -14,10 +14,24 @@ func vienna(t *testing.T) *time.Location {
 	return loc
 }
 
-// weekly builds a zone-anchored series at 09:00 lasting 15 minutes.
+// readingIn fixes the zone a test reads references in.
+func readingIn(t *testing.T, loc *time.Location) {
+	t.Helper()
+	saved := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = saved })
+}
+
+// weekly builds a zone-anchored series at 09:00 lasting 15 minutes, read from
+// that same zone.
+//
+// The reading matters as much as the series. A reference is the local reading of
+// an instant, so a test that writes one as a literal is writing it as read from
+// somewhere; left to the machine, that somewhere is whoever runs the test.
 func weekly(t *testing.T, rule string, day int) VEvent {
 	t.Helper()
 	loc := vienna(t)
+	readingIn(t, loc)
 	start := time.Date(2026, 10, day, 9, 0, 0, 0, loc)
 	return VEvent{
 		UID:     "uid-1",
@@ -160,10 +174,14 @@ func TestOccurrenceAtFindsAnInstanceAndItsNumber(t *testing.T) {
 	}
 }
 
-// A reference is printed in the series' own frame, so it has to be read back in
-// that frame. Reading it in the host's zone would make the same reference mean
-// different instants on different machines.
-func TestParseOccurrenceReadsTheReferenceInTheSeriesZone(t *testing.T) {
+// A reference is printed in the frame it is read in, so it is parsed in that
+// frame too, and the anchor it comes back carrying is the series'. Matching is by
+// instant, so the same reference names the same occurrence wherever it is typed.
+//
+// This is what the web client does: it draws every event in the viewer's own
+// zone, links to one occurrence by an absolute timestamp, and applies the
+// series' zone only when it writes the RECURRENCE-ID that names the instance.
+func TestParseOccurrenceReadsTheReferenceInTheFrameItWasPrintedIn(t *testing.T) {
 	loc := vienna(t)
 	v := weekly(t, "FREQ=WEEKLY", 12)
 	at, err := v.ParseOccurrence("2026-10-19T09:00")
