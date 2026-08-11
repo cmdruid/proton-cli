@@ -6,12 +6,12 @@ Everything the maintainer or CI runs, in whatever language suits it: shell insta
 | --- | --- |
 | `install.sh`, `install.ps1` | The installers users curl; referenced from the README |
 | `build-hv-helpers.sh` | Builds the CAPTCHA webview helpers that get embedded (`just build`) |
-| `gen-completions.sh` | Emits the shell completions shipped in releases |
+| `gen-completions.sh` | Emits the shell completions shipped in releases (a goreleaser `before` hook) |
 | `gendocs/` | Generates `docs/commands/README.md` from the command tree (`just docs`) |
-| `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source |
+| `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source (`just openapi`) |
 | `terminal-demo/` | Records the README panel against the primary account (`just demo`) |
 | `publish-npm.mjs` | Publishes the npm package on release |
-| `release-helpers-check.sh` | Verifies a release's embedded helpers before publishing |
+| `release-helpers-check.sh` | Verifies a release's embedded helpers before publishing (a goreleaser `before` hook) |
 
 ## Command Reference Generator
 
@@ -32,9 +32,7 @@ Auto-generates `openapi.yaml` from [ProtonMail/WebClients](https://github.com/Pr
 ### Usage
 
 ```bash
-cd scripts
-bun install
-bun run generate-openapi
+just openapi
 ```
 
 This outputs `openapi.yaml` in the project root. First run clones the WebClients repo to `/tmp/proton-cli-WebClients` (~30 seconds). Subsequent runs pull updates (~1 second).

@@ -94,13 +94,13 @@ func main() {
 
 	switch {
 	case len(r.failures) > 0:
-		fmt.Printf("made %d, replaced %d, %d could not be seeded: %s\n",
-			r.made, r.remade, len(r.failures), strings.Join(r.failures, ", "))
+		fmt.Printf("made %d, replaced %d, swept %d, %d could not be seeded: %s\n",
+			r.made, r.remade, r.swept, len(r.failures), strings.Join(r.failures, ", "))
 		os.Exit(1)
-	case r.made+r.remade == 0:
+	case r.made+r.remade+r.swept == 0:
 		fmt.Println("already seeded")
 	default:
-		fmt.Printf("made %d, replaced %d\n", r.made, r.remade)
+		fmt.Printf("made %d, replaced %d, swept %d\n", r.made, r.remade, r.swept)
 	}
 }
 

@@ -31,9 +31,11 @@ proton-cli has one grammar, one verb per idea, and one shape per response. All o
 After making code changes, run these in order. Stop on the first failure and fix it before continuing.
 
 1. **Fast tests** - `just test-fast` runs the unit, golden and conformance suites with no credentials and no network. It is the gate that catches an inconsistency.
-2. **Lint** - **always run `just lint`** and fix everything before considering the work done. It runs `gofmt -w .` and `golangci-lint run ./...` (CGO-free, so no C compiler needed).
+2. **Lint** - **always run `just lint`** and fix everything before considering the work done. It formats Go and Nix and regenerates the command reference, then checks the workflows with `actionlint`, the release configuration with `goreleaser check`, the shell scripts with `shellcheck`, and the Go with `golangci-lint` (CGO-free, so no C compiler needed). CI runs the same recipe and then fails on anything it rewrote, so leaving a generated file stale is the same failure as leaving a finding.
 3. **Build** - `just build` produces the release-shaped binary (`-tags=embed_hv` + the CGO webview helper); it needs the toolchain from `devbox shell`.
-4. **Integration tests** - **do not run.** The suite hits the live Proton API, creates real data, and takes several minutes; the user runs it manually and reports back. See [Testing](#testing).
+4. **Nix, when `go.mod` moved** - `just flake` builds the flake package from the working tree. `vendorHash` in `flake.nix` goes stale on every dependency change and nothing else catches it; the recipe prints the hash to paste in.
+5. **Packaging, when the release surface moved** - `just snapshot` builds every artifact a tag would, without publishing. Run it after touching `.goreleaser.yaml`, the completions or the embedded helpers.
+6. **Integration tests** - **do not run.** The suite hits the live Proton API, creates real data, and takes several minutes; the user runs it manually and reports back. See [Testing](#testing).
 
 ## Testing
 
@@ -42,7 +44,7 @@ Tests are **integration tests** that run against the live Proton API. They run o
 - **`just test-fast` is always safe** - no API, no credentials, seconds to run
 - **Never run the full test suite** (`just test` / `go test ./tests/...`) - only the user triggers that manually
 - **Single integration tests are allowed** (`just test-one TestName`) when verifying a specific change
-- **`just docs`** regenerates `docs/commands/README.md` from the tree; CI fails on a diff
+- **`just docs`** regenerates `docs/commands/README.md` from the tree; `just lint` runs it too, and CI fails on the diff
 - **Unit test file naming**: name a unit test file after the source file it tests, with `_test.go` appended (e.g. `size.go` → `size_test.go`) - never after a symbol or after a file that doesn't exist. The integration tests under `tests/` are the exception: they are grouped by feature area.
 
 ## Reference Source

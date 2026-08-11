@@ -16,20 +16,25 @@ cd proton-cli
 direnv allow      # or: devbox shell
 ```
 
-Without devbox you need Go 1.26 or newer, plus `golangci-lint` and `just` for the tasks below.
+Without devbox you need Go 1.26 or newer, plus `actionlint`, `charm-freeze`, `golangci-lint`, `goreleaser`, `just`, `nixfmt`, `protoc`, `protoc-gen-go` and `shellcheck` for the tasks below.
 
 ## Everyday commands
+
+`just --list` is the full set. The ones you'll reach for:
 
 ```bash
 go build .        # quick build (no CAPTCHA helper)
 just build        # release-shaped binary, embeds the webview helper
 just run -- mail messages list
-just lint         # gofmt + golangci-lint; run before every commit
+just lint         # format, regenerate, and check everything; run before every commit
+just test-fast    # unit, golden and conformance tests
+just flake        # build the nix package, after a dependency bump
+just snapshot     # every release artifact, without publishing
 just demo         # regenerate the README demo images
-just clean
+just update       # move every dependency and tool to the latest version
 ```
 
-`just lint` has to pass with no findings.
+`just lint` has to pass with no findings, and has to leave the tree clean. It formats Go and Nix, regenerates the command reference, and checks the workflows, the release configuration, the shell scripts and the Go, so a stale generated file fails the same way a lint finding does. CI runs the same recipe.
 
 ## README demo images
 
@@ -95,10 +100,10 @@ cd /tmp && git clone --depth 1 https://github.com/ProtonMail/WebClients.git
 `openapi.yaml` in the repository root is generated from that source and covers roughly 740 endpoints. Regenerate it with:
 
 ```bash
-cd scripts && bun install && bun run generate-openapi
+just openapi
 ```
 
-A weekly workflow does the same thing and opens a PR when upstream changes. See [`scripts/README.md`](scripts/README.md).
+A weekly workflow does the same thing and commits when upstream changes. See [`scripts/README.md`](scripts/README.md).
 
 ## Pull requests
 
@@ -110,7 +115,9 @@ A weekly workflow does the same thing and opens a PR when upstream changes. See 
 
 ## Releases
 
-Tagging `vX.Y.Z` triggers GoReleaser, which builds every platform, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
+Running the **Release** workflow with a version tags it, builds the CAPTCHA helper on a native runner per platform, and hands the lot to GoReleaser, which builds every target, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
+
+`just snapshot` runs the same GoReleaser pipeline locally without publishing, so a packaging mistake surfaces before the tag rather than after it. It builds the helper for your platform and stands in placeholders for the other four, since those need native runners: the artifacts in `dist/` prove the packaging, not the helper bytes, and the foreign binaries in there are not runnable.
 
 ## Security
 

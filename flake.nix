@@ -24,7 +24,7 @@
           __structuredAttrs = true;
 
           src = self;
-          vendorHash = "sha256-aHEqq2Sg6C+tvBsyQZlpkDX6fQe8L8ZZ+lvlYxQi+QA=";
+          vendorHash = "sha256-VjLuSaHW7C1Ar84vusMRjBWVikgVCdLBwd+OFT7ufiQ=";
 
           subPackages = [ "." ];
           tags = [ "embed_hv" ];

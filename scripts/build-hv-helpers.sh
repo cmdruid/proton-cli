@@ -76,7 +76,7 @@ build_one() {
         if [[ -n "${DEVBOX_PROJECT_ROOT:-}" ]]; then
             export PKG_CONFIG_PATH_FOR_TARGET="${DEVBOX_PROJECT_ROOT}/tools/pkgconfig:${PKG_CONFIG_PATH_FOR_TARGET:-}"
         fi
-        export PKG_CONFIG_PATH="$(pwd)/tools/pkgconfig:${PKG_CONFIG_PATH:-}"
+        export PKG_CONFIG_PATH="$PWD/tools/pkgconfig:${PKG_CONFIG_PATH:-}"
         if ! pkg-config --exists webkit2gtk-4.0; then
             echo "ERROR: pkg-config cannot find webkit2gtk-4.0 (or our 4.1 shim)" >&2
             echo "       Install libwebkit2gtk-4.1-dev (Debian/Ubuntu)" >&2
@@ -129,4 +129,4 @@ esac
 
 echo ""
 echo "Helper assets in $OUT_DIR:"
-ls -la "$OUT_DIR/" | grep -v '^d'
+ls -la "$OUT_DIR"/proton-cli-hv-*

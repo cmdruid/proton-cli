@@ -38,4 +38,4 @@ if [[ ${#missing[@]} -gt 0 ]]; then
 fi
 
 echo "All ${#expected[@]} helper binaries present:"
-ls -la "$ASSETS/" | grep -v '^d'
+ls -la "$ASSETS"/proton-cli-hv-*

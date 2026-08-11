@@ -32,7 +32,7 @@ func mailbox(work string) []collection {
 		what:   "label",
 		list:   []string{"mail", "settings", "labels", "list"},
 		key:    "name",
-		idKey:  "id",
+		idKeys: []string{"id"},
 		remove: []string{"mail", "settings", "labels", "delete"},
 		pins: []pin{{
 			id:     "Newsletters",
@@ -43,7 +43,7 @@ func mailbox(work string) []collection {
 		what:   "folder",
 		list:   []string{"mail", "settings", "folders", "list"},
 		key:    "name",
-		idKey:  "id",
+		idKeys: []string{"id"},
 		remove: []string{"mail", "settings", "folders", "delete"},
 		pins: []pin{{
 			id:     "Projects",
@@ -54,7 +54,7 @@ func mailbox(work string) []collection {
 		what:   "filter",
 		list:   []string{"mail", "settings", "filters", "list"},
 		key:    "name",
-		idKey:  "id",
+		idKeys: []string{"id"},
 		remove: []string{"mail", "settings", "filters", "delete"},
 		// Disabled, and matching a word none of the fixture's mail carries. A free
 		// account may hold one *active* filter, which the suite needs for itself,
@@ -70,7 +70,7 @@ func mailbox(work string) []collection {
 		what:   "contact",
 		list:   []string{"contacts", "list"},
 		key:    "name",
-		idKey:  "id",
+		idKeys: []string{"id"},
 		remove: []string{"contacts", "delete"},
 		pins: []pin{{
 			id:     "Anna Berger",
@@ -82,7 +82,7 @@ func mailbox(work string) []collection {
 		what:   "vault",
 		list:   []string{"pass", "vaults", "list"},
 		key:    "name",
-		idKey:  "share_id",
+		idKeys: []string{"share_id"},
 		remove: []string{"pass", "vaults", "delete"},
 		pins: []pin{{
 			id:     "Personal",
@@ -92,7 +92,7 @@ func mailbox(work string) []collection {
 		what:   "pass item",
 		list:   []string{"pass", "items", "list", "--vault", "Personal"},
 		key:    "name",
-		idKey:  "item_id",
+		idKeys: []string{"item_id"},
 		remove: []string{"pass", "items", "delete"},
 		pins: []pin{{
 			id:     "GitHub",
@@ -120,7 +120,7 @@ func mailbox(work string) []collection {
 		what:   "drive",
 		list:   []string{"drive", "items", "list", "/"},
 		key:    "name",
-		idKey:  "link_id",
+		idKeys: []string{"link_id"},
 		remove: []string{"drive", "items", "delete"},
 		parent: "/",
 		pins: []pin{{
@@ -132,7 +132,7 @@ func mailbox(work string) []collection {
 		what:   "drive",
 		list:   []string{"drive", "items", "list", "/Documents"},
 		key:    "name",
-		idKey:  "link_id",
+		idKeys: []string{"link_id"},
 		remove: []string{"drive", "items", "delete"},
 		parent: "/Documents",
 		pins: []pin{{
@@ -152,7 +152,7 @@ func mailbox(work string) []collection {
 		what:   "drive",
 		list:   []string{"drive", "items", "list", "/Documents/Trips"},
 		key:    "name",
-		idKey:  "link_id",
+		idKeys: []string{"link_id"},
 		remove: []string{"drive", "items", "delete"},
 		parent: "/Documents/Trips",
 		pins: []pin{{
@@ -164,7 +164,7 @@ func mailbox(work string) []collection {
 		what:   "event",
 		list:   []string{"calendar", "events", "list", "--start", today(), "--end", inDays(30)},
 		key:    "title",
-		idKey:  "id",
+		idKeys: []string{"calendar_id", "id"},
 		remove: []string{"calendar", "events", "delete"},
 		pins: []pin{{
 			id: "Dentist",

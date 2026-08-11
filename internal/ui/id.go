@@ -13,19 +13,23 @@ const ShortIDLen = 8
 // next command, so it must stay copy-safe.
 //
 // A compound reference ("SHARE/ITEM") is shortened segment by segment, keeping
-// it a single pasteable token.
+// it a single pasteable token. What follows an "@" names one occurrence of a
+// recurring event rather than an ID, and is what tells two rows of the same
+// series apart, so it is carried over whole.
 func Short(id string, short bool) string {
 	if !short || id == "" {
 		return id
 	}
-	if !strings.Contains(id, "/") {
-		return truncID(id)
-	}
-	parts := strings.Split(id, "/")
+	ref, occurrence, recurring := strings.Cut(id, "@")
+	parts := strings.Split(ref, "/")
 	for i, p := range parts {
 		parts[i] = truncID(p)
 	}
-	return strings.Join(parts, "/")
+	ref = strings.Join(parts, "/")
+	if !recurring {
+		return ref
+	}
+	return ref + "@" + occurrence
 }
 
 func truncID(id string) string {

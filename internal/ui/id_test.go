@@ -19,6 +19,9 @@ func TestShort(t *testing.T) {
 		// the separator survives.
 		{"compound shortens each half", full + "/" + full, true, "5bH2mQxK/5bH2mQxK"},
 		{"compound off", full + "/" + full, false, full + "/" + full},
+		// An occurrence is what tells two rows of one series apart, so shortening
+		// the reference must not take it with the rest of the event's ID.
+		{"an occurrence survives", full + "/" + full + "@2026-04-16T09:00", true, "5bH2mQxK/5bH2mQxK@2026-04-16T09:00"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := Short(tc.in, tc.short); got != tc.want {

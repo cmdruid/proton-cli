@@ -23,18 +23,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install generator dependencies
-        working-directory: scripts
-        run: bun install --frozen-lockfile
+      - uses: jetify-com/devbox-install-action@v0.15.0
 
       - name: Regenerate openapi.yaml
         run: |
           cp openapi.yaml /tmp/openapi-previous.yaml
-          cd scripts
-          bun run generate-openapi
+          devbox run just openapi
 
       - name: Verify the regenerated spec
         run: |

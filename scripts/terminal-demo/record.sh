@@ -38,11 +38,8 @@ prompt "proton-cli drive items upload trail-map.txt /Documents"
 "$bin" drive items upload "$work/trail-map.txt" /Documents || true
 printf '\n'
 
-# A dry run is the most useful thing to show: it names the rows it would touch
-# rather than counting them, which is the difference between approving a bulk
-# delete and hoping.
-prompt "proton-cli drive items trash --scope /Documents --pattern '*.txt' --dry-run"
-"$bin" drive items trash --scope /Documents --pattern '*.txt' --dry-run || true
+prompt "proton-cli calendar events get Dentist"
+"$bin" calendar events get Dentist || true
 printf '\n'
 
 prompt "proton-cli pass items list --vault Personal"
