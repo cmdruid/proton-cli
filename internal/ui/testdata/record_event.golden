@@ -6,7 +6,11 @@ Duration:     1h
 Location:     Vienna HQ
 Description:  Numbers and roadmap
 Recurrence:   FREQ=WEEKLY;COUNT=10
+Occurrence:   3 of 10
+Series:       ef56gh78/ab12cd34
+Zone:         Europe/Vienna
+Reminders:    -PT15M
 Calendar:     Work
 Signature:    verified
-ID:           ef56gh78/ab12cd34
+ID:           ef56gh78/ab12cd34@2026-04-16T14:00
 == stderr ==

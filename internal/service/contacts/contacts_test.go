@@ -10,8 +10,8 @@ import (
 	gopenpgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/roman-16/proton-cli/internal/vcard"
 )
 
 // testKeyRing generates a throwaway keyring to sign/verify contact cards.
@@ -108,9 +108,9 @@ func putSignedCardText(t *testing.T, d *contactDoer) string {
 func TestPinnedKeysForReadsSignedCard(t *testing.T) {
 	kr := testKeyRing(t)
 	_, keyValue := armoredPubKey(t)
-	card := ical.BuildSignedVCard(ical.SignedContact{
+	card := vcard.BuildSigned(vcard.Signed{
 		Name: "Bob", UID: "uid-1",
-		Emails: []ical.SignedEmail{{
+		Emails: []vcard.SignedEmail{{
 			Address:   "bob@example.com",
 			KeyValues: []string{keyValue},
 			Encrypt:   ptr(true),
@@ -150,9 +150,9 @@ func TestPinnedKeysForNoConfigIsMiss(t *testing.T) {
 
 func TestPinKeyAddsKeyAndPreservesOtherCards(t *testing.T) {
 	kr := testKeyRing(t)
-	base := ical.BuildSignedVCard(ical.SignedContact{
+	base := vcard.BuildSigned(vcard.Signed{
 		Name: "Bob", UID: "uid-1",
-		Emails: []ical.SignedEmail{{Address: "bob@example.com"}},
+		Emails: []vcard.SignedEmail{{Address: "bob@example.com"}},
 	})
 	// A verbatim encrypted card that must survive the edit untouched.
 	encrypted := map[string]any{"Type": float64(pgp.CardEncryptedSigned), "Data": "ENC", "Signature": "SIG"}
@@ -165,7 +165,7 @@ func TestPinKeyAddsKeyAndPreservesOtherCards(t *testing.T) {
 	}
 
 	newSigned := putSignedCardText(t, d)
-	model := ical.ParseSignedVCard(newSigned)
+	model := vcard.ParseSigned(newSigned)
 	e := model.FindEmail("bob@example.com")
 	if e == nil || len(e.KeyValues) != 1 || e.KeyValues[0] != keyValue {
 		t.Fatalf("pinned key not written: %+v", e)
@@ -186,7 +186,7 @@ func TestPinKeyAddsKeyAndPreservesOtherCards(t *testing.T) {
 func TestPinKeyRejectsUnverifiedCard(t *testing.T) {
 	kr := testKeyRing(t)
 	other := testKeyRing(t) // signs with a different key than the verifier
-	base := ical.BuildSignedVCard(ical.SignedContact{Name: "Bob", UID: "u", Emails: []ical.SignedEmail{{Address: "bob@example.com"}}})
+	base := vcard.BuildSigned(vcard.Signed{Name: "Bob", UID: "u", Emails: []vcard.SignedEmail{{Address: "bob@example.com"}}})
 	d := &contactDoer{cards: []map[string]any{signedCard(t, other, base)}}
 	u := &keys.Unlocked{UserKR: kr}
 
@@ -199,9 +199,9 @@ func TestPinKeyRejectsUnverifiedCard(t *testing.T) {
 func TestUnpinKeyRemovesKeys(t *testing.T) {
 	kr := testKeyRing(t)
 	_, keyValue := armoredPubKey(t)
-	base := ical.BuildSignedVCard(ical.SignedContact{
+	base := vcard.BuildSigned(vcard.Signed{
 		Name: "Bob", UID: "u",
-		Emails: []ical.SignedEmail{{Address: "bob@example.com", KeyValues: []string{keyValue}, Encrypt: ptr(true)}},
+		Emails: []vcard.SignedEmail{{Address: "bob@example.com", KeyValues: []string{keyValue}, Encrypt: ptr(true)}},
 	})
 	d := &contactDoer{cards: []map[string]any{signedCard(t, kr, base)}}
 	u := &keys.Unlocked{UserKR: kr}
@@ -209,7 +209,7 @@ func TestUnpinKeyRemovesKeys(t *testing.T) {
 	if err := New(d).UnpinKey(context.Background(), u, "c1", "bob@example.com"); err != nil {
 		t.Fatalf("UnpinKey: %v", err)
 	}
-	model := ical.ParseSignedVCard(putSignedCardText(t, d))
+	model := vcard.ParseSigned(putSignedCardText(t, d))
 	if e := model.FindEmail("bob@example.com"); e == nil {
 		t.Error("email should remain after unpin")
 	} else if len(e.KeyValues) != 0 || e.Encrypt != nil {

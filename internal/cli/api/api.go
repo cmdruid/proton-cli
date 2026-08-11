@@ -9,6 +9,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
@@ -34,6 +35,7 @@ Examples:
   proton-cli api POST /core/v4/labels --body '{"Name":"Work","Color":"#8080FF","Type":1}'`,
 		Args: cobra.ExactArgs(2),
 		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+			method := strings.ToUpper(c.Args[0])
 			q := make(map[string][]string)
 			for _, kv := range query {
 				key, value, found := strings.Cut(kv, "=")
@@ -45,10 +47,20 @@ Examples:
 			if body != "" && !json.Valid([]byte(body)) {
 				return kit.Fail("--body is not valid JSON.")
 			}
+			req := proton.Request{Method: method, Path: c.Args[1], Query: q, Body: body}
 
-			resp, err := c.App.API.Do(c.Ctx, proton.Request{
-				Method: c.Args[0], Path: c.Args[1], Query: q, Body: body,
-			})
+			// A request the CLI does not model is still a request that changes
+			// something, so it reports what it would have sent like every other
+			// mutation. The client refuses it as well; this is what makes the
+			// refusal readable rather than an error.
+			if c.App.DryRun && !readOnly(method) {
+				return kit.Mutate(c, ui.ResultSpec{
+					Action: ui.Updated, Kind: "API requests", Count: 1,
+					Name: method + " " + c.Args[1],
+				}, func() error { return nil })
+			}
+
+			resp, err := c.App.API.Do(c.Ctx, req)
 			if err != nil {
 				// An API error carries a body that explains itself, and that body
 				// is what someone reaching for this command wants to read.
@@ -64,4 +76,13 @@ Examples:
 	c.Flags().StringArrayVar(&query, "query", nil, "Query parameter as key=value (repeatable)")
 	c.Flags().StringVar(&body, "body", "", "JSON request body")
 	return c
+}
+
+// readOnly reports whether a method is defined to leave the resource alone.
+func readOnly(method string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	return false
 }

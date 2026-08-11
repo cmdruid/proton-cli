@@ -15,7 +15,19 @@ proton-cli calendar events get CALENDAR_ID/EVENT_ID
 proton-cli calendar events get "Team sync"           # by title
 ```
 
-`--calendar` takes a calendar name or ID.
+Every calendar is included unless `--calendar` narrows it to one, by name or ID. `--start` and `--end` are the first and last **whole** days to include.
+
+A recurring event is listed on each day it happens, with a reference that names that occurrence:
+
+```console
+$ proton-cli calendar events list --start 2026-04-20 --end 2026-04-27
+ID                         DATE        TIME     DURATION  TITLE           LOCATION
+─────────────────────────  ──────────  ───────  ────────  ──────────────  ────────
+4f2a1b9c@2026-04-20T09:00  2026-04-20  09:00    15m       Standup         Meet
+7bd3e011                   2026-04-21  all day  1d        Public holiday
+4f2a1b9c@2026-04-22T10:30  2026-04-22  10:30    30m       Standup (long)  Meet
+4f2a1b9c@2026-04-27T09:00  2026-04-27  09:00    15m       Standup         Meet
+```
 
 ### Create
 
@@ -33,6 +45,13 @@ proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --dur
 
 `--rrule` takes an iCal recurrence rule; `--remind` is repeatable.
 
+`--zone` anchors the event to an IANA time zone, defaulting to your system zone. It matters for a recurring event: a series anchored to `Europe/Vienna` stays at 09:00 when the clocks change, where one stored as a plain UTC instant would slide to 08:00.
+
+```bash
+proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m \
+  --rrule "FREQ=WEEKLY" --zone Europe/Vienna
+```
+
 Attendees:
 
 ```bash
@@ -46,13 +65,59 @@ Proton users are added directly; external addresses get an emailed invitation.
 ```bash
 proton-cli calendar events update CALENDAR_ID/EVENT_ID --title "New title"
 proton-cli calendar events update CALENDAR_ID/EVENT_ID --start 2026-04-17T10:00 --duration 2h
+proton-cli calendar events update CALENDAR_ID/EVENT_ID --rrule "FREQ=WEEKLY;BYDAY=MO,TH"
+proton-cli calendar events update CALENDAR_ID/EVENT_ID --remind 30m --remind 1h
+proton-cli calendar events update CALENDAR_ID/EVENT_ID --no-remind
 proton-cli calendar events respond CALENDAR_ID/EVENT_ID --status accept
 proton-cli calendar events respond "Team sync" --status decline    # emails the organizer
 proton-cli calendar events delete CALENDAR_ID/EVENT_ID
 proton-cli calendar events delete "Dentist"
 ```
 
-`--status` is `accept`, `tentative`, or `decline`.
+Anything you do not mention is left alone, including the reminders, the recurrence and the occurrences you have cancelled.
+
+`--status` is `accept`, `tentative`, or `decline`, and applies to the whole invitation rather than to one occurrence.
+
+## Recurring events
+
+The reference says which occurrences a change reaches, and `--future` widens one occurrence to it and everything after.
+
+| Command | Changes |
+| --- | --- |
+| `update 4f2a1b9c@2026-04-22T09:00 …` | that occurrence only |
+| `update 4f2a1b9c@2026-04-22T09:00 --future …` | that occurrence and every later one |
+| `update 4f2a1b9c …` | the whole series |
+| `delete 4f2a1b9c@2026-04-22T09:00` | that occurrence only |
+| `delete 4f2a1b9c@2026-04-22T09:00 --future` | that occurrence and every later one |
+| `delete 4f2a1b9c` | the whole series |
+
+```bash
+# move one standup, leaving the series alone
+proton-cli calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30 --duration 30m
+
+# cancel one standup
+proton-cli calendar events delete 4f2a1b9c@2026-04-22T09:00
+
+# from May the 4th on, it moves half an hour later
+proton-cli calendar events update 4f2a1b9c@2026-05-04T09:00 --start 2026-05-04T09:30 --future
+
+# end the series there
+proton-cli calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
+```
+
+Deleting a series removes every occurrence, so it says how many and shows them first:
+
+```console
+$ proton-cli calendar events delete 4f2a1b9c --dry-run
+Dry run - would delete 12 events:
+
+ID                         DATE        TIME   DURATION  TITLE    LOCATION
+─────────────────────────  ──────────  ─────  ────────  ───────  ────────
+4f2a1b9c@2026-04-06T09:00  2026-04-06  09:00  15m       Standup  Meet
+…
+```
+
+`--future` on the first occurrence is refused, because nothing would be left: delete or update the series instead.
 
 ## Time formats
 
@@ -61,7 +126,9 @@ proton-cli calendar events delete "Dentist"
 | `--start` | `2026-04-16T14:00`, `2026-04-16 14:00`, `2026-04-16`, or full RFC 3339, in your system timezone |
 | `--duration` | `15m`, `90m`, `1h`, `2h30m` |
 | `--remind` | `15m`, `1h`, `1d` (repeatable) |
-| `--start` / `--end` on `list` | `YYYY-MM-DD` |
+| `--start` / `--end` on `list` | `YYYY-MM-DD`, both days included |
+| `--zone` | an IANA zone name, e.g. `Europe/Vienna` |
+| an occurrence in a `REF` | the occurrence's own start, as `list` printed it |
 
 ## Settings
 

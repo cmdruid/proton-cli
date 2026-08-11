@@ -70,6 +70,15 @@ proton-cli pass items get SHARE_ID/ITEM_ID
 proton-cli calendar events get CALENDAR_ID/EVENT_ID
 ```
 
+A **recurring** event is stored once and happens many times, so one more thing is needed to name a single occurrence: its own start, after an `@`. `calendar events list` prints exactly what you paste back.
+
+```bash
+proton-cli calendar events get 4f2a1b9c@2026-04-16T09:00   # one occurrence
+proton-cli calendar events get 4f2a1b9c                    # the whole series
+```
+
+So the reference decides how far a change reaches: keep the `@` part and you act on that occurrence, drop it and you act on the series. `--future` widens one occurrence to it and every later one.
+
 **Drive is different.** Files and folders are named by their `PATH`. Trashed items, photos and albums have no path, so they are named by `REF`, the ID their list showed.
 
 ```bash

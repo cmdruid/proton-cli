@@ -3,6 +3,7 @@ package account
 import (
 	"github.com/roman-16/proton-cli/internal/account/session"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/profile"
 	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/spf13/cobra"
@@ -31,7 +32,7 @@ func profilesListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			active := c.App.Profile
+			active := c.App.Profile.String()
 			return kit.List(c, ui.TableSpec[session.Profile]{
 				Noun:  "profiles",
 				Total: ui.Unknown, Page: ui.Unpaged,
@@ -58,11 +59,17 @@ func profilesDeleteCmd() *cobra.Command {
 		Short: "Remove saved sessions by profile name",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			// A profile names a file, so the names are judged before anything is
+			// removed rather than at the point of removal.
+			names, err := profile.Names(c.Args)
+			if err != nil {
+				return kit.Fail("%v.", err)
+			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "profiles", Count: len(c.Args),
+				Action: ui.Deleted, Kind: "profiles", Count: len(names),
 				Name: single(c.Args), IDs: c.Args,
 			}, func() error {
-				for _, name := range c.Args {
+				for _, name := range names {
 					if err := session.Clear(name); err != nil {
 						return err
 					}

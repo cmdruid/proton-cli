@@ -10,6 +10,7 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/account/session"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/profile"
 	acctsvc "github.com/roman-16/proton-cli/internal/service/account"
 	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/roman-16/proton-cli/internal/units"
@@ -51,7 +52,7 @@ func getCmd() *cobra.Command {
 			}
 			// Reaching this point means the session worked, which is the only
 			// honest way to report that it is valid.
-			st := state{Account: acct, Profile: c.App.Profile, Session: "valid"}
+			st := state{Account: acct, Profile: c.App.Profile.String(), Session: "valid"}
 			if sess, err := session.Load(c.App.Profile); err == nil {
 				st.Unlocked = sess.Unlocked()
 			}
@@ -158,16 +159,23 @@ func logoutCmd() *cobra.Command {
 			"the session at Proton, which is what signing out in a Proton app does.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
-			targets := []string{c.App.Profile}
+			targets := []profile.Name{c.App.Profile}
 			if all {
 				profiles, err := session.Profiles()
 				if err != nil {
 					return err
 				}
-				targets = targets[:0]
+				names := make([]string, 0, len(profiles))
 				for _, p := range profiles {
-					targets = append(targets, p.Name)
+					names = append(names, p.Name)
 				}
+				if targets, err = profile.Names(names); err != nil {
+					return err
+				}
+			}
+			refs := make([]string, 0, len(targets))
+			for _, t := range targets {
+				refs = append(refs, t.String())
 			}
 			if len(targets) == 0 {
 				return kit.Mutate(c, ui.ResultSpec{Action: ui.SignedOut, Kind: "profiles"},
@@ -176,7 +184,7 @@ func logoutCmd() *cobra.Command {
 
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.SignedOut, Kind: "profiles", Count: len(targets),
-				Name: single(targets), IDs: targets,
+				Name: single(refs), IDs: refs,
 			}, func() error {
 				// Revoking needs the session that is about to be deleted, so it
 				// happens first and only for the active profile: the others'

@@ -360,12 +360,18 @@ func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemI
 	if !ok {
 		return fmt.Errorf("no share key for rotation %d", r.Item.KeyRotation)
 	}
-	ikBytes, _ := base64.StdEncoding.DecodeString(r.Item.ItemKey)
+	ikBytes, err := base64.StdEncoding.DecodeString(r.Item.ItemKey)
+	if err != nil {
+		return fmt.Errorf("decode item key: %w", err)
+	}
 	itemKey, err := aead.Decrypt(shareKey, ikBytes, []byte(aead.TagItemKey))
 	if err != nil {
 		return err
 	}
-	cBytes, _ := base64.StdEncoding.DecodeString(r.Item.Content)
+	cBytes, err := base64.StdEncoding.DecodeString(r.Item.Content)
+	if err != nil {
+		return fmt.Errorf("decode item content: %w", err)
+	}
 	plain, err := aead.Decrypt(itemKey, cBytes, []byte(aead.TagItemContent))
 	if err != nil {
 		return err
@@ -481,27 +487,62 @@ func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemI
 			}
 		}
 	}
-	pbBytes, _ := proto.Marshal(&it)
-	ct, err := aead.Encrypt(itemKey, pbBytes, []byte(aead.TagItemContent))
+	pbBytes, err := proto.Marshal(&it)
 	if err != nil {
 		return err
 	}
-	var latest struct {
-		Key struct {
-			Key         string
-			KeyRotation int
-		}
+
+	// The rotation sent has to be the rotation of the key the content was encrypted
+	// with. Encrypting with one key and naming another labels the ciphertext with a
+	// key that cannot open it, which is what happens when a rotation lands between
+	// reading the item and writing it back.
+	writeKey, rotation, err := s.latestItemKey(ctx, sk, shareID, itemID)
+	if err != nil {
+		return err
 	}
-	_ = s.C.Decode(ctx, proton.Request{Method: "GET", Path: fmt.Sprintf("/pass/v1/share/%s/item/%s/key/latest", shareID, itemID)}, &latest)
+	ct, err := aead.Encrypt(writeKey, pbBytes, []byte(aead.TagItemContent))
+	if err != nil {
+		return err
+	}
 	return s.C.Decode(ctx, proton.Request{
 		Method: "PUT", Path: fmt.Sprintf("/pass/v1/share/%s/item/%s", shareID, itemID),
 		Body: map[string]any{
 			"Content":              base64.StdEncoding.EncodeToString(ct),
 			"ContentFormatVersion": 7,
-			"KeyRotation":          latest.Key.KeyRotation,
+			"KeyRotation":          rotation,
 			"LastRevision":         r.Item.Revision,
 		},
 	}, nil)
+}
+
+// latestItemKey opens the item's newest key and returns it with its rotation, so a
+// write re-encrypts under the key that is current rather than the one the revision
+// happened to be stored with.
+func (s *Service) latestItemKey(ctx context.Context, sk *shareKeys, shareID, itemID string) ([]byte, int, error) {
+	var r struct {
+		Key struct {
+			Key         string
+			KeyRotation int
+		}
+	}
+	if err := s.C.Decode(ctx, proton.Request{
+		Method: "GET", Path: fmt.Sprintf("/pass/v1/share/%s/item/%s/key/latest", shareID, itemID),
+	}, &r); err != nil {
+		return nil, 0, fmt.Errorf("get the item's latest key: %w", err)
+	}
+	shareKey, ok := sk.keys[r.Key.KeyRotation]
+	if !ok {
+		return nil, 0, fmt.Errorf("no share key for rotation %d", r.Key.KeyRotation)
+	}
+	encoded, err := base64.StdEncoding.DecodeString(r.Key.Key)
+	if err != nil {
+		return nil, 0, fmt.Errorf("decode the item's latest key: %w", err)
+	}
+	itemKey, err := aead.Decrypt(shareKey, encoded, []byte(aead.TagItemKey))
+	if err != nil {
+		return nil, 0, fmt.Errorf("open the item's latest key: %w", err)
+	}
+	return itemKey, r.Key.KeyRotation, nil
 }
 
 func (s *Service) ItemTrash(ctx context.Context, shareID, itemID string) error {

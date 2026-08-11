@@ -286,30 +286,45 @@ func itemsDownloadCmd() *cobra.Command {
 				// Streaming to stdout means the bar would compete with the
 				// payload's own consumer for the terminal, so it stays off.
 				return c.App.Drive.Download(c.Ctx, dc, src, c.UI().Out, drivesvc.DownloadOptions{
-					Label: "Downloading " + name,
+					Label: "Downloading " + name, OnSignatureIssue: signatureIssue(c, name),
 				})
 			}
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Downloaded, Count: 1, Name: name,
 				Detail: "to " + dest.Describe(),
 			}, func() error {
-				target, err := dest.Reserve(name)
-				if err != nil {
-					return err
-				}
-				f, err := os.Create(target)
-				if err != nil {
-					return err
-				}
-				defer func() { _ = f.Close() }()
-				return c.App.Drive.Download(c.Ctx, dc, src, f, drivesvc.DownloadOptions{
-					Label: "Downloading " + name, Progress: ui.NewProgress(c.UI()),
+				// A download that fails its integrity checks part way through must
+				// not leave a plausible-looking file behind, so the bytes land
+				// beside the destination and are moved into place at the end.
+				_, err := dest.Stream(c, name, func(w io.Writer) error {
+					return c.App.Drive.Download(c.Ctx, dc, src, w, drivesvc.DownloadOptions{
+						Label: "Downloading " + name, Progress: ui.NewProgress(c.UI()),
+						OnSignatureIssue: signatureIssue(c, name),
+					})
 				})
+				return err
 			})
 		}),
 	}
 	dest.Register(c)
 	return c
+}
+
+// signatureIssue reports a block whose author signature does not check out.
+//
+// The content is already known to be what the revision was signed for, so this is
+// not a reason to refuse the file; it is a reason to say who cannot be confirmed as
+// having written it. Once said, it is not said again for every remaining block.
+func signatureIssue(c *kit.Invocation, name string) func(int, string) {
+	reported := false
+	return func(index int, verdict string) {
+		if reported {
+			return
+		}
+		reported = true
+		c.Note("%s downloaded, but the signature on block %d is %s, so who wrote it cannot be confirmed.",
+			name, index, verdict)
+	}
 }
 
 // ── organising ──

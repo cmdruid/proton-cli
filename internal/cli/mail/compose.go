@@ -245,7 +245,7 @@ func (f *deliveryFlags) delivery() (mailsvc.Delivery, time.Time, error) {
 	var del mailsvc.Delivery
 	var at time.Time
 	if f.sendAt != "" {
-		t, err := ical.ParseTime(f.sendAt)
+		t, err := ical.ParseTime(f.sendAt, time.Local)
 		if err != nil {
 			return del, at, kit.Fail("--send-at: %v", err)
 		}

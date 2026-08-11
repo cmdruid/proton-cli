@@ -15,9 +15,13 @@ func TestRecordAlignsToLongestLabel(t *testing.T) {
 		{Label: "Location", Value: "Vienna HQ"},
 		{Label: "Description", Value: "Numbers and roadmap"},
 		{Label: "Recurrence", Value: "FREQ=WEEKLY;COUNT=10"},
+		{Label: "Occurrence", Value: "3 of 10"},
+		{Label: "Series", Value: "ef56gh78/ab12cd34"},
+		{Label: "Zone", Value: "Europe/Vienna"},
+		{Label: "Reminders", Value: "-PT15M"},
 		{Label: "Calendar", Value: "Work"},
 		{Label: "Signature", Value: "verified"},
-		{Label: "ID", Value: "ef56gh78/ab12cd34", ID: true},
+		{Label: "ID", Value: "ef56gh78/ab12cd34@2026-04-16T14:00", ID: true},
 	}
 	if err := Record(u, RecordSpec{Fields: fields}); err != nil {
 		t.Fatal(err)

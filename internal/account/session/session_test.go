@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/roman-16/proton-cli/internal/profile"
 )
 
 // A session without a sealed key password is one that still needs the account
@@ -23,30 +25,23 @@ func TestUnlockedTracksTheSealedKeyPassword(t *testing.T) {
 	}
 }
 
-func TestPathInNamedProfile(t *testing.T) {
+func TestPathInStaysOneElementUnderTheSessionDirectory(t *testing.T) {
 	d := t.TempDir()
-	got := pathIn(d, "work")
-	want := filepath.Join(d, "sessions", "work.json")
-	if got != want {
-		t.Errorf("pathIn(work) = %q, want %q", got, want)
-	}
-}
-
-func TestPathInEmptyTreatedAsDefault(t *testing.T) {
-	d := t.TempDir()
-	got := pathIn(d, "")
-	want := filepath.Join(d, "sessions", "default.json")
-	if got != want {
-		t.Errorf("pathIn(\"\") = %q, want %q", got, want)
-	}
-}
-
-func TestPathInDefault(t *testing.T) {
-	d := t.TempDir()
-	got := pathIn(d, "default")
-	want := filepath.Join(d, "sessions", "default.json")
-	if got != want {
-		t.Errorf("pathIn(default) = %q, want %q", got, want)
+	for _, tc := range []struct{ in, want string }{
+		{"work", "work.json"},
+		{"", "default.json"},
+		{"default", "default.json"},
+		{"my-work.2", "my-work.2.json"},
+	} {
+		name, err := profile.Parse(tc.in)
+		if err != nil {
+			t.Fatalf("profile.Parse(%q): %v", tc.in, err)
+		}
+		got := pathIn(d, name)
+		want := filepath.Join(d, "sessions", tc.want)
+		if got != want {
+			t.Errorf("pathIn(%q) = %q, want %q", tc.in, got, want)
+		}
 	}
 }
 

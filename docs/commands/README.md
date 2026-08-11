@@ -17,7 +17,7 @@ Calendars and events
 | `calendar events get REF` | Show one event, decrypted |
 | `calendar events list` | List events in a date range |
 | `calendar events respond REF` | Answer an invitation, telling the organizer |
-| `calendar events update REF` | Change an event's title, time, location or description |
+| `calendar events update REF` | Change an event's title, time, location, description or recurrence |
 | `calendar settings calendars create` | Create a calendar |
 | `calendar settings calendars delete REF...` | Delete calendars, and every event in them |
 | `calendar settings calendars list` | List your calendars |

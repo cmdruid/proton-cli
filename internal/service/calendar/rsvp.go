@@ -9,7 +9,6 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -181,29 +180,21 @@ func (s *Service) EventRespond(ctx context.Context, u *keys.Unlocked, calendarID
 	}
 
 	res := &RespondResult{Status: statusWord(status)}
-	// The organizer reply needs the decrypted title/organizer, so it is
-	// best-effort: the answer is already recorded even if unlock/decrypt fails.
+	// The organizer reply needs the decrypted title and organizer, so it is
+	// best-effort: the answer is already recorded even if unlocking fails.
 	if ck, err := s.unlockCalendar(ctx, u, calendarID); err == nil {
-		// A received invitation wraps its shared content to the invited address
-		// (AddressKeyPacket + that address's key), not the calendar key.
-		packet, decKR := ev.SharedKeyPacket, ck.calKR
-		if packet == "" && ev.AddressKeyPacket != "" {
-			if kr, ok := u.AddrKR(ev.AddressID); ok {
-				packet, decKR = ev.AddressKeyPacket, kr
-			}
+		e := s.decrypt(ck, u, ev)
+		if e.readErr != nil {
+			return res, nil
 		}
-		title, location, _, _, organizer, _ := decryptEventCard(ev.SharedEvents, packet, decKR, ck.addrKR)
-		res.Title = title
-		if organizer != "" && !strings.EqualFold(organizer, selfEmail) {
-			start := time.Unix(ev.StartTime, 0)
-			end := time.Unix(ev.EndTime, 0)
-			ics := ical.ReplyICS(ev.UID, title, location, organizer, selfEmail, partstatICS(status),
-				start, end, ev.FullDay == 1, ev.IsProtonProtonInvite == 1)
+		res.Title = e.model.Summary
+		if organizer := e.model.Organizer; organizer != "" && !strings.EqualFold(organizer, selfEmail) {
+			start := e.model.Start.Time
 			res.Reply = &Reply{
-				ICS:        ics,
+				ICS:        e.model.ReplyDocument(selfEmail, partstatICS(status), ev.IsProtonProtonInvite == 1),
 				Recipients: []string{organizer},
-				Subject:    replySubject(start, ev.FullDay == 1),
-				Body:       replyBody(selfEmail, status, title),
+				Subject:    replySubject(start, e.model.Start.AllDay),
+				Body:       replyBody(selfEmail, status, e.model.Summary),
 			}
 		}
 	}

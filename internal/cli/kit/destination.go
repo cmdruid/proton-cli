@@ -104,6 +104,62 @@ func (d *Destination) Write(c *Invocation, name string, data []byte) (string, er
 	return target, os.WriteFile(target, data, 0o600)
 }
 
+// Stream writes one payload without ever holding it whole in memory.
+//
+// It exists because a payload can be larger than the machine: an mbox of a whole
+// mailbox, a Drive file of any size. File output goes to a temporary file beside
+// the destination and is renamed once the producer is done, so a failure part way
+// through leaves nothing behind rather than a plausible-looking truncated file.
+//
+// name is only consulted when the caller has no --output path of its own.
+func (d *Destination) Stream(c *Invocation, name string, write func(io.Writer) error) (string, error) {
+	return d.StreamDiscovered(c, func(w io.Writer) (string, error) { return name, write(w) })
+}
+
+// StreamDiscovered is Stream for a payload whose own name only becomes known once
+// it starts arriving, which is the case for a Drive photo: the producer returns
+// the name it found.
+func (d *Destination) StreamDiscovered(c *Invocation, write func(io.Writer) (string, error)) (string, error) {
+	if d.output == "-" {
+		_, err := write(c.UI().Out)
+		return "", err
+	}
+	dir, err := d.Dir()
+	if err != nil {
+		return "", err
+	}
+	tmp, err := os.CreateTemp(dir, ".proton-cli-*")
+	if err != nil {
+		return "", err
+	}
+	committed := false
+	defer func() {
+		_ = tmp.Close()
+		if !committed {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+	if err := tmp.Chmod(0o600); err != nil {
+		return "", err
+	}
+	name, err := write(tmp)
+	if err != nil {
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+	target, err := d.Reserve(name)
+	if err != nil {
+		return "", err
+	}
+	if err := os.Rename(tmp.Name(), target); err != nil {
+		return "", err
+	}
+	committed = true
+	return target, nil
+}
+
 // EnsureDir creates a directory if it is missing, and refuses a path that exists
 // as something else.
 func EnsureDir(dir string) error {

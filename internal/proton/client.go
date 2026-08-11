@@ -49,6 +49,7 @@ type Client struct {
 	ref           string
 	encKeyBlob    string // persisted (salted key password encrypted with the server-held client key)
 	profile       string
+	dryRun        bool
 	hvResolver    HVResolver
 	scopeResolver ScopeResolver
 	persist       func()
@@ -61,6 +62,9 @@ type Options struct {
 	Profile    string
 	HTTPClient *http.Client
 	Logger     *slog.Logger
+	// DryRun refuses every request that would change the account's data. See
+	// Client.dryRun.
+	DryRun bool
 }
 
 // New fills empty Options fields with defaults.
@@ -82,7 +86,40 @@ func New(opts Options) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Client{hc: hc, base: opts.BaseURL, app: opts.AppVersion, ua: opts.UserAgent, profile: opts.Profile, log: log}
+	return &Client{
+		hc: hc, base: opts.BaseURL, app: opts.AppVersion, ua: opts.UserAgent,
+		profile: opts.Profile, log: log, dryRun: opts.DryRun,
+	}
+}
+
+// ErrDryRun is returned instead of sending a request that would change something.
+var ErrDryRun = errors.New("refusing to change anything under --dry-run")
+
+// dryRun is why --dry-run is a promise rather than a habit.
+//
+// The CLI states that every command which changes something honours --dry-run.
+// Enforcing that inside each command makes it true of the commands that remember
+// to; enforcing it here, at the one point every request passes through, makes it
+// true of all of them, including the ones not yet written and including `api`,
+// whose whole purpose is to send a request nothing else models.
+//
+// Signing in and refreshing a session build their requests directly rather than
+// through Do, so they are unaffected: a dry run on an expired session still works,
+// which is the difference between a useful preview and an error.
+func (c *Client) dryRunRefuses(req Request) error {
+	if !c.dryRun || readOnlyMethod(req.Method) {
+		return nil
+	}
+	return fmt.Errorf("%w: %s %s", ErrDryRun, strings.ToUpper(req.Method), req.Path)
+}
+
+// readOnlyMethod reports whether a method is defined to leave the resource alone.
+func readOnlyMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	return false
 }
 
 func (c *Client) Profile() string { return c.profile }
@@ -171,6 +208,9 @@ type Response struct {
 // typed error. It transparently handles 401 (refresh + retry), 429
 // (Retry-After + retry) and 9001 (human verification + retry).
 func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
+	if err := c.dryRunRefuses(req); err != nil {
+		return nil, err
+	}
 	resp, err := c.doOnce(ctx, req)
 	if err != nil {
 		return nil, err

@@ -1,8 +1,9 @@
 package calendar
 
 import (
-	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
@@ -20,23 +21,66 @@ func eventsCmd() *cobra.Command {
 	return c
 }
 
+// References to an event.
+//
 // An event needs two IDs to address it, because Proton stores it inside a
-// calendar. Writing them as one slash-separated token keeps every command to a
-// single REF, and is safe because Proton's IDs are base64url and never contain a
-// slash.
-func eventRef(e calsvc.Event) string { return kit.JoinPair(e.CalendarID, e.ID) }
+// calendar, and a recurring event needs a third thing: which occurrence. Both are
+// written into the one REF every command takes - the two IDs separated by a
+// slash, which is safe because Proton's IDs are base64url, and the occurrence's
+// own start after an "@", which is safe because it has to parse as a time to
+// count as one.
+//
+//	CALENDAR/EVENT                    the stored event; for a series, all of it
+//	CALENDAR/EVENT@2026-04-16T09:00   one occurrence of it
 
-// resolveEvent turns a reference into the pair the service needs. A title still
+// occurrenceShape is the set of forms an occurrence may be written in: the two
+// the CLI prints, plus seconds or an offset for anything generated elsewhere.
+var occurrenceShape = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})?)?$`)
+
+// splitOccurrence separates a reference from the occurrence it names.
+//
+// The split only happens when what follows the last "@" is shaped like a time, so
+// a title or an address containing one stays a whole reference.
+func splitOccurrence(ref string) (base, occurrence string) {
+	at := strings.LastIndexByte(ref, '@')
+	if at < 0 {
+		return ref, ""
+	}
+	if suffix := ref[at+1:]; occurrenceShape.MatchString(suffix) {
+		return ref[:at], suffix
+	}
+	return ref, ""
+}
+
+// eventRef renders the reference a row is addressed by, which is the form a list
+// prints and a command reads back.
+func eventRef(e calsvc.Event) string {
+	ref := kit.JoinPair(e.CalendarID, e.ID)
+	if e.Occurrence == "" {
+		return ref
+	}
+	return ref + "@" + e.Occurrence
+}
+
+// resolveEvent turns a reference into the parts the service needs. A title still
 // works, and still resolves across every calendar.
-func resolveEvent(c *kit.Invocation, ref string) (calendarID, eventID string, err error) {
+func resolveEvent(c *kit.Invocation, ref string) (calendarID, eventID, occurrence string, err error) {
+	base, occurrence := splitOccurrence(ref)
+	if first, second, err := kit.ExpandPair(c.App, base); err != nil || first != "" {
+		return first, second, occurrence, err
+	}
 	u, err := c.App.Unlock(c.Ctx)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	if first, second, err := kit.ExpandPair(c.App, ref); err != nil || first != "" {
-		return first, second, err
+	calendarID, eventID, resolved, err := c.App.Calendar.ResolveEvent(c.Ctx, u, base)
+	if err != nil {
+		return "", "", "", err
 	}
-	return c.App.Calendar.ResolveEvent(c.Ctx, u, []string{ref})
+	if occurrence == "" {
+		occurrence = resolved
+	}
+	return calendarID, eventID, occurrence, nil
 }
 
 func eventColumns() []ui.Column[calsvc.Event] {
@@ -62,9 +106,13 @@ func eventsListCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "list",
 		Short: "List events in a date range",
-		Args:  cobra.NoArgs,
+		Long: "List what is on your calendars between two dates.\n\n" +
+			"A recurring event is stored once and happens many times, so each occurrence\n" +
+			"is listed on its own day with a reference that names it. Every calendar is\n" +
+			"included unless --calendar narrows it to one.",
+		Args: cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
-			calID, err := resolveCalendar(c, calendar)
+			calIDs, err := listedCalendars(c, calendar)
 			if err != nil {
 				return err
 			}
@@ -81,9 +129,10 @@ func eventsListCmd() *cobra.Command {
 				if err != nil {
 					return kit.Fail("--end expects YYYY-MM-DD.")
 				}
-				to = t
+				// The last day to include is a whole day, not the instant it begins.
+				to = t.AddDate(0, 0, 1)
 			}
-			events, err := c.App.Calendar.EventsList(c.Ctx, c.U, calID, from, to)
+			events, err := c.App.Calendar.EventsList(c.Ctx, c.U, calIDs, from, to)
 			if err != nil {
 				return err
 			}
@@ -93,7 +142,7 @@ func eventsListCmd() *cobra.Command {
 			}, events, func(e calsvc.Event) []string { return []string{e.CalendarID, e.ID} })
 		}),
 	}
-	c.Flags().StringVar(&calendar, "calendar", "", "Which calendar, by name or ID (default: your first)")
+	c.Flags().StringVar(&calendar, "calendar", "", "Which calendar, by name or ID (default: all of them)")
 	c.Flags().StringVar(&start, "start", "", "First day to include (YYYY-MM-DD)")
 	c.Flags().StringVar(&end, "end", "", "Last day to include (YYYY-MM-DD)")
 	return c
@@ -105,11 +154,11 @@ func eventsGetCmd() *cobra.Command {
 		Short: "Show one event, decrypted",
 		Args:  cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			calID, eventID, err := resolveEvent(c, c.Args[0])
+			calID, eventID, occurrence, err := resolveEvent(c, c.Args[0])
 			if err != nil {
 				return err
 			}
-			ev, err := c.App.Calendar.EventGet(c.Ctx, c.U, calID, eventID)
+			ev, err := c.App.Calendar.EventGet(c.Ctx, c.U, calID, eventID, occurrence)
 			if err != nil {
 				return err
 			}
@@ -133,6 +182,10 @@ func eventsGetCmd() *cobra.Command {
 					{Label: "Location", Value: ev.Location},
 					{Label: "Description", Value: ev.Description},
 					{Label: "Recurrence", Value: ev.RRule},
+					{Label: "Occurrence", Value: occurrenceLabel(*ev)},
+					{Label: "Series", Value: seriesLabel(*ev)},
+					{Label: "Zone", Value: ev.Zone},
+					{Label: "Reminders", Value: strings.Join(ev.Reminders, ", ")},
 					{Label: "Calendar", Value: name},
 					{Label: "Signature", Value: string(ev.Signature), Always: true},
 					{Label: "ID", Value: eventRef(*ev), ID: true},
@@ -142,13 +195,37 @@ func eventsGetCmd() *cobra.Command {
 	}
 }
 
+// occurrenceLabel says where an instance sits in its series, or how long a series
+// runs when the series itself is being shown.
+func occurrenceLabel(e calsvc.Event) string {
+	switch {
+	case e.Number > 0 && e.Count > 0:
+		return fmt.Sprintf("%d of %d", e.Number, e.Count)
+	case e.Number > 0:
+		return fmt.Sprintf("%d of a recurring series", e.Number)
+	case e.Count > 1:
+		return fmt.Sprintf("the whole series, %s", ui.Quantity(e.Count, "occurrences"))
+	}
+	return ""
+}
+
+// seriesLabel names the series an instance belongs to, so a reader can address the
+// whole thing from a row that addresses one occurrence.
+func seriesLabel(e calsvc.Event) string {
+	if e.Occurrence == "" {
+		return ""
+	}
+	return kit.JoinPair(e.CalendarID, e.ID)
+}
+
 // details are the fields an event carries. create and update share them, so the
 // two commands cannot disagree about what an event is.
 type details struct {
 	title, location, description string
-	start, duration, rrule       string
+	start, duration, zone, rrule string
 	allDay                       bool
-	reminders, attendees         []string
+	reminders                    []string
+	noReminders                  bool
 }
 
 func (d *details) register(c *cobra.Command, verb string) {
@@ -158,11 +235,15 @@ func (d *details) register(c *cobra.Command, verb string) {
 	f.StringVar(&d.duration, "duration", "", verb+" how long it lasts (e.g. 15m, 1h, 2h30m)")
 	f.StringVar(&d.location, "location", "", verb+" where it is")
 	f.StringVar(&d.description, "description", "", verb+" the description")
+	f.StringVar(&d.rrule, "rrule", "", verb+" the recurrence rule, e.g. FREQ=WEEKLY;COUNT=10")
+	f.StringVar(&d.zone, "zone", "", "IANA time zone the event is anchored to (default: your system zone)")
+	f.StringArrayVar(&d.reminders, "remind", nil, "Remind this long before the start (repeatable)")
 }
 
 func eventsCreateCmd() *cobra.Command {
 	var d details
 	var calendar string
+	var attendees []string
 	c := &cobra.Command{
 		Use:   "create",
 		Short: "Create an event",
@@ -176,7 +257,15 @@ func eventsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			start, err := ical.ParseTime(d.start)
+			zone, err := c.App.Calendar.Anchor(c.Ctx, d.zone)
+			if err != nil {
+				return kit.Fail("--zone: %v", err)
+			}
+			loc, err := time.LoadLocation(zone)
+			if err != nil {
+				loc = time.Local
+			}
+			start, err := ical.ParseTime(d.start, loc)
 			if err != nil {
 				return kit.Fail("--start: %v", err)
 			}
@@ -195,8 +284,8 @@ func eventsCreateCmd() *cobra.Command {
 				var err error
 				res, err = c.App.Calendar.EventCreate(c.Ctx, c.U, calID, calsvc.EventInput{
 					Title: d.title, Location: d.location, Description: d.description,
-					Start: start, End: start.Add(dur), AllDay: d.allDay,
-					RRule: d.rrule, Reminders: d.reminders, Attendees: d.attendees,
+					Start: start, End: start.Add(dur), AllDay: d.allDay, Zone: zone,
+					RRule: d.rrule, Reminders: d.reminders, Attendees: attendees,
 				})
 				if err != nil {
 					return "", err
@@ -205,67 +294,145 @@ func eventsCreateCmd() *cobra.Command {
 			}); err != nil {
 				return err
 			}
-			// External attendees are told by email, since they have no Proton
-			// calendar to add the event to. A failure here does not undo the event.
-			if res != nil && res.Invite != nil {
-				body := fmt.Sprintf("You have been invited to %q.\n\nThe calendar invitation is attached.", d.title)
-				if err := sendICS(c, c.U, res.Invite.Recipients, res.Invite.Subject, body, res.Invite.ICS, "REQUEST"); err != nil {
-					c.Note("The event was created, but the invitation email to %s failed: %v",
-						ui.Quantity(len(res.Invite.Recipients), "attendees"), err)
-				}
-			}
-			return nil
+			return tellAttendees(c, res)
 		}),
 	}
 	d.register(c, "Set")
 	c.Flags().StringVar(&calendar, "calendar", "", "Which calendar, by name or ID (default: your first)")
 	c.Flags().BoolVar(&d.allDay, "all-day", false, "An event with no time of day")
-	c.Flags().StringVar(&d.rrule, "rrule", "", "Recurrence rule, e.g. FREQ=WEEKLY;COUNT=10")
-	c.Flags().StringArrayVar(&d.reminders, "remind", nil, "Remind this long before the start (repeatable)")
-	c.Flags().StringArrayVar(&d.attendees, "attendee", nil,
+	c.Flags().StringArrayVar(&attendees, "attendee", nil,
 		"Invite someone; Proton users are added directly, others are emailed (repeatable)")
 	return c
 }
 
 func eventsUpdateCmd() *cobra.Command {
 	var d details
+	var future bool
 	c := &cobra.Command{
 		Use:   "update REF",
-		Short: "Change an event's title, time, location or description",
-		Args:  cobra.ExactArgs(1),
+		Short: "Change an event's title, time, location, description or recurrence",
+		Long: "Change an event.\n\n" +
+			"Anything you do not mention is left alone, including the reminders and the\n" +
+			"recurrence.\n\n" +
+			"A reference that names one occurrence of a recurring event changes only that\n" +
+			"occurrence. Add --future to change it and every later one, or drop the @ part\n" +
+			"of the reference to change the whole series.",
+		Args: cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			calID, eventID, err := resolveEvent(c, c.Args[0])
+			calID, eventID, occurrence, err := resolveEvent(c, c.Args[0])
 			if err != nil {
 				return err
 			}
-			var start, end time.Time
-			if d.start != "" {
-				t, err := ical.ParseTime(d.start)
-				if err != nil {
-					return kit.Fail("--start: %v", err)
-				}
-				start = t
-				if d.duration != "" {
-					dur, err := time.ParseDuration(d.duration)
-					if err != nil {
-						return kit.Fail("--duration: %v", err)
-					}
-					end = start.Add(dur)
-				}
-			} else if d.duration != "" {
-				return kit.Fail("--duration needs --start, since a length has to hang off a beginning.")
+			if future && occurrence == "" {
+				return kit.Fail("--future needs a reference that names an occurrence.").
+					Hint("`events list` prints one, as CALENDAR/EVENT@2026-04-16T09:00")
 			}
-			return kit.Mutate(c, ui.ResultSpec{
+			patch, err := d.patch(c)
+			if err != nil {
+				return err
+			}
+			var res *calsvc.EventResult
+			if err := kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Updated, Kind: "events", Count: 1, Name: d.title,
-				IDs: []string{kit.JoinPair(calID, eventID)},
+				IDs: []string{c.Args[0]}, Detail: updateScope(occurrence, future),
 			}, func() error {
-				return c.App.Calendar.EventUpdate(c.Ctx, c.U, calID, eventID,
-					d.title, d.location, d.description, start, end)
-			})
+				var err error
+				switch {
+				case occurrence == "":
+					res, err = c.App.Calendar.EventUpdate(c.Ctx, c.U, calID, eventID, patch)
+				case future:
+					res, err = c.App.Calendar.SeriesSplit(c.Ctx, c.U, calID, eventID, occurrence, patch)
+				default:
+					res, err = c.App.Calendar.OccurrenceUpdate(c.Ctx, c.U, calID, eventID, occurrence, patch)
+				}
+				return err
+			}); err != nil {
+				return err
+			}
+			return tellAttendees(c, res)
 		}),
 	}
 	d.register(c, "Replace")
+	c.Flags().BoolVar(&d.allDay, "all-day", false, "Turn it into an event with no time of day")
+	c.Flags().BoolVar(&d.noReminders, "no-remind", false, "Remove the reminders")
+	c.Flags().BoolVar(&future, "future", false, "Also change every later occurrence of the series")
 	return c
+}
+
+// updateScope says which occurrences a change reaches, so the confirmation and the
+// dry run describe the same thing the reference and the flag asked for.
+func updateScope(occurrence string, future bool) string {
+	switch {
+	case occurrence == "":
+		return ""
+	case future:
+		return "from " + occurrence + " onwards"
+	}
+	return "on " + occurrence
+}
+
+// patch turns the flags the user actually set into the change to make. A flag left
+// alone is absent rather than empty, which is what lets --description "" clear a
+// description instead of meaning "leave it".
+func (d *details) patch(c *kit.Invocation) (calsvc.EventPatch, error) {
+	var p calsvc.EventPatch
+	if c.Changed("title") {
+		p.Title = &d.title
+	}
+	if c.Changed("location") {
+		p.Location = &d.location
+	}
+	if c.Changed("description") {
+		p.Description = &d.description
+	}
+	if c.Changed("rrule") {
+		p.RRule = &d.rrule
+	}
+	if c.Changed("zone") {
+		p.Zone = &d.zone
+	}
+	if c.Changed("all-day") {
+		p.AllDay = &d.allDay
+	}
+	if c.Changed("remind") && c.Changed("no-remind") {
+		return p, kit.Fail("--remind and --no-remind contradict each other.")
+	}
+	if c.Changed("remind") {
+		p.Reminders = &d.reminders
+	}
+	if c.Changed("no-remind") {
+		none := []string{}
+		p.Reminders = &none
+	}
+
+	if !c.Changed("start") {
+		if c.Changed("duration") {
+			return p, kit.Fail("--duration needs --start, since a length has to hang off a beginning.")
+		}
+		return p, nil
+	}
+	loc := time.Local
+	if d.zone != "" {
+		l, err := time.LoadLocation(d.zone)
+		if err != nil {
+			return p, kit.Fail("--zone: unknown time zone %q", d.zone)
+		}
+		loc = l
+	}
+	start, err := ical.ParseTime(d.start, loc)
+	if err != nil {
+		return p, kit.Fail("--start: %v", err)
+	}
+	p.Start = &start
+	if c.Changed("duration") {
+		dur, err := time.ParseDuration(d.duration)
+		if err != nil {
+			return p, kit.Fail("--duration: %v", err)
+		}
+		end := start.Add(dur)
+		p.End = &end
+	}
+	return p, nil
 }
 
 func eventsRespondCmd() *cobra.Command {
@@ -286,9 +453,13 @@ func eventsRespondCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			calID, eventID, err := resolveEvent(c, c.Args[0])
+			calID, eventID, occurrence, err := resolveEvent(c, c.Args[0])
 			if err != nil {
 				return err
+			}
+			if occurrence != "" {
+				return kit.Fail("An answer applies to the whole series, not to one occurrence.").
+					Hint(fmt.Sprintf("drop the @%s from the reference", occurrence))
 			}
 			var res *calsvc.RespondResult
 			if err := kit.Mutate(c, ui.ResultSpec{
@@ -315,37 +486,70 @@ func eventsRespondCmd() *cobra.Command {
 }
 
 func eventsDeleteCmd() *cobra.Command {
-	return &cobra.Command{
+	var future bool
+	c := &cobra.Command{
 		Use:   "delete REF...",
 		Short: "Delete events",
-		Args:  cobra.MinimumNArgs(1),
+		Long: "Delete events.\n\n" +
+			"A reference that names one occurrence of a recurring event deletes only that\n" +
+			"occurrence. Add --future to delete it and every later one, or drop the @ part\n" +
+			"of the reference to delete the whole series.",
+		Args: cobra.MinimumNArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			sel, err := kit.Select(c, kit.Selector[calsvc.Event]{
-				Noun:    "events",
-				Columns: eventColumns(),
-				IDOf:    eventRef,
-				ByRef: func(ctx context.Context, ref string) (calsvc.Event, error) {
-					calID, eventID, err := resolveEvent(c, ref)
+			type target struct {
+				ref                        string
+				calID, eventID, occurrence string
+			}
+			targets := make([]target, 0, len(c.Args))
+			var rows []calsvc.Event
+			for _, ref := range c.Args {
+				calID, eventID, occurrence, err := resolveEvent(c, ref)
+				if err != nil {
+					return err
+				}
+				if future && occurrence == "" {
+					return kit.Fail("--future needs a reference that names an occurrence.").
+						Hint("`events list` prints one, as CALENDAR/EVENT@2026-04-16T09:00")
+				}
+				ev, err := c.App.Calendar.EventGet(c.Ctx, c.U, calID, eventID, occurrence)
+				if err != nil {
+					return err
+				}
+				targets = append(targets, target{ref: ref, calID: calID, eventID: eventID, occurrence: occurrence})
+				// Removing a series removes every occurrence of it, so that is what
+				// the confirmation and the dry run have to show.
+				if occurrence == "" && ev.RRule != "" && !future {
+					occs, err := c.App.Calendar.EventOccurrences(c.Ctx, c.U, calID, eventID, previewLimit)
 					if err != nil {
-						return calsvc.Event{}, err
+						return err
 					}
-					ev, err := c.App.Calendar.EventGet(ctx, c.U, calID, eventID)
-					if err != nil {
-						return calsvc.Event{}, err
-					}
-					return *ev, nil
-				},
-			})
-			if err != nil {
-				return err
+					rows = append(rows, occs...)
+					continue
+				}
+				rows = append(rows, *ev)
+			}
+
+			refs := make([]string, 0, len(targets))
+			for _, t := range targets {
+				refs = append(refs, t.ref)
 			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Deleted, Kind: "events", Count: sel.Len(), IDs: sel.IDs,
-				Name:    kit.Sole(sel.Rows, func(e calsvc.Event) string { return e.Title }),
-				Preview: sel.Preview(),
+				Action: ui.Deleted, Kind: "events", Count: len(rows), IDs: refs,
+				Name:    kit.Sole(rows, func(e calsvc.Event) string { return e.Title }),
+				Detail:  deleteScope(future),
+				Preview: kit.Preview("events", eventColumns(), rows),
 			}, func() error {
-				for _, e := range sel.Rows {
-					if err := c.App.Calendar.EventDelete(c.Ctx, c.U, e.CalendarID, e.ID); err != nil {
+				for _, t := range targets {
+					var err error
+					switch {
+					case t.occurrence == "":
+						err = c.App.Calendar.EventDelete(c.Ctx, c.U, t.calID, t.eventID)
+					case future:
+						err = c.App.Calendar.SeriesTruncate(c.Ctx, c.U, t.calID, t.eventID, t.occurrence)
+					default:
+						err = c.App.Calendar.OccurrenceDelete(c.Ctx, c.U, t.calID, t.eventID, t.occurrence)
+					}
+					if err != nil {
 						return err
 					}
 				}
@@ -353,9 +557,56 @@ func eventsDeleteCmd() *cobra.Command {
 			})
 		}),
 	}
+	c.Flags().BoolVar(&future, "future", false, "Also delete every later occurrence of the series")
+	return c
+}
+
+// previewLimit caps how many occurrences of a series a confirmation draws. Past
+// this many, the count in the sentence is what carries the warning.
+const previewLimit = 200
+
+func deleteScope(future bool) string {
+	if future {
+		return "and every later occurrence"
+	}
+	return ""
 }
 
 // ── helpers ──
+
+// tellAttendees emails the participants Proton cannot reach through their own
+// calendar. A failure here does not undo the change that has already been made.
+func tellAttendees(c *kit.Invocation, res *calsvc.EventResult) error {
+	if res == nil || res.Mail == nil {
+		return nil
+	}
+	m := res.Mail
+	if err := sendICS(c, c.U, m.Recipients, m.Subject, m.Body, m.ICS, m.Method); err != nil {
+		c.Note("The change was saved, but the email to %s failed: %v",
+			ui.Quantity(len(m.Recipients), "attendees"), err)
+	}
+	return nil
+}
+
+// listedCalendars is the set a listing covers: the one asked for, or all of them.
+func listedCalendars(c *kit.Invocation, ref string) ([]string, error) {
+	if ref != "" {
+		id, err := resolveCalendar(c, ref)
+		if err != nil {
+			return nil, err
+		}
+		return []string{id}, nil
+	}
+	cals, err := c.App.Calendar.CalendarsList(c.Ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(cals))
+	for _, cal := range cals {
+		ids = append(ids, cal.ID)
+	}
+	return ids, nil
+}
 
 func resolveCalendar(c *kit.Invocation, ref string) (string, error) {
 	expanded, err := kit.Expand(c.App, ref)

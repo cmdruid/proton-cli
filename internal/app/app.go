@@ -16,6 +16,7 @@ import (
 	"github.com/roman-16/proton-cli/internal/account/session"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
+	"github.com/roman-16/proton-cli/internal/profile"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/service/account"
 	"github.com/roman-16/proton-cli/internal/service/calendar"
@@ -27,7 +28,7 @@ import (
 )
 
 type App struct {
-	Profile string
+	Profile profile.Name
 	// Creds resolves the account email, password and two-factor code, asking the
 	// user only when nothing else supplies them.
 	Creds *Credentials
@@ -67,9 +68,6 @@ type App struct {
 	email     string
 }
 
-// defaultProfile is the profile a command acts as when none is named.
-const defaultProfile = "default"
-
 type Options struct {
 	Profile    string
 	APIURL     string
@@ -86,7 +84,13 @@ type Options struct {
 }
 
 func New(opts Options) (*App, error) {
-	profileName := firstNonEmpty(opts.Profile, os.Getenv("PROTON_PROFILE"), defaultProfile)
+	// The profile is judged once, here, before it can name a file or scope an
+	// environment lookup. Everything downstream takes the validated form, so there
+	// is no path by which an unchecked name reaches the filesystem.
+	profileName, err := profile.Parse(firstNonEmpty(opts.Profile, os.Getenv("PROTON_PROFILE")))
+	if err != nil {
+		return nil, errs.Problemf("%v.", err).Hint("profiles are named like `work` or `my-work.2`").Exit(2)
+	}
 
 	apiURL := firstNonEmpty(opts.APIURL, os.Getenv("PROTON_API_URL"))
 	appVer := firstNonEmpty(opts.AppVersion, os.Getenv("PROTON_APP_VERSION"))
@@ -101,7 +105,8 @@ func New(opts Options) (*App, error) {
 		FullIDs:  opts.FullIDs,
 	})
 	c := proton.New(proton.Options{
-		AppVersion: appVer, BaseURL: apiURL, Logger: u.Log, Profile: profileName, UserAgent: userAgent,
+		AppVersion: appVer, BaseURL: apiURL, Logger: u.Log, Profile: profileName.String(),
+		UserAgent: userAgent, DryRun: opts.DryRun,
 	})
 
 	var userID, email string
@@ -185,15 +190,12 @@ func (a *App) rememberIdentity(userID, email string) {
 }
 
 // idCachePath mirrors the session-file convention.
-func idCachePath(profile string) string {
-	if profile == "" {
-		profile = "default"
-	}
+func idCachePath(name profile.Name) string {
 	cd, err := os.UserConfigDir()
 	if err != nil {
 		cd = "."
 	}
-	return filepath.Join(cd, "proton-cli", "idcache", profile+".json")
+	return filepath.Join(cd, "proton-cli", "idcache", name.FileName(".json"))
 }
 
 // SignedIn reports whether this profile holds a session.
@@ -212,7 +214,7 @@ func (a *App) Authenticate(context.Context) error {
 	if a.SignedIn() {
 		return nil
 	}
-	if a.Profile == defaultProfile {
+	if a.Profile.IsDefault() {
 		return errs.Problemf("You are not signed in.").
 			Hint("proton-cli account login").Exit(2)
 	}

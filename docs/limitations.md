@@ -30,6 +30,18 @@ Proton may ask for human verification at login. Release binaries embed a webview
 
 Proton exposes no endpoint, to any client, that ingests a message file into an existing mailbox. `mail messages export` therefore has no exact inverse: [`--eml`](commands/mail.md#import) reads a file back into a draft or a send, which is as close as the platform allows.
 
+### An answer to an invitation covers the whole series
+
+Proton lets you answer one occurrence of a recurring invitation differently from the rest, by storing a personal copy of that occurrence. proton-cli does not: `calendar events respond` refuses a reference that names an occurrence and tells you to answer the series.
+
+### A recurring event needs a zone that can be named
+
+An event is anchored to an IANA time zone so that a series keeps its wall-clock time when the clocks change. proton-cli reads that zone from `TZ`, from `/etc/localtime` or from `/etc/timezone`, and falls back to the zone your Proton calendar settings are drawn in. On a host where none of those answers - a Windows machine with no `TZ` set and no calendar setting - a new event is stored as a plain UTC instant instead, and a recurring one will drift by an hour across a daylight-saving change. Pass `--zone Europe/Vienna` to be explicit.
+
+### An update is not signed by a key you can verify offline
+
+`self update` checks the downloaded binary against the release's `checksums.txt`, which proves the bytes were not corrupted in transit but not that the release itself is the maintainer's: both come from the same origin. Closing that needs the checksums signed with a key whose public half is built into the tool. That is not in place yet.
+
 ### An exported message is plaintext
 
 Export decrypts, so the files it writes are readable by anything. The original `DKIM-Signature` and `ARC-*` headers no longer verify, since the body they signed was the encrypted one. The web client's own export behaves the same way.

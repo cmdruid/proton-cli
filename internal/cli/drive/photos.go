@@ -2,6 +2,7 @@ package drive
 
 import (
 	stdctx "context"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -153,44 +154,17 @@ func photosDownloadCmd() *cobra.Command {
 				return err
 			}
 			// A photo's own filename only becomes known once the download starts,
-			// so the bytes land in a temporary file beside the destination and are
-			// renamed when the name - and a collision-free path - is known.
-			var final string
-			if err := kit.Mutate(c, ui.ResultSpec{
+			// so the producer is the one that names the file it lands in.
+			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Downloaded, Kind: "photos", Count: 1,
 				Detail: "to " + dest.Describe(),
 			}, func() error {
-				dir, err := dest.Dir()
-				if err != nil {
-					return err
-				}
-				tmp, err := os.CreateTemp(dir, ".proton-cli-photo-*")
-				if err != nil {
-					return err
-				}
-				name, derr := c.App.Drive.PhotoDownload(c.Ctx, dc, c.Args[0], tmp,
-					drivesvc.DownloadOptions{Label: "Downloading", Progress: ui.NewProgress(c.UI())})
-				_ = tmp.Close()
-				if derr != nil {
-					_ = os.Remove(tmp.Name())
-					return derr
-				}
-				target, perr := dest.Reserve(name)
-				if perr != nil {
-					_ = os.Remove(tmp.Name())
-					return perr
-				}
-				if err := os.Rename(tmp.Name(), target); err != nil {
-					_ = os.Remove(tmp.Name())
-					return err
-				}
-				final = target
-				return nil
-			}); err != nil {
+				_, err := dest.StreamDiscovered(c, func(w io.Writer) (string, error) {
+					return c.App.Drive.PhotoDownload(c.Ctx, dc, c.Args[0], w,
+						drivesvc.DownloadOptions{Label: "Downloading", Progress: ui.NewProgress(c.UI())})
+				})
 				return err
-			}
-			_ = final
-			return nil
+			})
 		}),
 	}
 	dest.Register(c)

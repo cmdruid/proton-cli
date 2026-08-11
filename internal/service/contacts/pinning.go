@@ -10,8 +10,8 @@ import (
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/roman-16/proton-cli/internal/vcard"
 )
 
 // ContactCrypto holds a contact's pinned-key encryption preferences for one
@@ -42,24 +42,24 @@ func (s *Service) PinnedKeysFor(ctx context.Context, u *keys.Unlocked, email str
 		return nil, nil
 	}
 	joined := strings.Join(ct.Cards, "\n")
-	group := ical.EmailGroup(joined, email)
+	group := vcard.EmailGroup(joined, email)
 	if group == "" {
 		return nil, nil
 	}
-	armored := decodePinnedKeys(ical.GroupValues(joined, group, "KEY"))
+	armored := decodePinnedKeys(vcard.GroupValues(joined, group, "KEY"))
 	if len(armored) == 0 {
 		return nil, nil
 	}
 	cc := &ContactCrypto{
 		ArmoredKeys:       armored,
-		Scheme:            strings.ToLower(strings.TrimSpace(ical.GroupValue(joined, group, "X-PM-SCHEME"))),
+		Scheme:            strings.ToLower(strings.TrimSpace(vcard.GroupValue(joined, group, "X-PM-SCHEME"))),
 		SignatureVerified: ct.Signature == pgp.Verified,
 	}
-	if v := ical.GroupValue(joined, group, "X-PM-ENCRYPT"); v != "" {
+	if v := vcard.GroupValue(joined, group, "X-PM-ENCRYPT"); v != "" {
 		b := parseVCardBool(v)
 		cc.Encrypt = &b
 	}
-	if v := ical.GroupValue(joined, group, "X-PM-SIGN"); v != "" {
+	if v := vcard.GroupValue(joined, group, "X-PM-SIGN"); v != "" {
 		b := parseVCardBool(v)
 		cc.Sign = &b
 	}
@@ -136,7 +136,7 @@ func (s *Service) rawContactCards(ctx context.Context, id string) ([]rawCard, er
 // editableSignedCard fetches a contact's raw cards, verifies and parses the
 // signed card into an editable model, and returns the remaining (encrypted/
 // clear) cards verbatim so callers can re-attach them unchanged on PUT.
-func (s *Service) editableSignedCard(ctx context.Context, u *keys.Unlocked, id string) (*ical.SignedContact, []map[string]any, error) {
+func (s *Service) editableSignedCard(ctx context.Context, u *keys.Unlocked, id string) (*vcard.Signed, []map[string]any, error) {
 	cards, err := s.rawContactCards(ctx, id)
 	if err != nil {
 		return nil, nil, err
@@ -159,16 +159,16 @@ func (s *Service) editableSignedCard(ctx context.Context, u *keys.Unlocked, id s
 	if !haveSigned {
 		return nil, nil, fmt.Errorf("contact has no signed card to edit")
 	}
-	model := ical.ParseSignedVCard(signedData)
+	model := vcard.ParseSigned(signedData)
 	if model.UID == "" {
-		model.UID = ical.ContactUID()
+		model.UID = vcard.UID()
 	}
 	return &model, others, nil
 }
 
 // putSignedCard re-signs the model and PUTs it alongside the preserved cards.
-func (s *Service) putSignedCard(ctx context.Context, u *keys.Unlocked, id string, model ical.SignedContact, others []map[string]any) error {
-	signedCard, err := pgp.SignCard(ical.BuildSignedVCard(model), u.UserKR)
+func (s *Service) putSignedCard(ctx context.Context, u *keys.Unlocked, id string, model vcard.Signed, others []map[string]any) error {
+	signedCard, err := pgp.SignCard(vcard.BuildSigned(model), u.UserKR)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func (s *Service) PinKey(ctx context.Context, u *keys.Unlocked, id, email, armor
 	}
 	e := model.FindEmail(email)
 	if e == nil {
-		model.Emails = append(model.Emails, ical.SignedEmail{Address: email})
+		model.Emails = append(model.Emails, vcard.SignedEmail{Address: email})
 		e = &model.Emails[len(model.Emails)-1]
 	}
 	e.KeyValues = prependUnique(e.KeyValues, keyValue)

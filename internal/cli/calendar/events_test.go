@@ -1,0 +1,100 @@
+package calendar
+
+import (
+	"testing"
+	"time"
+
+	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
+)
+
+// A reference names an event and, for a recurring one, which occurrence. The
+// occurrence half is only read as one when it is shaped like a time, so a title or
+// an address containing an "@" is still a whole reference.
+func TestSplitOccurrence(t *testing.T) {
+	for _, tc := range []struct{ in, base, occ string }{
+		{"cal/ev", "cal/ev", ""},
+		{"cal/ev@2026-04-16T09:00", "cal/ev", "2026-04-16T09:00"},
+		{"cal/ev@2026-04-16", "cal/ev", "2026-04-16"},
+		{"cal/ev@2026-04-16T09:00:30", "cal/ev", "2026-04-16T09:00:30"},
+		{"cal/ev@2026-04-16T09:00+02:00", "cal/ev", "2026-04-16T09:00+02:00"},
+		{"4f2a1b9c@2026-04-16T09:00", "4f2a1b9c", "2026-04-16T09:00"},
+		// A handle that merely contains an "@".
+		{"standup@10", "standup@10", ""},
+		{"jane@example.test", "jane@example.test", ""},
+		{"Lunch @ Anna's", "Lunch @ Anna's", ""},
+		{"cal/ev@notatime", "cal/ev@notatime", ""},
+	} {
+		base, occ := splitOccurrence(tc.in)
+		if base != tc.base || occ != tc.occ {
+			t.Errorf("splitOccurrence(%q) = %q, %q; want %q, %q", tc.in, base, occ, tc.base, tc.occ)
+		}
+	}
+}
+
+func TestEventRefIsWhatAListPrintsAndACommandReadsBack(t *testing.T) {
+	one := calsvc.Event{CalendarID: "cal", ID: "ev"}
+	if got := eventRef(one); got != "cal/ev" {
+		t.Errorf("eventRef = %q", got)
+	}
+	occurrence := calsvc.Event{CalendarID: "cal", ID: "ev", Occurrence: "2026-04-16T09:00"}
+	if got := eventRef(occurrence); got != "cal/ev@2026-04-16T09:00" {
+		t.Errorf("eventRef = %q", got)
+	}
+	base, occ := splitOccurrence(eventRef(occurrence))
+	if base != "cal/ev" || occ != "2026-04-16T09:00" {
+		t.Errorf("a reference did not survive a round trip: %q, %q", base, occ)
+	}
+}
+
+func TestOccurrenceLabelSaysWhereAnInstanceSits(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   calsvc.Event
+		want string
+	}{
+		{"an instance of a bounded series", calsvc.Event{Number: 3, Count: 10}, "3 of 10"},
+		{"an instance of an unbounded series", calsvc.Event{Number: 3}, "3 of a recurring series"},
+		{"the series itself", calsvc.Event{Count: 12}, "the whole series, 12 occurrences"},
+		{"a one-off event", calsvc.Event{}, ""},
+	} {
+		if got := occurrenceLabel(tc.in); got != tc.want {
+			t.Errorf("%s: occurrenceLabel = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestSeriesLabelOnlyNamesASeriesFromOneOfItsOccurrences(t *testing.T) {
+	if got := seriesLabel(calsvc.Event{CalendarID: "cal", ID: "ev"}); got != "" {
+		t.Errorf("seriesLabel on a one-off = %q, want empty", got)
+	}
+	got := seriesLabel(calsvc.Event{CalendarID: "cal", ID: "ev", Occurrence: "2026-04-16T09:00"})
+	if got != "cal/ev" {
+		t.Errorf("seriesLabel = %q", got)
+	}
+}
+
+func TestUpdateScopeDescribesWhatTheReferenceAndTheFlagAskedFor(t *testing.T) {
+	if got := updateScope("", false); got != "" {
+		t.Errorf("a whole-event update reads %q", got)
+	}
+	if got := updateScope("2026-04-16T09:00", false); got != "on 2026-04-16T09:00" {
+		t.Errorf("a single occurrence reads %q", got)
+	}
+	if got := updateScope("2026-04-16T09:00", true); got != "from 2026-04-16T09:00 onwards" {
+		t.Errorf("an occurrence and its successors read %q", got)
+	}
+}
+
+func TestEventColumnsRenderAnAllDayRowWithoutATime(t *testing.T) {
+	cols := eventColumns()
+	day := calsvc.Event{
+		CalendarID: "cal", ID: "ev", AllDay: true,
+		Start: time.Date(2026, 4, 16, 0, 0, 0, 0, time.UTC),
+		End:   time.Date(2026, 4, 17, 0, 0, 0, 0, time.UTC),
+	}
+	for _, c := range cols {
+		if c.Header == "TIME" && c.Cell(day) != "all day" {
+			t.Errorf("TIME on an all-day row = %q", c.Cell(day))
+		}
+	}
+}

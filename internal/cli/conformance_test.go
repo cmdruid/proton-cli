@@ -206,6 +206,7 @@ var flagMeanings = map[string]string{
 	"format":           "the shape of the output",
 	"from":             "the sender: compose sets it, a filter matches it",
 	"full-name":        "a full name",
+	"future":           "extend the change to every later occurrence of a series",
 	"hidden":           "a hidden custom field, as NAME=VALUE",
 	"holder":           "the name on a payment card",
 	"html":             "treat the text as HTML rather than escaping it",
@@ -570,15 +571,18 @@ func grepGo(t *testing.T, dirs []string, match func(string) bool) []string {
 // transforms - stays invisible until stated as a rule, and shows up as the same
 // symptom either way: neither half can be tested without the other.
 var layers = map[string][]string{
-	"ui":       {"units", "progress", "errs"},
-	"proton":   {"errs", "crypto/aead", "hv", "hv/hvexit"},
-	"errs":     {},
-	"units":    {},
-	"progress": {},
-	"mailtext": {},
-	"idcache":  {},
-	"ref":      {"errs"},
-	"ical":     {},
+	"ui":          {"units", "progress", "errs"},
+	"proton":      {"errs", "crypto/aead", "hv", "hv/hvexit"},
+	"errs":        {},
+	"units":       {},
+	"progress":    {},
+	"mailtext":    {},
+	"idcache":     {},
+	"ref":         {"errs"},
+	"contentline": {},
+	"ical":        {"contentline"},
+	"vcard":       {"contentline"},
+	"profile":     {},
 }
 
 func TestPackagesImportDownwardOnly(t *testing.T) {

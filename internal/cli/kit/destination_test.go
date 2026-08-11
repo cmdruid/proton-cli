@@ -1,6 +1,8 @@
 package kit
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -192,4 +194,72 @@ func read(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// A payload larger than memory has to be written as it arrives, and a producer
+// that fails part way through must not leave a file that looks complete.
+func TestStreamCommitsOnlyAFinishedPayload(t *testing.T) {
+	dir := t.TempDir()
+
+	target := filepath.Join(dir, "mail.mbox")
+	d := &Destination{output: target}
+	got, err := d.Stream(nil, "ignored", func(w io.Writer) error {
+		if _, err := io.WriteString(w, "first "); err != nil {
+			return err
+		}
+		_, err := io.WriteString(w, "second")
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != target || read(t, target) != "first second" {
+		t.Errorf("Stream wrote %q to %q", read(t, target), got)
+	}
+
+	failed := filepath.Join(dir, "failed.mbox")
+	d = &Destination{output: failed}
+	if _, err := d.Stream(nil, "ignored", func(w io.Writer) error {
+		_, _ = io.WriteString(w, "partial")
+		return errors.New("stop")
+	}); err == nil {
+		t.Fatal("Stream ignored the producer's error")
+	}
+	if exists(failed) {
+		t.Error("Stream left a partial file at the destination")
+	}
+	// Only the finished payload is left: no temporary file, and nothing at the
+	// destination the failed producer was aiming for.
+	if names := entryNames(t, dir); len(names) != 1 || names[0] != "mail.mbox" {
+		t.Errorf("the directory holds %v, want only the finished payload", names)
+	}
+}
+
+// A producer that only learns the name as the bytes arrive names the file itself.
+func TestStreamDiscoveredUsesTheNameTheProducerFound(t *testing.T) {
+	dir := t.TempDir()
+	d := &Destination{outputDir: dir}
+	got, err := d.StreamDiscovered(nil, func(w io.Writer) (string, error) {
+		_, err := io.WriteString(w, "jpeg")
+		return "IMG_0001.jpg", err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(got) != "IMG_0001.jpg" {
+		t.Errorf("StreamDiscovered wrote to %q", got)
+	}
+}
+
+func entryNames(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Name())
+	}
+	return out
 }

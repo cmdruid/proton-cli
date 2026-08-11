@@ -100,10 +100,12 @@ Revisions, sharing with people, and photo albums. → [Drive](docs/commands/driv
 proton-cli calendar events list --start 2026-04-15 --end 2026-04-30
 proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
 proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m
+proton-cli calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30
+proton-cli calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
 proton-cli calendar events respond "Team sync" --status accept
 ```
 
-Your own calendars, all-day events, and attendees. → [Calendar](docs/commands/calendar.md)
+Recurring events occurrence by occurrence, your own calendars, all-day events, and attendees. → [Calendar](docs/commands/calendar.md)
 
 ### Pass
 

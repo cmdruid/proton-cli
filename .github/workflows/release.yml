@@ -155,6 +155,12 @@ jobs:
           ls -la internal/hv/assets/
           file internal/hv/assets/proton-cli-hv-* || true
 
+      # GoReleaser builds the binaries and publishes to third-party package
+      # repositories in one step, and AUR being unreachable must not stop a release
+      # that built correctly. So this step is allowed to fail and the verification
+      # below is what actually gates the release: it fails the job when an asset a
+      # user installs from is missing. Do not remove continue-on-error without
+      # first splitting the third-party publishing out of this step.
       - name: Run GoReleaser
         id: goreleaser
         continue-on-error: true

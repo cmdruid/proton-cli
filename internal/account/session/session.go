@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/roman-16/proton-cli/internal/profile"
 )
 
 // Session is what one profile keeps on disk between runs.
@@ -66,13 +68,16 @@ func Profiles() ([]Profile, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		name := strings.TrimSuffix(e.Name(), ".json")
+		name, err := profile.Parse(strings.TrimSuffix(e.Name(), ".json"))
+		if err != nil {
+			continue
+		}
 		s, err := Load(name)
 		if err != nil || s == nil {
 			continue
 		}
 		out = append(out, Profile{
-			Name: name, Email: s.Email,
+			Name: name.String(), Email: s.Email,
 			Unlocked: s.Unlocked(), PersistedAt: s.PersistedAt,
 		})
 	}
@@ -90,27 +95,27 @@ func Dir() (string, error) {
 }
 
 // Path returns the session-file path for the given profile.
-func Path(profile string) (string, error) {
+func Path(name profile.Name) (string, error) {
 	d, err := Dir()
 	if err != nil {
 		return "", err
 	}
-	return pathIn(d, profile), nil
+	return pathIn(d, name), nil
 }
 
-// pathIn resolves the session-file path for profile within base config dir d.
-// Split out from Path so it can be tested against a temp dir.
-func pathIn(d, profile string) string {
-	if profile == "" {
-		profile = "default"
-	}
-	return filepath.Join(d, "sessions", profile+".json")
+// pathIn resolves the session-file path within base config dir d. Split out from
+// Path so it can be tested against a temp dir.
+//
+// The name is a single path element by construction, which is why this can join
+// without checking: a profile.Name cannot hold a separator or a relative segment.
+func pathIn(d string, name profile.Name) string {
+	return filepath.Join(d, "sessions", name.FileName(".json"))
 }
 
 // Load reads the session for the given profile. Returns nil (no error) when
 // no session file exists yet.
-func Load(profile string) (*Session, error) {
-	p, err := Path(profile)
+func Load(name profile.Name) (*Session, error) {
+	p, err := Path(name)
 	if err != nil {
 		return nil, err
 	}
@@ -131,16 +136,12 @@ func Load(profile string) (*Session, error) {
 	return &s, nil
 }
 
-func Save(profile string, s *Session) error {
-	if profile == "" {
-		profile = "default"
-	}
+func Save(name profile.Name, s *Session) error {
 	s.PersistedAt = time.Now().Unix()
-	d, err := Dir()
+	newPath, err := Path(name)
 	if err != nil {
 		return err
 	}
-	newPath := filepath.Join(d, "sessions", profile+".json")
 	if err := os.MkdirAll(filepath.Dir(newPath), 0700); err != nil {
 		return err
 	}
@@ -151,8 +152,8 @@ func Save(profile string, s *Session) error {
 	return os.WriteFile(newPath, data, 0600)
 }
 
-func Clear(profile string) error {
-	p, err := Path(profile)
+func Clear(name profile.Name) error {
+	p, err := Path(name)
 	if err != nil {
 		return err
 	}

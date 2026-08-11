@@ -7,10 +7,10 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
+	"github.com/roman-16/proton-cli/internal/vcard"
 )
 
 type Service struct{ C proton.Doer }
@@ -52,11 +52,31 @@ func hasEncryptedFields(nc NewContact) bool {
 		nc.Birthday != "" || nc.Address != "" || nc.URL != ""
 }
 
-func toVCardFields(nc NewContact) ical.VCardFields {
-	return ical.VCardFields{
+func encryptedPart(nc NewContact) vcard.Encrypted {
+	return vcard.Encrypted{
 		Phones: nc.Phones, Note: nc.Note, Org: nc.Org, Title: nc.Title,
 		Birthday: nc.Birthday, Address: nc.Address, URL: nc.URL,
 	}
+}
+
+// signedPart builds the signed card for a set of addresses, carrying over the
+// pinned keys and crypto settings any previous card held for an address that
+// survives. Rebuilding from the addresses alone would silently unpin keys.
+func signedPart(name, uid string, emails []string, previous *vcard.Signed) vcard.Signed {
+	model := vcard.Signed{Name: name, UID: uid}
+	for _, addr := range emails {
+		if addr == "" {
+			continue
+		}
+		e := vcard.SignedEmail{Address: addr}
+		if previous != nil {
+			if prev := previous.FindEmail(addr); prev != nil {
+				e.KeyValues, e.Encrypt, e.Sign, e.Scheme = prev.KeyValues, prev.Encrypt, prev.Sign, prev.Scheme
+			}
+		}
+		model.Emails = append(model.Emails, e)
+	}
+	return model
 }
 
 func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error) {
@@ -150,14 +170,14 @@ func (s *Service) Create(ctx context.Context, u *keys.Unlocked, nc NewContact) (
 	if name == "" {
 		name = nc.Emails[0]
 	}
-	signed := ical.SignedVCard(name, nc.Emails, ical.ContactUID())
+	signed := vcard.BuildSigned(signedPart(name, vcard.UID(), nc.Emails, nil))
 	signedCard, err := pgp.SignCard(signed, u.UserKR)
 	if err != nil {
 		return "", err
 	}
 	cards := []any{signedCard}
 	if hasEncryptedFields(nc) {
-		enc := ical.EncryptedVCard(toVCardFields(nc))
+		enc := vcard.BuildEncrypted(encryptedPart(nc))
 		ec, err := pgp.EncryptAndSignCard(enc, u.UserKR, u.UserKR)
 		if err != nil {
 			return "", err
@@ -201,35 +221,22 @@ func (s *Service) Update(ctx context.Context, u *keys.Unlocked, id string, patch
 		Address:  firstNonEmpty(patch.Address, existing.Address),
 		URL:      firstNonEmpty(patch.URL, existing.URL),
 	}
-	// Preserve any pinned keys / crypto flags the existing signed card holds
-	// for emails that survive the update; rebuilding from scratch would drop them.
-	old := ical.ParseSignedVCard(strings.Join(existing.Cards, "\n"))
+	old := vcard.ParseSigned(strings.Join(existing.Cards, "\n"))
 	uid := old.UID
 	if uid == "" {
-		uid = ical.ContactUID()
+		uid = vcard.UID()
 	}
 	name := merged.Name
 	if name == "" && len(merged.Emails) > 0 {
 		name = merged.Emails[0]
 	}
-	model := ical.SignedContact{Name: name, UID: uid}
-	for _, addr := range merged.Emails {
-		se := ical.SignedEmail{Address: addr}
-		if prev := old.FindEmail(addr); prev != nil {
-			se.KeyValues = prev.KeyValues
-			se.Encrypt = prev.Encrypt
-			se.Sign = prev.Sign
-			se.Scheme = prev.Scheme
-		}
-		model.Emails = append(model.Emails, se)
-	}
-	signedCard, err := pgp.SignCard(ical.BuildSignedVCard(model), u.UserKR)
+	signedCard, err := pgp.SignCard(vcard.BuildSigned(signedPart(name, uid, merged.Emails, &old)), u.UserKR)
 	if err != nil {
 		return err
 	}
 	cards := []any{signedCard}
 	if hasEncryptedFields(merged) {
-		enc := ical.EncryptedVCard(toVCardFields(merged))
+		enc := vcard.BuildEncrypted(encryptedPart(merged))
 		ec, err := pgp.EncryptAndSignCard(enc, u.UserKR, u.UserKR)
 		if err != nil {
 			return err
@@ -245,19 +252,19 @@ func (s *Service) Delete(ctx context.Context, ids []string) error {
 
 func contactFromCards(id string, cards []string) Contact {
 	joined := strings.Join(cards, "\n")
-	emails := ical.Fields(joined, "EMAIL")
-	phones := ical.Fields(joined, "TEL")
+	emails := vcard.Values(joined, "EMAIL")
+	phones := vcard.Values(joined, "TEL")
 	c := Contact{
 		ID:       id,
-		Name:     ical.Field(joined, "FN"),
+		Name:     vcard.Field(joined, "FN"),
 		Emails:   emails,
 		Phones:   phones,
-		Org:      ical.Field(joined, "ORG"),
-		Note:     ical.Field(joined, "NOTE"),
-		Title:    ical.Field(joined, "TITLE"),
-		Birthday: ical.Field(joined, "BDAY"),
-		Address:  ical.Field(joined, "ADR"),
-		URL:      ical.Field(joined, "URL"),
+		Org:      vcard.Field(joined, "ORG"),
+		Note:     vcard.Field(joined, "NOTE"),
+		Title:    vcard.Field(joined, "TITLE"),
+		Birthday: vcard.Field(joined, "BDAY"),
+		Address:  vcard.Field(joined, "ADR"),
+		URL:      vcard.Field(joined, "URL"),
 	}
 	if len(emails) > 0 {
 		c.Email = emails[0]

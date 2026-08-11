@@ -393,3 +393,439 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 			"mail", "messages", "delete", replyID)
 	}
 }
+
+// ── recurrence ──
+//
+// A recurring event is stored once and happens many times, so almost everything
+// about it is only observable through a window: whether the occurrences show up,
+// whether changing one leaves the others alone, and whether a deleted one stays
+// deleted. These tests work the way a person does - list a range, act on a row,
+// list again - because that is the only place the difference is visible.
+
+// seriesAnchor is a fixed far-future date, so a run cannot collide with real
+// events on the account or with a previous run's leftovers.
+const seriesAnchor = "2027-03-01"
+
+// occurrencesOf lists a window and returns the rows whose title matches.
+func occurrencesOf(t *testing.T, title, from, to string) []map[string]interface{} {
+	t.Helper()
+	rows := runJSONArray(t, "calendar", "events", "list",
+		"--calendar", "Default", "--start", from, "--end", to)
+	var out []map[string]interface{}
+	for _, r := range rows {
+		row, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if got, _ := row["title"].(string); strings.Contains(got, title) {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+// occurrenceRefs is the reference each matching row is addressed by, which is what
+// a person would copy out of the table.
+func occurrenceRefs(t *testing.T, title, from, to string) []string {
+	t.Helper()
+	var out []string
+	for _, row := range occurrencesOf(t, title, from, to) {
+		cal, _ := row["calendar_id"].(string)
+		id, _ := row["id"].(string)
+		ref := cal + "/" + id
+		if occ, _ := row["occurrence"].(string); occ != "" {
+			ref += "@" + occ
+		}
+		out = append(out, ref)
+	}
+	return out
+}
+
+func createSeries(t *testing.T, title, start, rule string, extra ...string) string {
+	t.Helper()
+	args := append([]string{
+		"calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", start, "--duration", "15m", "--rrule", rule,
+	}, extra...)
+	ref := strings.TrimSpace(runOK(t, args...))
+	if !looksLikePairRef(ref) {
+		t.Fatalf("expected CALENDAR_ID/EVENT_ID on stdout, got %q", ref)
+	}
+	cleanupRun(t, fmt.Sprintf("Delete series: proton-cli calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+	return ref
+}
+
+// A weekly event is one stored record. Asking about a week three weeks out has to
+// answer with that week's occurrence, which is only true if the rule is expanded
+// and if the record is asked for in the window it reaches into rather than the one
+// it starts in.
+func TestCalendarRecurringSeriesAppearsOnEveryOccurrence(t *testing.T) {
+	title := testID() + "-weekly"
+	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=5")
+
+	all := occurrencesOf(t, title, seriesAnchor, "2027-04-05")
+	if len(all) != 5 {
+		t.Fatalf("a five-occurrence series listed %d rows", len(all))
+	}
+	for i, row := range all {
+		occ, _ := row["occurrence"].(string)
+		if occ == "" {
+			t.Errorf("row %d has no occurrence, so it cannot be addressed", i)
+		}
+		if n, _ := row["occurrence_number"].(float64); int(n) != i+1 {
+			t.Errorf("row %d is numbered %v", i, row["occurrence_number"])
+		}
+	}
+
+	// A window that contains only the fourth occurrence answers with it alone,
+	// even though the record itself is dated three weeks earlier.
+	later := occurrencesOf(t, title, "2027-03-22", "2027-03-22")
+	if len(later) != 1 {
+		t.Fatalf("a window three weeks out listed %d rows, want 1", len(later))
+	}
+	if occ, _ := later[0]["occurrence"].(string); occ != "2027-03-22T09:00" {
+		t.Errorf("the occurrence in that window is %q", occ)
+	}
+}
+
+// An all-day event is asked for through a different window than a timed one, so
+// asking for only one window makes every all-day event invisible.
+func TestCalendarAllDayEventAppearsInAList(t *testing.T) {
+	title := testID() + "-allday"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-05-04", "--all-day"))
+	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton-cli calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	rows := occurrencesOf(t, title, "2027-05-04", "2027-05-04")
+	if len(rows) != 1 {
+		t.Fatalf("an all-day event listed %d rows in its own day, want 1", len(rows))
+	}
+	if allDay, _ := rows[0]["all_day"].(bool); !allDay {
+		t.Error("the row does not report itself as all-day")
+	}
+	assertContains(t, runOK(t, "calendar", "events", "list",
+		"--calendar", "Default", "--start", "2027-05-04", "--end", "2027-05-04"), "all day")
+}
+
+// The last day named is a whole day, not the instant it begins.
+func TestCalendarListIncludesTheLastDayNamed(t *testing.T) {
+	title := testID() + "-lastday"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-06-10T23:30", "--duration", "15m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	if rows := occurrencesOf(t, title, "2027-06-10", "2027-06-10"); len(rows) != 1 {
+		t.Errorf("an event late on the last day named listed %d rows, want 1", len(rows))
+	}
+}
+
+// Proton reads an absent reminder list as "use the calendar's defaults", so
+// sending one on every write silently resets whatever the event had. 42 minutes is
+// a value no default uses.
+func TestCalendarUpdatingAnEventKeepsItsReminders(t *testing.T) {
+	title := testID() + "-remind"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-07-01T09:00", "--duration", "30m", "--remind", "42m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	if got := triggersOf(t, ref); !contains(got, "-PT42M") {
+		t.Fatalf("the event was created with reminders %v, want -PT42M", got)
+	}
+	runOK(t, "calendar", "events", "update", "--title", title+"-renamed", "--", ref)
+	if got := triggersOf(t, ref); !contains(got, "-PT42M") {
+		t.Errorf("renaming the event left it with reminders %v, want -PT42M kept", got)
+	}
+
+	runOK(t, "calendar", "events", "update", "--remind", "5m", "--", ref)
+	if got := triggersOf(t, ref); !contains(got, "-PT5M") || contains(got, "-PT42M") {
+		t.Errorf("--remind left the event with %v, want only -PT5M", got)
+	}
+	runOK(t, "calendar", "events", "update", "--no-remind", "--", ref)
+	if got := triggersOf(t, ref); len(got) != 0 {
+		t.Errorf("--no-remind left the event with %v", got)
+	}
+}
+
+// triggersOf reads an event's reminder triggers straight from the API, so the
+// assertion does not depend on how the CLI renders them.
+func triggersOf(t *testing.T, ref string) []string {
+	t.Helper()
+	data := runJSON(t, "api", "GET", eventPath(t, ref))
+	ev, _ := data["Event"].(map[string]interface{})
+	notifs, _ := ev["Notifications"].([]interface{})
+	var out []string
+	for _, n := range notifs {
+		if m, ok := n.(map[string]interface{}); ok {
+			if trig, _ := m["Trigger"].(string); trig != "" {
+				out = append(out, trig)
+			}
+		}
+	}
+	return out
+}
+
+func contains(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// Editing one occurrence writes a second record that replaces it. The rest of the
+// series has to be untouched, and the edited occurrence keeps the reference it had
+// before it was edited.
+func TestCalendarOccurrenceUpdateLeavesTheSeriesAlone(t *testing.T) {
+	title := testID() + "-single"
+	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
+
+	refs := occurrenceRefs(t, title, seriesAnchor, "2027-03-29")
+	if len(refs) != 4 {
+		t.Fatalf("the series listed %d occurrences, want 4", len(refs))
+	}
+	second := refs[1]
+	runOK(t, "calendar", "events", "update", "--title", title+"-moved",
+		"--start", "2027-03-08T14:00", "--duration", "45m", "--", second)
+
+	after := occurrencesOf(t, title, seriesAnchor, "2027-03-29")
+	if len(after) != 4 {
+		t.Fatalf("editing one occurrence left %d rows, want the series intact", len(after))
+	}
+	var edited map[string]interface{}
+	for _, row := range after {
+		if got, _ := row["title"].(string); strings.Contains(got, "-moved") {
+			edited = row
+		}
+	}
+	if edited == nil {
+		t.Fatal("the edited occurrence is not in the window")
+	}
+	if occ, _ := edited["occurrence"].(string); occ != "2027-03-08T09:00" {
+		t.Errorf("the edited occurrence is named %q, want its original start", occ)
+	}
+	if stored, _ := edited["stored_id"].(string); stored == "" {
+		t.Error("the edited occurrence does not report the record backing it")
+	}
+	// Re-addressing it by the same reference finds the edit rather than the rule's
+	// version of that day.
+	assertContains(t, runOK(t, "calendar", "events", "get", "--", second), title+"-moved")
+}
+
+// Cancelling one occurrence has to leave the rule alone, and has to stick: an
+// exclusion written in the wrong frame does not cancel anything.
+func TestCalendarOccurrenceDeleteLeavesTheSeriesAloneAndSticks(t *testing.T) {
+	title := testID() + "-cancel"
+	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
+
+	refs := occurrenceRefs(t, title, seriesAnchor, "2027-03-29")
+	if len(refs) != 4 {
+		t.Fatalf("the series listed %d occurrences, want 4", len(refs))
+	}
+	runOK(t, "calendar", "events", "delete", "--yes", "--", refs[2])
+
+	after := occurrenceRefs(t, title, seriesAnchor, "2027-03-29")
+	if len(after) != 3 {
+		t.Fatalf("cancelling one occurrence left %d, want 3", len(after))
+	}
+	if contains(after, refs[2]) {
+		t.Error("the cancelled occurrence is still listed")
+	}
+
+	// Deleting it again changes nothing rather than accumulating exclusions.
+	runOK(t, "calendar", "events", "delete", "--yes", "--", refs[2])
+	if again := occurrenceRefs(t, title, seriesAnchor, "2027-03-29"); len(again) != 3 {
+		t.Errorf("cancelling the same occurrence twice left %d occurrences, want 3", len(again))
+	}
+}
+
+// Renaming a series must not resurrect the occurrences somebody cancelled, which
+// is what happens when an update rebuilds the event instead of merging into it.
+func TestCalendarSeriesUpdateKeepsItsExclusions(t *testing.T) {
+	title := testID() + "-exdate"
+	ref := createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
+
+	refs := occurrenceRefs(t, title, seriesAnchor, "2027-03-29")
+	if len(refs) != 4 {
+		t.Fatalf("the series listed %d occurrences, want 4", len(refs))
+	}
+	runOK(t, "calendar", "events", "delete", "--yes", "--", refs[1])
+	runOK(t, "calendar", "events", "update", "--title", title+"-renamed", "--", ref)
+
+	after := occurrencesOf(t, title, seriesAnchor, "2027-03-29")
+	if len(after) != 3 {
+		t.Errorf("renaming the series left %d occurrences, want the cancelled one still gone", len(after))
+	}
+	for _, row := range after {
+		if got, _ := row["title"].(string); !strings.Contains(got, "-renamed") {
+			t.Errorf("an occurrence still reads %q after the rename", got)
+		}
+	}
+}
+
+// Ending a series at one occurrence keeps everything before it and removes
+// everything from it on.
+func TestCalendarFutureEndsTheSeriesAtAnOccurrence(t *testing.T) {
+	title := testID() + "-future"
+	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=5")
+
+	refs := occurrenceRefs(t, title, seriesAnchor, "2027-04-05")
+	if len(refs) != 5 {
+		t.Fatalf("the series listed %d occurrences, want 5", len(refs))
+	}
+	runOK(t, "calendar", "events", "delete", "--future", "--yes", "--", refs[2])
+
+	after := occurrenceRefs(t, title, seriesAnchor, "2027-04-05")
+	if len(after) != 2 {
+		t.Fatalf("ending the series at the third occurrence left %d, want 2", len(after))
+	}
+	for _, r := range after[:2] {
+		if !contains(refs[:2], r) {
+			t.Errorf("%q is not one of the occurrences before the split", r)
+		}
+	}
+}
+
+// Changing one occurrence and every later one keeps the earlier ones as they were
+// and starts a second series from the split.
+func TestCalendarFutureUpdateSplitsTheSeries(t *testing.T) {
+	title := testID() + "-split"
+	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=5")
+
+	refs := occurrenceRefs(t, title, seriesAnchor, "2027-04-05")
+	if len(refs) != 5 {
+		t.Fatalf("the series listed %d occurrences, want 5", len(refs))
+	}
+	runOK(t, "calendar", "events", "update", "--future",
+		"--title", title+"-later", "--start", "2027-03-15T11:00", "--duration", "30m", "--", refs[2])
+
+	after := occurrencesOf(t, title, seriesAnchor, "2027-04-05")
+	if len(after) != 5 {
+		t.Fatalf("splitting the series left %d occurrences, want 5", len(after))
+	}
+	early, late := 0, 0
+	for _, row := range after {
+		got, _ := row["title"].(string)
+		if strings.Contains(got, "-later") {
+			late++
+			continue
+		}
+		early++
+	}
+	if early != 2 || late != 3 {
+		t.Errorf("the split left %d occurrences before and %d after, want 2 and 3", early, late)
+	}
+	// The remainder has its own identity, so the two halves are separate series.
+	var uids []string
+	for _, row := range after {
+		if uid, _ := row["uid"].(string); uid != "" && !contains(uids, uid) {
+			uids = append(uids, uid)
+		}
+	}
+	if len(uids) != 2 {
+		t.Errorf("the split produced %d identities, want 2", len(uids))
+	}
+
+	// Any occurrence created by the split has to be deletable on its own.
+	for _, row := range after {
+		if got, _ := row["title"].(string); strings.Contains(got, "-later") {
+			cal, _ := row["calendar_id"].(string)
+			id, _ := row["id"].(string)
+			cleanupRun(t, fmt.Sprintf("Delete split remainder: proton-cli calendar events delete -- %s/%s", cal, id),
+				"calendar", "events", "delete", "--yes", "--", cal+"/"+id)
+			break
+		}
+	}
+}
+
+// Ending a series at its own first occurrence would leave nothing, so it is
+// refused rather than quietly removing everything.
+func TestCalendarFutureRefusesTheFirstOccurrence(t *testing.T) {
+	title := testID() + "-firstocc"
+	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=3")
+
+	refs := occurrenceRefs(t, title, seriesAnchor, "2027-03-22")
+	if len(refs) == 0 {
+		t.Fatal("the series listed no occurrences")
+	}
+	_, stderr, code := run(t, "calendar", "events", "delete", "--future", "--yes", "--", refs[0])
+	if code == 0 {
+		t.Error("ending a series at its first occurrence was accepted")
+	}
+	assertContains(t, stderr, "first occurrence")
+}
+
+// Deleting the series removes every occurrence, and says how many before it does.
+func TestCalendarDeletingASeriesRemovesEveryOccurrence(t *testing.T) {
+	title := testID() + "-whole"
+	ref := createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
+
+	_, stderr := runOKStderr(t, "calendar", "events", "delete", "--dry-run", "--", ref)
+	assertContains(t, stderr, "4 events")
+
+	runOK(t, "calendar", "events", "delete", "--yes", "--", ref)
+	if after := occurrenceRefs(t, title, seriesAnchor, "2027-03-29"); len(after) != 0 {
+		t.Errorf("deleting the series left %d occurrences", len(after))
+	}
+}
+
+// A series anchored to a zone keeps its wall-clock time when the clocks change.
+// Stored as a plain UTC instant it slides by an hour, which is the whole reason an
+// event carries a zone. European summer time ends on 31 October 2027.
+func TestCalendarRecurringSeriesKeepsItsWallClockAcrossADaylightSavingChange(t *testing.T) {
+	title := testID() + "-dst"
+	createSeries(t, title, "2027-10-28T09:00", "FREQ=DAILY;COUNT=6", "--zone", "Europe/Vienna")
+
+	rows := occurrencesOf(t, title, "2027-10-28", "2027-11-02")
+	if len(rows) != 6 {
+		t.Fatalf("the series listed %d occurrences, want 6", len(rows))
+	}
+	for _, row := range rows {
+		occ, _ := row["occurrence"].(string)
+		if !strings.HasSuffix(occ, "T09:00") {
+			t.Errorf("an occurrence reads %q, want every one at 09:00", occ)
+		}
+		if zone, _ := row["zone"].(string); zone != "Europe/Vienna" {
+			t.Errorf("an occurrence is anchored to %q", zone)
+		}
+	}
+}
+
+// Changing the rule is a change to the event like any other.
+func TestCalendarSeriesRuleCanBeChanged(t *testing.T) {
+	title := testID() + "-rerule"
+	ref := createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=3")
+
+	runOK(t, "calendar", "events", "update", "--rrule", "FREQ=DAILY;COUNT=4", "--", ref)
+	got := runOK(t, "calendar", "events", "get", "--", ref)
+	assertContains(t, got, "FREQ=DAILY")
+
+	if rows := occurrencesOf(t, title, seriesAnchor, "2027-03-08"); len(rows) != 4 {
+		t.Errorf("the re-ruled series listed %d occurrences, want 4", len(rows))
+	}
+}
+
+// An answer applies to a whole invitation, so a reference naming one occurrence is
+// refused rather than half-honoured.
+func TestCalendarRespondRefusesAnOccurrenceReference(t *testing.T) {
+	title := testID() + "-rsvpocc"
+	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=2")
+
+	refs := occurrenceRefs(t, title, seriesAnchor, "2027-03-08")
+	if len(refs) == 0 {
+		t.Fatal("the series listed no occurrences")
+	}
+	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "accept", "--", refs[0])
+	if code == 0 {
+		t.Error("responding to one occurrence was accepted")
+	}
+	assertContains(t, stderr, "whole series")
+}

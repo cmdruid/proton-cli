@@ -150,18 +150,15 @@ func (s *Service) VaultEdit(ctx context.Context, u *keys.Unlocked, shareID, newN
 	if !ok {
 		return fmt.Errorf("no share key for rotation %d", rotation)
 	}
-	vault := &pb.Vault{}
-	if content != "" {
-		if v, err := decryptVault(content, shareKey); err == nil {
-			vault = v
-		}
-	}
-	vault.Name = newName
-	pbBytes, err := proto.Marshal(vault)
+	pbBytes, err := renamedVault(content, shareKey, newName)
 	if err != nil {
-		return err
+		return fmt.Errorf("rename vault %s: %w", shareID, err)
 	}
-	ct, err := aead.Encrypt(shareKey, pbBytes, []byte(aead.TagVaultContent))
+	writeKey, writeRotation := sk.latest()
+	if writeKey == nil {
+		return fmt.Errorf("vault %s has no usable share key", shareID)
+	}
+	ct, err := aead.Encrypt(writeKey, pbBytes, []byte(aead.TagVaultContent))
 	if err != nil {
 		return err
 	}
@@ -170,7 +167,7 @@ func (s *Service) VaultEdit(ctx context.Context, u *keys.Unlocked, shareID, newN
 		Body: map[string]any{
 			"Content":              base64.StdEncoding.EncodeToString(ct),
 			"ContentFormatVersion": 1,
-			"KeyRotation":          rotation,
+			"KeyRotation":          writeRotation,
 		},
 	}, nil)
 }
@@ -197,6 +194,23 @@ func (s *Service) ResolveVault(ctx context.Context, u *keys.Unlocked, nameOrID s
 		}
 	}
 	return "", &errs.NotFound{Kind: "vault", Ref: nameOrID}
+}
+
+// renamedVault is the stored vault with a new name, and nothing else changed.
+//
+// It fails rather than substituting an empty vault when the existing content
+// cannot be read: a rename that rebuilds the vault from nothing is a way of losing
+// its description and every other field it holds.
+func renamedVault(content string, shareKey []byte, newName string) ([]byte, error) {
+	if content == "" {
+		return nil, fmt.Errorf("it has no stored content to rename")
+	}
+	vault, err := decryptVault(content, shareKey)
+	if err != nil {
+		return nil, fmt.Errorf("its stored content could not be read: %w", err)
+	}
+	vault.Name = newName
+	return proto.Marshal(vault)
 }
 
 func decryptVault(encContent string, shareKey []byte) (*pb.Vault, error) {
