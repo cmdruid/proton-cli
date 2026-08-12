@@ -77,10 +77,16 @@ type rawNotification struct {
 }
 
 type rawEvent struct {
-	ID                   string
-	CalendarID           string
+	ID         string
+	CalendarID string
+	// StartTime and EndTime are the cleartext times Proton keeps beside the
+	// encrypted content. For a full-day event they are the dates it names, held as
+	// UTC midnights; for any other event they are instants anchored to the zones
+	// below. They are what places an event nobody can decrypt.
 	StartTime            int64
 	EndTime              int64
+	StartTimezone        string
+	EndTimezone          string
 	FullDay              int
 	UID                  string
 	IsOrganizer          int
@@ -162,8 +168,8 @@ func (s *Service) decrypt(ck *calKeys, u *keys.Unlocked, raw rawEvent) stored {
 	return stored{raw: raw, model: model, sig: sig, readErr: err}
 }
 
-// EventsList returns everything on the given calendars between from and to,
-// expanding each series into the occurrences that fall in the window.
+// EventsList returns everything the window covers on the given calendars,
+// expanding each series into the occurrences that fall in it.
 //
 // A calendar that cannot be read is left out rather than allowed to empty the
 // answer: the list of calendars is eventually consistent, so one that was deleted
@@ -171,7 +177,7 @@ func (s *Service) decrypt(ck *calKeys, u *keys.Unlocked, raw rawEvent) stored {
 // answering from the ones that are there. Only when nothing could be read at all
 // is that reported - which is also what makes a single named calendar strict,
 // since then the one failure is the only one.
-func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarIDs []string, from, to time.Time) ([]Event, error) {
+func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarIDs []string, w ical.Window) ([]Event, error) {
 	var (
 		mu    sync.Mutex
 		wg    sync.WaitGroup
@@ -183,7 +189,7 @@ func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarIDs 
 		wg.Add(1)
 		go func(calID string) {
 			defer wg.Done()
-			events, err := s.calendarEvents(ctx, u, calID, from, to)
+			events, err := s.calendarEvents(ctx, u, calID, w)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -211,12 +217,12 @@ func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarIDs 
 	return out, nil
 }
 
-func (s *Service) calendarEvents(ctx context.Context, u *keys.Unlocked, calendarID string, from, to time.Time) ([]Event, error) {
+func (s *Service) calendarEvents(ctx context.Context, u *keys.Unlocked, calendarID string, w ical.Window) ([]Event, error) {
 	ck, err := s.unlockCalendar(ctx, u, calendarID)
 	if err != nil {
 		return nil, err
 	}
-	raws, err := s.rawEventsBetween(ctx, calendarID, from, to)
+	raws, err := s.rawEventsBetween(ctx, calendarID, w)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +230,7 @@ func (s *Service) calendarEvents(ctx context.Context, u *keys.Unlocked, calendar
 	for _, raw := range raws {
 		events = append(events, s.decrypt(ck, u, raw))
 	}
-	return expand(events, from, to), nil
+	return expand(events, w), nil
 }
 
 // rawEventsBetween asks for all four windows and pages each one.
@@ -233,7 +239,8 @@ func (s *Service) calendarEvents(ctx context.Context, u *keys.Unlocked, calendar
 // serialising them would quadruple the wall-clock of a call that is already
 // waiting on the network. An event can legitimately answer more than one of them,
 // so the union is deduplicated.
-func (s *Service) rawEventsBetween(ctx context.Context, calendarID string, from, to time.Time) ([]rawEvent, error) {
+func (s *Service) rawEventsBetween(ctx context.Context, calendarID string, w ical.Window) ([]rawEvent, error) {
+	from, to := fetchBounds(w)
 	var (
 		mu     sync.Mutex
 		wg     sync.WaitGroup
@@ -275,12 +282,26 @@ func (s *Service) rawEventsBetween(ctx context.Context, calendarID string, from,
 	return out, nil
 }
 
+// fetchBounds are the instants the events endpoint is asked for: the window, a day
+// wider at each end.
+//
+// Wider on purpose. An all-day event names a date rather than an instant, so Proton
+// holds it at an instant up to a day from the day it belongs to here, and the
+// endpoint's own idea of which events touch the edge of a range is not this CLI's.
+// What is fetched only has to contain the answer; the window decides it.
+func fetchBounds(w ical.Window) (from, to time.Time) {
+	first, until := w.Bounds()
+	return first.AddDate(0, 0, -1), until.AddDate(0, 0, 1)
+}
+
 func (s *Service) rawEventsOfType(ctx context.Context, calendarID string, from, to time.Time, typ string) ([]rawEvent, error) {
 	var out []rawEvent
 	for page := 0; ; page++ {
 		q := url.Values{}
 		q.Set("Start", fmt.Sprintf("%d", max(from.Unix(), 0)))
 		q.Set("End", fmt.Sprintf("%d", max(to.Unix(), 0)))
+		// UTC, because that is the frame in which a full-day event's cleartext times
+		// are the dates it names.
 		q.Set("Timezone", "UTC")
 		q.Set("Type", typ)
 		q.Set("Page", fmt.Sprintf("%d", page))
@@ -305,7 +326,12 @@ func (s *Service) rawEventsOfType(ctx context.Context, calendarID string, from, 
 // expand turns stored events into the rows a person sees: a one-off is itself, a
 // series becomes its occurrences in the window, and an occurrence that has been
 // edited on its own replaces the one the rule would have generated.
-func expand(events []stored, from, to time.Time) []Event {
+//
+// Every row is put to the window by the same rule, whether it came from a stored
+// event or from a rule this CLI expanded. The endpoint is asked for more than the
+// window holds, so the window is what makes the answer the one that was asked for
+// rather than the one the server happened to return.
+func expand(events []stored, w ical.Window) []Event {
 	masters := map[string]stored{}
 	overrides := map[string][]stored{}
 	var plain []stored
@@ -324,7 +350,9 @@ func expand(events []stored, from, to time.Time) []Event {
 
 	var out []Event
 	for _, e := range plain {
-		out = append(out, e.row())
+		if w.Covers(e.when()) {
+			out = append(out, e.row())
+		}
 	}
 
 	for uid, master := range masters {
@@ -332,7 +360,7 @@ func expand(events []stored, from, to time.Time) []Event {
 		for _, o := range overrides[uid] {
 			replaced = append(replaced, *o.model.RecurrenceID)
 		}
-		occurrences, err := master.model.Occurrences(from, to)
+		occurrences, err := master.model.Occurrences(w)
 		if err != nil {
 			// A rule this build cannot read still describes a real event, so the
 			// series is reported at its own start rather than dropped.
@@ -350,6 +378,9 @@ func expand(events []stored, from, to time.Time) []Event {
 	for uid, list := range overrides {
 		master, hasMaster := masters[uid]
 		for _, o := range list {
+			if !w.Covers(o.when()) {
+				continue
+			}
 			row := o.row()
 			if hasMaster {
 				// An occurrence is addressed by where it sits in its series, not by
@@ -362,24 +393,46 @@ func expand(events []stored, from, to time.Time) []Event {
 			} else {
 				row.Occurrence = o.model.RecurrenceID.String()
 			}
-			if row.End.Before(from) || row.Start.After(to) {
-				continue
-			}
 			out = append(out, row)
 		}
 	}
 	return out
 }
 
+// when is the pair of values the event occupies, whether or not its content could
+// be read.
+//
+// An event nobody can decrypt is still placed on the right day, because the times
+// Proton keeps in the clear beside it are the same values its content carries.
+func (e stored) when() (start, end ical.DateTime) {
+	if e.readErr == nil {
+		return e.model.Span()
+	}
+	if e.raw.FullDay == 1 {
+		return ical.Span(
+			ical.Day(time.Unix(e.raw.StartTime, 0).UTC()),
+			ical.Day(time.Unix(e.raw.EndTime, 0).UTC()))
+	}
+	return ical.Span(
+		ical.Timed(time.Unix(e.raw.StartTime, 0), e.raw.StartTimezone),
+		ical.Timed(time.Unix(e.raw.EndTime, 0), e.raw.EndTimezone))
+}
+
 // row reports the stored event as itself.
+//
+// The times are read in the zone the reader is in, which for an all-day event is
+// the only way to name the day it is on: it carries a date and no instant, so
+// placing it anywhere else moves it to the day before or after.
 func (e stored) row() Event {
+	start, end := e.when()
 	ev := Event{
 		ID:         e.raw.ID,
 		CalendarID: e.raw.CalendarID,
 		UID:        e.raw.UID,
-		Start:      time.Unix(e.raw.StartTime, 0),
-		End:        time.Unix(e.raw.EndTime, 0),
-		AllDay:     e.raw.FullDay == 1,
+		Start:      start.In(time.Local),
+		End:        end.In(time.Local),
+		AllDay:     start.AllDay,
+		Zone:       start.TZID,
 		Signature:  e.sig,
 		Reminders:  e.raw.triggers(),
 	}
@@ -390,22 +443,14 @@ func (e stored) row() Event {
 	ev.Location = e.model.Location
 	ev.Description = e.model.Description
 	ev.RRule = e.model.RRule
-	ev.Zone = e.model.Start.TZID
-	ev.AllDay = e.model.Start.AllDay
-	if !e.model.Start.IsZero() {
-		ev.Start = e.model.Start.Time
-	}
-	if !e.model.End.IsZero() {
-		ev.End = e.model.End.Time
-	}
 	return ev
 }
 
 // occurrenceRow reports one instance of a series.
 func (e stored) occurrenceRow(occ ical.Occurrence) Event {
 	ev := e.row()
-	ev.Start = occ.Start.Time
-	ev.End = occ.End.Time
+	ev.Start = occ.Start.In(time.Local)
+	ev.End = occ.End.In(time.Local)
 	ev.Occurrence = occ.Start.String()
 	ev.Number = occ.Number
 	return ev
@@ -547,9 +592,11 @@ func (s *Service) EventCreate(ctx context.Context, u *keys.Unlocked, calendarID 
 		Description: in.Description,
 		RRule:       in.RRule,
 	}
-	if err := setTimes(&v, in.Start, in.End, in.AllDay, in.Zone); err != nil {
+	loc, err := zoneOf(in.Zone)
+	if err != nil {
 		return nil, err
 	}
+	v = withTimes(v, in.Start, in.End, in.AllDay, loc.String())
 	if len(in.Attendees) > 0 {
 		v.Organizer = ck.email
 	}
@@ -592,25 +639,6 @@ func (s *Service) attachAttendees(ctx context.Context, body *eventBody, emails [
 	body.attendeeList = clear
 	body.attendeeKeys = keys
 	return external, nil
-}
-
-// setTimes anchors an event's start and end.
-func setTimes(v *ical.VEvent, start, end time.Time, allDay bool, zone string) error {
-	loc, err := zoneOf(zone)
-	if err != nil {
-		return err
-	}
-	if allDay {
-		v.Start = ical.Day(start.In(loc))
-		if end.IsZero() {
-			end = start.AddDate(0, 0, 1)
-		}
-		v.End = ical.Day(end.In(loc))
-		return nil
-	}
-	v.Start = ical.Timed(start, loc.String())
-	v.End = ical.Timed(end, loc.String())
-	return nil
 }
 
 func inviteMail(v ical.VEvent, recipients []string) *Mail {
@@ -703,8 +731,8 @@ func (s *Service) attendeeKeyRing(ctx context.Context, email string) (*pgp.KeyRi
 
 // ── resolving ──
 
-// ResolveEvent finds an event by title across every calendar over the next 30
-// days.
+// ResolveEvent finds an event by title across every calendar over the days the
+// default window covers.
 func (s *Service) ResolveEvent(ctx context.Context, u *keys.Unlocked, needle string) (calendarID, eventID, occurrence string, err error) {
 	cals, err := s.CalendarsList(ctx)
 	if err != nil {
@@ -714,8 +742,7 @@ func (s *Service) ResolveEvent(ctx context.Context, u *keys.Unlocked, needle str
 	for _, c := range cals {
 		ids = append(ids, c.ID)
 	}
-	from, to := DefaultRange()
-	events, err := s.EventsList(ctx, u, ids, from, to)
+	events, err := s.EventsList(ctx, u, ids, ical.Days(DefaultDays()))
 	if err != nil {
 		return "", "", "", err
 	}

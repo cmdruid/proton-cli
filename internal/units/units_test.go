@@ -92,6 +92,10 @@ func TestDuration(t *testing.T) {
 		30 * time.Minute: "30m",
 		2 * time.Hour:    "2h",
 		90 * time.Minute: "1h30m",
+		24 * time.Hour:   "1d",
+		72 * time.Hour:   "3d",
+		25 * time.Hour:   "25h",
+		36 * time.Hour:   "36h",
 	}
 	for d, want := range cases {
 		if got := Duration(d); got != want {

@@ -511,6 +511,69 @@ func TestCalendarAllDayEventAppearsInAList(t *testing.T) {
 		"--calendar", "Default", "--start", "2027-05-04", "--end", "2027-05-04"), "all day")
 }
 
+// A whole-day event runs for a day, whichever way the end was stored: Proton keeps
+// an all-day range non-inclusively and clients differ on whether they write the end
+// at all, so a consumer that measured the row would otherwise get 0 or 24 hours for
+// the same event.
+func TestCalendarAllDayEventLastsAWholeDay(t *testing.T) {
+	title := testID() + "-allday-span"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-05-11", "--all-day"))
+	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton-cli calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	rows := occurrencesOf(t, title, "2027-05-11", "2027-05-11")
+	if len(rows) != 1 {
+		t.Fatalf("an all-day event listed %d rows in its own day, want 1", len(rows))
+	}
+	start, _ := rows[0]["start"].(string)
+	end, _ := rows[0]["end"].(string)
+	from, err := time.Parse(time.RFC3339, start)
+	if err != nil {
+		t.Fatalf("start %q is not a timestamp: %v", start, err)
+	}
+	until, err := time.Parse(time.RFC3339, end)
+	if err != nil {
+		t.Fatalf("end %q is not a timestamp: %v", end, err)
+	}
+	if from.Format("2006-01-02") != "2027-05-11" {
+		t.Errorf("the row starts %s, want the day the event names", start)
+	}
+	if until.Format("2006-01-02") != "2027-05-12" {
+		t.Errorf("the row ends %s, want the midnight after its day", end)
+	}
+	assertField(t, runOK(t, "calendar", "events", "get", "--", ref), "Duration:", "1d")
+}
+
+// The day after the last one named is not reported, by either route into a listing:
+// an all-day event begins at the instant that day begins, and an all-day row carries
+// no time of day to give it away. Recurring and one-off events are filtered by the
+// same rule, so both are checked here.
+func TestCalendarListStopsAtTheLastDayNamed(t *testing.T) {
+	series := testID() + "-leak-series"
+	seriesRef := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", series,
+		"--start", "2027-05-18", "--all-day", "--rrule", "FREQ=DAILY;COUNT=5"))
+	cleanupRun(t, fmt.Sprintf("Delete all-day series: proton-cli calendar events delete -- %s", seriesRef),
+		"calendar", "events", "delete", "--", seriesRef)
+
+	oneOff := testID() + "-leak-oneoff"
+	oneOffRef := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", oneOff,
+		"--start", "2027-05-19", "--all-day"))
+	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton-cli calendar events delete -- %s", oneOffRef),
+		"calendar", "events", "delete", "--", oneOffRef)
+
+	rows := occurrencesOf(t, series, "2027-05-18", "2027-05-18")
+	if len(rows) != 1 {
+		t.Errorf("a one-day window listed %d occurrences of a daily all-day series, want 1", len(rows))
+	}
+	if rows := occurrencesOf(t, oneOff, "2027-05-18", "2027-05-18"); len(rows) != 0 {
+		t.Errorf("a one-day window listed an all-day event belonging to the next day: %+v", rows)
+	}
+}
+
 // The last day named is a whole day, not the instant it begins.
 func TestCalendarListIncludesTheLastDayNamed(t *testing.T) {
 	title := testID() + "-lastday"

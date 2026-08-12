@@ -48,7 +48,7 @@ func weekly(t *testing.T, rule string, day int) VEvent {
 func TestOccurrencesKeepTheWallClockAcrossADaylightSavingChange(t *testing.T) {
 	loc := vienna(t)
 	v := weekly(t, "FREQ=WEEKLY;COUNT=4", 12)
-	occs, err := v.Occurrences(time.Date(2026, 10, 1, 0, 0, 0, 0, loc), time.Date(2026, 11, 30, 0, 0, 0, 0, loc))
+	occs, err := v.Occurrences(Days(date(loc, 2026, time.October, 1), date(loc, 2026, time.November, 30)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestOccurrencesIncludeAnEventThatReachesIntoTheWindow(t *testing.T) {
 		End:   Timed(start.Add(72*time.Hour), "Europe/Vienna"),
 	}
 	// The window opens after it started and closes before it ends.
-	occs, err := v.Occurrences(time.Date(2026, 4, 17, 0, 0, 0, 0, loc), time.Date(2026, 4, 18, 0, 0, 0, 0, loc))
+	occs, err := v.Occurrences(Days(date(loc, 2026, time.April, 17), date(loc, 2026, time.April, 17)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestOccurrencesSkipExclusionsButNotTheirNumbers(t *testing.T) {
 	loc := vienna(t)
 	v := weekly(t, "FREQ=WEEKLY;COUNT=4", 12)
 	v.ExDates = []DateTime{Timed(time.Date(2026, 10, 19, 9, 0, 0, 0, loc), "Europe/Vienna")}
-	occs, err := v.Occurrences(time.Date(2026, 10, 1, 0, 0, 0, 0, loc), time.Date(2026, 11, 30, 0, 0, 0, 0, loc))
+	occs, err := v.Occurrences(Days(date(loc, 2026, time.October, 1), date(loc, 2026, time.November, 30)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestOccurrencesSkipExclusionsButNotTheirNumbers(t *testing.T) {
 func TestOccurrencesReadsOrdinalBydayRules(t *testing.T) {
 	loc := vienna(t)
 	v := weekly(t, "FREQ=MONTHLY;BYDAY=2MO;COUNT=3", 12)
-	occs, err := v.Occurrences(time.Date(2026, 1, 1, 0, 0, 0, 0, loc), time.Date(2027, 6, 1, 0, 0, 0, 0, loc))
+	occs, err := v.Occurrences(Days(date(loc, 2026, time.January, 1), date(loc, 2027, time.June, 1)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,12 +131,13 @@ func TestOccurrencesReadsOrdinalBydayRules(t *testing.T) {
 }
 
 func TestOccurrencesOfAnAllDaySeries(t *testing.T) {
+	loc := vienna(t)
 	day := time.Date(2026, 4, 16, 0, 0, 0, 0, time.UTC)
 	v := VEvent{
 		UID: "u", Start: Day(day), End: Day(day.AddDate(0, 0, 1)),
 		RRule: "FREQ=DAILY;COUNT=3",
 	}
-	occs, err := v.Occurrences(day, day.AddDate(0, 0, 10))
+	occs, err := v.Occurrences(Days(date(loc, 2026, time.April, 16), date(loc, 2026, time.April, 26)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,6 +149,40 @@ func TestOccurrencesOfAnAllDaySeries(t *testing.T) {
 	}
 	if occs[2].Start.String() != "2026-04-18" {
 		t.Errorf("third occurrence = %s", occs[2].Start.String())
+	}
+}
+
+// A day asked for is a day answered, even where the next occurrence begins at the
+// instant the day ends. Only an all-day occurrence can fall exactly on that
+// boundary, and it carries no time of day to give itself away, so a range that
+// included it would quietly report two days of events for a one-day question.
+func TestOccurrencesOfAnAllDaySeriesStopAtTheLastDay(t *testing.T) {
+	loc := vienna(t)
+	start := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	v := VEvent{UID: "u", Start: Day(start), RRule: "FREQ=DAILY;COUNT=5"}
+
+	occ, err := v.Occurrences(Days(date(loc, 2026, time.August, 14), date(loc, 2026, time.August, 14)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(occ) != 1 {
+		t.Fatalf("a one-day window reported %d occurrences, want 1", len(occ))
+	}
+	if got := occ[0].Start.String(); got != "2026-08-14" {
+		t.Errorf("the occurrence reported is %s, want the day asked for", got)
+	}
+	// An all-day event's end is the midnight after its last day, whether or not the
+	// series was written with one.
+	if got := occ[0].End.String(); got != "2026-08-15" {
+		t.Errorf("the occurrence ends %s, want the midnight after its day", got)
+	}
+
+	two, err := v.Occurrences(Days(date(loc, 2026, time.August, 14), date(loc, 2026, time.August, 15)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(two) != 2 {
+		t.Errorf("a two-day window reported %d occurrences, want 2", len(two))
 	}
 }
 
@@ -361,7 +396,7 @@ func TestOccurrencesOfANonRecurringEventIsItself(t *testing.T) {
 	loc := vienna(t)
 	start := time.Date(2026, 4, 16, 9, 0, 0, 0, loc)
 	v := VEvent{UID: "u", Start: Timed(start, "Europe/Vienna"), End: Timed(start.Add(time.Hour), "Europe/Vienna")}
-	occs, err := v.Occurrences(start.AddDate(0, 0, -1), start.AddDate(0, 0, 1))
+	occs, err := v.Occurrences(Days(date(loc, 2026, time.April, 15), date(loc, 2026, time.April, 17)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +442,7 @@ func TestOccurrenceAtStillFindsACancelledInstance(t *testing.T) {
 	}
 	// A listing still hides it.
 	loc := vienna(t)
-	occs, err := cancelled.Occurrences(time.Date(2026, 10, 1, 0, 0, 0, 0, loc), time.Date(2026, 11, 30, 0, 0, 0, 0, loc))
+	occs, err := cancelled.Occurrences(Days(date(loc, 2026, time.October, 1), date(loc, 2026, time.November, 30)))
 	if err != nil {
 		t.Fatal(err)
 	}

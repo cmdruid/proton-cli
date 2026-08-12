@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -50,6 +51,13 @@ func (d *windowDoer) Decode(_ context.Context, r proton.Request, out any) error 
 	return json.Unmarshal(raw, out)
 }
 
+// someWindow is any window at all, for the tests that care about which queries the
+// endpoint is asked rather than about what falls in the range.
+func someWindow() ical.Window {
+	day := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	return ical.Days(day, day)
+}
+
 func (d *windowDoer) askedFor() []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -73,7 +81,7 @@ func TestRawEventsBetweenAsksForAllFourWindows(t *testing.T) {
 		"2": {{rawJSON("c")}},
 		"3": {{rawJSON("d")}},
 	}}
-	got, err := New(d).rawEventsBetween(context.Background(), "cal1", time.Unix(0, 0), time.Unix(1000, 0))
+	got, err := New(d).rawEventsBetween(context.Background(), "cal1", someWindow())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +102,7 @@ func TestRawEventsBetweenDeduplicatesAcrossWindows(t *testing.T) {
 		"0": {{rawJSON("a")}},
 		"1": {{rawJSON("a")}},
 	}}
-	got, err := New(d).rawEventsBetween(context.Background(), "cal1", time.Unix(0, 0), time.Unix(1000, 0))
+	got, err := New(d).rawEventsBetween(context.Background(), "cal1", someWindow())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +117,7 @@ func TestRawEventsBetweenWalksEveryPage(t *testing.T) {
 	d := &windowDoer{byType: map[string][][]map[string]any{
 		"0": {{rawJSON("a")}, {rawJSON("b")}, {rawJSON("c")}},
 	}}
-	got, err := New(d).rawEventsBetween(context.Background(), "cal1", time.Unix(0, 0), time.Unix(1000, 0))
+	got, err := New(d).rawEventsBetween(context.Background(), "cal1", someWindow())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,13 +135,73 @@ func TestRawEventsBetweenNeverSendsANegativeBound(t *testing.T) {
 	// The endpoint refuses a negative timestamp, and a zero time is what an unset
 	// range looks like.
 	d := &windowDoer{byType: map[string][][]map[string]any{}}
-	if _, err := New(d).rawEventsBetween(context.Background(), "cal1", time.Time{}, time.Time{}); err != nil {
+	if _, err := New(d).rawEventsBetween(context.Background(), "cal1", ical.Days(time.Time{}, time.Time{})); err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range d.askedFor() {
 		if strings.Contains(a, "-") {
 			t.Errorf("asked with a negative bound: %s", a)
 		}
+	}
+}
+
+// The endpoint is asked for a day either side of the window. An all-day event names
+// a date rather than an instant, so Proton holds it at an instant up to a day from
+// the day it belongs to here, and the endpoint's own idea of which events touch the
+// edge of a range is not this CLI's.
+func TestFetchBoundsReachADayPastTheWindow(t *testing.T) {
+	first := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	from, to := fetchBounds(ical.Days(first, first))
+	if want := first.AddDate(0, 0, -1); !from.Equal(want) {
+		t.Errorf("asked from %s, want %s", from, want)
+	}
+	if want := first.AddDate(0, 0, 2); !to.Equal(want) {
+		t.Errorf("asked to %s, want %s", to, want)
+	}
+}
+
+// The times a row carries are read in the reader's own zone, because that is the
+// only frame in which an all-day event is on the day it says: read as an instant it
+// slips to the day before in every zone behind UTC, taking the date column, the
+// sort order and the machine output with it.
+func TestRowReadsAnAllDayEventInTheReadersZone(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("America/New_York is not available: %v", err)
+	}
+	saved := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = saved })
+
+	day := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	row := allDayStored("holiday", day).row()
+	if got := row.Start.Format("2006-01-02 15:04"); got != "2026-08-14 00:00" {
+		t.Errorf("the row starts %s, want the day the event names", got)
+	}
+	if got := row.End.Format("2006-01-02 15:04"); got != "2026-08-15 00:00" {
+		t.Errorf("the row ends %s, want the midnight after its day", got)
+	}
+	if !row.AllDay {
+		t.Error("the row does not report itself as all-day")
+	}
+}
+
+// An event nobody can decrypt is still placed and still anchored, from the times
+// Proton keeps in the clear beside it.
+func TestRowPlacesAnEventItCannotRead(t *testing.T) {
+	at := atVienna(t, 4, 16, 9)
+	row := unreadableStored(at).row()
+	if !row.Start.Equal(at) {
+		t.Errorf("the row starts %s, want %s", row.Start, at)
+	}
+	if row.End.Sub(row.Start) != time.Hour {
+		t.Errorf("the row runs %v, want the hour the cleartext times say", row.End.Sub(row.Start))
+	}
+	if row.Zone != "Europe/Vienna" {
+		t.Errorf("the row is anchored to %q, want the zone Proton reports", row.Zone)
+	}
+	if row.Title != "" {
+		t.Errorf("the row claims a title it could not read: %q", row.Title)
 	}
 }
 

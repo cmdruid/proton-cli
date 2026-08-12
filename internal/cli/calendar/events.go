@@ -86,12 +86,12 @@ func resolveEvent(c *kit.Invocation, ref string) (calendarID, eventID, occurrenc
 func eventColumns() []ui.Column[calsvc.Event] {
 	return []ui.Column[calsvc.Event]{
 		{Header: "ID", ID: true, Cell: eventRef},
-		{Header: "DATE", Cell: func(e calsvc.Event) string { return e.Start.Local().Format("2006-01-02") }},
+		{Header: "DATE", Cell: func(e calsvc.Event) string { return e.Start.Format("2006-01-02") }},
 		{Header: "TIME", Cell: func(e calsvc.Event) string {
 			if e.AllDay {
 				return "all day"
 			}
-			return e.Start.Local().Format("15:04")
+			return e.Start.Format("15:04")
 		}},
 		{Header: "DURATION", Right: true, Cell: func(e calsvc.Event) string {
 			return units.Duration(e.End.Sub(e.Start))
@@ -102,37 +102,25 @@ func eventColumns() []ui.Column[calsvc.Event] {
 }
 
 func eventsListCmd() *cobra.Command {
-	var calendar, start, end string
+	var calendar string
+	var days kit.DayRange
 	c := &cobra.Command{
 		Use:   "list",
 		Short: "List events in a date range",
 		Long: "List what is on your calendars between two dates.\n\n" +
-			"A recurring event is stored once and happens many times, so each occurrence\n" +
-			"is listed on its own day with a reference that names it. Every calendar is\n" +
-			"included unless --calendar narrows it to one.",
+			"--start and --end are whole days in your own zone, both included, and\n" +
+			"nothing outside them is reported. A recurring event is stored once and\n" +
+			"happens many times, so each occurrence is listed on its own day with a\n" +
+			"reference that names it. Every calendar is included unless --calendar\n" +
+			"narrows it to one.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
 			calIDs, err := listedCalendars(c, calendar)
 			if err != nil {
 				return err
 			}
-			from, to := calsvc.DefaultRange()
-			if start != "" {
-				t, err := time.Parse("2006-01-02", start)
-				if err != nil {
-					return kit.Fail("--start expects YYYY-MM-DD.")
-				}
-				from = t
-			}
-			if end != "" {
-				t, err := time.Parse("2006-01-02", end)
-				if err != nil {
-					return kit.Fail("--end expects YYYY-MM-DD.")
-				}
-				// The last day to include is a whole day, not the instant it begins.
-				to = t.AddDate(0, 0, 1)
-			}
-			events, err := c.App.Calendar.EventsList(c.Ctx, c.U, calIDs, from, to)
+			first, last := days.Or(calsvc.DefaultDays())
+			events, err := c.App.Calendar.EventsList(c.Ctx, c.U, calIDs, ical.Days(first, last))
 			if err != nil {
 				return err
 			}
@@ -143,8 +131,7 @@ func eventsListCmd() *cobra.Command {
 		}),
 	}
 	c.Flags().StringVar(&calendar, "calendar", "", "Which calendar, by name or ID (default: all of them)")
-	c.Flags().StringVar(&start, "start", "", "First day to include (YYYY-MM-DD)")
-	c.Flags().StringVar(&end, "end", "", "Last day to include (YYYY-MM-DD)")
+	days.Register(c)
 	return c
 }
 
@@ -166,10 +153,10 @@ func eventsGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			when := ev.Start.Local().Format("2006-01-02 15:04")
-			until := ev.End.Local().Format("2006-01-02 15:04")
+			when := ev.Start.Format("2006-01-02 15:04")
+			until := ev.End.Format("2006-01-02 15:04")
 			if ev.AllDay {
-				when = ev.Start.Local().Format("2006-01-02") + " (all day)"
+				when = ev.Start.Format("2006-01-02") + " (all day)"
 				until = ""
 			}
 			return kit.Show(c, ui.RecordSpec{
@@ -232,7 +219,7 @@ func (d *details) register(c *cobra.Command, verb string) {
 	f := c.Flags()
 	f.StringVar(&d.title, "title", "", verb+" the title")
 	f.StringVar(&d.start, "start", "", verb+" the start (RFC 3339, or YYYY-MM-DDTHH:MM)")
-	f.StringVar(&d.duration, "duration", "", verb+" how long it lasts (e.g. 15m, 1h, 2h30m)")
+	f.StringVar(&d.duration, "duration", "", verb+" how long it lasts (e.g. 15m, 1h, 2h30m, 3d)")
 	f.StringVar(&d.location, "location", "", verb+" where it is")
 	f.StringVar(&d.description, "description", "", verb+" the description")
 	f.StringVar(&d.rrule, "rrule", "", verb+" the recurrence rule, e.g. FREQ=WEEKLY;COUNT=10")
@@ -269,13 +256,9 @@ func eventsCreateCmd() *cobra.Command {
 			if err != nil {
 				return kit.Fail("--start: %v", err)
 			}
-			dur := time.Hour
-			if d.duration != "" {
-				parsed, err := time.ParseDuration(d.duration)
-				if err != nil {
-					return kit.Fail("--duration: %v", err)
-				}
-				dur = parsed
+			dur, err := d.length()
+			if err != nil {
+				return err
 			}
 			var res *calsvc.EventResult
 			if err := kit.Create(c, ui.ResultSpec{
@@ -425,7 +408,7 @@ func (d *details) patch(c *kit.Invocation) (calsvc.EventPatch, error) {
 	}
 	p.Start = &start
 	if c.Changed("duration") {
-		dur, err := time.ParseDuration(d.duration)
+		dur, err := units.ParseDuration(d.duration)
 		if err != nil {
 			return p, kit.Fail("--duration: %v", err)
 		}
@@ -433,6 +416,22 @@ func (d *details) patch(c *kit.Invocation) (calsvc.EventPatch, error) {
 		p.End = &end
 	}
 	return p, nil
+}
+
+// length is how long a new event lasts: what was asked for, or an hour - a whole
+// day for an event that has no time of day, which is measured in days.
+func (d *details) length() (time.Duration, error) {
+	if d.duration == "" {
+		if d.allDay {
+			return 24 * time.Hour, nil
+		}
+		return time.Hour, nil
+	}
+	dur, err := units.ParseDuration(d.duration)
+	if err != nil {
+		return 0, kit.Fail("--duration: %v", err)
+	}
+	return dur, nil
 }
 
 func eventsRespondCmd() *cobra.Command {

@@ -143,6 +143,14 @@ Three rules, and they hold for every command.
 
 Timestamps are `<verb>_time` in Unix seconds; sizes are `size` in bytes.
 
+**Times are rendered in your own zone.** A calendar event's `start` and `end` are RFC 3339 with your offset, so the day and the clock read off the string are the ones the text output shows, and the instant is exact either way. What the event is anchored to is its own field:
+
+```json
+{ "start": "2026-04-16T16:00:00+02:00", "end": "2026-04-16T17:00:00+02:00", "zone": "Europe/Vienna" }
+```
+
+An event with no time of day has `"all_day": true`, begins at midnight on the date it names, and ends at the midnight after its last day - so `end` is never part of the event, and `end - start` is how long it lasts.
+
 **`--output json` always emits JSON**, mutations included:
 
 ```console

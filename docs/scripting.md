@@ -26,6 +26,11 @@ proton-cli drive items list /Backup --output json | jq '[.items[].size] | add'
 
 # every vault name
 proton-cli pass vaults list --output json | jq -r '.vaults[].name'
+
+# today's agenda, one line per event
+day=$(date +%F)
+proton-cli calendar events list --start "$day" --end "$day" --output json |
+  jq -r '.events[] | if .all_day then "all day  \(.title)" else "\(.start[11:16])    \(.title)" end'
 ```
 
 Every list is an object keyed by its plural name, always with a `count`:

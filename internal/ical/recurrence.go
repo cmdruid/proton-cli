@@ -30,17 +30,14 @@ type Occurrence struct {
 	End    DateTime
 }
 
-// Occurrences returns the instances overlapping [from, to].
-//
-// An event that began before the window and reaches into it is in the window, so
-// the test is overlap rather than containment.
-func (v VEvent) Occurrences(from, to time.Time) ([]Occurrence, error) {
+// Occurrences returns the instances the window covers.
+func (v VEvent) Occurrences(w Window) ([]Occurrence, error) {
 	var out []Occurrence
 	err := v.walk(skipExcluded, func(o Occurrence) (bool, error) {
-		if o.Start.Time.After(to) {
+		if w.Ended(o.Start) {
 			return false, nil
 		}
-		if !o.End.Time.Before(from) || o.Start.Time.Equal(from) {
+		if w.Covers(o.Start, o.End) {
 			out = append(out, o)
 		}
 		return true, nil
@@ -119,9 +116,10 @@ func (v VEvent) walk(skip bool, visit func(Occurrence) (bool, error)) error {
 	if v.Start.IsZero() {
 		return fmt.Errorf("event %s has no start", v.UID)
 	}
-	duration := v.Duration()
+	start, end := v.Span()
+	duration := end.Time.Sub(start.Time)
 	if !v.Recurring() {
-		_, err := visit(Occurrence{Number: 1, Start: v.Start, End: v.End})
+		_, err := visit(Occurrence{Number: 1, Start: start, End: end})
 		return err
 	}
 
@@ -134,13 +132,13 @@ func (v VEvent) walk(skip bool, visit func(Occurrence) (bool, error)) error {
 		if !ok {
 			return nil
 		}
-		start := v.Start.At(t)
-		if skip && slices.ContainsFunc(v.ExDates, start.Equal) {
+		at := v.Start.At(t)
+		if skip && slices.ContainsFunc(v.ExDates, at.Equal) {
 			continue
 		}
 		carryOn, err := visit(Occurrence{
 			Number: n,
-			Start:  start,
+			Start:  at,
 			End:    v.Start.At(t.Add(duration)),
 		})
 		if err != nil || !carryOn {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -64,11 +65,12 @@ func replyBody(selfEmail string, status int, title string) string {
 	return fmt.Sprintf("%s %s your invitation to %s", selfEmail, statusWord(status), title)
 }
 
-func replySubject(start time.Time, allDay bool) string {
-	if allDay {
-		return "Re: Invitation for an event on " + start.Local().Format("2006-01-02")
+func replySubject(start ical.DateTime) string {
+	when := start.In(time.Local)
+	if start.AllDay {
+		return "Re: Invitation for an event on " + when.Format("2006-01-02")
 	}
-	return "Re: Invitation for an event starting on " + start.Local().Format("2006-01-02 15:04")
+	return "Re: Invitation for an event starting on " + when.Format("2006-01-02 15:04")
 }
 
 // selfTokens maps each of the account's addresses to the deterministic X-PM
@@ -189,11 +191,10 @@ func (s *Service) EventRespond(ctx context.Context, u *keys.Unlocked, calendarID
 		}
 		res.Title = e.model.Summary
 		if organizer := e.model.Organizer; organizer != "" && !strings.EqualFold(organizer, selfEmail) {
-			start := e.model.Start.Time
 			res.Reply = &Reply{
 				ICS:        e.model.ReplyDocument(selfEmail, partstatICS(status), ev.IsProtonProtonInvite == 1),
 				Recipients: []string{organizer},
-				Subject:    replySubject(start, e.model.Start.AllDay),
+				Subject:    replySubject(e.model.Start),
 				Body:       replyBody(selfEmail, status, e.model.Summary),
 			}
 		}

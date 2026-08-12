@@ -89,6 +89,72 @@ func TestParseReadsAllDayAndUTCForms(t *testing.T) {
 	}
 }
 
+// Clients write an all-day event's end three ways: the exclusive next day, no end
+// at all, and an end equal to the start. All three mean the same days, so an event
+// measures the same however it arrived.
+func TestSpanReadsEveryShapeOfAllDayEnd(t *testing.T) {
+	day := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	for name, end := range map[string]DateTime{
+		"an exclusive end": Day(day.AddDate(0, 0, 1)),
+		"no end":           {},
+		"an end at start":  Day(day),
+	} {
+		v := VEvent{UID: "u", Start: Day(day), End: end}
+		_, got := v.Span()
+		if got.String() != "2026-08-15" {
+			t.Errorf("an all-day event with %s ends %s, want the midnight after its day", name, got.String())
+		}
+		if v.Duration() != 24*time.Hour {
+			t.Errorf("an all-day event with %s lasts %v, want a day", name, v.Duration())
+		}
+	}
+}
+
+func TestSpanOfAThreeDayAllDayEventKeepsItsLength(t *testing.T) {
+	day := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	v := VEvent{UID: "u", Start: Day(day), End: Day(day.AddDate(0, 0, 3))}
+	if _, end := v.Span(); end.String() != "2026-08-17" {
+		t.Errorf("end = %s, want the exclusive end it was written with", end.String())
+	}
+	if v.Duration() != 72*time.Hour {
+		t.Errorf("duration = %v, want three days", v.Duration())
+	}
+}
+
+// An event written with no end is an instant, and stays one: only a whole day has a
+// length nobody wrote down.
+func TestSpanOfATimedEventWithoutAnEndIsAnInstant(t *testing.T) {
+	loc := vienna(t)
+	at := time.Date(2026, 8, 14, 9, 0, 0, 0, loc)
+	v := VEvent{UID: "u", Start: Timed(at, "Europe/Vienna")}
+	start, end := v.Span()
+	if !end.Equal(start) {
+		t.Errorf("end = %+v, want the start", end)
+	}
+	if v.Duration() != 0 {
+		t.Errorf("duration = %v, want none", v.Duration())
+	}
+}
+
+// Reading is not rewriting: an event that arrived without an end is stored again
+// without one, because normalising what another client wrote would change what the
+// event says.
+func TestSpanLeavesTheStoredValuesAlone(t *testing.T) {
+	v, err := Parse("UID:u\r\nDTSTART;VALUE=DATE:20260814")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if _, end := v.Span(); end.IsZero() {
+		t.Fatal("Span reported no end")
+	}
+	if !v.End.IsZero() {
+		t.Errorf("reading the event gave it a stored end of %+v", v.End)
+	}
+	if got := v.SharedSigned(); strings.Contains(got, "DTEND") {
+		t.Errorf("an event that arrived without an end was stored with one:\n%s", got)
+	}
+}
+
 // The property split is Proton's: recurrence lives in the signed card, the words
 // people read live in the encrypted one. An event rebuilt without the recurrence
 // properties is an event silently turned back into a one-off.

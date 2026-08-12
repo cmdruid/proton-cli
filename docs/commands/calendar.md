@@ -15,7 +15,9 @@ proton-cli calendar events get CALENDAR_ID/EVENT_ID
 proton-cli calendar events get "Team sync"           # by title
 ```
 
-Every calendar is included unless `--calendar` narrows it to one, by name or ID. `--start` and `--end` are the first and last **whole** days to include.
+Every calendar is included unless `--calendar` narrows it to one, by name or ID. `--start` and `--end` are the first and last **whole** days to include, read in your own time zone, and nothing outside them is listed. Without them the next 30 days are listed.
+
+An event is on a day when it touches any part of it, so a query for one day inside a three-day event returns it. An event that merely ends at midnight belongs to the day before, and an all-day event belongs to the dates it names whatever zone you read it in.
 
 A recurring event is listed on each day it happens, with a reference that names that occurrence:
 
@@ -33,7 +35,7 @@ ID                         DATE        TIME     DURATION  TITLE           LOCATI
 
 ```bash
 proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
-proton-cli calendar events create --title Conference --start 2026-04-20 --all-day
+proton-cli calendar events create --title Conference --start 2026-04-20 --all-day --duration 3d
 proton-cli calendar events create --calendar Work --title "Quarterly sync" --start 2026-04-16T14:00 --duration 90m --location "Vienna HQ" --description "Numbers and roadmap"
 ```
 
@@ -44,6 +46,8 @@ proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --dur
 ```
 
 `--rrule` takes an iCal recurrence rule; `--remind` is repeatable.
+
+`--all-day` makes an event with no time of day, which is measured in days: it lasts one day unless `--duration` says otherwise, and `--duration 3d` covers three. Such an event ends at the midnight after its last day, which is how iCalendar and every other calendar client write it.
 
 `--zone` anchors the event to an IANA time zone, defaulting to your system zone. It matters for a recurring event: a series anchored to `Europe/Vienna` stays at 09:00 when the clocks change, where one stored as a plain UTC instant would slide to 08:00.
 

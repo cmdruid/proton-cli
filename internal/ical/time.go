@@ -78,6 +78,20 @@ func (d DateTime) Wall() time.Time {
 	return d.Time.In(d.Location())
 }
 
+// In returns the instant the value names when it is read in loc.
+//
+// A date-time names one instant whatever zone reads it, so it is only
+// re-expressed. An all-day date names no instant at all: it is a day, and a day
+// begins when the reader's own day begins. Reading it anywhere else is what puts a
+// whole-day event on the wrong date.
+func (d DateTime) In(loc *time.Location) time.Time {
+	if !d.AllDay {
+		return d.Time.In(loc)
+	}
+	y, m, day := d.Time.Date()
+	return time.Date(y, m, day, 0, 0, 0, 0, loc)
+}
+
 // At returns the same anchor and all-day-ness carrying a different instant, so
 // a derived value cannot accidentally lose the series' zone.
 func (d DateTime) At(t time.Time) DateTime {

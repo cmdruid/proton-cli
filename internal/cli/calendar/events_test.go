@@ -85,16 +85,28 @@ func TestUpdateScopeDescribesWhatTheReferenceAndTheFlagAskedFor(t *testing.T) {
 	}
 }
 
-func TestEventColumnsRenderAnAllDayRowWithoutATime(t *testing.T) {
-	cols := eventColumns()
+// A whole-day row has no time of day, and it lasts a day rather than the hours a day
+// happens to have. It is also printed on the date it carries: the service hands out
+// times already read in the reader's zone, so a column that converted them again
+// would move a whole-day event to the day before in every zone behind UTC.
+func TestEventColumnsRenderAnAllDayRow(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("America/New_York is not available: %v", err)
+	}
+	saved := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = saved })
+
 	day := calsvc.Event{
 		CalendarID: "cal", ID: "ev", AllDay: true,
-		Start: time.Date(2026, 4, 16, 0, 0, 0, 0, time.UTC),
-		End:   time.Date(2026, 4, 17, 0, 0, 0, 0, time.UTC),
+		Start: time.Date(2026, 4, 16, 0, 0, 0, 0, loc),
+		End:   time.Date(2026, 4, 17, 0, 0, 0, 0, loc),
 	}
-	for _, c := range cols {
-		if c.Header == "TIME" && c.Cell(day) != "all day" {
-			t.Errorf("TIME on an all-day row = %q", c.Cell(day))
+	want := map[string]string{"DATE": "2026-04-16", "TIME": "all day", "DURATION": "1d"}
+	for _, c := range eventColumns() {
+		if w, ok := want[c.Header]; ok && c.Cell(day) != w {
+			t.Errorf("%s on an all-day row = %q, want %q", c.Header, c.Cell(day), w)
 		}
 	}
 }

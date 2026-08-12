@@ -47,6 +47,32 @@ func seriesStored(t *testing.T, rule string) stored {
 	}
 }
 
+// allDayStored is a one-off whole-day event written the way a client that leaves out
+// the end writes it, which is one of the shapes a real calendar holds.
+func allDayStored(id string, day time.Time) stored {
+	return stored{
+		raw: rawEvent{ID: id, CalendarID: "cal1", UID: "uid-" + id, FullDay: 1},
+		model: ical.VEvent{
+			UID:     "uid-" + id,
+			Summary: "Public holiday",
+			Start:   ical.Day(day),
+		},
+	}
+}
+
+// unreadableStored is an event whose content this account cannot open, leaving only
+// the times Proton keeps beside it.
+func unreadableStored(at time.Time) stored {
+	return stored{
+		raw: rawEvent{
+			ID: "broken", CalendarID: "cal1",
+			StartTime: at.Unix(), EndTime: at.Add(time.Hour).Unix(),
+			StartTimezone: "Europe/Vienna", EndTimezone: "Europe/Vienna",
+		},
+		readErr: errRead,
+	}
+}
+
 func overrideStored(t *testing.T, at time.Time, title string) stored {
 	t.Helper()
 	id := ical.Timed(at, "Europe/Vienna")
@@ -62,11 +88,16 @@ func overrideStored(t *testing.T, at time.Time, title string) stored {
 	}
 }
 
+// daysAtVienna is the window covering the given days of 2026, read from Vienna.
+func daysAtVienna(t *testing.T, fromMonth, fromDay, toMonth, toDay int) ical.Window {
+	t.Helper()
+	return ical.Days(atVienna(t, fromMonth, fromDay, 0), atVienna(t, toMonth, toDay, 0))
+}
+
 // A series is stored once and happens many times, so a window has to report the
 // occurrences rather than the record.
 func TestExpandTurnsASeriesIntoItsOccurrences(t *testing.T) {
-	rows := expand([]stored{seriesStored(t, "FREQ=WEEKLY;COUNT=4")},
-		atVienna(t, 4, 1, 0), atVienna(t, 5, 1, 0))
+	rows := expand([]stored{seriesStored(t, "FREQ=WEEKLY;COUNT=4")}, daysAtVienna(t, 4, 1, 4, 30))
 	if len(rows) != 4 {
 		t.Fatalf("got %d rows, want one per occurrence", len(rows))
 	}
@@ -86,8 +117,7 @@ func TestExpandTurnsASeriesIntoItsOccurrences(t *testing.T) {
 func TestExpandReportsOnlyTheOccurrencesInTheWindow(t *testing.T) {
 	// The record itself is dated in April; asking about one week in May must answer
 	// with that week's occurrence and nothing else.
-	rows := expand([]stored{seriesStored(t, "FREQ=WEEKLY;COUNT=20")},
-		atVienna(t, 5, 4, 0), atVienna(t, 5, 11, 0))
+	rows := expand([]stored{seriesStored(t, "FREQ=WEEKLY;COUNT=20")}, daysAtVienna(t, 5, 4, 5, 10))
 	if len(rows) != 1 {
 		t.Fatalf("got %d rows, want one", len(rows))
 	}
@@ -104,7 +134,7 @@ func TestExpandLetsAnEditedOccurrenceReplaceTheGeneratedOne(t *testing.T) {
 	rows := expand([]stored{
 		seriesStored(t, "FREQ=WEEKLY;COUNT=3"),
 		overrideStored(t, at, "Standup (long)"),
-	}, atVienna(t, 4, 1, 0), atVienna(t, 5, 1, 0))
+	}, daysAtVienna(t, 4, 1, 4, 30))
 
 	if len(rows) != 3 {
 		t.Fatalf("got %d rows, want three", len(rows))
@@ -136,13 +166,49 @@ func TestExpandLetsAnEditedOccurrenceReplaceTheGeneratedOne(t *testing.T) {
 
 func TestExpandStillReportsAnEventItCannotRead(t *testing.T) {
 	// A row you cannot read is worth seeing; it just cannot be expanded or written.
-	e := stored{
-		raw:     rawEvent{ID: "broken", CalendarID: "cal1", StartTime: 1000, EndTime: 2000},
-		readErr: errRead,
-	}
-	rows := expand([]stored{e}, time.Unix(0, 0), time.Unix(5000, 0))
+	at := atVienna(t, 4, 16, 9)
+	e := unreadableStored(at)
+	rows := expand([]stored{e}, daysAtVienna(t, 4, 16, 4, 16))
 	if len(rows) != 1 || rows[0].ID != "broken" || rows[0].Title != "" {
 		t.Errorf("expand = %+v", rows)
+	}
+	// And it is placed by the times Proton keeps in the clear, so it is left out of a
+	// window it does not touch like anything else.
+	if rows := expand([]stored{e}, daysAtVienna(t, 4, 17, 4, 17)); len(rows) != 0 {
+		t.Errorf("an unreadable event was reported outside its window: %+v", rows)
+	}
+}
+
+// The endpoint is asked for more than the window holds, so a one-off has to be put
+// to the window like everything else. Without that, the days reported are the
+// server's idea of the range rather than the one that was asked for.
+func TestExpandReportsOnlyTheOneOffEventsInTheWindow(t *testing.T) {
+	holiday := allDayStored("holiday", time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC))
+	if rows := expand([]stored{holiday}, daysAtVienna(t, 8, 14, 8, 14)); len(rows) != 0 {
+		t.Errorf("an all-day event on the day after the last one was reported: %+v", rows)
+	}
+	rows := expand([]stored{holiday}, daysAtVienna(t, 8, 15, 8, 15))
+	if len(rows) != 1 {
+		t.Fatalf("the all-day event is missing from its own day: %+v", rows)
+	}
+	if !rows[0].AllDay || rows[0].End.Sub(rows[0].Start) != 24*time.Hour {
+		t.Errorf("the all-day row runs %v, want a whole day: %+v", rows[0].End.Sub(rows[0].Start), rows[0])
+	}
+}
+
+// An occurrence edited on its own is a record of its own, and answers the same
+// question about the window as the rest.
+func TestExpandReportsOnlyTheEditedOccurrencesInTheWindow(t *testing.T) {
+	at := atVienna(t, 4, 13, 9)
+	events := []stored{
+		seriesStored(t, "FREQ=WEEKLY;COUNT=3"),
+		overrideStored(t, at, "Standup (long)"),
+	}
+	rows := expand(events, daysAtVienna(t, 4, 20, 4, 20))
+	for _, r := range rows {
+		if r.Title == "Standup (long)" {
+			t.Errorf("an edited occurrence outside the window was reported: %+v", r)
+		}
 	}
 }
 

@@ -41,6 +41,30 @@ func TestStringIsTheLocalReadingOfTheInstant(t *testing.T) {
 	}
 }
 
+// A date-time names one instant, whoever reads it. An all-day date names a day, and
+// a day begins when the reader's day begins: read as an instant it slips to the day
+// before in every zone behind UTC.
+func TestInReadsAnAllDayDateAsTheReadersOwnDay(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("America/New_York is not available: %v", err)
+	}
+	day := Day(time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC))
+	if got := day.In(newYork); got.Format("2006-01-02 15:04") != "2026-08-14 00:00" {
+		t.Errorf("the day read in New York = %s", got)
+	}
+
+	loc := vienna(t)
+	at := time.Date(2026, 8, 14, 9, 0, 0, 0, loc)
+	timed := Timed(at, "Europe/Vienna")
+	if got := timed.In(newYork); !got.Equal(at) {
+		t.Errorf("reading a date-time in another zone moved it: %s", got)
+	}
+	if got := timed.In(newYork).Format("15:04"); got != "03:00" {
+		t.Errorf("09:00 in Vienna reads as %s in New York, want 03:00", got)
+	}
+}
+
 func TestUntilValueIsTheLastSecondOfThePreviousDay(t *testing.T) {
 	loc := vienna(t)
 	// 26 October 2026 is after the clocks go back, so the previous day ends at

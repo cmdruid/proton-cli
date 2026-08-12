@@ -63,10 +63,17 @@ func Time(unix int64) string {
 	return time.Unix(unix, 0).Local().Format("2006-01-02 15:04")
 }
 
-// Duration formats a duration compactly (e.g. "45s", "30m", "2h", "1h30m").
+// Duration formats a duration compactly (e.g. "45s", "30m", "2h", "1h30m", "3d").
+//
+// Whole days read as days, because a span that long is one somebody counted in
+// days: a day-long event is "1d", not "24h".
 func Duration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	const day = 24 * time.Hour
+	if d >= day && d%day == 0 {
+		return fmt.Sprintf("%dd", int(d/day))
 	}
 	h := int(d.Hours())
 	m := int(d.Minutes()) % 60

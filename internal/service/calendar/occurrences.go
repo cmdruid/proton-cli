@@ -62,7 +62,8 @@ func (p EventPatch) apply(v ical.VEvent, anchor string) ical.VEvent {
 	if !p.touchesTimes() {
 		return v
 	}
-	start, end := v.Start.Time, v.End.Time
+	spanStart, spanEnd := v.Span()
+	start, end := spanStart.Time, spanEnd.Time
 	if p.Start != nil {
 		start = *p.Start
 	}

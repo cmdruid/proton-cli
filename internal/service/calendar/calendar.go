@@ -154,8 +154,13 @@ func decryptEvent(cards []map[string]any, keyPacket string, decryptionKR, verifi
 	return v, pgphelper.Aggregate(verdicts...), nil
 }
 
-func DefaultRange() (time.Time, time.Time) {
+// defaultDays is how many days a listing covers when it is not told which.
+const defaultDays = 30
+
+// DefaultDays are the first and last day a listing covers when it is not told
+// which: today, and the rest of the month ahead.
+func DefaultDays() (first, last time.Time) {
 	now := time.Now()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	return start, start.AddDate(0, 0, 30)
+	first = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return first, first.AddDate(0, 0, defaultDays-1)
 }

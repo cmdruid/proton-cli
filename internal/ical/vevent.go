@@ -74,13 +74,36 @@ func (v VEvent) Recurring() bool { return v.RRule != "" }
 // IsOverride reports whether the event replaces a single occurrence of a series.
 func (v VEvent) IsOverride() bool { return v.RecurrenceID != nil }
 
+// Span is the pair of values an event occupies: its start, and the end that is not
+// part of it.
+//
+// An all-day event's end is exclusive in iCalendar - a single day runs to the next
+// one - and an event may be stored with no end at all, or with one that does not
+// exceed its start. All of those name the same days, so the reading is settled here
+// rather than at each place that measures an event. The stored values are left as
+// they were written, so re-saving an event another client authored cannot rewrite
+// what it said.
+func Span(start, end DateTime) (DateTime, DateTime) {
+	if start.AllDay {
+		if end.IsZero() || !end.Time.After(start.Time) {
+			return start, start.At(start.Time.AddDate(0, 0, 1))
+		}
+		return start, end
+	}
+	if end.IsZero() {
+		return start, start
+	}
+	return start, end
+}
+
+// Span is the pair of values the event occupies.
+func (v VEvent) Span() (DateTime, DateTime) { return Span(v.Start, v.End) }
+
 // Duration is how long the event lasts. An all-day event's end is exclusive in
 // iCalendar, which is why a one-day event reads as 24 hours here.
 func (v VEvent) Duration() time.Duration {
-	if v.End.IsZero() {
-		return 0
-	}
-	return v.End.Time.Sub(v.Start.Time)
+	start, end := v.Span()
+	return end.Time.Sub(start.Time)
 }
 
 // Parse reads an event from the concatenation of its decrypted cards.

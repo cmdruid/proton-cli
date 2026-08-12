@@ -8,9 +8,11 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -130,6 +132,29 @@ func TestReplyBodyMatchesWebClientsWording(t *testing.T) {
 		if got := replyBody("me@proton.me", status, "Sync"); got != want {
 			t.Errorf("replyBody(%d) = %q, want %q", status, got, want)
 		}
+	}
+}
+
+// The organizer is told which event was answered, so the day named has to be the
+// day the event is on. A whole-day event carries a date and no instant, so reading
+// it as one names the day before in every zone behind UTC.
+func TestReplySubjectNamesTheDayTheEventIsOn(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("America/New_York is not available: %v", err)
+	}
+	saved := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = saved })
+
+	day := ical.Day(time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC))
+	if got := replySubject(day); got != "Re: Invitation for an event on 2026-08-14" {
+		t.Errorf("replySubject of a whole-day event = %q", got)
+	}
+
+	at := time.Date(2026, 8, 14, 9, 0, 0, 0, time.UTC)
+	if got := replySubject(ical.Timed(at, "UTC")); got != "Re: Invitation for an event starting on 2026-08-14 05:00" {
+		t.Errorf("replySubject of a timed event = %q, want it read in the reader's zone", got)
 	}
 }
 
