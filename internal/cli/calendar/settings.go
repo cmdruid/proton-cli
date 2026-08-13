@@ -156,7 +156,7 @@ func calendarsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List your calendars",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			cals, err := calendarList(c).Rows(c.Ctx)
 			if err != nil {
 				return err
@@ -176,7 +176,7 @@ func calendarsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a calendar",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			if name == "" {
 				return kit.Fail("A calendar needs a name.").Hint("--name Work")
 			}
@@ -199,7 +199,7 @@ func calendarsUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Rename or recolor a calendar",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			if name == "" && !color.Set() {
 				return kit.Fail("Nothing to change.").Hint("pass --name or --color.")
 			}
@@ -226,7 +226,7 @@ func calendarsDeleteCmd() *cobra.Command {
 			"even when a saved session already exists. With no terminal to ask, pass\n" +
 			"--password-file or --password-stdin.",
 		Args: cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			if err := reauth.Supply(c); err != nil {
 				return err
 			}

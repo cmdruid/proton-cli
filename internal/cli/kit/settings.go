@@ -166,7 +166,7 @@ func Settings(scope, short string, specs map[string]Setting, show Handler) *cobr
 			Use:   "get",
 			Short: "Show the " + scope + " settings now in effect",
 			Args:  cobra.NoArgs,
-			RunE:  Run([]Step{StepAuth}, show),
+			RunE:  Run(nil, show),
 		},
 		settingsListCmd(scope, specs),
 		settingsSetCmd(scope, specs),
@@ -244,7 +244,7 @@ func settingsSetCmd(scope string, specs map[string]Setting) *cobra.Command {
 			}
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		},
-		RunE: Run([]Step{StepAuth}, func(c *Invocation) error {
+		RunE: Run(nil, func(c *Invocation) error {
 			key, raw := c.Args[0], c.Args[1]
 			// Already validated by Args; re-parsing is how the checked value gets
 			// here without a package-level variable to carry it.

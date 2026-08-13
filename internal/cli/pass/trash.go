@@ -40,7 +40,7 @@ func trashListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List what is in the trash",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			items, err := trashed(c)
 			if err != nil {
 				return err
@@ -58,7 +58,7 @@ func trashRestoreCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "restore [REF...]",
 		Short: "Put items back where they came from",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			targets, err := trashTargets(c, all)
 			if err != nil {
 				return err
@@ -85,7 +85,7 @@ func trashEmptyCmd() *cobra.Command {
 		Use:   "empty",
 		Short: "Delete everything in the trash, permanently",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			items, err := trashed(c)
 			if err != nil {
 				return err

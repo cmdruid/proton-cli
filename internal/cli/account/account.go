@@ -45,7 +45,7 @@ func getCmd() *cobra.Command {
 		Use:   "get",
 		Short: "Show the account, its storage and this machine's session",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			acct, err := c.App.Account.Get(c.Ctx)
 			if err != nil {
 				return err

@@ -10,6 +10,8 @@ import (
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
+	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
@@ -30,9 +32,77 @@ type Service struct {
 	C         proton.Doer
 	canonical map[string]canonicalAddr
 	zoneCache
+
+	// What one invocation asks Proton for, asked for once. A calendar's own record,
+	// its unlocked keys and the list of calendars are each wanted by several steps
+	// of a single command.
+	bootstraps fetch.Memo[*bootstrap]
+	unlocked   fetch.Memo[*calKeys]
+	calendars  fetch.Memo[[]Calendar]
 }
 
 func New(c proton.Doer) *Service { return &Service{C: c} }
+
+// member is one account's membership of one calendar. Proton keeps the display
+// name, colour and description here rather than on the calendar, because they are
+// each member's own.
+type member struct {
+	ID          string
+	CalendarID  string
+	Email       string
+	AddressID   string
+	Name        string
+	Color       string
+	Description string
+}
+
+// bootstrap is everything needed to open a calendar: the membership that names
+// it, the passphrase that unlocks its keys, and the keys.
+//
+// One request answers all of it, which is how the web client opens a calendar
+// (getFullCalendar, packages/shared/lib/api/calendars.ts).
+type bootstrap struct {
+	Keys       []struct{ PrivateKey string }
+	Passphrase struct {
+		MemberPassphrases []struct {
+			MemberID, Passphrase, Signature string
+		}
+	}
+	Members []member
+}
+
+func (s *Service) calendarBootstrap(ctx context.Context, calendarID string) (*bootstrap, error) {
+	return s.bootstraps.Do(calendarID, func() (*bootstrap, error) {
+		var b bootstrap
+		if err := s.C.Decode(ctx, proton.Request{
+			Method: "GET", Path: "/calendar/v2/" + calendarID + "/bootstrap",
+		}, &b); err != nil {
+			// The only thing the request named was the calendar, so a server that
+			// does not recognise it is answering about the reference, and the answer
+			// reads the same whether the reference was a name or an ID.
+			if proton.DoesNotExist(err) {
+				return nil, &errs.NotFound{Kind: "calendar", Ref: calendarID}
+			}
+			return nil, err
+		}
+		return &b, nil
+	})
+}
+
+// ourMember is the membership this account holds, which is the one whose address
+// key we can open.
+//
+// Proton reports a calendar's members as the ones belonging to whoever asked, so
+// there is normally one; matching it to an address of ours is what the web client
+// does too (getMemberAndAddress, packages/shared/lib/calendar/members.ts).
+func ourMember(members []member, u *keys.Unlocked) (member, *pgp.KeyRing, bool) {
+	for _, m := range members {
+		if kr, ok := u.AddrKR(m.AddressID); ok {
+			return m, kr, true
+		}
+	}
+	return member{}, nil, false
+}
 
 type calKeys struct {
 	calKR    *pgp.KeyRing
@@ -41,91 +111,66 @@ type calKeys struct {
 	email    string
 }
 
+// unlockCalendar opens a calendar's keys.
 func (s *Service) unlockCalendar(ctx context.Context, u *keys.Unlocked, calendarID string) (*calKeys, error) {
-	var mem struct {
-		Members []struct {
-			ID, CalendarID, Email, AddressID string
+	return s.unlocked.Do(calendarID, func() (*calKeys, error) {
+		b, err := s.calendarBootstrap(ctx, calendarID)
+		if err != nil {
+			return nil, err
 		}
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/calendar/v1/" + calendarID + "/members"}, &mem); err != nil {
-		return nil, err
-	}
-	var addrKR *pgp.KeyRing
-	var memberID, email string
-	for _, m := range mem.Members {
-		if kr, ok := u.AddrKR(m.AddressID); ok {
-			addrKR = kr
-			memberID = m.ID
-			email = m.Email
+
+		me, addrKR, ok := ourMember(b.Members, u)
+		if !ok {
+			return nil, fmt.Errorf("no matching address key for calendar %s", calendarID)
+		}
+
+		var calPass []byte
+		for _, mp := range b.Passphrase.MemberPassphrases {
+			if mp.MemberID != me.ID {
+				continue
+			}
+			msg, err := pgp.NewPGPMessageFromArmored(mp.Passphrase)
+			if err != nil {
+				return nil, err
+			}
+			sig, err := pgp.NewPGPSignatureFromArmored(mp.Signature)
+			if err != nil {
+				return nil, err
+			}
+			dec, err := addrKR.Decrypt(msg, nil, pgp.GetUnixTime())
+			if err != nil {
+				return nil, fmt.Errorf("decrypt calendar passphrase: %w", err)
+			}
+			if err := addrKR.VerifyDetached(dec, sig, pgp.GetUnixTime()); err != nil {
+				return nil, err
+			}
+			calPass = dec.GetBinary()
 			break
 		}
-	}
-	if addrKR == nil {
-		return nil, fmt.Errorf("no matching address key for calendar %s", calendarID)
-	}
+		if calPass == nil {
+			return nil, fmt.Errorf("no passphrase found for member %s", me.ID)
+		}
 
-	var pass struct {
-		Passphrase struct {
-			MemberPassphrases []struct {
-				MemberID, Passphrase, Signature string
+		calKR, err := pgp.NewKeyRing(nil)
+		if err != nil {
+			return nil, err
+		}
+		for _, k := range b.Keys {
+			locked, err := pgp.NewKeyFromArmored(k.PrivateKey)
+			if err != nil {
+				continue
 			}
+			unlocked, err := locked.Unlock(calPass)
+			if err != nil {
+				continue
+			}
+			_ = calKR.AddKey(unlocked)
 		}
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/calendar/v1/" + calendarID + "/passphrase"}, &pass); err != nil {
-		return nil, err
-	}
-	var calPass []byte
-	for _, mp := range pass.Passphrase.MemberPassphrases {
-		if mp.MemberID != memberID {
-			continue
+		if calKR.CountEntities() == 0 {
+			return nil, fmt.Errorf("failed to unlock calendar keys")
 		}
-		msg, err := pgp.NewPGPMessageFromArmored(mp.Passphrase)
-		if err != nil {
-			return nil, err
-		}
-		sig, err := pgp.NewPGPSignatureFromArmored(mp.Signature)
-		if err != nil {
-			return nil, err
-		}
-		dec, err := addrKR.Decrypt(msg, nil, pgp.GetUnixTime())
-		if err != nil {
-			return nil, fmt.Errorf("decrypt calendar passphrase: %w", err)
-		}
-		if err := addrKR.VerifyDetached(dec, sig, pgp.GetUnixTime()); err != nil {
-			return nil, err
-		}
-		calPass = dec.GetBinary()
-		break
-	}
-	if calPass == nil {
-		return nil, fmt.Errorf("no passphrase found for member %s", memberID)
-	}
-
-	var keyRes struct {
-		Keys []struct{ PrivateKey string }
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/calendar/v1/" + calendarID + "/keys"}, &keyRes); err != nil {
-		return nil, err
-	}
-	calKR, err := pgp.NewKeyRing(nil)
-	if err != nil {
-		return nil, err
-	}
-	for _, k := range keyRes.Keys {
-		locked, err := pgp.NewKeyFromArmored(k.PrivateKey)
-		if err != nil {
-			continue
-		}
-		unlocked, err := locked.Unlock(calPass)
-		if err != nil {
-			continue
-		}
-		_ = calKR.AddKey(unlocked)
-	}
-	if calKR.CountEntities() == 0 {
-		return nil, fmt.Errorf("failed to unlock calendar keys")
-	}
-	return &calKeys{calKR: calKR, addrKR: addrKR, memberID: memberID, email: email}, nil
+		return &calKeys{calKR: calKR, addrKR: addrKR, memberID: me.ID, email: me.Email}, nil
+	})
 }
 
 // decryptEvent decrypts an event's cards and parses them into one model.

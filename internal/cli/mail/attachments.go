@@ -50,7 +50,7 @@ func attachmentsListCmd() *cobra.Command {
 		Use:   "list REF",
 		Short: "List a message's attachments",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			id, err := c.App.Mail.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return wrongTable(err, "attachments list")
@@ -78,7 +78,7 @@ func attachmentsDownloadCmd() *cobra.Command {
 			"Existing files are never overwritten silently: a collision becomes\n" +
 			"\"file (2).pdf\" unless --force says otherwise.",
 		Args: cobra.RangeArgs(1, 2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			one := len(c.Args) == 2
 			if err := dest.Validate(one); err != nil {
 				return err

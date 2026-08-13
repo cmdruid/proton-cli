@@ -34,16 +34,38 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("[HTTP %d] %s", e.HTTPStatus, e.Message)
 }
 
-// notFoundCode is Proton's NOT_FOUND (packages/shared/lib/errors.ts).
+// The codes Proton answers with when the thing named does not exist: an ID it
+// does not recognise, a resource that is gone, and a conversation in particular.
+// The web clients treat all three as the same answer
+// (isNotExistError, packages/shared/lib/api/helpers/apiErrorHelper.ts).
 //
-// It arrives with HTTP 422, which on its own reads as a conflict, so the Proton
-// code has the final say. Deleting something that is already gone has to exit 3
-// like every other miss, because that is the code scripts branch on.
-const notFoundCode = 2501
+// They arrive with HTTP 400 or 422, which on their own read as a bad request or a
+// conflict, so the Proton code has the final say. Anything that matched no
+// resource has to exit 3, because that is the code scripts branch on.
+const (
+	invalidIDCode            = 2061
+	notFoundCode             = 2501
+	conversationNotFoundCode = 20052
+)
+
+// DoesNotExist reports whether err is Proton saying that what was named is not
+// there, so a caller holding the reference can say so in its own words.
+func DoesNotExist(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.Code {
+	case invalidIDCode, notFoundCode, conversationNotFoundCode:
+		return true
+	}
+	return apiErr.HTTPStatus == 404
+}
 
 // ExitCode maps an HTTP failure to the CLI's exit-code scheme.
 func (e *APIError) ExitCode() int {
-	if e.Code == notFoundCode {
+	switch e.Code {
+	case invalidIDCode, notFoundCode, conversationNotFoundCode:
 		return 3
 	}
 	switch e.HTTPStatus {

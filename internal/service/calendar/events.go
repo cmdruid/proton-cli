@@ -13,6 +13,7 @@ import (
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
+	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
@@ -241,31 +242,17 @@ func (s *Service) calendarEvents(ctx context.Context, u *keys.Unlocked, calendar
 // so the union is deduplicated.
 func (s *Service) rawEventsBetween(ctx context.Context, calendarID string, w ical.Window) ([]rawEvent, error) {
 	from, to := fetchBounds(w)
-	var (
-		mu     sync.Mutex
-		wg     sync.WaitGroup
-		byType = make([][]rawEvent, len(queryTypes))
-		first  error
-	)
+	byType := make([][]rawEvent, len(queryTypes))
+	queries := make([]func(context.Context) error, len(queryTypes))
 	for i, typ := range queryTypes {
-		wg.Add(1)
-		go func(i int, typ string) {
-			defer wg.Done()
+		queries[i] = func(ctx context.Context) error {
 			page, err := s.rawEventsOfType(ctx, calendarID, from, to, typ)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				if first == nil {
-					first = err
-				}
-				return
-			}
 			byType[i] = page
-		}(i, typ)
+			return err
+		}
 	}
-	wg.Wait()
-	if first != nil {
-		return nil, first
+	if err := fetch.Together(ctx, queries...); err != nil {
+		return nil, err
 	}
 
 	var out []rawEvent
@@ -458,15 +445,30 @@ func (e stored) occurrenceRow(occ ical.Occurrence) Event {
 
 // EventGet reports one event. An empty occurrence names the stored event, which
 // for a series is the series itself; otherwise it names one instance.
+//
+// The event and the keys that read it are asked for at the same time. The
+// reference names the event, so neither request needs the other's answer - only
+// the decryption between them does.
 func (s *Service) EventGet(ctx context.Context, u *keys.Unlocked, calendarID, eventID, occurrence string) (*Event, error) {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
-	if err != nil {
+	var (
+		ck  *calKeys
+		raw rawEvent
+	)
+	if err := fetch.Together(ctx,
+		func(ctx context.Context) error {
+			var err error
+			ck, err = s.unlockCalendar(ctx, u, calendarID)
+			return err
+		},
+		func(ctx context.Context) error {
+			var err error
+			raw, err = s.rawEvent(ctx, calendarID, eventID)
+			return err
+		},
+	); err != nil {
 		return nil, err
 	}
-	e, err := s.storedEvent(ctx, ck, u, calendarID, eventID)
-	if err != nil {
-		return nil, err
-	}
+	e := s.decrypt(ck, u, raw)
 	if occurrence == "" {
 		ev := e.row()
 		if e.readErr == nil && e.model.Recurring() {
@@ -531,14 +533,22 @@ func (s *Service) EventOccurrences(ctx context.Context, u *keys.Unlocked, calend
 	return out, nil
 }
 
-func (s *Service) storedEvent(ctx context.Context, ck *calKeys, u *keys.Unlocked, calendarID, eventID string) (stored, error) {
+func (s *Service) rawEvent(ctx context.Context, calendarID, eventID string) (rawEvent, error) {
 	var r struct{ Event rawEvent }
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "GET", Path: "/calendar/v1/" + calendarID + "/events/" + eventID,
 	}, &r); err != nil {
+		return rawEvent{}, err
+	}
+	return r.Event, nil
+}
+
+func (s *Service) storedEvent(ctx context.Context, ck *calKeys, u *keys.Unlocked, calendarID, eventID string) (stored, error) {
+	raw, err := s.rawEvent(ctx, calendarID, eventID)
+	if err != nil {
 		return stored{}, err
 	}
-	return s.decrypt(ck, u, r.Event), nil
+	return s.decrypt(ck, u, raw), nil
 }
 
 // ── creating ──

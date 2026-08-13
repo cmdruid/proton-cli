@@ -90,17 +90,44 @@ snapshot: build
     done
     goreleaser release --snapshot --clean --skip=publish
 
+# How many live tests run at once.
+#
+# Four, measured: it puts the suite within a minute of what eight does, and these
+# are real accounts. Raise it one step at a time and only after a full run shows no
+# rate limiting - the suite fails on the first sign of it - and never past eight.
+parallel := "4"
+
+# The timeouts say how long a run may take before something is wrong, not how long
+# it takes: the suite runs in about three minutes and one test in seconds. A
+# timeout of half an hour would let a hang look like a slow day.
 [doc("Everything, including the live-API suite against the two test accounts")]
 test: test-fast
-    go test ./tests/ -v -count=1 -timeout 30m
+    go test ./tests/ -v -count=1 -timeout 10m -parallel {{ parallel }} -shuffle=on
 
-[doc("Unit, golden and conformance tests: no API, no credentials, seconds not minutes")]
+[doc("The live suite one test at a time, for a run that looks flaky or an account that has been throttled")]
+test-serial: test-fast
+    go test ./tests/ -v -count=1 -timeout 20m -parallel 1
+
+[doc("Unit, golden, conformance and offline tests: no API, no credentials, seconds not minutes")]
 test-fast:
-    go test ./cmd/... ./internal/... -count=1
+    go test ./cmd/... ./internal/... ./tests/offline/ -count=1
 
 [doc("Run a single test (or a `|`-separated regex of test names)")]
 test-one pattern:
     go test ./tests/ -v -count=1 -run '{{ pattern }}' -timeout 5m
+
+[doc("Report what the live suite spent its time on, and how deep each command's request graph was")]
+test-report *pattern=".":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trace="${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
+    PROTON_CLI_TEST_TRACE="$trace" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
+        go test ./tests/ -count=1 -run '{{ pattern }}' -timeout 20m -parallel {{ parallel }} || true
+    go run ./scripts/testreport "$trace"
+
+[doc("Print the live API surface the last traced run actually reached")]
+test-coverage:
+    go run ./scripts/testreport --coverage "${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
 
 [doc("Move every dependency and tool to the latest version")]
 update:

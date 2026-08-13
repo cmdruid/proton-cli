@@ -16,6 +16,7 @@ import (
 // The harness runs every command that way, so this asserts the account it lands
 // on is the one the variable names.
 func TestProfileFromEnv(t *testing.T) {
+	t.Parallel()
 	acct := runJSONSecondary(t, "account", "get")
 	email, _ := acct["email"].(string)
 	if !strings.EqualFold(email, secondaryEmail()) {
@@ -30,6 +31,7 @@ func TestProfileFromEnv(t *testing.T) {
 // The refusal happens before the network, so it holds even with no session and
 // no connection.
 func TestProfileNotSignedInIsRefusedLocally(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := runWithEnv(t, map[string]string{"PROTON_PROFILE": "no-such-" + testID()},
 		"mail", "messages", "list")
 	if code != 2 {
@@ -42,6 +44,7 @@ func TestProfileNotSignedInIsRefusedLocally(t *testing.T) {
 // TestProfileSessionsAreSeparateFiles: each profile keeps its own session, so
 // two accounts on one machine cannot clobber each other.
 func TestProfileSessionsAreSeparateFiles(t *testing.T) {
+	t.Parallel()
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		t.Fatalf("user config dir: %v", err)
@@ -58,6 +61,7 @@ func TestProfileSessionsAreSeparateFiles(t *testing.T) {
 // truth about who is signed in here, so listing it needs no API call and cannot
 // disagree with what a command would act as.
 func TestProfilesListNamesEverySignedInAccount(t *testing.T) {
+	t.Parallel()
 	rows := runJSONArray(t, "account", "profiles", "list")
 	seen := map[string]string{}
 	for _, r := range rows {

@@ -57,11 +57,7 @@ func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string
 	if !parent.IsFolder {
 		return fmt.Errorf("%s is not a folder", destPath)
 	}
-	parentLink, err := s.getLink(ctx, parent.ShareID, parent.LinkID)
-	if err != nil {
-		return err
-	}
-	hk, err := hashKeyOf(parentLink, parent.NodeKR)
+	hk, err := hashKeyOf(parent.Link, parent.NodeKR)
 	if err != nil {
 		return err
 	}

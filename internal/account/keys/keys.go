@@ -11,6 +11,7 @@ import (
 	"github.com/ProtonMail/go-srp"
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/localkey"
+	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -70,52 +71,45 @@ type PasswordFunc func() (string, error)
 // Unlock fetches the user and address keys and unlocks them, using either the
 // key password sealed into the session or, on a first unlock, one derived from
 // the account password.
+//
+// The key password, the user and the addresses are asked for at the same time.
+// None of the three answers is needed to ask for another, and only the unlocking
+// that follows them has an order: the user keys open the address keys.
 func Unlock(ctx context.Context, c *proton.Client, password PasswordFunc) (*Unlocked, error) {
-	var skp string
-	if c.EncKeyBlob() != "" {
-		// Resume: recover the key password by unwrapping the on-disk blob with the
-		// server-held client key. A failure here (e.g. the session was revoked) is
-		// fatal - the blob is useless without the key.
-		key, err := localkey.Get(ctx, c)
-		if err != nil {
-			return nil, fmt.Errorf("fetch session key: %w", err)
-		}
-		d, err := localkey.Unwrap(c.EncKeyBlob(), key)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt session key blob: %w", err)
-		}
-		skp = d
-	} else {
-		// First unlock: derive from the account password, then seal and persist so
-		// no later run has to ask again.
-		if password == nil {
-			return nil, fmt.Errorf("no password available to unlock the keys")
-		}
-		pw, err := password()
-		if err != nil {
-			return nil, err
-		}
-		d, err := deriveSaltedKeyPass(ctx, c, pw)
-		if err != nil {
-			return nil, fmt.Errorf("derive key password: %w", err)
-		}
-		skp = d
-		wrapAndPersist(ctx, c, skp)
+	var (
+		skp   string
+		user  *User
+		addrs []Address
+	)
+	if err := fetch.Together(ctx,
+		func(ctx context.Context) error {
+			var err error
+			skp, err = saltedKeyPass(ctx, c, password)
+			return err
+		},
+		func(ctx context.Context) error {
+			var err error
+			if user, err = getUser(ctx, c); err != nil {
+				return fmt.Errorf("get user: %w", err)
+			}
+			return nil
+		},
+		func(ctx context.Context) error {
+			var err error
+			if addrs, err = getAddresses(ctx, c); err != nil {
+				return fmt.Errorf("get addresses: %w", err)
+			}
+			return nil
+		},
+	); err != nil {
+		return nil, err
 	}
 
-	user, err := getUser(ctx, c)
-	if err != nil {
-		return nil, fmt.Errorf("get user: %w", err)
-	}
 	userKR, err := unlockKeyRing(user.Keys, []byte(skp), nil)
 	if err != nil {
 		return nil, fmt.Errorf("unlock user keys: %w", err)
 	}
 
-	addrs, err := getAddresses(ctx, c)
-	if err != nil {
-		return nil, fmt.Errorf("get addresses: %w", err)
-	}
 	addrKRs := map[string]*pgp.KeyRing{}
 	for _, a := range addrs {
 		if kr, err := unlockKeyRing(a.Keys, []byte(skp), userKR); err == nil {
@@ -126,6 +120,39 @@ func Unlock(ctx context.Context, c *proton.Client, password PasswordFunc) (*Unlo
 		return nil, fmt.Errorf("failed to unlock any address keys")
 	}
 	return &Unlocked{UserKR: userKR, AddrKRs: addrKRs, Addresses: addrs}, nil
+}
+
+// saltedKeyPass is the passphrase the key hierarchy is locked with.
+//
+// A resumed session unwraps it from the blob on disk with the server-held client
+// key, which is what makes revoking the session render that blob useless. A first
+// unlock derives it from the account password, then seals and persists it so no
+// later run has to ask for anything.
+func saltedKeyPass(ctx context.Context, c *proton.Client, password PasswordFunc) (string, error) {
+	if c.EncKeyBlob() != "" {
+		key, err := localkey.Get(ctx, c)
+		if err != nil {
+			return "", fmt.Errorf("fetch session key: %w", err)
+		}
+		skp, err := localkey.Unwrap(c.EncKeyBlob(), key)
+		if err != nil {
+			return "", fmt.Errorf("decrypt session key blob: %w", err)
+		}
+		return skp, nil
+	}
+	if password == nil {
+		return "", fmt.Errorf("no password available to unlock the keys")
+	}
+	pw, err := password()
+	if err != nil {
+		return "", err
+	}
+	skp, err := deriveSaltedKeyPass(ctx, c, pw)
+	if err != nil {
+		return "", fmt.Errorf("derive key password: %w", err)
+	}
+	wrapAndPersist(ctx, c, skp)
+	return skp, nil
 }
 
 // wrapAndPersist generates a fresh client key, stores it server-side, wraps the

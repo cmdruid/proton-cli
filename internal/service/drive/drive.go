@@ -12,6 +12,7 @@ import (
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -27,6 +28,11 @@ type Context struct {
 	AddrEmail  string
 	VolumeID   string
 	RootLinkID string
+
+	// rootLink is the share's root folder, fetched while the share itself was
+	// being fetched. Everything addressed by path starts from it, so resolving the
+	// share without it would only mean asking for it a moment later, alone.
+	rootLink *Link
 }
 
 func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked) (*Context, error) {
@@ -71,14 +77,29 @@ func (s *Service) ResolvePhotos(ctx context.Context, u *keys.Unlocked) (*Context
 	return nil, &errs.NotFound{Kind: "photos share"}
 }
 
-func (s *Service) unlockShare(ctx context.Context, u *keys.Unlocked, shareID, rootLink, volumeID string) (*Context, error) {
+// unlockShare opens a share's key and its root folder.
+//
+// The share and the root folder are asked for at the same time: the volume named
+// both, so neither request needs the other's answer, and only unwrapping the root
+// folder's key needs the share's.
+func (s *Service) unlockShare(ctx context.Context, u *keys.Unlocked, shareID, rootLinkID, volumeID string) (*Context, error) {
 	var sh struct {
 		AddressID           string
 		Key                 string
 		Passphrase          string
 		PassphraseSignature string
 	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/shares/" + shareID}, &sh); err != nil {
+	var rootLink *Link
+	if err := fetch.Together(ctx,
+		func(ctx context.Context) error {
+			return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/shares/" + shareID}, &sh)
+		},
+		func(ctx context.Context) error {
+			var err error
+			rootLink, err = s.getLink(ctx, shareID, rootLinkID)
+			return err
+		},
+	); err != nil {
 		return nil, err
 	}
 	addrKR, ok := u.AddrKR(sh.AddressID)
@@ -119,7 +140,7 @@ func (s *Service) unlockShare(ctx context.Context, u *keys.Unlocked, shareID, ro
 	return &Context{
 		ShareID: shareID, ShareKR: shareKR,
 		AddrKR: addrKR, AddrID: sh.AddressID, AddrEmail: addrEmail,
-		VolumeID: volumeID, RootLinkID: rootLink,
+		VolumeID: volumeID, RootLinkID: rootLinkID, rootLink: rootLink,
 	}, nil
 }
 
@@ -166,20 +187,24 @@ type Resolved struct {
 	NodeKR   *pgp.KeyRing
 	Name     string
 	IsFolder bool
+	// Link is the record resolving the path already read. A caller that needs the
+	// item's size, type or shares has it here rather than by asking for the link it
+	// was just handed.
+	Link *Link
 }
 
 func (s *Service) ResolvePath(ctx context.Context, dc *Context, path string) (*Resolved, error) {
 	path = strings.Trim(path, "/")
-	rootLink, err := s.getLink(ctx, dc.ShareID, dc.RootLinkID)
-	if err != nil {
-		return nil, err
-	}
+	rootLink := dc.rootLink
 	rootKR, err := unlockNode(rootLink, dc.ShareKR, dc.AddrKR)
 	if err != nil {
 		return nil, fmt.Errorf("unlock root: %w", err)
 	}
 	if path == "" || path == "." {
-		return &Resolved{ShareID: dc.ShareID, LinkID: dc.RootLinkID, ParentKR: dc.ShareKR, NodeKR: rootKR, IsFolder: true}, nil
+		return &Resolved{
+			ShareID: dc.ShareID, LinkID: dc.RootLinkID, ParentKR: dc.ShareKR,
+			NodeKR: rootKR, IsFolder: true, Link: rootLink,
+		}, nil
 	}
 	parts := strings.Split(path, "/")
 	currentID := dc.RootLinkID
@@ -208,7 +233,7 @@ func (s *Service) ResolvePath(ctx context.Context, dc *Context, path string) (*R
 					return &Resolved{
 						ShareID: dc.ShareID, LinkID: ch.LinkID,
 						ParentKR: prevKR, NodeKR: childKR, Name: name,
-						IsFolder: ch.Type == 1,
+						IsFolder: ch.Type == 1, Link: &ch,
 					}, nil
 				}
 				if ch.Type != 1 {

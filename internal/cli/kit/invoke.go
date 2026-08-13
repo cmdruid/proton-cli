@@ -48,9 +48,6 @@ type Step func(*Invocation) error
 // Handler is a command body.
 type Handler func(*Invocation) error
 
-// StepAuth makes sure a usable session exists, signing in if none does.
-func StepAuth(c *Invocation) error { return c.App.Authenticate(c.Ctx) }
-
 // StepUnlock decrypts the key hierarchy up front and puts it in U.
 //
 // Declare it when the command always needs keys. When unlocking should wait
@@ -86,6 +83,10 @@ func StepExpand(c *Invocation) error {
 // Before any step, every enum flag the command declared is checked. Local
 // validation preceding the network is a rule rather than a habit: a value that
 // could never have been sent should not first cost a sign-in to discover.
+//
+// Which is why no step asserts that an account exists. The requirement belongs to
+// the request, and the client holds it there, so a command body judges what it can
+// judge first and only then finds out whether anyone is signed in.
 func Run(steps []Step, h Handler) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		if err := validateFlags(cmd); err != nil {
@@ -135,6 +136,9 @@ func Read(c *Invocation, spec ui.DocumentSpec) error { return ui.Document(c.UI()
 // unannounced.
 func Mutate(c *Invocation, spec ui.ResultSpec, apply func() error) error {
 	if c.App.DryRun {
+		if err := c.App.Authenticate(c.Ctx); err != nil {
+			return err
+		}
 		spec.DryRun = true
 		return ui.Result(c.UI(), spec)
 	}
@@ -187,6 +191,13 @@ func confirm(c *Invocation, spec ui.ResultSpec) error {
 func Create(c *Invocation, spec ui.ResultSpec, apply func() (string, error)) error {
 	spec.Count = 1
 	if c.App.DryRun {
+		// A preview is a claim about what the command would do, so it has to be as
+		// true as the change: without an account it would not do it. A dry run that
+		// never reached the network would otherwise be the one path that answers as
+		// though it had.
+		if err := c.App.Authenticate(c.Ctx); err != nil {
+			return err
+		}
 		spec.DryRun = true
 		return ui.Result(c.UI(), spec)
 	}

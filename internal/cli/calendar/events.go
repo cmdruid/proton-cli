@@ -114,7 +114,7 @@ func eventsListCmd() *cobra.Command {
 			"reference that names it. Every calendar is included unless --calendar\n" +
 			"narrows it to one.",
 		Args: cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			calIDs, err := listedCalendars(c, calendar)
 			if err != nil {
 				return err
@@ -140,7 +140,7 @@ func eventsGetCmd() *cobra.Command {
 		Use:   "get REF",
 		Short: "Show one event, decrypted",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			calID, eventID, occurrence, err := resolveEvent(c, c.Args[0])
 			if err != nil {
 				return err
@@ -149,7 +149,7 @@ func eventsGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			name, err := calendarName(c, ev.CalendarID)
+			name, err := c.App.Calendar.CalendarName(c.Ctx, c.U, ev.CalendarID)
 			if err != nil {
 				return err
 			}
@@ -235,7 +235,7 @@ func eventsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create an event",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			if d.title == "" || d.start == "" {
 				return kit.Fail("An event needs a title and a start.").
 					Hint(`--title Dentist --start 2026-04-16T14:00`)
@@ -301,7 +301,7 @@ func eventsUpdateCmd() *cobra.Command {
 			"occurrence. Add --future to change it and every later one, or drop the @ part\n" +
 			"of the reference to change the whole series.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			calID, eventID, occurrence, err := resolveEvent(c, c.Args[0])
 			if err != nil {
 				return err
@@ -443,7 +443,7 @@ func eventsRespondCmd() *cobra.Command {
 		Use:   "respond REF",
 		Short: "Answer an invitation, telling the organizer",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			answer, err := status.Value()
 			if err != nil {
 				return err
@@ -494,7 +494,7 @@ func eventsDeleteCmd() *cobra.Command {
 			"occurrence. Add --future to delete it and every later one, or drop the @ part\n" +
 			"of the reference to delete the whole series.",
 		Args: cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			type target struct {
 				ref                        string
 				calID, eventID, occurrence string
@@ -613,19 +613,4 @@ func resolveCalendar(c *kit.Invocation, ref string) (string, error) {
 		return "", err
 	}
 	return c.App.Calendar.ResolveCalendarID(c.Ctx, expanded)
-}
-
-// calendarName turns a calendar ID back into its name, so a record reports the
-// calendar a person recognises rather than a second opaque ID.
-func calendarName(c *kit.Invocation, id string) (string, error) {
-	cals, err := c.App.Calendar.CalendarsList(c.Ctx)
-	if err != nil {
-		return "", err
-	}
-	for _, cal := range cals {
-		if cal.ID == id {
-			return cal.Name, nil
-		}
-	}
-	return id, nil
 }

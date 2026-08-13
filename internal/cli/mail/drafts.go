@@ -28,7 +28,7 @@ func draftsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List drafts",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			msgs, total, err := c.App.Mail.DraftsList(c.Ctx, page, pageSize)
 			if err != nil {
 				return err
@@ -50,7 +50,7 @@ func draftsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Save a draft without sending it",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
@@ -87,7 +87,7 @@ func draftsUpdateCmd() *cobra.Command {
 			"--to, --cc and --bcc replace the whole list rather than adding to it. --attach\n" +
 			"adds files and --detach removes one by name or ID.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			u, err := c.App.Unlock(c.Ctx)
 			if err != nil {
 				return err
@@ -164,7 +164,7 @@ func draftsSendCmd() *cobra.Command {
 			"Its body already contains whatever signature it was created with, so nothing\n" +
 			"is appended.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			del, at, err := d.delivery()
 			if err != nil {
 				return err
@@ -211,7 +211,7 @@ func draftsDeleteCmd() *cobra.Command {
 		Use:   "delete REF...",
 		Short: "Delete drafts",
 		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := kit.Select(c, kit.Selector[mailsvc.Message]{
 				Noun:    "drafts",
 				Columns: draftColumns(),

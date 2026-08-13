@@ -48,7 +48,7 @@ func listCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List contacts",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			all, err := c.App.Contacts.List(c.Ctx, c.U)
 			if err != nil {
 				return err
@@ -63,7 +63,7 @@ func getCmd() *cobra.Command {
 		Use:   "get REF",
 		Short: "Show one contact in full",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
 			if err != nil {
 				return err
@@ -119,7 +119,7 @@ func createCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a contact",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			if d.nc.Name == "" && len(d.nc.Emails) == 0 {
 				return kit.Fail("A contact needs at least a name or an email address.").
 					Hint("--name \"Jane Roe\"", "--email jane@example.com")
@@ -144,7 +144,7 @@ func updateCmd() *cobra.Command {
 			"Only what you pass is replaced. --email and --phone replace the whole list\n" +
 			"rather than adding to it, so pass every address you want the contact to keep.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
 			if err != nil {
 				return err
@@ -166,7 +166,7 @@ func deleteCmd() *cobra.Command {
 		Use:   "delete REF...",
 		Short: "Delete contacts",
 		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			sel, err := kit.Select(c, kit.Selector[ctsvc.Contact]{
 				Noun:    "contacts",
 				Columns: columns(),

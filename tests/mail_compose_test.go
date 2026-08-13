@@ -18,6 +18,7 @@ import (
 // ── drafts ──
 
 func TestMailDraftsLifecycle(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-draft"
 
 	stdout := runOK(t, "mail", "drafts", "create",
@@ -66,6 +67,7 @@ func TestMailDraftsLifecycle(t *testing.T) {
 }
 
 func TestMailDraftsCreateDryRunCreatesNothing(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-draft-dry"
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "drafts", "create",
 		"--to", selfEmail(), "--subject", subject, "--body", "x")
@@ -76,6 +78,7 @@ func TestMailDraftsCreateDryRunCreatesNothing(t *testing.T) {
 }
 
 func TestMailDraftsAttachAndDetach(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-draft-attach"
 	dir := t.TempDir()
 	path := filepath.Join(dir, "note.txt")
@@ -96,6 +99,7 @@ func TestMailDraftsAttachAndDetach(t *testing.T) {
 }
 
 func TestMailDraftsEditRejectsASentMessage(t *testing.T) {
+	t.Parallel()
 	_, _, subject := plainMail(t)
 	// REF resolution for drafts is scoped to the Drafts folder, so a sent
 	// message's subject must not resolve.
@@ -109,6 +113,7 @@ func TestMailDraftsEditRejectsASentMessage(t *testing.T) {
 }
 
 func TestMailDraftsSendRequiresARecipient(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-draft-norecipient"
 	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create", "--subject", subject, "--body", "x"))
 	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
@@ -124,6 +129,7 @@ func TestMailDraftsSendRequiresARecipient(t *testing.T) {
 // ── reply ──
 
 func TestMailMessagesReply(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-reply-parent"
 	parentID := sendTestMail(t, subject)
 
@@ -161,6 +167,7 @@ func TestMailMessagesReply(t *testing.T) {
 }
 
 func TestMailMessagesReplyNoQuote(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	id := strings.TrimSpace(runOK(t, "mail", "messages", "reply",
 		"--body", "Terse.", "--no-quote", "--", msgID))
@@ -173,6 +180,7 @@ func TestMailMessagesReplyNoQuote(t *testing.T) {
 }
 
 func TestMailMessagesReplyAsDraft(t *testing.T) {
+	t.Parallel()
 	msgID, _, subject := plainMail(t)
 	stdout, stderr := runOKStderr(t, "mail", "messages", "reply",
 		"--body", "Later.", "--draft", "--", msgID)
@@ -192,6 +200,7 @@ func TestMailMessagesReplyAsDraft(t *testing.T) {
 }
 
 func TestMailMessagesReplyDryRun(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "reply",
 		"--body", "x", "--", msgID)
@@ -204,6 +213,7 @@ func TestMailMessagesReplyDryRun(t *testing.T) {
 // ── forward ──
 
 func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
+	t.Parallel()
 	msgID, _, attName := sharedAttachment(t)
 	marker := testID() + "-forwarded"
 
@@ -246,6 +256,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 }
 
 func TestMailMessagesForwardWithoutAttachments(t *testing.T) {
+	t.Parallel()
 	msgID, _, attName := sharedAttachment(t)
 	subject := testID() + "-fwd-noatt"
 
@@ -263,6 +274,7 @@ func TestMailMessagesForwardWithoutAttachments(t *testing.T) {
 }
 
 func TestMailMessagesForwardRequiresTo(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	_, stderr, code := run(t, "mail", "messages", "forward", "--body", "x", "--", msgID)
 	if code == 0 {
@@ -274,6 +286,7 @@ func TestMailMessagesForwardRequiresTo(t *testing.T) {
 // ── sender selection ──
 
 func TestMailSendFromRejectsAnAddressYouDoNotOwn(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "mail", "messages", "send",
 		"--from", "someone@not-your-account.invalid",
 		"--to", selfEmail(), "--subject", testID(), "--body", "x")
@@ -285,6 +298,7 @@ func TestMailSendFromRejectsAnAddressYouDoNotOwn(t *testing.T) {
 }
 
 func TestMailSendFromAcceptsYourOwnAddress(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-from"
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
 		"--from", selfEmail(), "--to", selfEmail(), "--subject", subject, "--body", "x")
@@ -297,6 +311,8 @@ func TestMailSendFromAcceptsYourOwnAddress(t *testing.T) {
 // Signatures are applied automatically, matching the web client, so a message
 // composed with one set carries it and --no-signature suppresses it.
 func TestMailSignatureIsAppliedAndSuppressible(t *testing.T) {
+	t.Parallel()
+	lease(t, addressIdentity)
 	addrID := primaryAddressID(t)
 	original := addressSignature(t, addrID)
 	marker := testID() + "-sig"

@@ -9,6 +9,7 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
+	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
 	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
@@ -66,24 +67,44 @@ type ItemField struct {
 	Type  string `json:"type"`
 }
 
+// ItemsList reads what is in every vault, or in the one named.
+//
+// The vaults are read at the same time and their items joined in the order the
+// vaults came in, so the answer does not depend on which vault replied first. A
+// vault that cannot be read is left out, as it was before.
 func (s *Service) ItemsList(ctx context.Context, u *keys.Unlocked, vaultFilter string) ([]Item, error) {
 	vaults, err := s.VaultsList(ctx, u)
 	if err != nil {
 		return nil, err
 	}
-	var out []Item
+	wanted := make([]Vault, 0, len(vaults))
 	for _, v := range vaults {
 		if vaultFilter != "" && v.ShareID != vaultFilter && v.Name != vaultFilter {
 			continue
 		}
-		sk, err := s.decryptShareKeys(ctx, v.ShareID, u)
-		if err != nil {
-			continue
+		wanted = append(wanted, v)
+	}
+
+	perVault := make([][]Item, len(wanted))
+	fetches := make([]func(context.Context) error, len(wanted))
+	for i, v := range wanted {
+		fetches[i] = func(ctx context.Context) error {
+			sk, err := s.decryptShareKeys(ctx, v.ShareID, u)
+			if err != nil {
+				return nil
+			}
+			items, err := s.fetchItems(ctx, v.ShareID, sk)
+			if err != nil {
+				return nil
+			}
+			perVault[i] = items
+			return nil
 		}
-		items, err := s.fetchItems(ctx, v.ShareID, sk)
-		if err != nil {
-			continue
-		}
+	}
+	_ = fetch.Together(ctx, fetches...)
+
+	var out []Item
+	for _, items := range perVault {
 		out = append(out, items...)
 	}
 	return out, nil

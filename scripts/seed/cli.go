@@ -6,8 +6,27 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 )
+
+// passwordFiles is where each profile's account password was written, for the
+// one thing Proton will not do on a session alone. A session cannot carry that
+// elevation: the key blob sealed at login is a one-way derivation of the
+// password rather than the password itself.
+var passwordFiles = map[string]string{}
+
+func writePasswordFiles(work string) error {
+	for _, a := range accounts {
+		file := filepath.Join(work, a.profile+".password")
+		if err := os.WriteFile(file, []byte(os.Getenv(a.passwordVar)), 0o600); err != nil {
+			return err
+		}
+		passwordFiles[a.profile] = file
+	}
+	return nil
+}
 
 // binary is the proton-cli to drive. `just` builds it first; PROTON_CLI points
 // somewhere else when the integration suite runs its own build.
@@ -20,9 +39,49 @@ func binary() string {
 
 // command builds a CLI invocation as one profile.
 func command(profile string, args ...string) *exec.Cmd {
-	cmd := exec.Command(binary(), args...)
+	cmd := exec.Command(binary(), withPassword(profile, args)...)
 	cmd.Env = append(os.Environ(), "PROTON_PROFILE="+profile, "PROTON_NO_INPUT=1")
 	return cmd
+}
+
+// guarded are the commands Proton answers only for a session that has just
+// proved the password again. Deleting a calendar is one, and the seed does it
+// whenever a run left one behind.
+var guarded = [][]string{
+	{"calendar", "settings", "calendars", "delete"},
+}
+
+// withPassword hands such a command the profile's password file.
+//
+// It goes directly after the command's own words: the flag belongs to that
+// command rather than to the root, and anything after a positional would be read
+// as another one.
+func withPassword(profile string, args []string) []string {
+	file := passwordFiles[profile]
+	if file == "" {
+		return args
+	}
+	for _, cmd := range guarded {
+		at := indexOfRun(args, cmd...)
+		if at < 0 {
+			continue
+		}
+		out := make([]string, 0, len(args)+2)
+		out = append(out, args[:at+len(cmd)]...)
+		out = append(out, "--password-file", file)
+		return append(out, args[at+len(cmd):]...)
+	}
+	return args
+}
+
+// indexOfRun reports where args holds the words in order and adjacent, or -1.
+func indexOfRun(args []string, run ...string) int {
+	for i := 0; i+len(run) <= len(args); i++ {
+		if slices.Equal(args[i:i+len(run)], run) {
+			return i
+		}
+	}
+	return -1
 }
 
 // run invokes the CLI as one profile and returns stdout. stderr is folded into

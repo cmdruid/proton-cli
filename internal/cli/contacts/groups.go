@@ -40,7 +40,7 @@ func groupsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List contact groups",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			groups, err := groupList(c).Rows(c.Ctx)
 			if err != nil {
 				return err
@@ -60,7 +60,7 @@ func groupsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a contact group",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if name == "" {
 				return kit.Fail("A group needs a name.").Hint("--name Team")
 			}
@@ -83,7 +83,7 @@ func groupsUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Rename or recolor a contact group",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			if name == "" && !color.Set() {
 				return kit.Fail("Nothing to change.").Hint("pass --name or --color.")
 			}
@@ -105,7 +105,7 @@ func groupsDeleteCmd() *cobra.Command {
 		Use:   "delete REF...",
 		Short: "Delete contact groups",
 		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := kit.SelectFrom(c, "groups", groupColumns(), groupList(c))
 			if err != nil {
 				return err
@@ -137,7 +137,7 @@ func membersCmd(use, short string, action ui.Action, preposition string) *cobra.
 		Use:   use + " REF CONTACT_REF...",
 		Short: short,
 		Args:  cobra.MinimumNArgs(2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			groupID := c.Args[0]
 			ids := make([]string, 0, len(c.Args)-1)
 			for _, ref := range c.Args[1:] {

@@ -14,6 +14,7 @@ import (
 // ── mail messages list ──
 
 func TestMailMessagesList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "messages", "list")
 	assertContains(t, stdout, "ID")
 	assertContains(t, stdout, "FROM")
@@ -21,10 +22,12 @@ func TestMailMessagesList(t *testing.T) {
 }
 
 func TestMailMessagesListSent(t *testing.T) {
+	t.Parallel()
 	runOK(t, "mail", "messages", "list", "--folder", "sent")
 }
 
 func TestMailMessagesListJSONFieldNames(t *testing.T) {
+	t.Parallel()
 	data := runJSON(t, "mail", "messages", "list", "--page-size", "1")
 	msgs, ok := data["messages"].([]interface{})
 	if !ok {
@@ -41,6 +44,7 @@ func TestMailMessagesListJSONFieldNames(t *testing.T) {
 }
 
 func TestMailMessagesListPageSize(t *testing.T) {
+	t.Parallel()
 	data := runJSON(t, "mail", "messages", "list", "--page-size", "3")
 	msgs := data["messages"].([]interface{})
 	if len(msgs) > 3 {
@@ -49,12 +53,14 @@ func TestMailMessagesListPageSize(t *testing.T) {
 }
 
 func TestMailMessagesListUnreadFlag(t *testing.T) {
+	t.Parallel()
 	runOK(t, "mail", "messages", "list", "--unread")
 }
 
 // ── list footer / json shape ──
 
 func TestMailMessagesListFooterSinglePage(t *testing.T) {
+	t.Parallel()
 	// Use 150 (Proton's documented max for messages list); 500 is
 	// rejected as "Invalid page size parameter".
 	_, stderr := runOKStderr(t, "mail", "messages", "list", "--page-size", "150")
@@ -70,6 +76,7 @@ func TestMailMessagesListFooterSinglePage(t *testing.T) {
 }
 
 func TestMailMessagesListFooterMidPagination(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "mail", "messages", "list", "--page-size", "1")
 	last := lastNonEmpty(stderr)
 	// Either mid-pagination ("Pass --page 1") or last/single-page if the
@@ -81,6 +88,7 @@ func TestMailMessagesListFooterMidPagination(t *testing.T) {
 }
 
 func TestMailMessagesListJSONPaginationFields(t *testing.T) {
+	t.Parallel()
 	data := runJSON(t, "mail", "messages", "list", "--page-size", "1")
 	for _, key := range []string{"total", "page", "page_size", "has_more", "messages"} {
 		if _, ok := data[key]; !ok {
@@ -90,6 +98,7 @@ func TestMailMessagesListJSONPaginationFields(t *testing.T) {
 }
 
 func TestMailMessagesSearchFooterNoPageZero(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "mail", "messages", "search", "--keyword", "proton", "--limit", "5")
 	last := lastNonEmpty(stderr)
 	if strings.Contains(last, "page 0") {
@@ -103,6 +112,7 @@ func TestMailMessagesSearchFooterNoPageZero(t *testing.T) {
 }
 
 func TestMailMessagesSearchEmptyFooter(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "mail", "messages", "search",
 		"--keyword", "xyz-no-match-"+testID())
 	last := lastNonEmpty(stderr)
@@ -125,18 +135,22 @@ func lastNonEmpty(s string) string {
 // ── mail messages search ──
 
 func TestMailMessagesSearch(t *testing.T) {
+	t.Parallel()
 	runOK(t, "mail", "messages", "search", "--keyword", "proton")
 }
 
 func TestMailMessagesSearchFrom(t *testing.T) {
+	t.Parallel()
 	runOK(t, "mail", "messages", "search", "--from", selfEmail())
 }
 
 func TestMailMessagesSearchDateRange(t *testing.T) {
+	t.Parallel()
 	runOK(t, "mail", "messages", "search", "--after", "2020-01-01", "--before", "2099-12-31")
 }
 
 func TestMailMessagesSearchEmpty(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "mail", "messages", "search", "--keyword", "xyz-nothing-xxxyyy-"+testID())
 	if code != 0 {
 		t.Fatalf("search with no results should exit 0, got %d", code)
@@ -146,6 +160,7 @@ func TestMailMessagesSearchEmpty(t *testing.T) {
 // ── --from / --to zero-result hint ──
 
 func TestMailSearchFromZeroResultsHint(t *testing.T) {
+	t.Parallel()
 	needle := "no-such-sender-" + testID()
 	_, stderr := runOKStderr(t, "mail", "messages", "search", "--from", needle)
 	if !strings.Contains(stderr, "--from matches the address only") {
@@ -157,6 +172,7 @@ func TestMailSearchFromZeroResultsHint(t *testing.T) {
 }
 
 func TestMailSearchToZeroResultsHint(t *testing.T) {
+	t.Parallel()
 	needle := "no-such-rcpt-" + testID()
 	_, stderr := runOKStderr(t, "mail", "messages", "search", "--to", needle)
 	if !strings.Contains(stderr, "--to matches the address only") {
@@ -168,6 +184,7 @@ func TestMailSearchToZeroResultsHint(t *testing.T) {
 }
 
 func TestMailSearchFromKeywordSuppressesHint(t *testing.T) {
+	t.Parallel()
 	needle := "impossible-" + testID()
 	_, stderr := runOKStderr(t, "mail", "messages", "search",
 		"--from", needle, "--keyword", "alsoimpossible-"+testID())
@@ -177,6 +194,7 @@ func TestMailSearchFromKeywordSuppressesHint(t *testing.T) {
 }
 
 func TestMailSearchFromHitsNoHint(t *testing.T) {
+	t.Parallel()
 	plainMail(t) // ensure a delivered self-mail exists and is indexed
 	// --from selfEmail() should match. May take a beat to index.
 	var stderr string
@@ -193,6 +211,7 @@ func TestMailSearchFromHitsNoHint(t *testing.T) {
 }
 
 func TestMailSearchFromQuietSuppressesHint(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "--quiet", "mail", "messages", "search",
 		"--from", "no-such-sender-"+testID())
 	if strings.Contains(stderr, "matches the address only") {
@@ -201,6 +220,7 @@ func TestMailSearchFromQuietSuppressesHint(t *testing.T) {
 }
 
 func TestMailConversationsSearchFromZeroResultsHint(t *testing.T) {
+	t.Parallel()
 	needle := "no-such-sender-" + testID()
 	_, stderr := runOKStderr(t, "mail", "conversations", "search", "--from", needle)
 	if !strings.Contains(stderr, "--from matches the address only") {
@@ -214,6 +234,7 @@ func TestMailConversationsSearchFromZeroResultsHint(t *testing.T) {
 // ── send / read / REF search ──
 
 func TestMailMessagesSendAndReadText(t *testing.T) {
+	t.Parallel()
 	msgID, _, subject := plainMail(t)
 
 	// Default --format text: human-readable, fields on stderr-safe stdout
@@ -226,6 +247,7 @@ func TestMailMessagesSendAndReadText(t *testing.T) {
 }
 
 func TestMailMessagesReadByRef(t *testing.T) {
+	t.Parallel()
 	_, _, subject := plainMail(t)
 
 	// Proton's search index is populated asynchronously, so the message may
@@ -251,26 +273,15 @@ func TestMailMessagesReadByRef(t *testing.T) {
 }
 
 func TestMailMessagesReadFormatRaw(t *testing.T) {
+	t.Parallel()
 	msgID, _, subject := plainMail(t)
 
 	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", "--", msgID)
 	assertContains(t, stdout, subject)
 }
 
-func TestMailMessagesReadFormatInvalid(t *testing.T) {
-	msgID, _, _ := plainMail(t)
-
-	_, stderr, code := run(t, "mail", "messages", "get", "--format", "wut", "--", msgID)
-	if code == 0 {
-		t.Error("expected non-zero exit for unknown --format")
-	}
-	assertContains(t, stderr, "--format accepts:")
-	for _, shape := range []string{"text", "html", "raw"} {
-		assertContains(t, stderr, shape)
-	}
-}
-
 func TestMailMessagesReadNotFound(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "mail", "messages", "get", "no-such-msg-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3 (not-found), got %d", code)
@@ -280,8 +291,8 @@ func TestMailMessagesReadNotFound(t *testing.T) {
 // ── mark / star / unstar ──
 
 func TestMailMessagesMarkReadUnread(t *testing.T) {
-	subject := testID() + "-mark"
-	msgID := sendTestMail(t, subject)
+	t.Parallel()
+	msgID := mutableMail(t)
 
 	runOK(t, "mail", "messages", "mark", "unread", "--", msgID)
 	data := runJSON(t, "mail", "messages", "list", "--unread", "--page-size", "50")
@@ -308,8 +319,8 @@ func TestMailMessagesMarkReadUnread(t *testing.T) {
 }
 
 func TestMailMessagesStarUnstar(t *testing.T) {
-	subject := testID() + "-star"
-	msgID := sendTestMail(t, subject)
+	t.Parallel()
+	msgID := mutableMail(t)
 
 	runOK(t, "mail", "messages", "star", "--", msgID)
 	data := runJSON(t, "mail", "messages", "list", "--folder", "starred", "--page-size", "50")
@@ -331,8 +342,8 @@ func TestMailMessagesStarUnstar(t *testing.T) {
 // ── move / trash with --dest ──
 
 func TestMailMessagesMoveDest(t *testing.T) {
-	subject := testID() + "-move"
-	msgID := sendTestMail(t, subject)
+	t.Parallel()
+	msgID := mutableMail(t)
 
 	runOK(t, "mail", "messages", "move", "--into", "archive", "--", msgID)
 	data := runJSON(t, "mail", "messages", "list", "--folder", "archive", "--page-size", "50")
@@ -352,8 +363,8 @@ func TestMailMessagesMoveDest(t *testing.T) {
 }
 
 func TestMailMessagesTrash(t *testing.T) {
-	subject := testID() + "-trash"
-	msgID := sendTestMail(t, subject)
+	t.Parallel()
+	msgID := mutableMail(t)
 
 	runOK(t, "mail", "messages", "trash", "--", msgID)
 	data := runJSON(t, "mail", "messages", "list", "--page-size", "50")
@@ -370,31 +381,27 @@ func TestMailMessagesTrash(t *testing.T) {
 // ── batch filters (all dry-run so nothing is actually mutated) ──
 
 func TestMailBatchTrashDryRunUnread(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "trash", "--unread", "--limit", "5")
 	assertContains(t, stderr, "Dry run")
 }
 
 func TestMailBatchTrashDryRunOlderThan(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "trash", "--older-than", "365d", "--from", "noreply", "--limit", "5")
 	assertContains(t, stderr, "Dry run")
-}
-
-func TestMailBatchRequiresInput(t *testing.T) {
-	_, stderr, code := run(t, "mail", "messages", "trash")
-	if code == 0 {
-		t.Error("expected error when no REF and no filter given")
-	}
-	assertContains(t, stderr, "Nothing selected")
 }
 
 // ── conversations ──
 
 func TestMailConversationsList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "conversations", "list", "--page-size", "5")
 	assertContains(t, stdout, "SUBJECT")
 }
 
 func TestMailConversationsListJSONShape(t *testing.T) {
+	t.Parallel()
 	data := runJSON(t, "mail", "conversations", "list", "--page-size", "3")
 	if _, ok := data["total"]; !ok {
 		t.Error("expected 'total' key")
@@ -439,6 +446,7 @@ func findConversationFor(t *testing.T, msgID string) string {
 }
 
 func TestMailConversationsRead(t *testing.T) {
+	t.Parallel()
 	_, convID, subject := plainMail(t)
 
 	stdout := runOK(t, "mail", "conversations", "get", "--", convID)
@@ -449,6 +457,7 @@ func TestMailConversationsRead(t *testing.T) {
 }
 
 func TestMailMessagesReadConvIDRedirects(t *testing.T) {
+	t.Parallel()
 	_, convID, _ := plainMail(t)
 
 	_, stderr, code := run(t, "mail", "messages", "get", "--", convID)
@@ -461,6 +470,7 @@ func TestMailMessagesReadConvIDRedirects(t *testing.T) {
 }
 
 func TestMailConversationsReadMsgIDRedirects(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 
 	_, stderr, code := run(t, "mail", "conversations", "get", "--", msgID)
@@ -473,15 +483,15 @@ func TestMailConversationsReadMsgIDRedirects(t *testing.T) {
 }
 
 func TestMailConversationsBulkDryRun(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "conversations", "trash",
 		"--unread", "--limit", "3")
 	assertContains(t, stderr, "Dry run")
 }
 
 func TestMailConversationsTrashRoundTrip(t *testing.T) {
-	subject := testID() + "-conv-trash"
-	msgID := sendTestMail(t, subject)
-	convID := findConversationFor(t, msgID)
+	t.Parallel()
+	convID := findConversationFor(t, mutableMail(t))
 
 	runOK(t, "mail", "conversations", "trash", "--", convID)
 	data := runJSON(t, "mail", "conversations", "list", "--page-size", "50")
@@ -497,6 +507,7 @@ func TestMailConversationsTrashRoundTrip(t *testing.T) {
 // ── attachments ──
 
 func TestMailAttachmentsListAndDownload(t *testing.T) {
+	t.Parallel()
 	msgID, attID, attName := findMessageWithAttachment(t)
 
 	// List
@@ -524,6 +535,7 @@ func findMessageWithAttachment(t *testing.T) (msgID, attID, attName string) {
 }
 
 func TestMailAttachmentsDownloadCollisionAutoSuffix(t *testing.T) {
+	t.Parallel()
 	msgID, attID, attName := findMessageWithAttachment(t)
 
 	dir := t.TempDir()
@@ -548,6 +560,7 @@ func TestMailAttachmentsDownloadCollisionAutoSuffix(t *testing.T) {
 }
 
 func TestMailAttachmentsDownloadCollisionExplicitErrors(t *testing.T) {
+	t.Parallel()
 	msgID, attID, _ := findMessageWithAttachment(t)
 
 	dest := filepath.Join(t.TempDir(), "existing.bin")
@@ -564,6 +577,7 @@ func TestMailAttachmentsDownloadCollisionExplicitErrors(t *testing.T) {
 }
 
 func TestMailAttachmentsDownloadForce(t *testing.T) {
+	t.Parallel()
 	msgID, attID, _ := findMessageWithAttachment(t)
 
 	dest := filepath.Join(t.TempDir(), "existing.bin")
@@ -581,6 +595,7 @@ func TestMailAttachmentsDownloadForce(t *testing.T) {
 }
 
 func TestMailAttachmentsDownloadAll(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 
 	dir := t.TempDir()
@@ -595,31 +610,8 @@ func TestMailAttachmentsDownloadAll(t *testing.T) {
 	}
 }
 
-// Naming no attachment downloads them all, so --output - a single path cannot
-// say where they go. Both refusals are judgeable from the command line, so
-// neither needs the network to reach.
-func TestMailAttachmentsDownloadAllRejectsASinglePath(t *testing.T) {
-	_, stderr, code := run(t, "mail", "messages", "attachments", "download",
-		"--output", filepath.Join(t.TempDir(), "one.bin"), "any-msg-id")
-	if code == 0 {
-		t.Error("expected non-zero exit for --output with every attachment selected")
-	}
-	if !strings.Contains(stderr, "--output-dir") {
-		t.Errorf("expected stderr to point at --output-dir, got: %s", stderr)
-	}
-}
-
-func TestMailAttachmentsDownloadAllRejectsStdout(t *testing.T) {
-	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "--output", "-", "any-msg-id")
-	if code == 0 {
-		t.Error("expected non-zero exit for --output - with every attachment selected")
-	}
-	if !strings.Contains(stderr, "--output-dir") {
-		t.Errorf("expected stderr to point at --output-dir, got: %s", stderr)
-	}
-}
-
 func TestMailAttachmentsDownloadOutputDirAutoCreates(t *testing.T) {
+	t.Parallel()
 	msgID, attID, _ := findMessageWithAttachment(t)
 
 	dir := filepath.Join(t.TempDir(), "new", "deep", "nested")
@@ -648,6 +640,7 @@ func findMessageWithMixedAttachments(t *testing.T) (msgID string) {
 }
 
 func TestMailAttachmentsListFiltersInline(t *testing.T) {
+	t.Parallel()
 	msgID := findMessageWithMixedAttachments(t)
 
 	// Default: filtered. Text mode must NOT have a DISPOSITION header.
@@ -696,6 +689,7 @@ func TestMailAttachmentsListFiltersInline(t *testing.T) {
 }
 
 func TestMailAttachmentsListJSONHasDisposition(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 
 	atts := runJSONArray(t, "mail", "messages", "attachments", "list", msgID)
@@ -714,6 +708,7 @@ func TestMailAttachmentsListJSONHasDisposition(t *testing.T) {
 }
 
 func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
+	t.Parallel()
 	msgID := findMessageWithMixedAttachments(t)
 
 	dir := t.TempDir()
@@ -741,6 +736,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 // ── strip-quotes / summary (#10) ──
 
 func TestMailMessagesReadStripQuotesPlaintext(t *testing.T) {
+	t.Parallel()
 	msgID, _ := quotedMail(t)
 
 	default1 := runOK(t, "mail", "messages", "get", msgID)
@@ -758,6 +754,7 @@ func TestMailMessagesReadStripQuotesPlaintext(t *testing.T) {
 }
 
 func TestMailMessagesReadStripQuotesNoFalsePositive(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 
 	default1 := runOK(t, "mail", "messages", "get", msgID)
@@ -769,6 +766,7 @@ func TestMailMessagesReadStripQuotesNoFalsePositive(t *testing.T) {
 }
 
 func TestMailConversationsReadSummary(t *testing.T) {
+	t.Parallel()
 	_, convID, _ := plainMail(t)
 
 	data := runJSON(t, "--full-ids", "mail", "conversations", "get", convID)
@@ -799,6 +797,7 @@ func TestMailConversationsReadSummary(t *testing.T) {
 }
 
 func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 	stdout := runOK(t, "mail", "conversations", "get", "--summary", convID)
@@ -810,6 +809,7 @@ func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
 }
 
 func TestMailConversationsReadStripQuotesKeepsLayout(t *testing.T) {
+	t.Parallel()
 	_, convID, _ := plainMail(t)
 
 	stdout := runOK(t, "mail", "conversations", "get", "--strip-quotes", convID)
@@ -825,6 +825,7 @@ func TestMailConversationsReadStripQuotesKeepsLayout(t *testing.T) {
 // ── messages/conversations read --body-only (#08) ──
 
 func TestMailMessagesReadBodyOnly(t *testing.T) {
+	t.Parallel()
 	msgID, _, subject := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "get", "--body-only", msgID)
 	for _, marker := range []string{"Subject:", "From:", "To:", "ID:", "---", "Attachments ("} {
@@ -839,6 +840,7 @@ func TestMailMessagesReadBodyOnly(t *testing.T) {
 }
 
 func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "get", "--format", "html", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
@@ -852,6 +854,7 @@ func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
 }
 
 func TestMailMessagesReadFormatRawNoHeader(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
@@ -860,6 +863,7 @@ func TestMailMessagesReadFormatRawNoHeader(t *testing.T) {
 }
 
 func TestMailMessagesReadDefaultStillHasHeader(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "get", msgID)
 	assertContains(t, stdout, "Subject:")
@@ -867,6 +871,7 @@ func TestMailMessagesReadDefaultStillHasHeader(t *testing.T) {
 }
 
 func TestMailConversationsReadBodyOnly(t *testing.T) {
+	t.Parallel()
 	_, convID, subject := plainMail(t)
 
 	stdout := runOK(t, "mail", "conversations", "get", "--body-only", convID)
@@ -893,6 +898,7 @@ func TestMailConversationsReadBodyOnly(t *testing.T) {
 // ── messages read attachments footer (#07) ──
 
 func TestMailMessagesReadShowsAttachments(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	stdout := runOK(t, "mail", "messages", "get", msgID)
 	assertContains(t, stdout, "Attachments")
@@ -901,6 +907,7 @@ func TestMailMessagesReadShowsAttachments(t *testing.T) {
 }
 
 func TestMailMessagesReadNoAttachmentsNoFooter(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	stdout := runOK(t, "mail", "messages", "get", msgID)
 	if strings.Contains(stdout, "---") {
@@ -912,6 +919,7 @@ func TestMailMessagesReadNoAttachmentsNoFooter(t *testing.T) {
 }
 
 func TestMailMessagesReadFormatHTMLNoFooter(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	stdout := runOK(t, "mail", "messages", "get", "--format", "html", msgID)
 	if strings.Contains(stdout, "Attachments (") {
@@ -920,6 +928,7 @@ func TestMailMessagesReadFormatHTMLNoFooter(t *testing.T) {
 }
 
 func TestMailMessagesReadFormatRawNoFooter(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", msgID)
 	if strings.Contains(stdout, "Attachments (") {
@@ -928,6 +937,7 @@ func TestMailMessagesReadFormatRawNoFooter(t *testing.T) {
 }
 
 func TestMailMessagesReadIncludeInlineTags(t *testing.T) {
+	t.Parallel()
 	msgID := findMessageWithMixedAttachments(t)
 
 	// The attachments trailer is the same table the list verb draws, so an inline
@@ -944,6 +954,7 @@ func TestMailMessagesReadIncludeInlineTags(t *testing.T) {
 }
 
 func TestMailConversationsReadShowsAttachmentsPerMessage(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 	stdout := runOK(t, "mail", "conversations", "get", convID)
@@ -952,6 +963,7 @@ func TestMailConversationsReadShowsAttachmentsPerMessage(t *testing.T) {
 }
 
 func TestMailConversationsReadIncludeInline(t *testing.T) {
+	t.Parallel()
 	msgID := findMessageWithMixedAttachments(t)
 	convID := findConversationFor(t, msgID)
 
@@ -969,6 +981,7 @@ func TestMailConversationsReadIncludeInline(t *testing.T) {
 // ── mail conversations attachments ──
 
 func TestMailConversationsAttachmentsList(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 
@@ -996,6 +1009,7 @@ func TestMailConversationsAttachmentsList(t *testing.T) {
 }
 
 func TestMailConversationsAttachmentsListIncludeInline(t *testing.T) {
+	t.Parallel()
 	msgID := findMessageWithMixedAttachments(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1006,6 +1020,7 @@ func TestMailConversationsAttachmentsListIncludeInline(t *testing.T) {
 }
 
 func TestMailConversationsAttachmentsDownloadAll(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1022,6 +1037,7 @@ func TestMailConversationsAttachmentsDownloadAll(t *testing.T) {
 }
 
 func TestMailConversationsAttachmentsDownloadAllSkipsInline(t *testing.T) {
+	t.Parallel()
 	msgID := findMessageWithMixedAttachments(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1040,6 +1056,7 @@ func TestMailConversationsAttachmentsDownloadAllSkipsInline(t *testing.T) {
 }
 
 func TestMailConversationsAttachmentsDownloadOneByID(t *testing.T) {
+	t.Parallel()
 	msgID, attID, attName := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1057,6 +1074,7 @@ func TestMailConversationsAttachmentsDownloadOneByID(t *testing.T) {
 }
 
 func TestMailConversationsAttachmentsDownloadUnknownID(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1071,6 +1089,8 @@ func TestMailConversationsAttachmentsDownloadUnknownID(t *testing.T) {
 // ── labels ──
 
 func TestMailLabelsList(t *testing.T) {
+	t.Parallel()
+	lease(t, labelSlot)
 	name := testID() + "-list"
 	id := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete %s", id),
@@ -1082,6 +1102,8 @@ func TestMailLabelsList(t *testing.T) {
 }
 
 func TestMailLabelsCreateDeleteLabel(t *testing.T) {
+	t.Parallel()
+	lease(t, labelSlot)
 	name := testID() + "-label"
 
 	// stdout = just the ID
@@ -1099,6 +1121,8 @@ func TestMailLabelsCreateDeleteLabel(t *testing.T) {
 
 // A folder is its own collection, not a label wearing a flag.
 func TestMailFoldersCreateDelete(t *testing.T) {
+	t.Parallel()
+	lease(t, folderSlot)
 	name := testID() + "-folder"
 	stdout := runOK(t, "mail", "settings", "folders", "create", "--name", name, "--color", "#8080FF")
 	id := strings.TrimSpace(stdout)
@@ -1117,6 +1141,8 @@ func TestMailFoldersCreateDelete(t *testing.T) {
 // ── filters ──
 
 func TestMailFiltersCRUD(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
 	name := testID() + "-filter"
 	sieve := `require ["fileinto"]; if header :contains "Subject" "xyz-never-matches-` + testID() + `" { fileinto "Archive"; }`
 
@@ -1162,6 +1188,7 @@ func filterStatus(t *testing.T, id string) int {
 // ── addresses ──
 
 func TestMailAddressesList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "settings", "addresses", "list")
 	assertContains(t, stdout, "EMAIL")
 	assertContains(t, stdout, selfEmail())
@@ -1202,7 +1229,53 @@ func findMessage(t *testing.T, folder, subject string) string {
 	return id
 }
 
+// An inline image is a distinct thing to put on the wire: it is embedded in the
+// HTML body by Content-ID, which is what makes Proton record the part as inline
+// rather than as an attachment. The tests that tell the two dispositions apart
+// read a seeded message, so the sending of one is asserted here.
+func TestMailSendWithInlineImage(t *testing.T) {
+	t.Parallel()
+	subject := testID() + "-inline"
+	dir := t.TempDir()
+	img := filepath.Join(dir, "pixel.png")
+	writePNG(t, img)
+	note := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(note, []byte("regular attachment"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	id := strings.TrimSpace(runOK(t, "mail", "messages", "send",
+		"--to", selfEmail(), "--subject", subject, "--html", "--body", "<p>see below</p>",
+		"--attach", note, "--attach-inline", img))
+	cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+id,
+		"mail", "messages", "delete", "--", id)
+	if inbox := findMessage(t, "inbox", subject); inbox != "" {
+		cleanupRun(t, "Delete inbox mail: proton-cli mail messages delete "+inbox,
+			"mail", "messages", "delete", "--", inbox)
+	}
+
+	// The image is recorded as inline and the note as an attachment, so the
+	// default listing shows one of the two and --include-inline both.
+	regular := runJSONArray(t, "mail", "messages", "attachments", "list", id)
+	if len(regular) != 1 {
+		t.Fatalf("the default listing shows %d attachments, want only the regular one", len(regular))
+	}
+	if name, _ := regular[0].(map[string]interface{})["name"].(string); name != "note.txt" {
+		t.Errorf("the regular attachment is %q, want note.txt", name)
+	}
+	dispositions := map[string]bool{}
+	for _, row := range runJSONArray(t, "mail", "messages", "attachments", "list", "--include-inline", id) {
+		if d, ok := row.(map[string]interface{})["disposition"].(string); ok {
+			dispositions[d] = true
+		}
+	}
+	if !dispositions["inline"] || !dispositions["attachment"] {
+		t.Errorf("the message carries dispositions %v, want both inline and attachment", dispositions)
+	}
+}
+
 func TestMailSendWithAttachment(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-attach"
 	dir := t.TempDir()
 	path := filepath.Join(dir, "note.txt")
@@ -1245,6 +1318,8 @@ func TestMailSendWithAttachment(t *testing.T) {
 }
 
 func TestMailLabelsUpdate(t *testing.T) {
+	t.Parallel()
+	lease(t, labelSlot)
 	name := testID() + "-label"
 	id := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete %s", id),
@@ -1282,6 +1357,8 @@ func assertLabel(t *testing.T, id, name, color string) {
 }
 
 func TestMailFiltersUpdate(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
 	name := testID() + "-filter"
 	sieve := `require ["fileinto"]; if header :contains "Subject" "` + name + `" { fileinto "Archive"; }`
 	id := strings.TrimSpace(runOK(t, "mail", "settings", "filters", "create", "--name", name, "--sieve", sieve))
@@ -1294,6 +1371,7 @@ func TestMailFiltersUpdate(t *testing.T) {
 }
 
 func TestMailSendHTMLSetsHTMLMimeType(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-html"
 	runOK(t, "mail", "messages", "send",
 		"--to", selfEmail(), "--subject", subject,
@@ -1320,31 +1398,8 @@ func TestMailSendHTMLSetsHTMLMimeType(t *testing.T) {
 	}
 }
 
-func TestMailSendScheduledHasFutureDeliveryTime(t *testing.T) {
-	subject := testID() + "-sendat"
-	sendAt := time.Now().Add(3 * time.Hour)
-	runOK(t, "mail", "messages", "send",
-		"--to", selfEmail(), "--subject", subject,
-		"--body", "scheduled via --send-at", "--send-at", sendAt.Format("2006-01-02T15:04"))
-
-	id := findMessage(t, "all", subject)
-	if id == "" {
-		t.Fatal("scheduled message not found in all-mail")
-	}
-	cleanupRun(t, fmt.Sprintf("Delete scheduled mail: proton-cli mail messages delete %s", id),
-		"mail", "messages", "delete", "--", id)
-
-	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+id)
-	msg, _ := data["Message"].(map[string]interface{})
-	msgTime, _ := msg["Time"].(float64)
-	// A scheduled message carries its future delivery time; an immediate send
-	// would be ~now.
-	if int64(msgTime) <= time.Now().Add(time.Hour).Unix() {
-		t.Errorf("scheduled Time = %d, expected a future delivery time near %d", int64(msgTime), sendAt.Unix())
-	}
-}
-
 func TestMailSendPrintsMessageID(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-sendid"
 	stdout, stderr := runOKStderr(t, "mail", "messages", "send",
 		"--to", selfEmail(), "--subject", subject, "--body", "id on stdout")
@@ -1364,31 +1419,71 @@ func TestMailSendPrintsMessageID(t *testing.T) {
 	}
 }
 
-func TestMailSendScheduledConfirmsAndReturnsID(t *testing.T) {
-	subject := testID() + "-schedconf"
+// A scheduled send is one behaviour, so it is one test: the message is queued
+// rather than sent, it answers with the ID it was queued under, it carries the
+// delivery time it was given, and it can be taken back out of the queue.
+//
+// Sending it once rather than three times is not only faster - a free plan meters
+// what the suite may send, and that is what decides how often it can be run.
+func TestMailMessagesScheduledSendAndUnschedule(t *testing.T) {
+	t.Parallel()
+	subject := testID() + "-scheduled"
 	sendAt := time.Now().Add(3 * time.Hour)
 	stdout, stderr := runOKStderr(t, "mail", "messages", "send",
 		"--to", selfEmail(), "--subject", subject,
-		"--body", "scheduled", "--send-at", sendAt.Format("2006-01-02T15:04"))
+		"--body", "scheduled via --send-at", "--send-at", sendAt.Format("2006-01-02T15:04"))
+
 	id := strings.TrimSpace(stdout)
 	if !looksLikeID(id) {
-		t.Fatalf("scheduled send stdout should be a bare message ID, got %q", stdout)
+		t.Fatalf("a scheduled send should print a bare message ID, got %q", stdout)
 	}
+	// cancel_send keeps the same message ID, so this covers it in either state.
 	cleanupRun(t, "Delete scheduled mail: proton-cli mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 	assertContains(t, stderr, "Scheduled")
-	// The returned ID is exactly the Scheduled-folder entry.
+
+	// It is queued rather than sent, under exactly the ID that was reported.
 	var schedID string
 	waitFor(30*time.Second, 1*time.Second, func() bool {
 		schedID = messageIDInFolder("scheduled", subject)
 		return schedID != ""
 	})
 	if schedID != id {
-		t.Errorf("scheduled folder ID %q != send stdout ID %q", schedID, id)
+		t.Errorf("the scheduled folder holds %q, want the ID the send reported, %q", schedID, id)
+	}
+
+	// It carries its future delivery time; an immediate send would be about now.
+	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+id)
+	msg, _ := data["Message"].(map[string]interface{})
+	msgTime, _ := msg["Time"].(float64)
+	if int64(msgTime) <= time.Now().Add(time.Hour).Unix() {
+		t.Errorf("scheduled Time = %d, want a delivery time near %d", int64(msgTime), sendAt.Unix())
+	}
+
+	// A dry run does not take it out of the queue.
+	_, stderr = runOKStderr(t, "--dry-run", "mail", "messages", "unschedule", "--", id)
+	assertContains(t, stderr, "Dry run")
+	if messageIDInFolder("scheduled", subject) == "" {
+		t.Error("--dry-run unscheduled the message")
+	}
+
+	// Taking it back out returns it to Drafts.
+	runOK(t, "mail", "messages", "unschedule", "--", id)
+	var draftID string
+	waitFor(30*time.Second, 1*time.Second, func() bool {
+		draftID = messageIDInFolder("drafts", subject)
+		return draftID != ""
+	})
+	if draftID == "" {
+		t.Error("an unscheduled message should appear in Drafts")
+	}
+	if messageIDInFolder("scheduled", subject) != "" {
+		t.Error("the message is still in Scheduled after being unscheduled")
 	}
 }
 
 func TestMailSendScheduledDryRunEchoesTime(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-scheddry"
 	sendAt := time.Now().Add(5 * time.Hour)
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
@@ -1401,63 +1496,15 @@ func TestMailSendScheduledDryRunEchoesTime(t *testing.T) {
 	}
 }
 
-func TestMailMessagesUnschedule(t *testing.T) {
-	subject := testID() + "-unsched"
-	sendAt := time.Now().Add(3 * time.Hour)
-	runOK(t, "mail", "messages", "send",
-		"--to", selfEmail(), "--subject", subject,
-		"--body", "reschedule me", "--send-at", sendAt.Format("2006-01-02T15:04"))
-
-	// It lands in the Scheduled folder (proves the new `scheduled` alias).
-	var schedID string
-	waitFor(30*time.Second, 1*time.Second, func() bool {
-		schedID = messageIDInFolder("scheduled", subject)
-		return schedID != ""
-	})
-	if schedID == "" {
-		t.Fatal("scheduled message did not appear in the scheduled folder")
-	}
-	// cancel_send keeps the same message ID, so this cleanup covers both states.
-	cleanupRun(t, "Delete unscheduled draft: proton-cli mail messages delete "+schedID,
-		"mail", "messages", "delete", "--", schedID)
-
-	// Dry-run must not move it.
-	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "unschedule", "--", schedID)
-	assertContains(t, stderr, "Dry run")
-	if messageIDInFolder("scheduled", subject) == "" {
-		t.Error("dry-run should not unschedule the message")
-	}
-
-	// Real unschedule -> back to Drafts, gone from Scheduled.
-	runOK(t, "mail", "messages", "unschedule", "--", schedID)
-	var draftID string
-	waitFor(30*time.Second, 1*time.Second, func() bool {
-		draftID = messageIDInFolder("drafts", subject)
-		return draftID != ""
-	})
-	if draftID == "" {
-		t.Error("unscheduled message should appear in Drafts")
-	}
-	if messageIDInFolder("scheduled", subject) != "" {
-		t.Error("message should no longer be in Scheduled after unschedule")
-	}
-}
-
 func TestMailMessagesUnscheduleByAllDryRun(t *testing.T) {
+	t.Parallel()
 	// --all with --dry-run is safe: it previews without touching the queue.
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "unschedule", "--all")
 	assertContains(t, stderr, "Dry run")
 }
 
-func TestMailMessagesUnscheduleRequiresSelection(t *testing.T) {
-	_, stderr, code := run(t, "mail", "messages", "unschedule")
-	if code == 0 {
-		t.Error("expected error when no REF and no --all given")
-	}
-	assertContains(t, stderr, "Nothing selected")
-}
-
 func TestMailSendExpiringHasExpirationTime(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-expires"
 	runOK(t, "mail", "messages", "send",
 		"--to", selfEmail(), "--subject", subject,
@@ -1484,6 +1531,7 @@ func TestMailSendExpiringHasExpirationTime(t *testing.T) {
 }
 
 func TestMailSendEncryptedForOutsideDryRun(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "send",
 		"--to", externalRecipient(t), "--subject", testID()+"-eo-dry",
 		"--body", "secret", "--eo-password", "hunter2", "--eo-password-hint", "the usual")
@@ -1496,6 +1544,7 @@ func TestMailSendEncryptedForOutsideDryRun(t *testing.T) {
 // EO-packaging regression or a server-side address policy. (Sending to a fake
 // @example.com address instead would bounce with a MAILER-DAEMON return.)
 func TestMailSendEncryptedForOutside(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-eo-real"
 
 	runOK(t, "mail", "messages", "send",
@@ -1519,6 +1568,8 @@ func TestMailSendEncryptedForOutside(t *testing.T) {
 }
 
 func TestMailFoldersNestedReportsParent(t *testing.T) {
+	t.Parallel()
+	lease(t, folderSlot)
 	parentName := testID() + "-parent"
 	parentID := strings.TrimSpace(runOK(t, "mail", "settings", "folders", "create", "--name", parentName, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton-cli mail settings folders delete %s", parentID),
@@ -1569,6 +1620,7 @@ func secondaryMailContaining(t *testing.T, from, needle string) string {
 }
 
 func TestMailCrossAccountDelivery(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-x2acct"
 	body := "cross-account e2ee body for " + subject
 	runOK(t, "mail", "messages", "send", "--to", secondaryEmail(), "--subject", subject, "--body", body)

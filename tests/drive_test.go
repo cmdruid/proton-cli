@@ -21,6 +21,7 @@ import (
 // A table draws no header when it has no rows, so the listing needs something
 // to list rather than whatever another test happened to leave behind.
 func TestDriveItemsList(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-list"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete %s", folder),
@@ -32,6 +33,7 @@ func TestDriveItemsList(t *testing.T) {
 }
 
 func TestDriveItemsListJSONFieldNames(t *testing.T) {
+	t.Parallel()
 	data := runJSONArray(t, "drive", "items", "list")
 	if len(data) == 0 {
 		t.Skip("drive root is empty")
@@ -47,6 +49,7 @@ func TestDriveItemsListJSONFieldNames(t *testing.T) {
 // ── info ──
 
 func TestDriveItemsInfo(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-info"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "doc.txt")
@@ -81,6 +84,7 @@ func TestDriveItemsInfo(t *testing.T) {
 }
 
 func TestDriveItemsInfoFolder(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-infodir"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -95,6 +99,7 @@ func TestDriveItemsInfoFolder(t *testing.T) {
 // ── upload / download lifecycle ──
 
 func TestDriveItemsUploadDownload(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-upload"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "payload.txt")
@@ -118,6 +123,7 @@ func TestDriveItemsUploadDownload(t *testing.T) {
 }
 
 func TestDriveItemsUploadFromStdin(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-stdin"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -149,6 +155,7 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 // A stdin DEST whose last segment isn't an existing folder names the new file:
 // the basename becomes the file name and its parent is the target folder.
 func TestDriveItemsUploadFromStdinNamed(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-stdin-named"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -177,6 +184,7 @@ func TestDriveItemsUploadFromStdinNamed(t *testing.T) {
 // A stdin upload under a non-existent parent fails as not-found (exit 3) and
 // names the missing folder segment, never the intended filename.
 func TestDriveItemsUploadFromStdinMissingParent(t *testing.T) {
+	t.Parallel()
 	missing := testID() + "-nope"
 	_, stderr, code := runWithStdin(t, strings.NewReader("x\n"),
 		"drive", "items", "upload", "-", "/"+missing+"/note.txt")
@@ -196,6 +204,7 @@ func TestDriveItemsUploadFromStdinMissingParent(t *testing.T) {
 // single folder + uploads created once, rather than one folder+upload per
 // behavior. Subtests keep per-behavior reporting.
 func TestDriveItemsDownloadBehaviors(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-dl"
 	tmp := t.TempDir()
 	aSrc := filepath.Join(tmp, "a.txt")
@@ -251,6 +260,7 @@ func TestDriveItemsDownloadBehaviors(t *testing.T) {
 }
 
 func TestDriveItemsUploadRecursive(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-rec"
 	tmp := t.TempDir()
 	tree := filepath.Join(tmp, "tree")
@@ -283,6 +293,7 @@ func TestDriveItemsUploadRecursive(t *testing.T) {
 }
 
 func TestDriveItemsUploadMultiBlock(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-big"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "big.bin")
@@ -316,6 +327,7 @@ func TestDriveItemsUploadMultiBlock(t *testing.T) {
 // request links in multiple batches and upload blocks in parallel; the sha256
 // round-trip proves block ordering survives the concurrency.
 func TestDriveItemsUploadManyBlocks(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-many"
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "many.bin")
@@ -347,6 +359,7 @@ func TestDriveItemsUploadManyBlocks(t *testing.T) {
 // ── rename / move (re-encryption) ──
 
 func TestDriveItemsRename(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-rn"
 	tmp := t.TempDir()
 	_ = os.WriteFile(filepath.Join(tmp, "orig.txt"), []byte("renameme"), 0644)
@@ -377,6 +390,7 @@ func TestDriveItemsRename(t *testing.T) {
 }
 
 func TestDriveItemsMove(t *testing.T) {
+	t.Parallel()
 	src := "/" + testID() + "-src"
 	dst := "/" + testID() + "-dst"
 	tmp := t.TempDir()
@@ -414,6 +428,7 @@ func TestDriveItemsMove(t *testing.T) {
 // ── delete + trash ──
 
 func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-trash"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Final delete: proton-cli drive items delete --permanent %s", folder),
@@ -462,6 +477,7 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 // ── batch filters (all dry-run) ──
 
 func TestDriveBatchDeletePatternDryRun(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-pat"
 	tmp := t.TempDir()
 	for _, n := range []string{"a.log", "b.log", "keep.txt"} {
@@ -482,14 +498,6 @@ func TestDriveBatchDeletePatternDryRun(t *testing.T) {
 	assertNotContains(t, stderr, "keep.txt")
 }
 
-func TestDriveBatchDeleteRequiresInput(t *testing.T) {
-	_, stderr, code := run(t, "drive", "items", "delete")
-	if code == 0 {
-		t.Error("expected error when no PATH and no filter given")
-	}
-	assertContains(t, stderr, "Nothing selected")
-}
-
 // Deleting is permanent, so it is confirmed rather than assumed - and never more
 // so than with --all, which covers the whole drive. A test is not a terminal, so
 // the only way through is --yes, and its absence has to stop the command rather
@@ -499,6 +507,7 @@ func TestDriveBatchDeleteRequiresInput(t *testing.T) {
 // the guard ever stopped working this is the test standing between a stray --all
 // and the account's entire Drive.
 func TestDriveBatchDeleteAllNeedsConfirming(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "drive", "items", "delete", "--all")
 	if code != 1 {
 		t.Fatalf("--all alone must be stopped for confirmation, got exit %d: %s", code, stderr)
@@ -511,6 +520,7 @@ func TestDriveBatchDeleteAllNeedsConfirming(t *testing.T) {
 // ── folders ──
 
 func TestDriveFoldersCreate(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-folder"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -530,6 +540,7 @@ func TestDriveFoldersCreate(t *testing.T) {
 }
 
 func TestDriveItemsCopy(t *testing.T) {
+	t.Parallel()
 	base := "/" + testID() + "-copy-src"
 	dest := "/" + testID() + "-copy-dst"
 	runOK(t, "drive", "folders", "create", base)
@@ -561,6 +572,7 @@ func TestDriveItemsCopy(t *testing.T) {
 }
 
 func TestDriveItemsRevisions(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-rev"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -601,6 +613,8 @@ func photoLinkIDs(t *testing.T) map[string]bool {
 }
 
 func TestDrivePhotosWriteLifecycle(t *testing.T) {
+	t.Parallel()
+	lease(t, photos)
 	if _, stderr, code := run(t, "drive", "photos", "list"); code != 0 {
 		if strings.Contains(stderr, "photos") {
 			t.Skip("no photos share on this account")
@@ -718,6 +732,8 @@ func favoritePhotoTags(t *testing.T, photoID string) []string {
 // photo to the trash (it leaves the timeline listing), and `delete` (permanent)
 // cleans it up.
 func TestDrivePhotosTrash(t *testing.T) {
+	t.Parallel()
+	lease(t, photos)
 	if _, stderr, code := run(t, "drive", "photos", "list"); code != 0 {
 		if strings.Contains(stderr, "photos") {
 			t.Skip("no photos share on this account")
@@ -753,6 +769,8 @@ func TestDrivePhotosTrash(t *testing.T) {
 }
 
 func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
+	t.Parallel()
+	lease(t, photos)
 	if _, stderr, code := run(t, "drive", "photos", "list"); code != 0 {
 		if strings.Contains(stderr, "photos") {
 			t.Skip("no photos share on this account")
@@ -826,6 +844,7 @@ func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
 }
 
 func TestDrivePhotosRead(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "drive", "photos", "list")
 	if code != 0 {
 		if strings.Contains(stderr, "photos") {
@@ -837,20 +856,11 @@ func TestDrivePhotosRead(t *testing.T) {
 	runOK(t, "drive", "photos", "albums", "list")
 }
 
+// Which tag names exist is judged from the command line, so that is asserted in
+// the offline suite. What is left here is that a name Proton knows actually
+// filters against the library.
 func TestDrivePhotosListTags(t *testing.T) {
-	// Tags are referenced by name only - an unknown name and an integer are
-	// both rejected (the CLI never accepts or leaks raw enum ints).
-	_, stderr, code := run(t, "drive", "photos", "list", "--tag", "bogus-"+testID())
-	if code == 0 {
-		t.Error("expected non-zero exit for an unknown --tags value")
-	}
-	assertContains(t, stderr, "--tag accepts:")
-	assertContains(t, stderr, "favorites")
-	if _, _, code := run(t, "drive", "photos", "list", "--tag", "2"); code == 0 {
-		t.Error("expected non-zero exit for an integer --tags value (names only)")
-	}
-
-	// Filtering by a valid classification tag runs cleanly (result may be empty).
+	t.Parallel()
 	if _, stderr, code := run(t, "drive", "photos", "list", "--tag", "videos"); code != 0 {
 		if strings.Contains(stderr, "photos") {
 			t.Skip("no photos share on this account")
@@ -865,6 +875,7 @@ func TestDrivePhotosListTags(t *testing.T) {
 // Favouriting is a verb, not a tag to be set: `tags` would invite a second way to
 // say the same thing.
 func TestDrivePhotosFavouriteIsAVerb(t *testing.T) {
+	t.Parallel()
 	help := runOK(t, "drive", "photos", "--help")
 	assertContains(t, help, "favorite")
 	assertContains(t, help, "unfavorite")

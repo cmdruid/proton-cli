@@ -13,6 +13,7 @@ import (
 // export and the --eml import agree with each other.
 
 func TestMailMessagesExportToStdout(t *testing.T) {
+	t.Parallel()
 	msgID, _, subject := plainMail(t)
 
 	stdout := runOK(t, "mail", "messages", "export", "--output", "-", "--", msgID)
@@ -35,6 +36,7 @@ func TestMailMessagesExportToStdout(t *testing.T) {
 }
 
 func TestMailMessagesExportToFile(t *testing.T) {
+	t.Parallel()
 	msgID, _, subject := plainMail(t)
 	dest := filepath.Join(t.TempDir(), "message.eml")
 
@@ -52,6 +54,7 @@ func TestMailMessagesExportToFile(t *testing.T) {
 }
 
 func TestMailMessagesExportFolderToDirectory(t *testing.T) {
+	t.Parallel()
 	plainMail(t) // make sure the inbox has something to export
 	dir := t.TempDir()
 
@@ -78,6 +81,7 @@ func TestMailMessagesExportFolderToDirectory(t *testing.T) {
 }
 
 func TestMailMessagesExportMbox(t *testing.T) {
+	t.Parallel()
 	plainMail(t)
 	dest := filepath.Join(t.TempDir(), "inbox.mbox")
 
@@ -95,6 +99,7 @@ func TestMailMessagesExportMbox(t *testing.T) {
 }
 
 func TestMailMessagesExportRejectsAmbiguousOutput(t *testing.T) {
+	t.Parallel()
 	dest := filepath.Join(t.TempDir(), "one.eml")
 	_, stderr, code := run(t, "mail", "messages", "export",
 		"--folder", "inbox", "--limit", "5", "--all", "--output", dest)
@@ -105,6 +110,7 @@ func TestMailMessagesExportRejectsAmbiguousOutput(t *testing.T) {
 }
 
 func TestMailMessagesExportDryRun(t *testing.T) {
+	t.Parallel()
 	msgID, _, _ := plainMail(t)
 	dir := t.TempDir()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "export",
@@ -117,6 +123,7 @@ func TestMailMessagesExportDryRun(t *testing.T) {
 }
 
 func TestMailConversationsExportWholeThread(t *testing.T) {
+	t.Parallel()
 	_, convID, subject := plainMail(t)
 	dest := filepath.Join(t.TempDir(), "thread.mbox")
 
@@ -135,6 +142,7 @@ func TestMailConversationsExportWholeThread(t *testing.T) {
 
 // The point of having both halves: what export writes, --eml reads back.
 func TestMailExportImportRoundTrip(t *testing.T) {
+	t.Parallel()
 	msgID, attID, attName := sharedAttachment(t)
 	_ = attID
 
@@ -154,6 +162,7 @@ func TestMailExportImportRoundTrip(t *testing.T) {
 }
 
 func TestMailSendFromEMLFile(t *testing.T) {
+	t.Parallel()
 	subject := testID() + "-eml-send"
 	path := filepath.Join(t.TempDir(), "message.eml")
 	doc := "From: " + selfEmail() + "\r\n" +
@@ -181,6 +190,7 @@ func TestMailSendFromEMLFile(t *testing.T) {
 }
 
 func TestMailSendFromEMLRejectsAnUnreadableFile(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "not-mail.eml")
 	if err := os.WriteFile(path, []byte("this is not a message"), 0o600); err != nil {
 		t.Fatal(err)

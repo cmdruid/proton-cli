@@ -9,6 +9,7 @@ import (
 // profiles on it.
 
 func TestAccountGetReportsBothHalves(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "account", "get")
 	// The question people ask is "whose account, and can this machine act as it",
 	// so one command has to answer both.
@@ -18,6 +19,7 @@ func TestAccountGetReportsBothHalves(t *testing.T) {
 }
 
 func TestAccountGetJSON(t *testing.T) {
+	t.Parallel()
 	data := runJSON(t, "account", "get")
 	for _, key := range []string{"email", "used_space", "max_space", "profile", "session", "unlocked"} {
 		if _, ok := data[key]; !ok {
@@ -33,6 +35,7 @@ func TestAccountGetJSON(t *testing.T) {
 
 // Storage is reported as a share of a total, which is how a person reads it.
 func TestAccountGetStorageIsHumanReadable(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "account", "get")
 	for _, line := range strings.Split(stdout, "\n") {
 		if strings.HasPrefix(line, "Storage:") {
@@ -48,6 +51,7 @@ func TestAccountGetStorageIsHumanReadable(t *testing.T) {
 // Profiles are read off the filesystem, so this works without contacting Proton -
 // which is the point: you can see what is configured before signing in.
 func TestAccountProfilesList(t *testing.T) {
+	t.Parallel()
 	profiles := runJSONArray(t, "account", "profiles", "list")
 	if len(profiles) == 0 {
 		t.Skip("no saved session, so nothing to list")
@@ -73,6 +77,7 @@ func TestAccountProfilesList(t *testing.T) {
 }
 
 func TestAccountSessionsListMarksTheCurrentOne(t *testing.T) {
+	t.Parallel()
 	sessions := runJSONArray(t, "account", "sessions", "list")
 	if len(sessions) == 0 {
 		t.Fatal("a signed-in account has at least this session")
@@ -94,26 +99,10 @@ func TestAccountSessionsListMarksTheCurrentOne(t *testing.T) {
 	}
 }
 
-// Revoking needs a target, and refuses to guess.
-func TestAccountSessionsRevokeNeedsATarget(t *testing.T) {
-	_, stderr, code := run(t, "account", "sessions", "revoke")
-	if code == 0 {
-		t.Error("revoking nothing should fail")
-	}
-	assertContains(t, stderr, "Nothing selected")
-}
-
-func TestAccountSessionsRevokeOthersTakesNoRef(t *testing.T) {
-	_, stderr, code := run(t, "account", "sessions", "revoke", "--others", "some-uid")
-	if code == 0 {
-		t.Error("--others with a REF should fail rather than doing both")
-	}
-	assertContains(t, stderr, "--others")
-}
-
 // ── settings ──
 
 func TestAccountSettingsGetAndList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "account", "settings", "get")
 	for _, want := range []string{"Locale:", "Date Format:", "Telemetry:"} {
 		assertContains(t, stdout, want)
@@ -141,30 +130,10 @@ func TestAccountSettingsGetAndList(t *testing.T) {
 	}
 }
 
-// A settings value is declared, so it is judged locally - no session, no request.
-func TestAccountSettingsRejectsLocally(t *testing.T) {
-	t.Run("an unknown key", func(t *testing.T) {
-		_, stderr, code := run(t, "account", "settings", "set", "no-such-key", "on")
-		if code != 3 {
-			t.Errorf("exit %d, want 3 for something that does not exist", code)
-		}
-		assertContains(t, stderr, "no account setting called")
-		assertContains(t, stderr, "settings list")
-	})
-	t.Run("a value outside the domain", func(t *testing.T) {
-		_, stderr, code := run(t, "account", "settings", "set", "week-start", "funday")
-		if code != 1 {
-			t.Errorf("exit %d, want 1 for a bad value", code)
-		}
-		// The whole domain has to appear: a user who guessed wrong needs the list.
-		for _, want := range []string{"week-start accepts", "monday", "sunday"} {
-			assertContains(t, stderr, want)
-		}
-	})
-}
-
 // Reads and writes speak the same vocabulary: what `get` shows is what `set` takes.
 func TestAccountSettingsRoundTripsNames(t *testing.T) {
+	t.Parallel()
+	lease(t, accountSettings)
 	before := runJSON(t, "account", "settings", "get")
 	original, ok := before["week_start"].(string)
 	if !ok {

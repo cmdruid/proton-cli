@@ -22,7 +22,7 @@ func addressesListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List the addresses on the account",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			addrs, err := c.App.Mail.AddressesList(c.Ctx)
 			if err != nil {
 				return err
@@ -50,7 +50,7 @@ func addressesGetCmd() *cobra.Command {
 		Use:   "get REF",
 		Short: "Show one address, including its signature",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			a, err := c.App.Mail.ResolveAddress(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
@@ -86,7 +86,7 @@ func addressesUpdateCmd() *cobra.Command {
 			"Proton stores signatures as HTML. Plain text is escaped and its newlines become\n" +
 			"line breaks; --html passes markup through untouched.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			setName, setSig := c.Changed("display-name"), c.Changed("signature")
 			if clear && setSig {
 				return kit.Fail("--clear-signature and --signature contradict each other.")

@@ -23,7 +23,7 @@ func shareGetCmd() *cobra.Command {
 		Use:   "get PATH",
 		Short: "Show how a file or folder is shared",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -87,7 +87,7 @@ func shareLinkCmd() *cobra.Command {
 			"Running it again with different options changes the existing link rather than\n" +
 			"making a second one, so the URL you have shared keeps working.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			opts := drivesvc.LinkOptions{}
 			if c.Changed("edit") {
 				opts.SetEdit, opts.CanEdit = true, edit
@@ -144,7 +144,7 @@ func shareUnlinkCmd() *cobra.Command {
 		Use:   "unlink PATH",
 		Short: "Remove the public links for a file or folder",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -171,7 +171,7 @@ func shareAddCmd() *cobra.Command {
 		Use:   "add PATH EMAIL",
 		Short: "Invite someone to a file or folder",
 		Args:  cobra.ExactArgs(2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -194,7 +194,7 @@ func shareRemoveCmd() *cobra.Command {
 		Use:   "remove PATH EMAIL",
 		Short: "Revoke someone's access, or cancel their invitation",
 		Args:  cobra.ExactArgs(2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -227,7 +227,7 @@ func invitationsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List invitations waiting for an answer",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			invitations, err := c.App.Drive.ListInvitations(c.Ctx)
 			if err != nil {
 				return err
@@ -251,7 +251,7 @@ func invitationVerb(use, short string, action ui.Action) *cobra.Command {
 		Use:   use + " REF...",
 		Short: short,
 		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: action, Kind: "invitations", Count: len(c.Args), IDs: c.Args,
 			}, func() error {
@@ -298,7 +298,7 @@ func trashListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List what is in the trash",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -323,7 +323,7 @@ func trashRestoreCmd() *cobra.Command {
 			"A trashed item has no path any more, so it is named by the ID that\n" +
 			"`trash list` shows.",
 		Args: cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -342,7 +342,7 @@ func trashEmptyCmd() *cobra.Command {
 		Use:   "empty",
 		Short: "Delete everything in the trash, permanently",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err

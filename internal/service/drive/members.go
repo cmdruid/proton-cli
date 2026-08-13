@@ -112,11 +112,7 @@ func (s *Service) RemoveMember(ctx context.Context, dc *Context, path, email str
 	if err != nil {
 		return err
 	}
-	link, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return err
-	}
-	for _, sid := range link.ShareIDs {
+	for _, sid := range res.Link.ShareIDs {
 		if sid == dc.ShareID {
 			continue
 		}

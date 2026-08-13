@@ -81,11 +81,7 @@ func (s *Service) Download(ctx context.Context, dc *Context, path string, w io.W
 	if res.IsFolder {
 		return fmt.Errorf("%s is a folder, not a file", path)
 	}
-	link, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return err
-	}
-	return s.downloadFile(ctx, res.ShareID, link, res.NodeKR, w, opts)
+	return s.downloadFile(ctx, res.ShareID, res.Link, res.NodeKR, w, opts)
 }
 
 // downloadFile streams and decrypts the active revision of a file link whose

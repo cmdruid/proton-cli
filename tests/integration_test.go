@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/png"
 	"io"
 	"math/rand"
 	"os"
@@ -16,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/roman-16/proton-cli/tests/fixture"
 )
 
 var binaryPath string
@@ -54,14 +54,13 @@ func TestMain(m *testing.M) {
 	}
 
 	writePasswordFiles()
+	openTrace()
 	seed()
 
 	code := m.Run()
 
-	// Shared fixtures outlive individual tests, so their teardown runs here
-	// while binaryPath is still valid. os.Exit skips deferred funcs, so the
-	// temp-dir removal is explicit too.
-	flushSuiteCleanup()
+	// os.Exit skips deferred funcs, so the temp-dir removal is explicit.
+	closeTrace()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }
@@ -197,13 +196,31 @@ func runAs(profile string, stdin io.Reader, args ...string) (stdout, stderr stri
 	cmd.Stderr = &errBuf
 	cmd.Stdin = stdin
 	cmd.Env = childEnv(profile)
-	if runErr := cmd.Run(); runErr != nil {
-		if exitErr, ok := runErr.(*exec.ExitError); ok {
-			return outBuf.String(), errBuf.String(), exitErr.ExitCode(), nil
-		}
-		return outBuf.String(), errBuf.String(), -1, runErr
+	if tracingRequests() {
+		cmd.Env = append(cmd.Env, "PROTON_LOG_LEVEL=debug")
 	}
-	return outBuf.String(), errBuf.String(), 0, nil
+
+	started := time.Now()
+	var runErr error
+	if at := sendsMail(args); at {
+		// Sending is metered by the hour and judged by Proton, so two never go out
+		// at once however many tests are running. The lease covers the send itself
+		// and not the wait for delivery that follows it.
+		holding(sending, func() { runErr = cmd.Run() })
+	} else {
+		runErr = cmd.Run()
+	}
+	elapsed := time.Since(started)
+
+	exitCode = 0
+	if runErr != nil {
+		exitErr, ok := runErr.(*exec.ExitError)
+		if !ok {
+			return outBuf.String(), errBuf.String(), -1, runErr
+		}
+		exitCode = exitErr.ExitCode()
+	}
+	return outBuf.String(), trace(profile, args, elapsed, exitCode, errBuf.String()), exitCode, nil
 }
 
 // reauthCommands are the commands Proton may ask to re-authenticate, and so the
@@ -235,6 +252,29 @@ func withPassword(a *testAccount, args []string) []string {
 		return append(out, args[at+len(cmd):]...)
 	}
 	return args
+}
+
+// sendingCommands are the commands that put a message on the wire. It mirrors
+// what the CLI's own compose paths do, and is the one place the suite states it,
+// so no test has to remember to space its sending.
+var sendingCommands = [][]string{
+	{"mail", "messages", "send"},
+	{"mail", "messages", "reply"},
+	{"mail", "messages", "forward"},
+	{"mail", "drafts", "send"},
+	{"calendar", "events", "respond"},
+}
+
+func sendsMail(args []string) bool {
+	if slices.Contains(args, "--dry-run") {
+		return false
+	}
+	for _, cmd := range sendingCommands {
+		if indexOfRun(args, cmd...) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // indexOfRun reports where args holds the words in order and adjacent, or -1.
@@ -294,7 +334,25 @@ func runWithStdin(t *testing.T, stdin io.Reader, args ...string) (stdout, stderr
 	if err != nil {
 		t.Fatalf("failed to run command %v: %v", args, err)
 	}
+	refuseToPush(t, stderr)
 	return stdout, stderr, exitCode
+}
+
+// rateLimited is what the client says when Proton asks for room.
+const rateLimited = "rate limited by Proton"
+
+// refuseToPush stops the run the first time Proton throttles it.
+//
+// The client backs off and would very likely succeed, so the suite would pass and
+// nobody would learn anything - except that these are real accounts, and a run
+// that has started being throttled is a run that should be asking for less rather
+// than pressing on. The concurrency is a setting; this is how it gets corrected.
+func refuseToPush(t *testing.T, stderr string) {
+	t.Helper()
+	if strings.Contains(stderr, rateLimited) {
+		t.Fatalf("Proton rate-limited this run. Lower the concurrency (go test -parallel N) "+
+			"and give the account a few minutes.\n%s", truncateOutput(stderr))
+	}
 }
 
 // runWithEnv runs the CLI with extra env vars layered on top of os.Environ().
@@ -522,6 +580,7 @@ func runSecondary(t *testing.T, args ...string) (stdout, stderr string, exitCode
 	if err != nil {
 		t.Fatalf("failed to run command %v as the secondary account: %v", args, err)
 	}
+	refuseToPush(t, stderr)
 	return stdout, stderr, exitCode
 }
 
@@ -675,282 +734,169 @@ func sendTestMail(t *testing.T, subject string) string {
 	return sentID
 }
 
-// ── suite-scoped cleanup ──
-//
-// Shared fixtures outlive any single test, so their teardown is registered here
-// and flushed from TestMain after m.Run() (while binaryPath is still valid). A
-// failed deletion prints the same loud, copy-pasteable box the per-test cleanup
-// uses, so nothing silently leaks.
-
-var (
-	suiteCleanupMu  sync.Mutex
-	suiteCleanupFns []func()
-)
-
-// registerSuiteCleanup queues a CLI command to run once, at suite teardown.
-func registerSuiteCleanup(description string, args ...string) {
-	suiteCleanupMu.Lock()
-	defer suiteCleanupMu.Unlock()
-	suiteCleanupFns = append(suiteCleanupFns, func() {
-		if _, stderr, code, err := runArgs(nil, consenting(args)...); err != nil || code != 0 {
-			fmt.Fprintf(os.Stderr, "\n"+
-				"╔══════════════════════════════════════════════════════════════╗\n"+
-				"║  ⚠️  CLEANUP FAILED - MANUAL ACTION REQUIRED                ║\n"+
-				"╠══════════════════════════════════════════════════════════════╣\n"+
-				"║  %s\n"+
-				"║  Error: exit %d: %v %s\n"+
-				"╚══════════════════════════════════════════════════════════════╝\n",
-				description, code, err, strings.TrimSpace(stderr))
-		}
-	})
-}
-
-// flushSuiteCleanup runs the queued teardowns in reverse registration order.
-func flushSuiteCleanup() {
-	suiteCleanupMu.Lock()
-	defer suiteCleanupMu.Unlock()
-	for i := len(suiteCleanupFns) - 1; i >= 0; i-- {
-		suiteCleanupFns[i]()
-	}
-}
-
 // ── shared mail fixtures ──
 //
-// Read-only mail tests share a handful of delivered messages created once per
-// suite (guarded by sync.Once) instead of each sending and polling. This is the
-// single biggest speedup lever: it collapses ~25 send+deliver waits into ~3.
-// Mutating tests still send their own via sendTestMail.
+// Most mail tests need *a* delivered message of a particular shape rather than a
+// freshly sent one. Those shapes live on the account: `scripts/seed` puts them
+// there and this finds them, so a run spends its sending allowance on the send
+// path it is actually testing. What each one is for is declared in tests/fixture.
+//
+// A test that mutates its message, or that exercises the send path itself, sends
+// its own with sendTestMail instead.
 
-type sharedMail struct {
-	once    sync.Once
-	msgID   string // inbox copy (falls back to sent)
+// seeded is a fixture message as the suite needs it: what to address, what thread
+// it is in, and - for the one carrying attachments - which attachment to act on.
+type seeded struct {
+	msgID   string
 	convID  string
 	subject string
-	err     error
-}
-
-func (f *sharedMail) ensure(bodyFor func(subject string) string) {
-	f.once.Do(func() {
-		f.subject = testID() + "-shared"
-		sentID, inboxID, err := sendSelfMail(f.subject, bodyFor(f.subject))
-		if err != nil {
-			f.err = err
-			return
-		}
-		f.msgID = inboxID
-		if f.msgID == "" {
-			f.msgID = sentID
-		}
-		if f.msgID == "" {
-			f.err = fmt.Errorf("shared mail %q was not delivered", f.subject)
-			return
-		}
-		if sentID != "" {
-			registerSuiteCleanup("Delete shared sent mail: proton-cli mail messages delete "+sentID,
-				"mail", "messages", "delete", "--", sentID)
-		}
-		if inboxID != "" && inboxID != sentID {
-			registerSuiteCleanup("Delete shared inbox mail: proton-cli mail messages delete "+inboxID,
-				"mail", "messages", "delete", "--", inboxID)
-		}
-		f.convID = conversationIDOf(f.msgID)
-	})
-}
-
-var (
-	plainMailFixture  sharedMail
-	quotedMailFixture sharedMail
-)
-
-// plainMail returns a shared, delivered self-mail with a plain body (no quote
-// markers, no attachments) plus its conversation ID and subject. Read-only.
-func plainMail(t *testing.T) (msgID, convID, subject string) {
-	t.Helper()
-	plainMailFixture.ensure(func(s string) string { return "Integration test body: " + s })
-	if plainMailFixture.err != nil {
-		t.Fatalf("shared plain mail: %v", plainMailFixture.err)
-	}
-	return plainMailFixture.msgID, plainMailFixture.convID, plainMailFixture.subject
-}
-
-// quotedMail returns a shared, delivered self-mail whose body carries the
-// canonical "On <date>, <name> <addr> wrote:" reply block. Read-only.
-func quotedMail(t *testing.T) (msgID, subject string) {
-	t.Helper()
-	quotedMailFixture.ensure(func(s string) string {
-		return "My new note for " + s + ".\n\nOn Tue, 24 Sep 2024, Sender <a@b.com> wrote:\n\n> ancient quoted text\n> that should disappear\n"
-	})
-	if quotedMailFixture.err != nil {
-		t.Fatalf("shared quoted mail: %v", quotedMailFixture.err)
-	}
-	return quotedMailFixture.msgID, quotedMailFixture.subject
-}
-
-// ── shared attachment fixture ──
-
-type sharedAttachMail struct {
-	once    sync.Once
-	msgID   string
 	attID   string
 	attName string
-	err     error
 }
 
-var attachMailFixture sharedAttachMail
-
-func (f *sharedAttachMail) ensure() {
-	f.once.Do(func() {
-		subject := testID() + "-shared-attach"
-		dir, err := os.MkdirTemp("", "pcli-fixture-*")
-		if err != nil {
-			f.err = err
-			return
-		}
-		defer func() { _ = os.RemoveAll(dir) }()
-		path := filepath.Join(dir, "note.txt")
-		if err := os.WriteFile(path, []byte("shared attachment body for "+subject), 0644); err != nil {
-			f.err = err
-			return
-		}
-		if _, stderr, code, e := runArgs(nil, "mail", "messages", "send",
-			"--to", selfEmail(), "--subject", subject, "--body", "see attached",
-			"--attach", path); e != nil || code != 0 {
-			f.err = fmt.Errorf("send attachment mail failed (exit %d): %v %s", code, e, strings.TrimSpace(stderr))
-			return
-		}
-		var inboxID string
-		waitFor(25*time.Second, 750*time.Millisecond, func() bool {
-			inboxID = messageIDInFolder("inbox", subject)
-			return inboxID != ""
-		})
-		sentID := messageIDInFolder("sent", subject)
-		if sentID != "" {
-			registerSuiteCleanup("Delete shared attach sent mail: proton-cli mail messages delete "+sentID,
-				"mail", "messages", "delete", "--", sentID)
-		}
-		if inboxID != "" && inboxID != sentID {
-			registerSuiteCleanup("Delete shared attach inbox mail: proton-cli mail messages delete "+inboxID,
-				"mail", "messages", "delete", "--", inboxID)
-		}
-		f.msgID = inboxID
-		if f.msgID == "" {
-			f.msgID = sentID
-		}
-		if f.msgID == "" {
-			f.err = fmt.Errorf("shared attachment mail was not delivered")
-			return
-		}
-		out, _, code, e := runArgs(nil, "mail", "messages", "attachments", "list", f.msgID, "--output", "json")
-		if e != nil || code != 0 {
-			f.err = fmt.Errorf("list shared attachment failed (exit %d): %v", code, e)
-			return
-		}
-		var env struct {
-			Attachments []struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
-			} `json:"attachments"`
-		}
-		if json.Unmarshal([]byte(out), &env) != nil || len(env.Attachments) == 0 {
-			f.err = fmt.Errorf("shared attachment not found after delivery")
-			return
-		}
-		f.attID = env.Attachments[0].ID
-		f.attName = env.Attachments[0].Name
-	})
+// find locates one seeded message and reads whatever else a test will ask of it.
+func find(m fixture.Mail) (seeded, error) {
+	id := inboxMessageID(m.Subject)
+	if id == "" {
+		return seeded{}, fmt.Errorf("the inbox holds no message subject %q; run `just seed`", m.Subject)
+	}
+	s := seeded{msgID: id, subject: m.Subject, convID: conversationIDOf(id)}
+	if m.Attach == "" {
+		return s, nil
+	}
+	out, _, code, err := runArgs(nil, "--output", "json", "mail", "messages", "attachments", "list", id)
+	if err != nil || code != 0 {
+		return seeded{}, fmt.Errorf("list the attachments of %q (exit %d): %v", m.Subject, code, err)
+	}
+	var env struct {
+		Attachments []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"attachments"`
+	}
+	if json.Unmarshal([]byte(out), &env) != nil || len(env.Attachments) == 0 {
+		return seeded{}, fmt.Errorf("the seeded message %q carries no attachment", m.Subject)
+	}
+	// The listing leaves inline parts out by default, so this is the regular one.
+	s.attID, s.attName = env.Attachments[0].ID, env.Attachments[0].Name
+	return s, nil
 }
 
-// sharedAttachment returns a shared, delivered self-mail carrying one
-// (non-inline) attachment, plus that attachment's ID and name. Read-only.
+// The lookups happen at most once per run, and only if something asks.
+var (
+	plainFixture       = sync.OnceValues(func() (seeded, error) { return find(fixture.Plain) })
+	quotedFixture      = sync.OnceValues(func() (seeded, error) { return find(fixture.Quoted) })
+	attachmentsFixture = sync.OnceValues(func() (seeded, error) { return find(fixture.Attachments) })
+)
+
+// inboxMessageID is the ID of the inbox message with exactly this subject.
+//
+// It reads the listing rather than the search index, because a message the seed
+// sent moments ago is in the mailbox before it is findable in the index.
+func inboxMessageID(subject string) string {
+	stdout, _, code, err := runArgs(nil, "--output", "json", "mail", "messages", "list",
+		"--folder", "inbox", "--page-size", "150")
+	if err != nil || code != 0 {
+		return ""
+	}
+	var data struct {
+		Messages []struct {
+			ID      string `json:"id"`
+			Subject string `json:"subject"`
+		} `json:"messages"`
+	}
+	if json.Unmarshal([]byte(stdout), &data) != nil {
+		return ""
+	}
+	for _, m := range data.Messages {
+		if m.Subject == subject {
+			return m.ID
+		}
+	}
+	return ""
+}
+
+func fixtureOr(t *testing.T, load func() (seeded, error)) seeded {
+	t.Helper()
+	s, err := load()
+	if err != nil {
+		t.Fatalf("shared mail fixture: %v", err)
+	}
+	return s
+}
+
+// plainMail is a delivered self-mail with a plain body: no quote markers, no
+// attachments. Read-only.
+func plainMail(t *testing.T) (msgID, convID, subject string) {
+	t.Helper()
+	s := fixtureOr(t, plainFixture)
+	return s.msgID, s.convID, s.subject
+}
+
+// quotedMail is a delivered self-mail whose body carries the canonical
+// "On <date>, <name> <addr> wrote:" reply block. Read-only.
+func quotedMail(t *testing.T) (msgID, subject string) {
+	t.Helper()
+	s := fixtureOr(t, quotedFixture)
+	return s.msgID, s.subject
+}
+
+// sharedAttachment is a delivered self-mail carrying one regular attachment, plus
+// that attachment's ID and name. Read-only.
 func sharedAttachment(t *testing.T) (msgID, attID, attName string) {
 	t.Helper()
-	attachMailFixture.ensure()
-	if attachMailFixture.err != nil {
-		t.Fatalf("shared attachment mail: %v", attachMailFixture.err)
-	}
-	return attachMailFixture.msgID, attachMailFixture.attID, attachMailFixture.attName
+	s := fixtureOr(t, attachmentsFixture)
+	return s.msgID, s.attID, s.attName
 }
 
-// ── shared mixed-disposition fixture ──
+// ── the mutable pool ──
 //
-// A delivered self-mail carrying BOTH an inline image (embedded via Content-ID)
-// and a regular attachment, so the inline-filter tests have a real message to
-// assert against instead of skipping. Created via `mail messages send --html
-// --attach ... --attach-inline ...`.
+// A test that marks, stars, moves or trashes a message needs one it may change,
+// not a freshly sent one: what it proves is that the change happens and can be
+// undone, and a seeded message proves that exactly as well. The pool hands them
+// out one at a time, so two tests running together never change the same message.
+//
+// A test that finishes as it should leaves its message as it found it. One that
+// fails may not have got that far, so the state is put back here rather than
+// trusted - otherwise the next run would find the message somewhere it does not
+// look for it, and the seed would send another.
+var mutablePool = func() chan fixture.Mail {
+	pool := make(chan fixture.Mail, len(fixture.Mutable))
+	for _, m := range fixture.Mutable {
+		pool <- m
+	}
+	return pool
+}()
 
-type sharedMixedMail struct {
-	once  sync.Once
-	msgID string
-	err   error
-}
-
-var mixedMailFixture sharedMixedMail
-
-func (f *sharedMixedMail) ensure() {
-	f.once.Do(func() {
-		subject := testID() + "-shared-mixed"
-		dir, err := os.MkdirTemp("", "pcli-fixture-*")
-		if err != nil {
-			f.err = err
-			return
+func mutableMail(t *testing.T) string {
+	t.Helper()
+	m := <-mutablePool
+	id := inboxMessageID(m.Subject)
+	t.Cleanup(func() {
+		if t.Failed() && id != "" {
+			for _, args := range [][]string{
+				{"mail", "messages", "move", "--into", "inbox", "--", id},
+				{"mail", "messages", "unstar", "--", id},
+				{"mail", "messages", "mark", "read", "--", id},
+			} {
+				_, _, _, _ = runArgs(nil, consenting(args)...)
+			}
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
-		reg := filepath.Join(dir, "note.txt")
-		img := filepath.Join(dir, "pixel.png")
-		if err := os.WriteFile(reg, []byte("regular attachment for "+subject), 0644); err != nil {
-			f.err = err
-			return
-		}
-		if err := os.WriteFile(img, tinyPNG(), 0644); err != nil {
-			f.err = err
-			return
-		}
-		if _, stderr, code, e := runArgs(nil, "mail", "messages", "send",
-			"--to", selfEmail(), "--subject", subject, "--html", "--body", "<p>mixed</p>",
-			"--attach", reg, "--attach-inline", img); e != nil || code != 0 {
-			f.err = fmt.Errorf("send mixed mail failed (exit %d): %v %s", code, e, strings.TrimSpace(stderr))
-			return
-		}
-		var inboxID string
-		waitFor(25*time.Second, 750*time.Millisecond, func() bool {
-			inboxID = messageIDInFolder("inbox", subject)
-			return inboxID != ""
-		})
-		sentID := messageIDInFolder("sent", subject)
-		if sentID != "" {
-			registerSuiteCleanup("Delete shared mixed sent mail: proton-cli mail messages delete "+sentID,
-				"mail", "messages", "delete", "--", sentID)
-		}
-		if inboxID != "" && inboxID != sentID {
-			registerSuiteCleanup("Delete shared mixed inbox mail: proton-cli mail messages delete "+inboxID,
-				"mail", "messages", "delete", "--", inboxID)
-		}
-		f.msgID = inboxID
-		if f.msgID == "" {
-			f.msgID = sentID
-		}
-		if f.msgID == "" {
-			f.err = fmt.Errorf("shared mixed mail was not delivered")
-		}
+		mutablePool <- m
 	})
+	if id == "" {
+		t.Fatalf("the inbox holds no message subject %q; run `just seed`", m.Subject)
+	}
+	return id
 }
 
-// sharedMixedAttachment returns a shared, delivered self-mail with one inline
-// and one regular attachment. Read-only.
+// sharedMixedAttachment is a delivered self-mail carrying both an inline image
+// and a regular attachment, for the tests about telling the two apart. It is the
+// same message: a mail with an inline image and an attachment is one shape rather
+// than two. Read-only.
 func sharedMixedAttachment(t *testing.T) string {
 	t.Helper()
-	mixedMailFixture.ensure()
-	if mixedMailFixture.err != nil {
-		t.Fatalf("shared mixed-attachment mail: %v", mixedMailFixture.err)
-	}
-	return mixedMailFixture.msgID
-}
-
-// tinyPNG returns the bytes of a 1x1 PNG, used for inline-image fixtures.
-func tinyPNG() []byte {
-	var b bytes.Buffer
-	_ = png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 1, 1)))
-	return b.Bytes()
+	return fixtureOr(t, attachmentsFixture).msgID
 }
 
 // ── the runner is the only way in ──
@@ -964,6 +910,7 @@ func tinyPNG() []byte {
 // which is how a stdin upload once landed in a personal Drive instead of the
 // primary account's, and reported an empty folder rather than a failure.
 func TestEveryInvocationGoesThroughTheRunner(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("read the test directory: %v", err)

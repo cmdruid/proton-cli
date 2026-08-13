@@ -1,13 +1,16 @@
-package tests
+package offline
 
 import (
 	"strings"
 	"testing"
 )
 
+// A leading-dash ID is a parsing problem, so it is answered before anything is
+// sent: what these assert is that cobra accepted the argument, which is decided
+// entirely by argv.
+//
 // dashedSyntheticID is a syntactically valid Proton ID (88 chars, URL-safe
-// base64, ends "==") starting with '-'. Real APIs reject it as not-found,
-// which is fine - these tests only assert that argument parsing succeeds.
+// base64, ends "==") starting with '-'.
 const dashedSyntheticID = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A=="
 
 // dashedSyntheticPair is the same ID used as a two-part reference, which the CLI
@@ -23,15 +26,14 @@ func assertNotFlagParseError(t *testing.T, stderr string) {
 		"unknown flag",
 	} {
 		if strings.Contains(stderr, marker) {
-			t.Errorf("expected no flag-parse error, but stderr contains %q:\n%s", marker, truncateOutput(stderr))
+			t.Errorf("expected no flag-parse error, but stderr contains %q:\n%s", marker, truncate(stderr))
 		}
 	}
 }
 
-// TestLeadingDashIDIsAccepted: each affected command parses cleanly when
-// given a synthetic leading-dash ID. The API call may then fail with
-// not-found / invalid-id (exit 3 or 1) - that's fine; we only assert
-// that cobra doesn't reject the argument.
+// TestLeadingDashIDIsAccepted: each affected command parses cleanly when given a
+// synthetic leading-dash ID. What the command then does with it does not matter -
+// only that cobra did not reject the argument.
 func TestLeadingDashIDIsAccepted(t *testing.T) {
 	cases := []struct {
 		name string

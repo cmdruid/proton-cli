@@ -38,7 +38,7 @@ func exportCmd() *cobra.Command {
 			"Exported files are not encrypted - that is what exporting means. The original\n" +
 			"DKIM signatures will not verify against the rebuilt body either, exactly as\n" +
 			"with the web client's own export.",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			shape, err := format.Value()
 			if err != nil {
 				return err
@@ -126,7 +126,7 @@ func conversationExportCmd() *cobra.Command {
 		Use:   "export REF",
 		Short: "Write a whole thread out as .eml files or one mbox",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			shape, err := format.Value()
 			if err != nil {
 				return err

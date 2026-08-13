@@ -16,6 +16,7 @@ import (
 // ── --output json: field names use json tags (snake_case) ──
 
 func TestOutputJSONMailMessages(t *testing.T) {
+	t.Parallel()
 	data := runJSON(t, "mail", "messages", "list", "--page-size", "1")
 	if _, ok := data["messages"]; !ok {
 		t.Fatal("expected 'messages' key (json tag) in output")
@@ -26,6 +27,7 @@ func TestOutputJSONMailMessages(t *testing.T) {
 }
 
 func TestOutputJSONContacts(t *testing.T) {
+	t.Parallel()
 	contacts := runJSONArray(t, "contacts", "list")
 	if len(contacts) == 0 {
 		t.Skip("no contacts")
@@ -40,6 +42,7 @@ func TestOutputJSONContacts(t *testing.T) {
 // ── --output yaml: respects json tags, uses snake_case ──
 
 func TestOutputYAMLSnakeCase(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "messages", "list", "--page-size", "1", "--output", "yaml")
 	// Non-omitempty keys only; from_name drops out when the sender has no display name.
 	for _, want := range []string{"from_address", "num_attachments"} {
@@ -58,6 +61,7 @@ func TestOutputYAMLSnakeCase(t *testing.T) {
 // ── --output yaml: raw api path keeps integers as integers ──
 
 func TestOutputYAMLRawAPIKeepsIntegers(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "--output", "yaml", "api", "GET", "/core/v4/users")
 	// Code: 1000 (int) rather than 1000.0
 	intRe := regexp.MustCompile(`(?m)^Code:\s+\d+$`)
@@ -73,6 +77,7 @@ func TestOutputYAMLRawAPIKeepsIntegers(t *testing.T) {
 // ── --output text (default): human-readable ──
 
 func TestOutputTextIsDefault(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "messages", "list", "--page-size", "1")
 	// Table output has a separator line with ─ chars
 	if !strings.Contains(stdout, "─") {
@@ -86,17 +91,10 @@ func TestOutputTextIsDefault(t *testing.T) {
 
 // ── invalid --output is rejected ──
 
-func TestOutputUnknownFormat(t *testing.T) {
-	_, stderr, code := run(t, "--output", "xml", "mail", "messages", "list")
-	if code == 0 {
-		t.Error("expected non-zero exit for unknown --output")
-	}
-	_ = stderr
-}
-
 // ── JSON output parses as valid JSON across many commands ──
 
 func TestOutputJSONParsesEverywhere(t *testing.T) {
+	t.Parallel()
 	cases := [][]string{
 		{"mail", "messages", "list", "--page-size", "1"},
 		{"mail", "settings", "labels", "list"},
@@ -134,6 +132,8 @@ func assertBareID(t *testing.T, stdout, where string) string {
 }
 
 func TestStdoutIDMailLabelCreate(t *testing.T) {
+	t.Parallel()
+	lease(t, labelSlot)
 	name := testID() + "-stid-label"
 	stdout, stderr := runOKStderr(t, "mail", "settings", "labels", "create",
 		"--name", name, "--color", "#8080FF")
@@ -146,6 +146,8 @@ func TestStdoutIDMailLabelCreate(t *testing.T) {
 }
 
 func TestStdoutIDMailFilterCreate(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
 	name := testID() + "-stid-filter"
 	stdout, _ := runOKStderr(t, "mail", "settings", "filters", "create",
 		"--name", name,
@@ -156,6 +158,8 @@ func TestStdoutIDMailFilterCreate(t *testing.T) {
 }
 
 func TestStdoutIDCalendarCreate(t *testing.T) {
+	t.Parallel()
+	lease(t, calendarSlot)
 	name := testID() + "-stid-cal"
 	stdout, _ := runOKStderr(t, "calendar", "settings", "calendars", "create",
 		"--name", name, "--color", "#8080FF")
@@ -165,6 +169,7 @@ func TestStdoutIDCalendarCreate(t *testing.T) {
 }
 
 func TestStdoutIDContactCreate(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-stid-contact"
 	stdout, _ := runOKStderr(t, "contacts", "create",
 		"--name", name, "--email", "t@x.invalid")
@@ -174,6 +179,8 @@ func TestStdoutIDContactCreate(t *testing.T) {
 }
 
 func TestStdoutIDVaultCreate(t *testing.T) {
+	t.Parallel()
+	lease(t, vaultSlot)
 	name := testID() + "-stid-vault"
 	stdout, _ := runOKStderr(t, "pass", "vaults", "create", "--name", name)
 	id := assertBareID(t, stdout, "vaults create")
@@ -182,6 +189,7 @@ func TestStdoutIDVaultCreate(t *testing.T) {
 }
 
 func TestStdoutIDPassItemCreate(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-stid-item"
 	stdout, _ := runOKStderr(t, "pass", "items", "create",
 		"--type", "note", "--name", name, "--note", "x")
@@ -192,6 +200,7 @@ func TestStdoutIDPassItemCreate(t *testing.T) {
 }
 
 func TestStdoutIDCalendarEventCreate(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-stid-event"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	stdout, _ := runOKStderr(t, "calendar", "events", "create",
@@ -213,6 +222,7 @@ func TestStdoutIDCalendarEventCreate(t *testing.T) {
 //   4 = ambiguous / conflict
 
 func TestExit0Success(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "mail", "messages", "list", "--page-size", "1")
 	if code != 0 {
 		t.Errorf("expected exit 0, got %d", code)
@@ -220,6 +230,7 @@ func TestExit0Success(t *testing.T) {
 }
 
 func TestExit3NotFoundMail(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "mail", "messages", "get", "no-such-message-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3, got %d", code)
@@ -227,6 +238,7 @@ func TestExit3NotFoundMail(t *testing.T) {
 }
 
 func TestExit3NotFoundContact(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "contacts", "get", "no-such-contact-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3, got %d", code)
@@ -234,6 +246,7 @@ func TestExit3NotFoundContact(t *testing.T) {
 }
 
 func TestExit3NotFoundCalendarEvent(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "calendar", "events", "get", "no-such-event-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3, got %d", code)
@@ -241,6 +254,7 @@ func TestExit3NotFoundCalendarEvent(t *testing.T) {
 }
 
 func TestExit4AmbiguousMail(t *testing.T) {
+	t.Parallel()
 	// "a" matches many messages in any real inbox
 	stdout := runOK(t, "mail", "messages", "list", "--page-size", "2")
 	if stdout == "" {
@@ -255,6 +269,7 @@ func TestExit4AmbiguousMail(t *testing.T) {
 }
 
 func TestExit1MissingRequiredFlag(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "mail", "messages", "send")
 	if code == 0 {
 		t.Error("expected non-zero exit for missing required --to")
@@ -264,17 +279,12 @@ func TestExit1MissingRequiredFlag(t *testing.T) {
 	}
 }
 
-func TestExit1BadArgCount(t *testing.T) {
-	_, _, code := run(t, "api")
-	if code == 0 {
-		t.Error("expected non-zero exit for missing api args")
-	}
-}
-
 // ── from dry_run_test.go ──
 // --dry-run must never mutate state.
 
 func TestDryRunLabelCreate(t *testing.T) {
+	t.Parallel()
+	lease(t, labelSlot)
 	name := testID() + "-dryrun"
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "settings", "labels", "create",
 		"--name", name, "--color", "#8080FF")
@@ -287,6 +297,7 @@ func TestDryRunLabelCreate(t *testing.T) {
 }
 
 func TestDryRunFolderCreate(t *testing.T) {
+	t.Parallel()
 	path := "/" + testID() + "-dryrun"
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "folders", "create", path)
 	assertContains(t, stderr, "Dry run")
@@ -299,12 +310,14 @@ func TestDryRunFolderCreate(t *testing.T) {
 }
 
 func TestDryRunMailTrashBatch(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "trash",
 		"--unread", "--limit", "3")
 	assertContains(t, stderr, "Dry run")
 }
 
 func TestDryRunPassTrashBatch(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "--dry-run", "pass", "items", "trash", "--type", "note")
 	if code != 0 {
 		t.Fatalf("dry-run should succeed, got exit %d", code)
@@ -313,6 +326,7 @@ func TestDryRunPassTrashBatch(t *testing.T) {
 }
 
 func TestDryRunContactsCreate(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-dryrun-contact"
 	_, stderr := runOKStderr(t, "--dry-run", "contacts", "create",
 		"--name", name, "--email", "t@x.invalid")
@@ -334,6 +348,8 @@ func TestDryRunContactsCreate(t *testing.T) {
 // A permanent deletion refuses to happen unattended, and the thing it was asked
 // to delete is still there afterwards.
 func TestDeleteWithoutConsentRefusesAndChangesNothing(t *testing.T) {
+	t.Parallel()
+	lease(t, labelSlot)
 	name := testID() + "-consent"
 	runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF")
 	cleanupRun(t, "Delete: proton-cli mail settings labels delete "+name,
@@ -356,6 +372,7 @@ func TestDeleteWithoutConsentRefusesAndChangesNothing(t *testing.T) {
 // Trashing something named by hand is not worth a question: it is reversible,
 // and the user typed the reference.
 func TestTrashOfANamedReferenceNeedsNoConsent(t *testing.T) {
+	t.Parallel()
 	path := "/" + testID() + "-consent-trash"
 	runOK(t, "drive", "folders", "create", path)
 	cleanupRun(t, "Delete: proton-cli drive items delete "+path,
@@ -379,6 +396,7 @@ func TestTrashOfANamedReferenceNeedsNoConsent(t *testing.T) {
 // Trashing what a filter found is, because the filter chose them and nobody has
 // read the list.
 func TestTrashOfAFilteredSelectionNeedsConsent(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "mail", "messages", "trash", "--unread", "--limit", "1")
 	if code == 0 {
 		// Nothing matched, so there was nothing to ask about.
@@ -395,6 +413,7 @@ func TestTrashOfAFilteredSelectionNeedsConsent(t *testing.T) {
 
 // --dry-run answers the question in a safer form, so it never has to ask it.
 func TestDryRunNeedsNoConsent(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "--dry-run", "mail", "messages", "delete", "--unread", "--limit", "1")
 	if code != 0 {
 		t.Fatalf("a dry run should never need consent, got exit %d: %s", code, stderr)

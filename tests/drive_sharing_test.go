@@ -26,6 +26,7 @@ func tokenOf(t *testing.T, url string) string {
 }
 
 func TestDriveShareLinkLifecycle(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-share"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -53,6 +54,7 @@ func TestDriveShareLinkLifecycle(t *testing.T) {
 // link 404s in a browser) if UrlPasswordSalt is not exactly 10 bytes, even
 // though creation and status both still succeed.
 func TestDriveShareLinkPublicHandshake(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-handshake"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -81,6 +83,7 @@ func TestDriveShareLinkPublicHandshake(t *testing.T) {
 }
 
 func TestDriveShareLinkIdempotent(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-idem"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -94,6 +97,7 @@ func TestDriveShareLinkIdempotent(t *testing.T) {
 }
 
 func TestDriveShareLinkExpires(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-exp"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -106,6 +110,7 @@ func TestDriveShareLinkExpires(t *testing.T) {
 }
 
 func TestDriveShareLinkPassword(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-pw"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -122,6 +127,7 @@ func TestDriveShareLinkPassword(t *testing.T) {
 }
 
 func TestDriveShareLinkDryRun(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-sharedry"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -137,6 +143,7 @@ func TestDriveShareLinkDryRun(t *testing.T) {
 // ── members ──
 
 func TestDriveShareAddNotProtonUser(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-member"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -152,6 +159,7 @@ func TestDriveShareAddNotProtonUser(t *testing.T) {
 }
 
 func TestDriveShareAddDryRun(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-memberdry"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -164,6 +172,8 @@ func TestDriveShareAddDryRun(t *testing.T) {
 // TestDriveShareMemberRoundTrip invites a real Proton address, verifies it shows
 // as pending, then revokes it.
 func TestDriveShareMemberRoundTrip(t *testing.T) {
+	t.Parallel()
+	lease(t, driveInvitations)
 	invitee := secondaryEmail()
 	folder := "/" + testID() + "-memberrt"
 	tmp := t.TempDir()
@@ -187,6 +197,7 @@ func TestDriveShareMemberRoundTrip(t *testing.T) {
 }
 
 func TestDriveShareRemoveNotFound(t *testing.T) {
+	t.Parallel()
 	folder := "/" + testID() + "-rm"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
@@ -201,6 +212,7 @@ func TestDriveShareRemoveNotFound(t *testing.T) {
 // ── incoming invitations ──
 
 func TestDriveInvitationsList(t *testing.T) {
+	t.Parallel()
 	// Single-account runs can't produce an incoming invite, so only assert the
 	// command itself succeeds.
 	_, _, code := run(t, "drive", "invitations", "list")
@@ -210,6 +222,7 @@ func TestDriveInvitationsList(t *testing.T) {
 }
 
 func TestDriveInvitationsAcceptRejectDryRun(t *testing.T) {
+	t.Parallel()
 	_, stderr := runOKStderr(t, "--dry-run", "drive", "invitations", "accept", "some-invitation-id")
 	assertContains(t, stderr, "Dry run")
 	_, stderr = runOKStderr(t, "--dry-run", "drive", "invitations", "decline", "some-invitation-id")
@@ -243,6 +256,8 @@ func altInvitationIDs(t *testing.T) map[string]bool {
 }
 
 func TestDriveShareInvitationRoundTrip(t *testing.T) {
+	t.Parallel()
+	lease(t, driveInvitations)
 	folder := "/" + testID() + "-share-rt"
 	runOK(t, "drive", "folders", "create", folder)
 	// Permanent delete cascades the share + membership.

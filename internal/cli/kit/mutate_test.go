@@ -3,11 +3,14 @@ package kit
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/roman-16/proton-cli/internal/app"
+	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ui"
 )
 
@@ -19,6 +22,15 @@ import (
 // noTerminal is the answer a cron job gives: there is nobody there to ask, so a
 // change that needs consent has to fail rather than wait for one.
 const noTerminal = ""
+
+// signedIn is an app with a session, which is what the guard's cases are about:
+// whether a change is applied, not whether anyone is signed in. The one case about
+// that says so.
+func signedIn(a *app.App) *app.App {
+	a.API = proton.New(proton.Options{})
+	a.API.SetTokens("uid", "access", "refresh")
+	return a
+}
 
 // mutation runs a spec against a prepared invocation and reports whether the
 // change was applied.
@@ -48,7 +60,7 @@ func mutation(t *testing.T, a *app.App, answer string, spec ui.ResultSpec, compu
 
 func TestForeverIsRefusedWithNobodyToAsk(t *testing.T) {
 	spec := ui.ResultSpec{Action: ui.Deleted, Kind: "messages", Count: 112}
-	applied, err := mutation(t, &app.App{}, noTerminal, spec, false)
+	applied, err := mutation(t, signedIn(&app.App{}), noTerminal, spec, false)
 	if applied {
 		t.Fatal("a deletion ran without consent")
 	}
@@ -71,12 +83,12 @@ func TestForeverIsRefusedWithNobodyToAsk(t *testing.T) {
 func TestForeverAsksEvenForOneNamedThing(t *testing.T) {
 	spec := ui.ResultSpec{Action: ui.Deleted, Kind: "labels", Count: 1, Name: "Work"}
 
-	applied, err := mutation(t, &app.App{}, "n\n", spec, false)
+	applied, err := mutation(t, signedIn(&app.App{}), "n\n", spec, false)
 	if applied || err == nil {
 		t.Errorf("a no must stop the change: applied=%v err=%v", applied, err)
 	}
 
-	applied, err = mutation(t, &app.App{}, "y\n", spec, false)
+	applied, err = mutation(t, signedIn(&app.App{}), "y\n", spec, false)
 	if !applied || err != nil {
 		t.Errorf("a yes must let it through: applied=%v err=%v", applied, err)
 	}
@@ -87,12 +99,12 @@ func TestForeverAsksEvenForOneNamedThing(t *testing.T) {
 func TestOutOfSightAsksOnlyForAComputedSelection(t *testing.T) {
 	spec := ui.ResultSpec{Action: ui.Trashed, Kind: "messages", Count: 3, Detail: "to trash"}
 
-	applied, err := mutation(t, &app.App{}, noTerminal, spec, false)
+	applied, err := mutation(t, signedIn(&app.App{}), noTerminal, spec, false)
 	if !applied || err != nil {
 		t.Errorf("trashing what was named should not ask: applied=%v err=%v", applied, err)
 	}
 
-	applied, err = mutation(t, &app.App{}, noTerminal, spec, true)
+	applied, err = mutation(t, signedIn(&app.App{}), noTerminal, spec, true)
 	if applied || err == nil {
 		t.Errorf("trashing what a filter found should ask: applied=%v err=%v", applied, err)
 	}
@@ -107,7 +119,7 @@ func TestOrdinaryChangesNeverAsk(t *testing.T) {
 	for _, action := range []ui.Action{ui.Moved, ui.Labelled, ui.Updated, ui.Restored, ui.Copied} {
 		for _, computed := range []bool{false, true} {
 			spec := ui.ResultSpec{Action: action, Kind: "messages", Count: 40}
-			applied, err := mutation(t, &app.App{}, noTerminal, spec, computed)
+			applied, err := mutation(t, signedIn(&app.App{}), noTerminal, spec, computed)
 			if !applied || err != nil {
 				t.Errorf("%s (computed=%v) should just run: applied=%v err=%v",
 					action.Key, computed, applied, err)
@@ -118,7 +130,7 @@ func TestOrdinaryChangesNeverAsk(t *testing.T) {
 
 func TestYesIsTheAnswerGivenInAdvance(t *testing.T) {
 	spec := ui.ResultSpec{Action: ui.Deleted, Kind: "messages", Count: 112}
-	applied, err := mutation(t, &app.App{Yes: true}, noTerminal, spec, false)
+	applied, err := mutation(t, signedIn(&app.App{Yes: true}), noTerminal, spec, false)
 	if !applied || err != nil {
 		t.Errorf("--yes should let it through: applied=%v err=%v", applied, err)
 	}
@@ -128,7 +140,7 @@ func TestYesIsTheAnswerGivenInAdvance(t *testing.T) {
 // apply the change on the way to saying so.
 func TestDryRunNeitherAsksNorApplies(t *testing.T) {
 	spec := ui.ResultSpec{Action: ui.Deleted, Kind: "messages", Count: 112}
-	applied, err := mutation(t, &app.App{DryRun: true}, noTerminal, spec, false)
+	applied, err := mutation(t, signedIn(&app.App{DryRun: true}), noTerminal, spec, false)
 	if applied {
 		t.Fatal("a dry run applied the change")
 	}
@@ -145,11 +157,30 @@ func TestDryRunNeitherAsksNorApplies(t *testing.T) {
 // failure when the truth is that there was nothing to do.
 func TestNothingSelectedIsNeitherAskedAboutNorApplied(t *testing.T) {
 	spec := ui.ResultSpec{Action: ui.Deleted, Kind: "messages", Count: 0}
-	applied, err := mutation(t, &app.App{}, noTerminal, spec, true)
+	applied, err := mutation(t, signedIn(&app.App{}), noTerminal, spec, true)
 	if err != nil {
 		t.Errorf("an empty change should not fail: %v", err)
 	}
 	if applied {
 		t.Error("an empty change was sent to Proton")
+	}
+}
+
+// A preview is a claim about what the command would do. Without an account it
+// would not do it, so the dry run says so rather than describing a change that
+// could never have happened - the one thing a dry run could otherwise answer as
+// though it had reached Proton.
+func TestDryRunWithoutAnAccountIsRefused(t *testing.T) {
+	spec := ui.ResultSpec{Action: ui.Deleted, Kind: "messages", Count: 3}
+	applied, err := mutation(t, &app.App{DryRun: true, API: proton.New(proton.Options{})}, noTerminal, spec, false)
+	if applied {
+		t.Fatal("a dry run applied the change")
+	}
+	if err == nil {
+		t.Fatal("a dry run with no session should be refused")
+	}
+	var coder errs.ExitCoder
+	if !errors.As(err, &coder) || coder.ExitCode() != 2 {
+		t.Errorf("err = %v, want one that exits 2 for a missing session", err)
 	}
 }

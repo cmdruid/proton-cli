@@ -10,11 +10,14 @@ import (
 // ── vaults ──
 
 func TestPassVaultsList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "pass", "vaults", "list")
 	assertContains(t, stdout, "ID")
 }
 
 func TestPassVaultsCRUD(t *testing.T) {
+	t.Parallel()
+	lease(t, vaultSlot)
 	name := testID() + "-vault"
 	stdout := runOK(t, "pass", "vaults", "create", "--name", name)
 	shareID := strings.TrimSpace(stdout)
@@ -31,6 +34,7 @@ func TestPassVaultsCRUD(t *testing.T) {
 // ── items: login ──
 
 func TestPassItemsCRUDLogin(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-login"
 	url := "https://" + name + ".example.invalid/"
 
@@ -62,6 +66,7 @@ func TestPassItemsCRUDLogin(t *testing.T) {
 // ── items: note ──
 
 func TestPassItemsCreateNote(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-note"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "note",
@@ -82,6 +87,7 @@ func TestPassItemsCreateNote(t *testing.T) {
 // ── items: card (checks PIN rendering) ──
 
 func TestPassItemsCreateCardShowsPIN(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-card"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "credit-card",
@@ -111,6 +117,7 @@ func TestPassItemsCreateCardShowsPIN(t *testing.T) {
 // filter, so `create --type credit-card` then `trash --type credit-card`
 // actually matches (the old card/credit_card split matched nothing).
 func TestPassCreditCardTypeConsistent(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-cc"
 	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "credit-card",
 		"--name", name, "--holder", "Roman", "--number", "4111111111111111", "--expiry", "2030-01"))
@@ -136,6 +143,7 @@ func TestPassCreditCardTypeConsistent(t *testing.T) {
 // ── items: trash / restore / delete ──
 
 func TestPassItemsTrashRestoreDelete(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-trash"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "login", "--name", name,
@@ -158,6 +166,7 @@ func TestPassItemsTrashRestoreDelete(t *testing.T) {
 // ── items list with vault filter ──
 
 func TestPassItemsListVaultFilter(t *testing.T) {
+	t.Parallel()
 	vaults := runJSONArray(t, "pass", "vaults", "list")
 	if len(vaults) == 0 {
 		t.Skip("no vaults")
@@ -169,6 +178,7 @@ func TestPassItemsListVaultFilter(t *testing.T) {
 // ── alias options (read-only) ──
 
 func TestPassAliasOptions(t *testing.T) {
+	t.Parallel()
 	// Both kinds come back in one table, told apart by KIND rather than by two
 	// headed sections.
 	stdout := runOK(t, "pass", "aliases", "options")
@@ -180,6 +190,7 @@ func TestPassAliasOptions(t *testing.T) {
 // ── batch filters (all dry-run) ──
 
 func TestPassBatchTrashDryRunByType(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "--dry-run", "pass", "items", "trash", "--type", "note")
 	if code != 0 {
 		t.Fatalf("dry-run should succeed, got exit %d: %s", code, stderr)
@@ -188,6 +199,7 @@ func TestPassBatchTrashDryRunByType(t *testing.T) {
 }
 
 func TestPassBatchTrashDryRunOlderThanYear(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "--dry-run", "pass", "items", "trash",
 		"--older-than", "1y", "--type", "login")
 	if code != 0 {
@@ -198,6 +210,7 @@ func TestPassBatchTrashDryRunOlderThanYear(t *testing.T) {
 }
 
 func TestPassBatchTrashDurationUnitMonths(t *testing.T) {
+	t.Parallel()
 	// "6mo" must parse without error.
 	_, _, code := run(t, "--dry-run", "pass", "items", "trash",
 		"--older-than", "6mo", "--type", "login")
@@ -206,15 +219,8 @@ func TestPassBatchTrashDurationUnitMonths(t *testing.T) {
 	}
 }
 
-func TestPassBatchTrashRequiresInput(t *testing.T) {
-	_, stderr, code := run(t, "pass", "items", "trash")
-	if code == 0 {
-		t.Error("expected error when no REF and no filter given")
-	}
-	assertContains(t, stderr, "Nothing selected")
-}
-
 func TestPassItemTypesAndFields(t *testing.T) {
+	t.Parallel()
 	// Identity with core fields plus custom text/hidden fields.
 	idName := testID() + "-identity"
 	idRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "identity",
@@ -243,6 +249,8 @@ func TestPassItemTypesAndFields(t *testing.T) {
 }
 
 func TestPassVaultRename(t *testing.T) {
+	t.Parallel()
+	lease(t, vaultSlot)
 	name := testID() + "-vault"
 	sid := strings.TrimSpace(runOK(t, "pass", "vaults", "create", "--name", name))
 	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete %s", sid),
@@ -254,6 +262,7 @@ func TestPassVaultRename(t *testing.T) {
 }
 
 func TestPassLoginTOTPRoundTrips(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-totp"
 	secret := "JBSWY3DPEHPK3PXP"
 	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "login",

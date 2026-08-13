@@ -91,9 +91,7 @@ func Select[T any](c *Invocation, s Selector[T]) (Selection[T], error) {
 	sel := Selection[T]{noun: s.Noun, cols: s.Columns, idsOf: s.IDOf}
 
 	if len(c.Args) == 0 && s.ByFilter == nil {
-		return sel, Fail("Nothing selected.").
-			Hint("pass a REF, or a filter such as "+s.FilterHint+".",
-				"Use --all to target "+s.Scope+".")
+		return sel, NothingSelected(s.FilterHint, s.Scope)
 	}
 
 	for _, ref := range c.Args {
@@ -134,6 +132,33 @@ func Select[T any](c *Invocation, s Selector[T]) (Selection[T], error) {
 	}
 	sel.Rows = rows
 	return sel, nil
+}
+
+// NothingSelected is the refusal for a command line that named nothing to act on.
+//
+// Select raises it when it gets there, and StepSelection raises the same thing
+// earlier, because it is the same judgement: whether anything was named is decided
+// by the command line, and nothing a request could answer changes it.
+func NothingSelected(filterHint, scope string) error {
+	return Fail("Nothing selected.").
+		Hint("pass a REF, or a filter such as "+filterHint+".",
+			"Use --all to target "+scope+".")
+}
+
+// StepSelection refuses a command line that named nothing before the command
+// unlocks anything or asks Proton anything.
+//
+// set reports whether the user gave a filter, which only the command knows -
+// it is the same answer that decides whether the Selector gets a ByFilter.
+// Declaring it as a step is what puts the judgement before the network for a
+// command that needs keys, whose unlocking would otherwise speak first.
+func StepSelection(set func() bool, filterHint, scope string) Step {
+	return func(c *Invocation) error {
+		if len(c.Args) == 0 && !set() {
+			return NothingSelected(filterHint, scope)
+		}
+		return nil
+	}
 }
 
 // ── the shared filter flags ──

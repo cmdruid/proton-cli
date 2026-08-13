@@ -136,20 +136,42 @@ func Load(name profile.Name) (*Session, error) {
 	return &s, nil
 }
 
+// Save writes the session for the given profile.
+//
+// The file is replaced rather than rewritten in place, so a reader never sees a
+// half-written session: a command that ran while another was saving would
+// otherwise find a truncated file and conclude nobody is signed in.
 func Save(name profile.Name, s *Session) error {
 	s.PersistedAt = time.Now().Unix()
-	newPath, err := Path(name)
+	p, err := Path(name)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(newPath), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 		return err
 	}
 	data, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(newPath, data, 0600)
+	f, err := os.CreateTemp(filepath.Dir(p), "."+filepath.Base(p)+".*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if err := f.Chmod(0600); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, p)
 }
 
 func Clear(name profile.Name) error {

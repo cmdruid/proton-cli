@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -10,12 +12,14 @@ import (
 // ── calendars ──
 
 func TestCalendarCalendarsList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "calendar", "settings", "calendars", "list")
 	assertContains(t, stdout, "NAME")
 	assertContains(t, stdout, "COLOR")
 }
 
 func TestCalendarCalendarsListColorPopulated(t *testing.T) {
+	t.Parallel()
 	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
 	if len(cals) == 0 {
 		t.Skip("no calendars on account")
@@ -35,6 +39,8 @@ func TestCalendarCalendarsListColorPopulated(t *testing.T) {
 }
 
 func TestCalendarCalendarsCreateAndDelete(t *testing.T) {
+	t.Parallel()
+	lease(t, calendarSlot)
 	name := testID() + "-cal"
 	stdout := runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF")
 	id := strings.TrimSpace(stdout)
@@ -55,11 +61,13 @@ func TestCalendarCalendarsCreateAndDelete(t *testing.T) {
 // ── events ──
 
 func TestCalendarEventsList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "calendar", "events", "list", "--calendar", "Default")
 	_ = stdout // may be empty; only assert the command runs
 }
 
 func TestCalendarEventsCRUDByIDs(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-event"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 
@@ -92,6 +100,7 @@ func TestCalendarEventsCRUDByIDs(t *testing.T) {
 }
 
 func TestCalendarEventsGetByTitleRef(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-ref"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	idOut := runOK(t, "calendar", "events", "create",
@@ -109,6 +118,7 @@ func TestCalendarEventsGetByTitleRef(t *testing.T) {
 }
 
 func TestCalendarEventsDeleteByTitleRef(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-refdel"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
 	runOK(t, "calendar", "events", "create",
@@ -126,6 +136,7 @@ func TestCalendarEventsDeleteByTitleRef(t *testing.T) {
 }
 
 func TestCalendarEventsNotFound(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "calendar", "events", "get", "no-such-event-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3 for unknown event, got %d", code)
@@ -143,16 +154,40 @@ func eventPath(t *testing.T, ref string) string {
 	return "/calendar/v1/" + cal + "/events/" + ev
 }
 
+// firstCalendarID is which calendar a test writes to when it does not care. It is
+// looked up once: the account's calendars do not change under the suite, so asking
+// again for every test that needs one is a listing paid for six times over.
+var defaultCalendarID = sync.OnceValues(func() (string, error) {
+	stdout, stderr, code, err := runArgs(nil, "--output", "json", "calendar", "settings", "calendars", "list")
+	if err != nil || code != 0 {
+		return "", fmt.Errorf("list calendars (exit %d): %v %s", code, err, strings.TrimSpace(stderr))
+	}
+	var env struct {
+		Calendars []struct{ ID string } `json:"calendars"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
+		return "", err
+	}
+	if len(env.Calendars) == 0 {
+		return "", nil
+	}
+	return env.Calendars[0].ID, nil
+})
+
 func firstCalendarID(t *testing.T) string {
 	t.Helper()
-	cals := runJSONArray(t, "calendar", "settings", "calendars", "list")
-	if len(cals) == 0 {
+	id, err := defaultCalendarID()
+	if err != nil {
+		t.Fatalf("could not read the account's calendars: %v", err)
+	}
+	if id == "" {
 		t.Skip("no calendars on this account")
 	}
-	return cals[0].(map[string]interface{})["id"].(string)
+	return id
 }
 
 func TestCalendarEventRecurrenceAndDescription(t *testing.T) {
+	t.Parallel()
 	calID := firstCalendarID(t)
 
 	title := testID() + "-evt"
@@ -169,6 +204,7 @@ func TestCalendarEventRecurrenceAndDescription(t *testing.T) {
 }
 
 func TestCalendarEventReminderNotification(t *testing.T) {
+	t.Parallel()
 	calID := firstCalendarID(t)
 
 	title := testID() + "-remind"
@@ -195,6 +231,7 @@ func TestCalendarEventReminderNotification(t *testing.T) {
 }
 
 func TestCalendarEventWithProtonAttendee(t *testing.T) {
+	t.Parallel()
 	calID := firstCalendarID(t)
 
 	title := testID() + "-attendee"
@@ -213,6 +250,8 @@ func TestCalendarEventWithProtonAttendee(t *testing.T) {
 }
 
 func TestCalendarCalendarsRename(t *testing.T) {
+	t.Parallel()
+	lease(t, calendarSlot)
 	name := testID() + "-cal"
 	calID := strings.TrimSpace(runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete %s", calID),
@@ -226,6 +265,8 @@ func TestCalendarCalendarsRename(t *testing.T) {
 // TestCalendarCreateUsable proves a freshly created calendar is provisioned
 // with keys (setupCalendar) by creating an event in it.
 func TestCalendarCreateUsable(t *testing.T) {
+	t.Parallel()
+	lease(t, calendarSlot)
 	name := testID() + "-usable"
 	calID := strings.TrimSpace(runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF"))
 	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete %s", calID),
@@ -247,16 +288,8 @@ func TestCalendarCreateUsable(t *testing.T) {
 // `drive invitations` accept/reject. These cover the branches reachable with
 // a single account: flag validation, dry-run, and the organizer rejection.
 
-func TestCalendarEventsRespondBadStatus(t *testing.T) {
-	// --status is validated before auth, so an invalid value is a clean exit 1.
-	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "maybe", "some-event-ref")
-	if code != 1 {
-		t.Errorf("expected exit 1 for invalid --status, got %d", code)
-	}
-	assertContains(t, stderr, "--status accepts")
-}
-
 func TestCalendarEventsRespondDryRun(t *testing.T) {
+	t.Parallel()
 	calID := firstCalendarID(t)
 	title := testID() + "-rsvp-dry"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
@@ -274,6 +307,7 @@ func TestCalendarEventsRespondDryRun(t *testing.T) {
 }
 
 func TestCalendarEventsRespondRejectsOrganizer(t *testing.T) {
+	t.Parallel()
 	calID := firstCalendarID(t)
 	title := testID() + "-rsvp-org"
 	start := time.Now().Add(48 * time.Hour).Format("2006-01-02T15:04")
@@ -324,6 +358,7 @@ func firstAttendeeStatus(ev map[string]interface{}) (int, bool) {
 }
 
 func TestCalendarEventsRespondRoundTrip(t *testing.T) {
+	t.Parallel()
 	secondaryCals := runJSONArraySecondary(t, "calendar", "settings", "calendars", "list")
 	if len(secondaryCals) == 0 {
 		t.Skip("the second account has no calendars")
@@ -462,6 +497,7 @@ func createSeries(t *testing.T, title, start, rule string, extra ...string) stri
 // and if the record is asked for in the window it reaches into rather than the one
 // it starts in.
 func TestCalendarRecurringSeriesAppearsOnEveryOccurrence(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-weekly"
 	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=5")
 
@@ -493,6 +529,7 @@ func TestCalendarRecurringSeriesAppearsOnEveryOccurrence(t *testing.T) {
 // An all-day event is asked for through a different window than a timed one, so
 // asking for only one window makes every all-day event invisible.
 func TestCalendarAllDayEventAppearsInAList(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-allday"
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
@@ -516,6 +553,7 @@ func TestCalendarAllDayEventAppearsInAList(t *testing.T) {
 // at all, so a consumer that measured the row would otherwise get 0 or 24 hours for
 // the same event.
 func TestCalendarAllDayEventLastsAWholeDay(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-allday-span"
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
@@ -551,6 +589,7 @@ func TestCalendarAllDayEventLastsAWholeDay(t *testing.T) {
 // no time of day to give it away. Recurring and one-off events are filtered by the
 // same rule, so both are checked here.
 func TestCalendarListStopsAtTheLastDayNamed(t *testing.T) {
+	t.Parallel()
 	series := testID() + "-leak-series"
 	seriesRef := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", series,
@@ -576,6 +615,7 @@ func TestCalendarListStopsAtTheLastDayNamed(t *testing.T) {
 
 // The last day named is a whole day, not the instant it begins.
 func TestCalendarListIncludesTheLastDayNamed(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-lastday"
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
@@ -592,6 +632,7 @@ func TestCalendarListIncludesTheLastDayNamed(t *testing.T) {
 // sending one on every write silently resets whatever the event had. 42 minutes is
 // a value no default uses.
 func TestCalendarUpdatingAnEventKeepsItsReminders(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-remind"
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
@@ -648,6 +689,7 @@ func contains(ss []string, want string) bool {
 // series has to be untouched, and the edited occurrence keeps the reference it had
 // before it was edited.
 func TestCalendarOccurrenceUpdateLeavesTheSeriesAlone(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-single"
 	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
 
@@ -686,6 +728,7 @@ func TestCalendarOccurrenceUpdateLeavesTheSeriesAlone(t *testing.T) {
 // Cancelling one occurrence has to leave the rule alone, and has to stick: an
 // exclusion written in the wrong frame does not cancel anything.
 func TestCalendarOccurrenceDeleteLeavesTheSeriesAloneAndSticks(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-cancel"
 	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
 
@@ -713,6 +756,7 @@ func TestCalendarOccurrenceDeleteLeavesTheSeriesAloneAndSticks(t *testing.T) {
 // Renaming a series must not resurrect the occurrences somebody cancelled, which
 // is what happens when an update rebuilds the event instead of merging into it.
 func TestCalendarSeriesUpdateKeepsItsExclusions(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-exdate"
 	ref := createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
 
@@ -737,6 +781,7 @@ func TestCalendarSeriesUpdateKeepsItsExclusions(t *testing.T) {
 // Ending a series at one occurrence keeps everything before it and removes
 // everything from it on.
 func TestCalendarFutureEndsTheSeriesAtAnOccurrence(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-future"
 	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=5")
 
@@ -760,6 +805,7 @@ func TestCalendarFutureEndsTheSeriesAtAnOccurrence(t *testing.T) {
 // Changing one occurrence and every later one keeps the earlier ones as they were
 // and starts a second series from the split.
 func TestCalendarFutureUpdateSplitsTheSeries(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-split"
 	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=5")
 
@@ -812,6 +858,7 @@ func TestCalendarFutureUpdateSplitsTheSeries(t *testing.T) {
 // Ending a series at its own first occurrence would leave nothing, so it is
 // refused rather than quietly removing everything.
 func TestCalendarFutureRefusesTheFirstOccurrence(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-firstocc"
 	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=3")
 
@@ -828,6 +875,7 @@ func TestCalendarFutureRefusesTheFirstOccurrence(t *testing.T) {
 
 // Deleting the series removes every occurrence, and says how many before it does.
 func TestCalendarDeletingASeriesRemovesEveryOccurrence(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-whole"
 	ref := createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=4")
 
@@ -844,6 +892,7 @@ func TestCalendarDeletingASeriesRemovesEveryOccurrence(t *testing.T) {
 // Stored as a plain UTC instant it slides by an hour, which is the whole reason an
 // event carries a zone. European summer time ends on 31 October 2027.
 func TestCalendarRecurringSeriesKeepsItsWallClockAcrossADaylightSavingChange(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-dst"
 	createSeries(t, title, "2027-10-28T09:00", "FREQ=DAILY;COUNT=6", "--zone", "Europe/Vienna")
 
@@ -864,6 +913,7 @@ func TestCalendarRecurringSeriesKeepsItsWallClockAcrossADaylightSavingChange(t *
 
 // Changing the rule is a change to the event like any other.
 func TestCalendarSeriesRuleCanBeChanged(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-rerule"
 	ref := createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=3")
 
@@ -879,6 +929,7 @@ func TestCalendarSeriesRuleCanBeChanged(t *testing.T) {
 // An answer applies to a whole invitation, so a reference naming one occurrence is
 // refused rather than half-honoured.
 func TestCalendarRespondRefusesAnOccurrenceReference(t *testing.T) {
+	t.Parallel()
 	title := testID() + "-rsvpocc"
 	createSeries(t, title, seriesAnchor+"T09:00", "FREQ=WEEKLY;COUNT=2")
 

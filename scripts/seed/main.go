@@ -25,6 +25,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"github.com/roman-16/proton-cli/tests/fixture"
 )
 
 // The accounts. These variables are this program's own, not the CLI's:
@@ -68,26 +71,44 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	if err := writePasswordFiles(work); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
 	r := &report{}
+	var wg sync.WaitGroup
 	for _, a := range accounts {
 		if *only != "" && *only != a.profile {
 			continue
 		}
-		address := os.Getenv(a.userVar)
-		fmt.Printf("%s (%s)\n", address, a.profile)
-		r.calendar(a.profile)
-		for _, c := range mailbox(work) {
-			r.reconcile(a.profile, c)
-		}
-		r.photos(a.profile, work)
-		if *stage && a.profile == "primary" {
-			r.stage(a.profile, address, work)
-		} else {
-			r.mail(a.profile, address, work)
-		}
-		r.empty(a.profile)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			address := os.Getenv(a.userVar)
+			// The calendar is named before anything else, because the events pinned
+			// below are pinned in the calendar that name refers to.
+			r.calendar(a.profile)
+			// Then everything the account holds, in lanes: a folder has to exist
+			// before the file in it, so collections of the same thing keep their
+			// order, while a label and a vault have nothing to do with each other.
+			lanes := lanesOf(mailbox(work), func(c collection) { r.reconcile(a.profile, c) })
+			lanes = append(lanes,
+				func() { r.photos(a.profile, work) },
+				func() {
+					if *stage && a.profile == "primary" {
+						r.stage(a.profile, address, work)
+						return
+					}
+					r.mail(a.profile, address, work)
+				},
+			)
+			runLanes(lanes)
+			// Last, because a sweep puts things in the trash it then empties.
+			r.empty(a.profile)
+		}()
 	}
+	wg.Wait()
 	if *only == "" {
 		r.across(work)
 	}
@@ -102,6 +123,48 @@ func main() {
 	default:
 		fmt.Printf("made %d, replaced %d, swept %d\n", r.made, r.remade, r.swept)
 	}
+}
+
+// lanesOf groups collections by the thing they hold. Two collections of the same
+// thing are reconciled in order, because that is where a dependency between them
+// can exist - a folder and the file inside it are both "drive".
+func lanesOf(cs []collection, reconcile func(collection)) []func() {
+	var order []string
+	by := map[string][]collection{}
+	for _, c := range cs {
+		if _, seen := by[c.what]; !seen {
+			order = append(order, c.what)
+		}
+		by[c.what] = append(by[c.what], c)
+	}
+	lanes := make([]func(), 0, len(order))
+	for _, what := range order {
+		lanes = append(lanes, func() {
+			for _, c := range by[what] {
+				reconcile(c)
+			}
+		})
+	}
+	return lanes
+}
+
+// seedJobs bounds how much of one account is seeded at once, so filling two
+// accounts asks no more of Proton than running the suite does.
+const seedJobs = 4
+
+func runLanes(lanes []func()) {
+	sem := make(chan struct{}, seedJobs)
+	var wg sync.WaitGroup
+	for _, lane := range lanes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			lane()
+		}()
+	}
+	wg.Wait()
 }
 
 func requireCredentials() error {
@@ -145,23 +208,32 @@ func writeFiles(work string) error {
 	return writePhotos(work)
 }
 
-// writePhotos draws the photos the library is topped up with. Generated rather
-// than checked in, so the repository carries no binaries and each one is
-// visibly different from the last.
+// writePNG draws one image. Generated rather than checked in, so the repository
+// carries no binaries.
+func writePNG(path string, shade color.RGBA, w, h int) error {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: shade}, image.Point{}, draw.Src)
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	if err := png.Encode(f, img); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// writePhotos draws the photos the library is topped up with, and the image the
+// suite's inline-attachment fixture embeds. Each one is visibly different from
+// the last.
 func writePhotos(work string) error {
 	shades := []color.RGBA{{R: 0x1b, G: 0x10, B: 0x33, A: 0xff}, {R: 0x6d, G: 0x4a, B: 0xff, A: 0xff}, {R: 0x35, G: 0xb1, B: 0x91, A: 0xff}}
+	if err := writePNG(filepath.Join(work, fixture.Attachments.Inline), shades[1], 8, 8); err != nil {
+		return err
+	}
 	for i := 0; i < photoCount; i++ {
-		img := image.NewRGBA(image.Rect(0, 0, 240, 160))
-		draw.Draw(img, img.Bounds(), &image.Uniform{C: shades[i%len(shades)]}, image.Point{}, draw.Src)
-		f, err := os.Create(filepath.Join(work, fmt.Sprintf("photo-%d.png", i+1)))
-		if err != nil {
-			return err
-		}
-		if err := png.Encode(f, img); err != nil {
-			_ = f.Close()
-			return err
-		}
-		if err := f.Close(); err != nil {
+		if err := writePNG(filepath.Join(work, fmt.Sprintf("photo-%d.png", i+1)), shades[i%len(shades)], 240, 160); err != nil {
 			return err
 		}
 	}

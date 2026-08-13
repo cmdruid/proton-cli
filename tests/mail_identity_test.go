@@ -14,18 +14,22 @@ import (
 // ── mail settings addresses ──
 
 func TestMailSettingsAddressesList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "settings", "addresses", "list")
 	assertContains(t, stdout, "EMAIL")
 	assertContains(t, stdout, selfEmail())
 }
 
 func TestMailSettingsAddressesGetByEmail(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "settings", "addresses", "get", selfEmail())
 	assertField(t, stdout, "Email:", selfEmail())
 	assertContains(t, stdout, "Can Send:")
 }
 
 func TestMailSettingsAddressesUpdateSignature(t *testing.T) {
+	t.Parallel()
+	lease(t, addressIdentity)
 	addrID := primaryAddressID(t)
 	original := addressSignature(t, addrID)
 	restoreSignature(t, addrID, original)
@@ -45,6 +49,7 @@ func TestMailSettingsAddressesUpdateSignature(t *testing.T) {
 }
 
 func TestMailSettingsAddressesUpdateRequiresAField(t *testing.T) {
+	t.Parallel()
 	_, stderr, code := run(t, "mail", "settings", "addresses", "update", selfEmail())
 	if code == 0 {
 		t.Error("an update with nothing to change should fail")
@@ -72,6 +77,8 @@ func restoreSignature(t *testing.T, addrID, original string) {
 // is deliberately set years into the future so the account can never actually
 // auto-reply to anyone while the suite runs.
 func TestMailSettingsAutoreply(t *testing.T) {
+	t.Parallel()
+	lease(t, autoReplySetting)
 	before := autoReplyState(t)
 
 	_, stderr, code := run(t, "mail", "settings", "autoreply", "set",
@@ -119,30 +126,6 @@ func TestMailSettingsAutoreply(t *testing.T) {
 
 	// The status shows up on the settings overview too.
 	assertContains(t, runOK(t, "mail", "settings", "get"), "Auto-reply:")
-}
-
-func TestMailSettingsAutoreplyRejectsMismatchedSchedules(t *testing.T) {
-	tests := []struct {
-		args []string
-		want string
-	}{
-		{[]string{"--repeat", "permanent", "--start", "09:00", "--message", "x"}, "takes no --start"},
-		{[]string{"--repeat", "daily", "--start", "09:00", "--end", "17:00", "--message", "x"}, "needs --days"},
-		{[]string{"--repeat", "weekly", "--start", "mon:09:00", "--end", "fri:17:00",
-			"--days", "mon", "--message", "x"}, "--days applies to --repeat daily"},
-		{[]string{"--repeat", "hourly", "--message", "x"}, "--repeat accepts: fixed, daily, weekly, monthly, permanent"},
-		{[]string{"--repeat", "permanent"}, "A message is required"},
-	}
-	for _, tt := range tests {
-		_, stderr, code := run(t, append([]string{"mail", "settings", "autoreply", "set"}, tt.args...)...)
-		if code == 0 {
-			t.Errorf("%v should have been rejected", tt.args)
-			continue
-		}
-		if !strings.Contains(stderr, tt.want) {
-			t.Errorf("%v: stderr = %q, want it to mention %q", tt.args, stderr, tt.want)
-		}
-	}
 }
 
 type autoReply struct {

@@ -6,19 +6,22 @@ All tests are **integration tests** that run the real `proton-cli` binary agains
 
 Unit tests live alongside the code they test (e.g. `internal/mailtext/html_test.go`).
 
-Three faster suites run with **no credentials and no network**, and they are the ones to reach for first - `just test-fast` runs all three in seconds:
+Faster suites run with **no credentials and no network**, and they are the ones to reach for first - `just test-fast` runs all in about a second:
 
 - **unit** tests, colocated with their source
 - **golden** tests in `internal/ui`, which pin the exact bytes of every response kind. Change how something looks and run `just golden`; the diff is the review.
 - the **conformance** test in `internal/cli`, which walks the whole command tree and checks the interface's rules: one verb per idea, one meaning per flag, groups that never act, nothing outside `internal/ui` touching a process stream.
+- the **offline** suite in `tests/offline`, which runs the real binary with no session and the API pointed at a dead port. Everything judgeable from the command line alone belongs there: a value outside a declared domain, a colour off Proton's palette, a reference shaped like nothing, an argument count. Each case costs about 5ms, against about 500ms and a set of credentials in the live suite.
 
 An inconsistency is far more likely to be caught there than here.
 
 ## Running Tests
 
 ```bash
-just test                             # all integration tests
+just test                             # all integration tests, four at a time
 just test-one TestDriveItemsMove      # a single one
+just test-serial                      # one at a time, for a run that looks flaky
+just test-report                      # where the time went, and how deep each request graph was
 ```
 
 `just login` and `just seed` sign the accounts in and fill them, for working with them by hand.
@@ -55,6 +58,10 @@ An **external, non-Proton** recipient comes from `PROTON_CLI_TEST_EXTERNAL_RECIP
 ```
 tests/
 ├── integration_test.go      TestMain + helpers
+├── lease_test.go            what two tests cannot both have, and the guards
+├── trace_test.go            the per-invocation trace `just test-report` reads
+├── fixture/                  what the seed puts on the account for the suite to read
+├── offline/                  the real binary, no session, no network
 ├── settings_test.go         account / mail / calendar / drive settings
 ├── mail_test.go             messages, attachments, conversations, batch filters
 ├── mail_compose_test.go     drafts, reply, forward, sender selection, signatures
@@ -69,7 +76,6 @@ tests/
 │                            codes, --dry-run, stdout=ID
 ├── profile_test.go          --profile / PROTON_PROFILE multi-account
 ├── short_ids_test.go        short-ID display and resolution
-├── leading_dash_ids_test.go IDs that begin with a dash
 └── api_test.go              raw `api` escape hatch
 ```
 
@@ -81,9 +87,48 @@ tests/
 2. Each test calls the binary as a subprocess via `run()` / `runOK()` / `runJSON()`.
 3. `TestMain` signs both profiles in and runs `scripts/seed/seed.sh`; each checks before it acts, so an account already in shape costs a read.
 4. Each invocation names its profile through `PROTON_PROFILE` in a scrubbed child environment, and the session is reused across invocations.
-5. Tests are **sequential** (no `t.Parallel()`) to avoid rate limits and shared-state conflicts.
+5. Tests run **four at a time**, and every one of them calls `t.Parallel()`. What two tests cannot both have at once is declared and leased - see below.
 
-The cost of an integration test is almost entirely **network latency** - process spawn is ~4ms, but a single authenticated call is ~150-300ms and an unlock-requiring one ~0.5-1.7s. The dominant cost is tests sending a self-mail and polling for delivery. Two mechanisms below cut that: **shared fixtures** (send once, reuse) and **check-first polling**.
+## Running four at a time
+
+The suite is bound by waiting for Proton, not by doing anything, so tests overlap. Proton absorbs it easily: sixteen concurrent invocations were measured to cost the same wall time as one. The reason the setting is **four** rather than sixteen is that these are real accounts, and four already lands within a minute of what eight does.
+
+The safeguards, in the order they bite:
+
+- **A single 429 fails the run.** The client backs off and would very likely succeed, so the suite would otherwise pass and teach nobody anything. Proton's first sign of displeasure stops the run and says to lower the concurrency.
+- **Sends never overlap.** `runAs` takes the `sending` lease for any command that puts a message on the wire, so no test has to remember. It is held for the send and not for the wait after it.
+- **The client holds at most 8 requests in flight**, and refreshes a session once per process however many requests discover it expired together.
+- **Raise `parallel` in the justfile one step at a time**, only after a full run shows no rate limiting, and never past eight.
+
+### Leases: what two tests cannot both have
+
+Almost nothing needs a lease. Each test makes its own labels, folders, events and items under its own `testID()` and asserts on those. Two things do:
+
+- an account has exactly **one** of some things - its settings, an address's signature, the auto-reply;
+- the free plan allows only a few **calendars, vaults, labels, mail folders and filters**, and the fixture already holds one of each, so a test that makes one takes the spare slot;
+- a few tests identify their own work by **comparing a listing before and after**, which another test's work would appear in (photos have no name in a listing, so there is no other way).
+
+Those are named in `lease_test.go` and taken with `lease(t, ...)`, which holds them for the test and releases them after. This is what `t.Parallel()` alone cannot say: two tests that exclude each other but nobody else.
+
+**Both rules are checked, not remembered.** `TestEveryTestThatTouchesSharedStateLeasesIt` reads every test's source and fails if it touches something shared without leasing it; `TestEveryTestRunsInParallelUnlessItSaysWhy` fails on a test that is neither parallel nor listed in `serialTests` with a reason. A test that runs alone gets the whole account to itself for free, because Go finishes every non-parallel test before any parallel one resumes - which is exactly what the one test that rewrites the shared ID cache file needs.
+
+When a new conflict appears - and it will appear as a test failing somewhere it has nothing to do with, like `Number of calendars exceeded limit` - the fix is one line in the vocabulary and one `lease` call, and the guard finds every test that needs it.
+
+## What a run costs, and how to know
+
+A run is spent almost entirely **inside invocations of the binary** - measured, 100% of the wall clock, with no idle time between them. So there are exactly three ways to make the suite faster: fewer invocations, cheaper invocations, or invocations that overlap.
+
+An invocation's cost is the **depth of its request graph**, not the number of assertions in the test. A command that asks Proton for eight things one after another waits for all eight; one that asks for them together waits for the slowest. Do not guess which is which - measure it:
+
+```bash
+just test-report                    # per command: invocations, time, requests, overlap
+just test-report TestCalendar       # or one slice of it
+just test-coverage                  # every METHOD + path template the run reached
+```
+
+`overlap` is 1.0 for a strict chain and higher when requests were made together. The report ends with **chains worth flattening**: commands with several requests and an overlap near 1.0. That list is the work, in order.
+
+`just test-coverage` is the guard rail on all of it: it prints the API surface the run actually exercised. An optimisation is only acceptable if that set does not shrink - a response nobody parsed is a response Proton could change without a test noticing.
 
 ## Writing a Test
 
@@ -109,7 +154,7 @@ func TestDriveItemsFoo(t *testing.T) {
 
 - **Always register cleanup**, even for tests about deletion - the test might fail before reaching the delete step.
 - Use `cleanupRun()` for CLI commands, `cleanup()` for custom functions - both are `t.Cleanup`-based (per-test).
-- **Shared fixtures** (see below) outlive individual tests, so they register **suite-scoped** cleanup via `registerSuiteCleanup(desc, args...)`, which `TestMain` flushes after `m.Run()`. Never use `t.Cleanup` for a shared fixture - it would delete the fixture out from under other tests.
+- **Never clean up a seeded fixture.** The account holds it between runs on purpose; deleting it makes the next run send it again and spend the allowance this exists to protect.
 - `t.Cleanup()` guarantees cleanup runs even on test failure.
 - Cleanup failures print a loud box with a copy-pasteable command the user can run manually:
 
@@ -139,44 +184,51 @@ func TestDriveItemsFoo(t *testing.T) {
 | `assertNotContains(t, stdout, substr)` | Assert stdout does not contain substring |
 | `assertField(t, stdout, field, expected)` | Assert `Key: Value` line matches |
 | `runArgs(stdin, args...)` | `t`-free runner (stdout, stderr, code, err); used by fixtures and suite cleanup |
-| `sendTestMail(t, subject)` | Send a mail to self, register per-test cleanup, return inbox ID. **Only for mutating / send-path tests** - read-only tests use a shared fixture |
-| `plainMail(t)` / `quotedMail(t)` / `sharedAttachment(t)` | Shared, delivered self-mail fixtures (see Performance section) |
+| `sendTestMail(t, subject)` | Send a mail to self, register per-test cleanup, return inbox ID. **Only when the send itself is the subject** |
+| `plainMail(t)` / `quotedMail(t)` / `sharedAttachment(t)` / `mutableMail(t)` | Seeded mail fixtures (see the sending-allowance section) |
 | `waitFor(timeout, interval, check)` | Poll `check` (checks first, then sleeps) until true or timeout |
 | `messageIDInFolder(folder, subject)` | `t`-free: first message ID in a folder matching subject, or `""` |
-| `registerSuiteCleanup(desc, args...)` | Queue a CLI cleanup to run once at suite teardown (for shared fixtures) |
 | `selfEmail()` | The primary account's address |
 | `looksLikeID(s)` | Heuristic: Proton base64 IDs end in `==` |
 | `secondaryEmail()` | The second account's address |
 | `runSecondary` / `runOKSecondary` / `runJSONSecondary` / `runJSONArraySecondary` / `cleanupRunSecondary` | The same runners, as the second account |
+| `lease(t, ...)` | Take exclusive use of shared state for this test (see Leases) |
 | `externalRecipient(t)` | A non-Proton recipient; skips the test when none is configured |
 
-## Performance: shared fixtures & polling
+## The sending allowance, and the fixtures that protect it
 
-Most mail tests only need *some* readable message, not a freshly sent one. Sending and polling for delivery per test is the single biggest time sink, so read-only tests share a handful of messages created once per suite.
+The accounts are on the free plan, which allows **50 messages an hour and 150 a day**, counted per recipient. A run sends about 19. That, not the wall clock, is what decides how often the suite can be run: a suite that sends 30 can be run once an hour however fast it is.
 
-### Shared fixtures (read-only tests)
+So a message is only sent when the sending is the thing being tested. Everything that merely needs *a* message of some shape reads one the account already holds: `tests/fixture` declares them, `scripts/seed` puts them there, and both read the same declaration so they cannot drift. Nothing sends them per run.
+
+### Seeded fixtures (read-only tests)
 
 | Fixture accessor | What it gives you | Use for |
 |---|---|---|
-| `plainMail(t)` | `(msgID, convID, subject)` - a delivered self-mail with a plain body (no quote markers, no attachments) | reading, formats, body-only, redirects, summaries, search-hit |
+| `plainMail(t)` | `(msgID, convID, subject)` - a delivered self-mail with a plain body (no quote markers, no attachments); its body contains its subject | reading, formats, body-only, redirects, summaries, search-hit |
 | `quotedMail(t)` | `(msgID, subject)` - body carries the canonical `On <date>, <name> <addr> wrote:` reply block | strip-quotes assertions |
-| `sharedAttachment(t)` (aka `findMessageWithAttachment(t)`) | `(msgID, attID, attName)` - a delivered mail with one non-inline attachment | attachment list/download/footer tests |
-| `sharedMixedAttachment(t)` (aka `findMessageWithMixedAttachments(t)`) | `msgID` - a delivered mail with one **inline** image + one regular attachment (sent via `--attach-inline`) | inline-vs-attachment disposition filter tests |
+| `sharedAttachment(t)` (aka `findMessageWithAttachment(t)`) | `(msgID, attID, attName)` - a delivered mail carrying one regular attachment | attachment list/download/footer tests |
+| `sharedMixedAttachment(t)` (aka `findMessageWithMixedAttachments(t)`) | `msgID` - the same message, which also carries an **inline** image | inline-vs-attachment disposition filter tests |
+| `mutableMail(t)` | `msgID` of a message this test may change and change back | mark / star / move / trash round-trips |
 
-They are created lazily under `sync.Once` on first use, so the send+deliver wait happens at most once per fixture per run, and they are safe to call from parallel tests.
+The lookups happen at most once per run under `sync.OnceValues`, and are safe to call from parallel tests. `mutableMail` hands out one message from a pool, so two tests running together never change the same one; the state is put back if the test failed before it could.
 
 **Rule of thumb:**
 
-- **Read-only** test (never mutates its message) → use a shared fixture.
-- **Mutating** test (mark / star / move / trash) or a test of the **send path itself** (attachments, HTML, scheduled, expiring, EO) → send your own with `sendTestMail(t, subject)`.
+- **Read-only** test (never mutates its message) → use a seeded fixture.
+- **Mutating** test (mark / star / move / trash) → `mutableMail(t)`.
+- A test of the **send path itself** (attachments, inline images, HTML, scheduled, expiring, encrypted-for-outside, `--eml`, cross-account) → send your own. Each distinct send shape keeps exactly one such test: that is what makes a change to Proton's send path fail something.
+- A test whose subject is a **flag on the parent** (`reply` setting `IsReplied`) → send your own, because a seeded parent would already be flagged and the assertion would pass for the wrong reason.
 
 ```go
 func TestMailMessagesGetBodyOnly(t *testing.T) {
-    msgID, _, subject := plainMail(t)    // shared, no send/poll
+    msgID, _, subject := plainMail(t)    // seeded, no send, no delivery wait
     stdout := runOK(t, "mail", "messages", "get", "--body-only", msgID)
     assertContains(t, stdout, subject)
 }
 ```
+
+Adding a fixture means adding it to `tests/fixture` and running `just seed`. A test whose fixture is missing says so and names the command.
 
 ### Polling for delivery
 
@@ -232,7 +284,14 @@ Two-ID references are one slash-separated token: `pass items get SHARE_ID/ITEM_I
 
 ### Local validation precedes the network
 
-Anything judgeable from the command line alone must fail without a session: an unknown setting key, a value outside a declared domain, a colour off Proton's palette, a missing required flag. A test for one of those should not need credentials to reach the error, and should assert the whole accepted domain appears in the message.
+Anything judgeable from the command line alone must fail without a session: an unknown setting key, a value outside a declared domain, a colour off Proton's palette, a missing required flag, a selection that names nothing. A test for one of those belongs in `tests/offline`, where it costs 5ms and no credentials, and should assert the whole accepted domain appears in the message.
+
+This holds because **no step asserts that an account exists**. The requirement belongs to the request, and the client holds it there (`SetSessionGuard`), so a command body judges what it can judge and only then finds out whether anyone is signed in. Two places keep the requirement earlier, on purpose:
+
+- **unlocking keys**, because there are none to unlock for an account nobody is signed in to, and asking for a password to open them would be asking the wrong question;
+- **a dry run of a mutation**, because a preview is a claim about what the command would do, and without an account it would not do it.
+
+So a command that declares `kit.StepUnlock` answers "not signed in" before its own checks unless it declares them as a step first - which is what `kit.StepSelection` is for, and what `drive items delete` and `pass items trash` use. If you add a check to a key-using command and want it judged from the command line, put it in a step ahead of `StepUnlock` and move its test to `tests/offline`.
 
 ## Cobra and Positional IDs
 
@@ -280,5 +339,6 @@ Auto-reply is worth a note: Proton refuses it with 9100, the same code it uses f
 - `calendar settings calendars delete` hits an endpoint Proton guards behind an elevated session. Nothing in the command arranges that: the client elevates when the server asks, using the password `runAs` supplies through `--password-file`, and drops the scope again.
 - `drive trash empty` may not clear items from non-default volumes (e.g. Photos share).
 - Proton only allows specific hex colors for labels, folders, calendars and contact groups (e.g. `#8080FF`, `#3CBB3A`) - see `ACCENT_COLORS` in the WebClients source. The CLI refuses anything else locally, before a request.
-- `just test` runs serially; expect ~15-20 minutes after the shared-fixture and polling work (30m timeout).
-- Mail-delivery latency is inherent: a self-mail's inbox copy lands a few seconds after send. Amortize it with a shared fixture rather than paying it per test.
+- `just test-report` says where the time went. The report ends with the request chains still worth flattening; `drive items upload` and `pass items delete` are genuinely deep and the rest is measured.
+- Mail-delivery latency is inherent: a self-mail's inbox copy lands a few seconds after send. Only the tests whose subject is the send pay it.
+- `TestDriveItemsUploadManyBlocks` uploads 44 MiB and takes about 20 seconds. It is the only test that makes the CLI ask for more than one batch of block links, so it is the only one that would notice if Proton lowered the number of links a single request may ask for. It stays.

@@ -26,7 +26,7 @@ func autoreplyGetCmd() *cobra.Command {
 		Use:   "get",
 		Short: "Show the auto-reply and its schedule",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			ar, err := c.App.Mail.AutoReplyGet(c.Ctx)
 			if err != nil {
 				return err
@@ -67,7 +67,7 @@ func autoreplySetCmd() *cobra.Command {
 			"Proton sends every auto-reply with the subject \"Auto\" and offers no way to\n" +
 			"change it, so neither does proton-cli. Auto-reply is a paid feature.",
 		Args: cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if err := reauth.Supply(c); err != nil {
 				return err
 			}
@@ -114,7 +114,7 @@ func autoreplyToggleCmd(use, short string, action ui.Action, enabled bool) *cobr
 		Use:   use,
 		Short: short,
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: action, Kind: "settings", Count: 1, Name: "auto-reply",
 			}, func() error { return c.App.Mail.AutoReplyToggle(c.Ctx, enabled) })

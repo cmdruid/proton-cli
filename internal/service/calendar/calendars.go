@@ -8,6 +8,7 @@ import (
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -21,31 +22,46 @@ type Calendar struct {
 
 // CalendarsList reads per-user prefs (Name/Color/Description) from Members[0].
 func (s *Service) CalendarsList(ctx context.Context) ([]Calendar, error) {
-	var r struct {
-		Calendars []struct {
-			ID      string
-			Members []struct {
-				Name        string
-				Color       string
-				Description string
-				Email       string
+	return s.calendars.Do("", func() ([]Calendar, error) {
+		var r struct {
+			Calendars []struct {
+				ID      string
+				Members []member
 			}
 		}
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/calendar/v1"}, &r); err != nil {
-		return nil, err
-	}
-	out := make([]Calendar, 0, len(r.Calendars))
-	for _, c := range r.Calendars {
-		var name, color, desc string
-		if len(c.Members) > 0 {
-			name = c.Members[0].Name
-			color = c.Members[0].Color
-			desc = c.Members[0].Description
+		if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/calendar/v1"}, &r); err != nil {
+			return nil, err
 		}
-		out = append(out, Calendar{ID: c.ID, Name: name, Color: color, Description: desc, MemberCount: len(c.Members)})
+		out := make([]Calendar, 0, len(r.Calendars))
+		for _, c := range r.Calendars {
+			var name, color, desc string
+			if len(c.Members) > 0 {
+				name = c.Members[0].Name
+				color = c.Members[0].Color
+				desc = c.Members[0].Description
+			}
+			out = append(out, Calendar{ID: c.ID, Name: name, Color: color, Description: desc, MemberCount: len(c.Members)})
+		}
+		return out, nil
+	})
+}
+
+// CalendarName is the name this account gave a calendar.
+//
+// It reads the membership, which is where Proton keeps the name and which every
+// command that touches a calendar has already fetched. Asking for the whole list
+// of calendars to turn one ID into one string is a request for something already
+// in hand. A calendar this account is not a member of is reported by its ID,
+// which is the only name it has here.
+func (s *Service) CalendarName(ctx context.Context, u *keys.Unlocked, calendarID string) (string, error) {
+	b, err := s.calendarBootstrap(ctx, calendarID)
+	if err != nil {
+		return "", err
 	}
-	return out, nil
+	if me, _, ok := ourMember(b.Members, u); ok && me.Name != "" {
+		return me.Name, nil
+	}
+	return calendarID, nil
 }
 
 func (s *Service) CalendarCreate(ctx context.Context, u *keys.Unlocked, name, color string) (string, error) {
@@ -87,18 +103,12 @@ func (s *Service) CalendarDelete(ctx context.Context, id string) error {
 }
 
 func (s *Service) calendarMemberID(ctx context.Context, u *keys.Unlocked, calendarID string) (string, error) {
-	var mem struct {
-		Members []struct {
-			ID, AddressID string
-		}
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/calendar/v1/" + calendarID + "/members"}, &mem); err != nil {
+	b, err := s.calendarBootstrap(ctx, calendarID)
+	if err != nil {
 		return "", err
 	}
-	for _, m := range mem.Members {
-		if _, ok := u.AddrKR(m.AddressID); ok {
-			return m.ID, nil
-		}
+	if me, _, ok := ourMember(b.Members, u); ok {
+		return me.ID, nil
 	}
 	return "", fmt.Errorf("no matching member for calendar %s", calendarID)
 }
@@ -122,7 +132,15 @@ func (s *Service) CalendarRename(ctx context.Context, u *keys.Unlocked, calendar
 	}, nil)
 }
 
+// ResolveCalendarID turns a name or an ID into an ID.
+//
+// An ID is already the answer, so it is returned without asking: a reference that
+// names the calendar outright should not cost the list of all of them. A name has
+// to be looked up, and nothing named at all means the first one.
 func (s *Service) ResolveCalendarID(ctx context.Context, nameOrID string) (string, error) {
+	if idcache.IsFullID(nameOrID) {
+		return nameOrID, nil
+	}
 	cals, err := s.CalendarsList(ctx)
 	if err != nil {
 		return "", err

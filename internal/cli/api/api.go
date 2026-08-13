@@ -34,7 +34,7 @@ Examples:
   proton-cli api GET /mail/v4/messages --query Page=0 --query PageSize=10
   proton-cli api POST /core/v4/labels --body '{"Name":"Work","Color":"#8080FF","Type":1}'`,
 		Args: cobra.ExactArgs(2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			method := strings.ToUpper(c.Args[0])
 			q := make(map[string][]string)
 			for _, kv := range query {

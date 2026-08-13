@@ -45,7 +45,7 @@ func itemsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List items across your vaults",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			kind, err := itemType.Value()
 			if err != nil {
 				return err
@@ -80,7 +80,7 @@ func itemsGetCmd() *cobra.Command {
 			"Passwords, TOTP secrets and private keys are printed in full: this is the\n" +
 			"command for reading a secret, so it does not hide one.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			shareID, itemID, err := resolveItem(c, c.Args[0])
 			if err != nil {
 				return err
@@ -189,7 +189,7 @@ func itemsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create an item",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			kind, err := itemType.Value()
 			if err != nil {
 				return err
@@ -237,7 +237,7 @@ func itemsUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Change an item's fields",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			wifi, err := security.Value()
 			if err != nil {
 				return err
@@ -293,7 +293,9 @@ func bulkItemCmd(use, short string, action ui.Action, detail string,
 	c := &cobra.Command{
 		Use:   use + " [REF...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{
+			kit.StepSelection(f.set, itemFilterHint, itemScope), kit.StepExpand, kit.StepUnlock,
+		}, func(c *kit.Invocation) error {
 			sel, err := selectItems(c, &f)
 			if err != nil {
 				return err
@@ -337,6 +339,12 @@ func (f *filters) set() bool {
 	return f.vault != "" || f.itemType.Set() || f.age.Set() || f.all
 }
 
+const (
+	itemFilterHint = "--vault, --type or --older-than"
+	// itemScope is what --all covers when nothing narrows it.
+	itemScope = "a whole vault"
+)
+
 func selectItems(c *kit.Invocation, f *filters) (kit.Selection[passsvc.Item], error) {
 	if f.all && f.vault == "" && !f.itemType.Set() && !f.age.Set() {
 		c.Note("--all with no other filter covers every vault. Add --vault to narrow it.")
@@ -345,8 +353,8 @@ func selectItems(c *kit.Invocation, f *filters) (kit.Selection[passsvc.Item], er
 		Noun:       "items",
 		Columns:    itemColumns(),
 		IDOf:       itemRef,
-		FilterHint: "--vault, --type or --older-than",
-		Scope:      "a whole vault",
+		FilterHint: itemFilterHint,
+		Scope:      itemScope,
 		ByRef: func(ctx stdctx.Context, ref string) (passsvc.Item, error) {
 			shareID, itemID, err := resolveItem(c, ref)
 			if err != nil {

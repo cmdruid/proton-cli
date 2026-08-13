@@ -27,6 +27,7 @@ func firstIDLineCell(stdout string) string {
 }
 
 func TestShortIDDisplayInTTY(t *testing.T) {
+	t.Parallel()
 	stdout, _, code := runWithEnv(t,
 		map[string]string{"PROTON_CLI_FORCE_TTY": "1"},
 		"mail", "messages", "list", "--page-size", "3")
@@ -40,6 +41,7 @@ func TestShortIDDisplayInTTY(t *testing.T) {
 }
 
 func TestShortIDPipeFullIDs(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "mail", "messages", "list", "--page-size", "3")
 	id := firstIDLineCell(stdout)
 	if len(id) <= 8 {
@@ -51,6 +53,7 @@ func TestShortIDPipeFullIDs(t *testing.T) {
 }
 
 func TestShortIDFullIDsFlagOverrides(t *testing.T) {
+	t.Parallel()
 	stdout, _, code := runWithEnv(t,
 		map[string]string{"PROTON_CLI_FORCE_TTY": "1"},
 		"--full-ids", "mail", "messages", "list", "--page-size", "3")
@@ -64,6 +67,7 @@ func TestShortIDFullIDsFlagOverrides(t *testing.T) {
 }
 
 func TestShortIDJSONAlwaysFull(t *testing.T) {
+	t.Parallel()
 	// Even with TTY forced.
 	stdout, _, code := runWithEnv(t,
 		map[string]string{"PROTON_CLI_FORCE_TTY": "1"},
@@ -99,6 +103,7 @@ func idcachePath(t *testing.T) string {
 }
 
 func TestShortIDCacheFilePopulated(t *testing.T) {
+	t.Parallel()
 	// Run any list command to populate the cache.
 	runOK(t, "mail", "messages", "list", "--page-size", "1")
 
@@ -126,6 +131,7 @@ func TestShortIDCacheFilePopulated(t *testing.T) {
 }
 
 func TestShortIDRoundTripMail(t *testing.T) {
+	t.Parallel()
 	msgID, _, subject := plainMail(t)
 
 	// Run a list command so the cache learns the ID.
@@ -143,6 +149,7 @@ func TestShortIDRoundTripMail(t *testing.T) {
 }
 
 func TestShortIDPrefixCacheMissOK(t *testing.T) {
+	t.Parallel()
 	// On cache miss, ResolvePrefix passes the input through unchanged
 	// (so commands like `pass items list --vault Personal` work even
 	// when "Personal" looks short-ID-shaped). The downstream service
@@ -201,6 +208,7 @@ func TestShortIDAmbiguousErrors(t *testing.T) {
 }
 
 func TestShortIDRoundTripContacts(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-shortid-contact"
 	stdout := runOK(t, "contacts", "create",
 		"--name", name, "--email", "t+"+name+"@x.invalid")
@@ -221,6 +229,7 @@ func TestShortIDRoundTripContacts(t *testing.T) {
 }
 
 func TestShortIDRoundTripPass(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-shortid-pass"
 	stdout := runOK(t, "pass", "items", "create",
 		"--type", "note", "--name", name, "--note", "x")

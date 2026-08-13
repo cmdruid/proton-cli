@@ -23,7 +23,7 @@ func sessionsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List every signed-in session",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			sessions, err := c.App.API.Sessions(c.Ctx)
 			if err != nil {
 				return err
@@ -55,7 +55,7 @@ func sessionsRevokeCmd() *cobra.Command {
 		Long: "Invalidate sessions at Proton.\n\n" +
 			"A revoked session cannot decrypt the key password sealed into its saved file,\n" +
 			"so revoking is what makes a leaked session file worthless.",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			if others {
 				if len(c.Args) > 0 {
 					return kit.Fail("--others revokes every other session, so it takes no REF.")

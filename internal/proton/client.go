@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,6 +28,33 @@ const (
 	// maxRateLimitWait caps how long a single 429 retry will sleep before
 	// giving up and surfacing the error.
 	maxRateLimitWait = 30 * time.Second
+
+	// sessionRenewals is how many times one request may have the session renewed
+	// under it. More than one is needed because several commands can share a
+	// session: by the time this one has taken up the tokens another process wrote,
+	// a third may have replaced them again. The count is what stops that becoming a
+	// loop when the session is genuinely gone.
+	sessionRenewals = 3
+
+	// rateLimitWaits is how many times a rate-limited request is waited out
+	// before the refusal is reported. Proton throttles a client it considers
+	// demanding, and the only civil answer is to slow down rather than to fail
+	// and be retried by a human immediately.
+	rateLimitWaits = 4
+
+	// backoffFloor and backoffCeiling bound the wait when the server names no
+	// Retry-After. The wait doubles between them and carries jitter, so several
+	// requests refused at the same instant do not all come back at the same
+	// instant.
+	backoffFloor   = 500 * time.Millisecond
+	backoffCeiling = 8 * time.Second
+
+	// maxInFlight bounds how many requests one invocation has outstanding.
+	// Independent requests are made at the same time, which is what keeps a
+	// command's wall time to the depth of its request graph; this is what keeps
+	// that from becoming a way to flood Proton. Uploads already run five blocks
+	// at once, so the bound has to leave room for them.
+	maxInFlight = 8
 )
 
 // Doer is the seam domain services depend on. *Client satisfies it; tests
@@ -37,11 +65,18 @@ type Doer interface {
 }
 
 type Client struct {
-	hc   *http.Client
-	base string
-	app  string
-	ua   string
-	log  *slog.Logger
+	hc    *http.Client
+	base  string
+	app   string
+	ua    string
+	log   *slog.Logger
+	slots chan struct{}
+
+	// renewMu makes one process refresh a session once. Independent requests are
+	// made at the same time, so a session that has just expired is discovered by
+	// several of them at once; a refresh token is single-use, so the second and
+	// third refresh would spend a token the first had already replaced.
+	renewMu sync.Mutex
 
 	mu            sync.RWMutex
 	uid           string
@@ -53,6 +88,8 @@ type Client struct {
 	hvResolver    HVResolver
 	scopeResolver ScopeResolver
 	persist       func()
+	reload        func() (acc, ref string, ok bool)
+	sessionGuard  func() error
 }
 
 type Options struct {
@@ -89,6 +126,7 @@ func New(opts Options) *Client {
 	return &Client{
 		hc: hc, base: opts.BaseURL, app: opts.AppVersion, ua: opts.UserAgent,
 		profile: opts.Profile, log: log, dryRun: opts.DryRun,
+		slots: make(chan struct{}, maxInFlight),
 	}
 }
 
@@ -174,6 +212,54 @@ func (c *Client) Persist() {
 	}
 }
 
+// SetSessionGuard installs the check that stands between a command and the
+// network.
+//
+// It is asked before every request rather than before every command, which is
+// what lets a command judge its own arguments first. A reference shaped like
+// nothing, a value outside a declared domain, a selection that names nothing:
+// none of those needs an account to be wrong, and answering "you are not signed
+// in" to them tells somebody to fix the wrong thing.
+func (c *Client) SetSessionGuard(fn func() error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.sessionGuard = fn
+}
+
+// SetReloadHook installs a callback that re-reads the tokens from where they are
+// stored, so a session another process has just refreshed can be picked up rather
+// than refreshed again.
+//
+// Proton hands out a new refresh token each time and stops honouring the old one,
+// so two processes refreshing the same session at once leaves one of them holding
+// a token that no longer works. Looking first is what makes running two commands
+// at the same time safe.
+func (c *Client) SetReloadHook(fn func() (acc, ref string, ok bool)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.reload = fn
+}
+
+// adoptStoredTokens takes up the stored tokens when they are not the ones that
+// just failed, and reports whether it did.
+func (c *Client) adoptStoredTokens() bool {
+	c.mu.RLock()
+	fn, current := c.reload, c.acc
+	c.mu.RUnlock()
+	if fn == nil {
+		return false
+	}
+	acc, ref, ok := fn()
+	if !ok || acc == "" || acc == current {
+		return false
+	}
+	c.mu.Lock()
+	c.acc, c.ref = acc, ref
+	c.mu.Unlock()
+	c.log.Debug("adopted a session refreshed elsewhere")
+	return true
+}
+
 // Request is a typed API request. Body is JSON-encoded when it is not nil and
 // not already a []byte / string / io.Reader.
 type Request struct {
@@ -208,37 +294,20 @@ type Response struct {
 // typed error. It transparently handles 401 (refresh + retry), 429
 // (Retry-After + retry) and 9001 (human verification + retry).
 func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
-	if err := c.dryRunRefuses(req); err != nil {
-		return nil, err
-	}
-	resp, err := c.doOnce(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.Status == http.StatusUnauthorized {
-		if rerr := c.refreshAuth(ctx); rerr != nil {
-			return resp, ErrUnauthorized
-		}
-		c.Persist()
-		resp, err = c.doOnce(ctx, req)
-		if err != nil {
+	c.mu.RLock()
+	guard := c.sessionGuard
+	c.mu.RUnlock()
+	if guard != nil {
+		if err := guard(); err != nil {
 			return nil, err
 		}
 	}
-
-	if resp.Status == http.StatusTooManyRequests {
-		if d, ok := retryAfter(resp); ok {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(d):
-			}
-			resp, err = c.doOnce(ctx, req)
-			if err != nil {
-				return nil, err
-			}
-		}
+	if err := c.dryRunRefuses(req); err != nil {
+		return nil, err
+	}
+	resp, err := c.send(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	if resp.Status >= 200 && resp.Status < 300 {
@@ -276,6 +345,91 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 	return resp, apiErr
 }
 
+// send makes the request, renewing a session the server no longer accepts and
+// waiting out a rate limit, and returns the response it settled on.
+func (c *Client) send(ctx context.Context, req Request) (*Response, error) {
+	renewals, waits := 0, 0
+	for {
+		c.mu.RLock()
+		used := c.acc
+		c.mu.RUnlock()
+
+		resp, err := c.doOnce(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case resp.Status == http.StatusUnauthorized && tokenRejected(resp) && renewals < sessionRenewals:
+			renewals++
+			if rerr := c.renewSession(ctx, used); rerr != nil {
+				return resp, ErrUnauthorized
+			}
+		case resp.Status == http.StatusTooManyRequests && waits < rateLimitWaits:
+			waits++
+			delay := rateLimitDelay(resp, waits)
+			// Said out loud rather than logged at debug: waiting is the right thing to
+			// do and the wait can run to seconds, so a person watching a command sit
+			// there deserves to know it is Proton asking for room and not a hang.
+			c.log.Warn("rate limited by Proton; waiting before trying again",
+				"method", req.Method, "path", req.Path, "wait_ms", delay.Milliseconds(), "attempt", waits)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+		default:
+			return resp, nil
+		}
+	}
+}
+
+// tokenRejected reports whether a 401 is about the session rather than about what
+// was asked.
+//
+// Proton answers a refusal it wants understood with a code of its own - a feature
+// the plan does not include, an account that is disabled - and no amount of
+// refreshing changes that answer. Renewing the session for one of those spends a
+// refresh token to ask the same question again, and replaces Proton's reason with
+// whatever the last attempt happened to say. A rejected token comes back with
+// nothing but the status.
+func tokenRejected(resp *Response) bool {
+	var env struct{ Code int }
+	if json.Unmarshal(resp.Body, &env) != nil {
+		return true
+	}
+	return env.Code == 0 || env.Code == http.StatusUnauthorized
+}
+
+// renewSession gets the session working again, preferring whatever somebody else
+// has already put in its place.
+//
+// failed is the access token whose refusal prompted this, so a caller that queued
+// behind another's refresh can see that the answer has already arrived and ask
+// for nothing. This mirrors how the web clients guard the same route, with a
+// once-handler inside a context and a lock between them
+// (packages/shared/lib/api/helpers/refreshHandlers.ts).
+func (c *Client) renewSession(ctx context.Context, failed string) error {
+	c.renewMu.Lock()
+	defer c.renewMu.Unlock()
+
+	if _, acc, _ := c.Tokens(); acc != failed {
+		return nil
+	}
+	if c.adoptStoredTokens() {
+		return nil
+	}
+	if err := c.refreshAuth(ctx); err != nil {
+		// A refresh token is single-use, so losing this race is not a broken
+		// session - it is somebody else's fresher one, already on disk.
+		if c.adoptStoredTokens() {
+			return nil
+		}
+		return err
+	}
+	c.Persist()
+	return nil
+}
+
 // Decode is Do + JSON unmarshal into out (out may be nil for discard). A 2xx
 // with a Proton Code that isn't 1000 (OK) or 1001 (multi-response OK) is
 // treated as an API error.
@@ -310,6 +464,13 @@ func (c *Client) setClientHeaders(r *http.Request) {
 }
 
 func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
+	select {
+	case c.slots <- struct{}{}:
+		defer func() { <-c.slots }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	c.mu.RLock()
 	uid, acc := c.uid, c.acc
 	c.mu.RUnlock()
@@ -386,6 +547,22 @@ func encodeBody(b any) (io.Reader, error) {
 	}
 }
 
+// rateLimitDelay is how long to wait before asking again.
+//
+// The server's own Retry-After is the answer when it gives one. Without it the
+// wait doubles from a floor to a ceiling, and half of it is random: requests
+// refused together would otherwise return together and be refused together.
+func rateLimitDelay(resp *Response, attempt int) time.Duration {
+	if d, ok := retryAfter(resp); ok {
+		return d
+	}
+	d := backoffFloor << (attempt - 1)
+	if d > backoffCeiling {
+		d = backoffCeiling
+	}
+	return d/2 + time.Duration(rand.Int64N(int64(d/2)+1))
+}
+
 // retryAfter parses the Retry-After header (seconds form) into a bounded delay.
 func retryAfter(resp *Response) (time.Duration, bool) {
 	if resp.retryHeader == "" {
@@ -402,13 +579,51 @@ func retryAfter(resp *Response) (time.Duration, bool) {
 	return d, true
 }
 
+// refreshAuth exchanges the refresh token for a new pair.
+//
+// A rate-limited refresh is waited out rather than reported: the session is fine,
+// the server is busy, and answering "you are not signed in" to that would be both
+// wrong and the fastest way to make a person try again immediately.
 func (c *Client) refreshAuth(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	for waits := 0; ; {
+		status, body, err := c.refreshOnce(ctx)
+		if err != nil {
+			return err
+		}
+		if status == http.StatusTooManyRequests && waits < rateLimitWaits {
+			waits++
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(rateLimitDelay(&Response{retryHeader: body.retryHeader}, waits)):
+			}
+			continue
+		}
+		if status != http.StatusOK {
+			return fmt.Errorf("refresh returned %d: %s", status, string(body.Body))
+		}
+		var result struct {
+			AccessToken  string
+			RefreshToken string
+		}
+		if err := json.Unmarshal(body.Body, &result); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.acc, c.ref = result.AccessToken, result.RefreshToken
+		c.mu.Unlock()
+		return nil
+	}
+}
+
+func (c *Client) refreshOnce(ctx context.Context) (int, *Response, error) {
+	c.mu.RLock()
+	uid, ref := c.uid, c.ref
+	c.mu.RUnlock()
 
 	reqBody, _ := json.Marshal(map[string]string{
-		"UID":          c.uid,
-		"RefreshToken": c.ref,
+		"UID":          uid,
+		"RefreshToken": ref,
 		"ResponseType": "token",
 		"GrantType":    "refresh_token",
 		"RedirectURI":  "https://protonmail.ch",
@@ -417,31 +632,24 @@ func (c *Client) refreshAuth(ctx context.Context) error {
 
 	r, err := http.NewRequestWithContext(ctx, "POST", c.base+"/auth/v4/refresh", bytes.NewReader(reqBody))
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("x-pm-uid", c.uid)
+	r.Header.Set("x-pm-uid", uid)
 	c.setClientHeaders(r)
 
 	resp, err := c.hc.Do(r)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("refresh returned %d: %s", resp.StatusCode, string(b))
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, nil, err
 	}
-	var result struct {
-		AccessToken  string
-		RefreshToken string
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-	c.acc = result.AccessToken
-	c.ref = result.RefreshToken
-	return nil
+	return resp.StatusCode, &Response{
+		Status: resp.StatusCode, Body: buf, retryHeader: resp.Header.Get("Retry-After"),
+	}, nil
 }
 
 func httpStatusText(status int) string {

@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/roman-16/proton-cli/tests/fixture"
 )
 
 // The fixture. Both accounts hold the same of it, so a test can act as either
@@ -199,26 +202,57 @@ func attachArg(f string) []string {
 // own work.
 func (r *report) mail(profile, address, work string) {
 	for _, m := range panelMail {
-		what := "mail: " + m.subject
-		found, err := rows(profile, append([]string{"mail", "messages", "search",
-			"--subject", m.subject, "--limit", "1"}, inbox()...)...)
-		if err != nil {
-			r.fail(what, err)
-			continue
-		}
-		if len(found) > 0 {
-			continue
-		}
-		send := []string{"mail", "messages", "send", "--to", address, "--subject", m.subject, "--body", m.body}
-		if m.attach != "" {
-			send = append(send, attachArg(filepath.Join(work, m.attach))...)
-		}
-		r.make(profile, what, send)
+		r.deliver(profile, address, work, fixture.Mail{Subject: m.subject, Body: m.body, Attach: m.attach})
 	}
+	// What the suite reads. Kept here rather than sent by the suite itself, so a
+	// run spends its sending allowance on the send path it is testing.
+	for _, m := range fixture.All() {
+		r.deliver(profile, address, work, m)
+	}
+}
+
+// deliver sends one message unless the inbox already holds it.
+func (r *report) deliver(profile, address, work string, m fixture.Mail) {
+	what := "mail: " + m.Subject
+	found, err := rows(profile, append([]string{"mail", "messages", "search",
+		"--subject", m.Subject, "--limit", "1"}, inbox()...)...)
+	if err != nil {
+		r.fail(what, err)
+		return
+	}
+	if len(found) > 0 {
+		return
+	}
+	send := []string{"mail", "messages", "send", "--to", address, "--subject", m.Subject, "--body", m.Body}
+	if m.HTML {
+		send = append(send, "--html")
+	}
+	if m.Attach != "" {
+		send = append(send, "--attach", filepath.Join(work, m.Attach))
+	}
+	if m.Inline != "" {
+		send = append(send, "--attach-inline", filepath.Join(work, m.Inline))
+	}
+	r.make(profile, what, send)
 }
 
 // calendarName is what the suite addresses the account's calendar by.
 const calendarName = "Default"
+
+// calendars is the collection a leftover test calendar is swept from.
+//
+// It pins nothing - the account arrives with its own calendar and the fixture
+// renames that one - but it has to be swept like everything else, and more
+// urgently: a free plan allows three, so a couple of calendars an interrupted run
+// left behind is the difference between the suite working and every test that
+// makes one failing on a limit it has nothing to do with.
+var calendars = collection{
+	what:   "calendar",
+	list:   []string{"calendar", "settings", "calendars", "list"},
+	key:    "name",
+	idKeys: []string{"id"},
+	remove: []string{"calendar", "settings", "calendars", "delete"},
+}
 
 // calendar makes the account's calendar answer to that name.
 //
@@ -227,20 +261,29 @@ const calendarName = "Default"
 // suite needs to create and delete its own. Renaming the one already there costs
 // nothing.
 func (r *report) calendar(profile string) {
-	list, err := rows(profile, "calendar", "settings", "calendars", "list")
+	list, err := rows(profile, calendars.list...)
 	if err != nil {
 		r.fail("calendar: "+calendarName, err)
 		return
 	}
-	if _, ok := find(list, "name", calendarName); ok {
+	// Swept first, so what is left to be named is the account's own calendar
+	// rather than something a run left behind.
+	r.sweep(profile, calendars, list)
+	var kept []map[string]any
+	for _, row := range list {
+		if !strings.HasPrefix(str(row["name"]), testPrefix) {
+			kept = append(kept, row)
+		}
+	}
+	if _, ok := find(kept, "name", calendarName); ok {
 		return
 	}
-	if len(list) == 0 {
+	if len(kept) == 0 {
 		r.fail("calendar: "+calendarName, fmt.Errorf("the account has no calendar to name"))
 		return
 	}
 	r.remake(profile, "calendar: "+calendarName, []string{"calendar", "settings", "calendars",
-		"update", str(list[0]["id"]), "--name", calendarName})
+		"update", str(kept[0]["id"]), "--name", calendarName})
 }
 
 // photoCount is how many photos the library has to hold.
@@ -318,8 +361,7 @@ func (r *report) stage(profile, address, work string) {
 			r.fail("stage: send "+m.subject, err)
 			return
 		}
-		fmt.Printf("  + mail: %s\n", m.subject)
-		r.made++
+		r.note("+", profile, "mail: "+m.subject)
 	}
 	r.await(profile)
 }

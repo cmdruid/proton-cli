@@ -10,6 +10,7 @@ import (
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
 	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/proton"
 	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
 	"google.golang.org/protobuf/proto"
@@ -27,29 +28,51 @@ type Vault struct {
 }
 
 func (s *Service) VaultsList(ctx context.Context, u *keys.Unlocked) ([]Vault, error) {
-	shares, err := s.getShares(ctx)
+	raw, err := s.getShares(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var out []Vault
-	for _, raw := range shares {
-		var sh struct {
-			ShareID            string
-			VaultID            string
-			TargetType         int
-			Owner              bool
-			Shared             bool
-			TargetMembers      int
-			AddressID          string
-			Content            string
-			ContentKeyRotation int
-		}
-		if err := json.Unmarshal(raw, &sh); err != nil {
+	type share struct {
+		ShareID            string
+		VaultID            string
+		TargetType         int
+		Owner              bool
+		Shared             bool
+		TargetMembers      int
+		AddressID          string
+		Content            string
+		ContentKeyRotation int
+	}
+	var shares []share
+	for _, r := range raw {
+		var sh share
+		if err := json.Unmarshal(r, &sh); err != nil {
 			continue
 		}
 		if sh.TargetType != 1 {
 			continue
 		}
+		shares = append(shares, sh)
+	}
+
+	// Each vault's name is encrypted with its own share's key, so every key is
+	// asked for at the same time rather than one vault at a time. A share whose
+	// keys cannot be read is reported without a name, as it was before, and the
+	// answer is remembered so the second look costs nothing.
+	fetches := make([]func(context.Context) error, 0, len(shares))
+	for _, sh := range shares {
+		if sh.Content == "" {
+			continue
+		}
+		fetches = append(fetches, func(ctx context.Context) error {
+			_, _ = s.decryptShareKeys(ctx, sh.ShareID, u)
+			return nil
+		})
+	}
+	_ = fetch.Together(ctx, fetches...)
+
+	var out []Vault
+	for _, sh := range shares {
 		v := Vault{
 			ShareID: sh.ShareID, VaultID: sh.VaultID,
 			Owner: sh.Owner, Shared: sh.Shared,

@@ -231,7 +231,15 @@ func convSenderAddr(c Conversation) string {
 	return ""
 }
 
+// Resolve turns a reference into a message ID.
+//
+// An ID is already the answer. FindMessage looks one up anyway, because the row
+// it returns is what a dry run shows before it acts; a caller that only wants the
+// ID has no use for the row and no reason to pay for it.
 func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
+	if idcache.IsFullID(r) {
+		return r, nil
+	}
 	m, err := s.FindMessage(ctx, r)
 	if err != nil {
 		return "", err
@@ -282,6 +290,9 @@ func (s *Service) ResolveScheduled(ctx context.Context, r string) (string, error
 }
 
 func (s *Service) ResolveConversation(ctx context.Context, r string) (string, error) {
+	if idcache.IsFullID(r) {
+		return r, nil
+	}
 	c, err := s.FindConversation(ctx, r)
 	if err != nil {
 		return "", err

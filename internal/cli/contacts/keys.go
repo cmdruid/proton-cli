@@ -40,7 +40,7 @@ func keysListCmd() *cobra.Command {
 		Use:   "list REF",
 		Short: "List the keys pinned to a contact",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
 			if err != nil {
 				return err
@@ -94,7 +94,7 @@ func keysPinCmd() *cobra.Command {
 		Use:   "pin REF",
 		Short: "Pin a public key so mail to a contact is encrypted to it",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			if keyPath == "" {
 				return kit.Fail("A key is required.").
 					Hint("--key jane-pubkey.asc, or --key - to read an armoured key from stdin.")
@@ -141,7 +141,7 @@ func keysUnpinCmd() *cobra.Command {
 		Use:   "unpin REF",
 		Short: "Remove the keys pinned to a contact",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
 			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
 			if err != nil {
 				return err

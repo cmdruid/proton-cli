@@ -110,11 +110,7 @@ func (s *Service) CreateFolder(ctx context.Context, dc *Context, fullPath string
 	if err != nil {
 		return fmt.Errorf("parent not found: %w", err)
 	}
-	parentLink, err := s.getLink(ctx, p.ShareID, p.LinkID)
-	if err != nil {
-		return err
-	}
-	hashKey, err := hashKeyOf(parentLink, p.NodeKR)
+	hashKey, err := hashKeyOf(p.Link, p.NodeKR)
 	if err != nil {
 		return err
 	}
@@ -156,11 +152,7 @@ func (s *Service) Rename(ctx context.Context, dc *Context, path, newName string)
 	if err != nil {
 		return err
 	}
-	resLink, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return err
-	}
-	parentLink, err := s.getLink(ctx, res.ShareID, resLink.ParentLinkID)
+	parentLink, err := s.getLink(ctx, res.ShareID, res.Link.ParentLinkID)
 	if err != nil {
 		return err
 	}
@@ -195,15 +187,7 @@ func (s *Service) Move(ctx context.Context, dc *Context, sourcePath, destPath st
 	if !dst.IsFolder {
 		return fmt.Errorf("%s is not a folder", destPath)
 	}
-	srcLink, err := s.getLink(ctx, src.ShareID, src.LinkID)
-	if err != nil {
-		return err
-	}
-	dstLink, err := s.getLink(ctx, dst.ShareID, dst.LinkID)
-	if err != nil {
-		return err
-	}
-	hk, err := hashKeyOf(dstLink, dst.NodeKR)
+	hk, err := hashKeyOf(dst.Link, dst.NodeKR)
 	if err != nil {
 		return err
 	}
@@ -211,11 +195,11 @@ func (s *Service) Move(ctx context.Context, dc *Context, sourcePath, destPath st
 	if err != nil {
 		return err
 	}
-	encName, err := reEncryptName(srcLink.Name, src.Name, src.ParentKR, dst.NodeKR, dc.AddrKR)
+	encName, err := reEncryptName(src.Link.Name, src.Name, src.ParentKR, dst.NodeKR, dc.AddrKR)
 	if err != nil {
 		return err
 	}
-	newPass, _, err := reEncryptNodePassphrase(srcLink, src.ParentKR, dst.NodeKR, dc.AddrKR)
+	newPass, _, err := reEncryptNodePassphrase(src.Link, src.ParentKR, dst.NodeKR, dc.AddrKR)
 	if err != nil {
 		return fmt.Errorf("re-encrypt passphrase: %w", err)
 	}
@@ -243,15 +227,7 @@ func (s *Service) Copy(ctx context.Context, dc *Context, sourcePath, destPath st
 	if !dst.IsFolder {
 		return fmt.Errorf("%s is not a folder", destPath)
 	}
-	srcLink, err := s.getLink(ctx, src.ShareID, src.LinkID)
-	if err != nil {
-		return err
-	}
-	dstLink, err := s.getLink(ctx, dst.ShareID, dst.LinkID)
-	if err != nil {
-		return err
-	}
-	hk, err := hashKeyOf(dstLink, dst.NodeKR)
+	hk, err := hashKeyOf(dst.Link, dst.NodeKR)
 	if err != nil {
 		return err
 	}
@@ -259,11 +235,11 @@ func (s *Service) Copy(ctx context.Context, dc *Context, sourcePath, destPath st
 	if err != nil {
 		return err
 	}
-	encName, err := reEncryptName(srcLink.Name, src.Name, src.ParentKR, dst.NodeKR, dc.AddrKR)
+	encName, err := reEncryptName(src.Link.Name, src.Name, src.ParentKR, dst.NodeKR, dc.AddrKR)
 	if err != nil {
 		return err
 	}
-	newPass, _, err := reEncryptNodePassphrase(srcLink, src.ParentKR, dst.NodeKR, dc.AddrKR)
+	newPass, _, err := reEncryptNodePassphrase(src.Link, src.ParentKR, dst.NodeKR, dc.AddrKR)
 	if err != nil {
 		return fmt.Errorf("re-encrypt passphrase: %w", err)
 	}

@@ -2,6 +2,8 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -56,5 +58,97 @@ func TestSessionMarshalUsesEncKeyBlob(t *testing.T) {
 	}
 	if strings.Contains(out, "salted_key_pass") {
 		t.Errorf("salted_key_pass field should not exist, got: %s", out)
+	}
+}
+
+// A reader must never see a half-written session. Save replaces the file, so a
+// command running alongside a save finds either the old session or the new one.
+func TestSaveReplacesTheFileRatherThanRewritingIt(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	name, err := profile.Parse("primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Save(name, &Session{UID: "uid", AccessToken: "first", RefreshToken: "r1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 200 {
+			_ = Save(name, &Session{
+				UID:          "uid",
+				AccessToken:  fmt.Sprintf("token-%d", i),
+				RefreshToken: fmt.Sprintf("refresh-%d", i),
+			})
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		got, err := Load(name)
+		if err != nil {
+			t.Fatalf("Load while saving: %v", err)
+		}
+		if got == nil {
+			t.Fatal("Load found no session while one was being saved")
+		}
+		if got.UID != "uid" || got.AccessToken == "" || got.RefreshToken == "" {
+			t.Fatalf("Load saw a partial session: %+v", got)
+		}
+	}
+}
+
+func TestSaveLeavesNoLeftoverFiles(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	name, err := profile.Parse("primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if err := Save(name, &Session{UID: "uid", AccessToken: "a", RefreshToken: "r"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "proton-cli", "sessions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("the sessions directory holds %v, want just the session file", names)
+	}
+}
+
+func TestSavedSessionIsReadableOnlyByItsOwner(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	name, err := profile.Parse("primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(name, &Session{UID: "uid", AccessToken: "a", RefreshToken: "r"}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Path(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("mode = %o, want 600", perm)
 	}
 }

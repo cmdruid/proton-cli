@@ -48,6 +48,7 @@ func signedCardData(t *testing.T, contactID string) string {
 }
 
 func TestContactsPinUnpinKey(t *testing.T) {
+	t.Parallel()
 	email := "pin-" + testID() + "@example.invalid"
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-pin", "--email", email))
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
@@ -65,6 +66,7 @@ func TestContactsPinUnpinKey(t *testing.T) {
 }
 
 func TestContactsUpdatePreservesPinnedKey(t *testing.T) {
+	t.Parallel()
 	email := "pin-" + testID() + "@example.invalid"
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-pin", "--email", email))
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
@@ -86,6 +88,7 @@ func TestContactsUpdatePreservesPinnedKey(t *testing.T) {
 // contact and sends to it: a matching pin must not break E2EE delivery, and
 // the second account must still decrypt the body with a verified signature.
 func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
+	t.Parallel()
 	data := runJSON(t, "api", "GET", "/core/v4/keys/all", "--query", "Email="+secondaryEmail(), "--query", "InternalOnly=0")
 	addr, _ := data["Address"].(map[string]interface{})
 	ks, _ := addr["Keys"].([]interface{})
@@ -133,6 +136,7 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 // a regression guard for the send-abort cleanup, which used the wrong HTTP
 // method and silently leaked drafts on any aborted send.
 func TestMailSendPinnedMismatchRefused(t *testing.T) {
+	t.Parallel()
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-mismatch", "--email", secondaryEmail()))
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
 		"contacts", "delete", "--", id)
@@ -157,11 +161,13 @@ func TestMailSendPinnedMismatchRefused(t *testing.T) {
 }
 
 func TestContactsList(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "contacts", "list")
 	assertContains(t, stdout, "NAME")
 }
 
 func TestContactsCRUD(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-contact"
 	email := "test+" + name + "@example.invalid"
 
@@ -193,6 +199,7 @@ func TestContactsCRUD(t *testing.T) {
 }
 
 func TestContactsGetByNameRef(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-refname"
 	stdout := runOK(t, "contacts", "create", "--name", name, "--email", "t@x.invalid")
 	id := strings.TrimSpace(stdout)
@@ -204,6 +211,7 @@ func TestContactsGetByNameRef(t *testing.T) {
 }
 
 func TestContactsGetByEmailRef(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-refmail"
 	email := "t+" + name + "@x.invalid"
 	stdout := runOK(t, "contacts", "create", "--name", name, "--email", email)
@@ -216,6 +224,7 @@ func TestContactsGetByEmailRef(t *testing.T) {
 }
 
 func TestContactsDeleteByRef(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-refdel"
 	runOK(t, "contacts", "create", "--name", name, "--email", "t@x.invalid")
 
@@ -227,6 +236,7 @@ func TestContactsDeleteByRef(t *testing.T) {
 }
 
 func TestContactsNotFound(t *testing.T) {
+	t.Parallel()
 	_, _, code := run(t, "contacts", "get", "no-such-contact-"+testID())
 	if code != 3 {
 		t.Errorf("expected exit 3 for unknown contact, got %d", code)
@@ -234,6 +244,7 @@ func TestContactsNotFound(t *testing.T) {
 }
 
 func TestContactsAmbiguous(t *testing.T) {
+	t.Parallel()
 	prefix := testID() + "-ambig"
 	for i := 0; i < 2; i++ {
 		stdout := runOK(t, "contacts", "create",
@@ -250,6 +261,7 @@ func TestContactsAmbiguous(t *testing.T) {
 }
 
 func TestContactsMultiValue(t *testing.T) {
+	t.Parallel()
 	name := testID() + "-mv"
 	e1 := testID() + "-1@example.com"
 	e2 := testID() + "-2@example.com"
@@ -267,6 +279,7 @@ func TestContactsMultiValue(t *testing.T) {
 }
 
 func TestContactsGroups(t *testing.T) {
+	t.Parallel()
 	gname := testID() + "-group"
 	stdout, stderr, code := run(t, "contacts", "groups", "create", "--name", gname, "--color", "#8080FF")
 	if code != 0 {

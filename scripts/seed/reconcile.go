@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
 )
 
 // A pin is one row a collection has to hold.
@@ -78,8 +79,7 @@ func (r *report) sweep(profile string, c collection, list []map[string]any) {
 			r.fail(what, err)
 			continue
 		}
-		fmt.Printf("  - %s\n", what)
-		r.swept++
+		r.note("-", profile, what)
 	}
 }
 
@@ -128,11 +128,29 @@ func agrees(row map[string]any, fields map[string]string) bool {
 }
 
 // report is what the run did, so a seed that changed nothing can say so.
+//
+// The two accounts are seeded at the same time, so every line names the account
+// it belongs to and the tally is guarded.
 type report struct {
+	mu       sync.Mutex
 	made     int
 	remade   int
 	swept    int
 	failures []string
+}
+
+func (r *report) note(mark, profile, what string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	fmt.Printf("  %s %s: %s\n", mark, profile, what)
+	switch mark {
+	case "+":
+		r.made++
+	case "~":
+		r.remade++
+	case "-":
+		r.swept++
+	}
 }
 
 func (r *report) make(profile, what string, args []string) {
@@ -140,8 +158,7 @@ func (r *report) make(profile, what string, args []string) {
 		r.fail(what, err)
 		return
 	}
-	fmt.Printf("  + %s\n", what)
-	r.made++
+	r.note("+", profile, what)
 }
 
 func (r *report) remake(profile, what string, args []string) {
@@ -149,11 +166,12 @@ func (r *report) remake(profile, what string, args []string) {
 		r.fail(what, err)
 		return
 	}
-	fmt.Printf("  ~ %s\n", what)
-	r.remade++
+	r.note("~", profile, what)
 }
 
 func (r *report) fail(what string, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	fmt.Printf("  ! %s: %v\n", what, err)
 	r.failures = append(r.failures, what)
 }

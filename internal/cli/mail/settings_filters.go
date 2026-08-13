@@ -51,7 +51,7 @@ func filtersListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List your filters",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			rows, err := filterList(c).Rows(c.Ctx)
 			if err != nil {
 				return err
@@ -71,7 +71,7 @@ func filtersCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a Sieve filter",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			script, err := kit.ReadTextArg(c, sieve, "--sieve")
 			if err != nil {
 				return err
@@ -103,7 +103,7 @@ func filtersUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Change a filter's name or script",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			script, err := kit.ReadTextArg(c, sieve, "--sieve")
 			if err != nil {
 				return err
@@ -132,7 +132,7 @@ func filterVerbCmd(use, short string, action ui.Action, apply func(*kit.Invocati
 		Use:   use + " REF...",
 		Short: short,
 		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := kit.SelectFrom(c, "filters", filterColumns(), filterList(c))
 			if err != nil {
 				return err

@@ -33,7 +33,7 @@ func convListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List threads in a folder",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			convs, total, err := c.App.Mail.ConversationsList(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -57,7 +57,7 @@ func convSearchCmd() *cobra.Command {
 		Use:   "search",
 		Short: "Search threads through Proton's index",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			convs, _, err := c.App.Mail.ConversationsSearch(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -82,7 +82,7 @@ func convGetCmd() *cobra.Command {
 		Use:   "get REF",
 		Short: "Show a whole thread, decrypted",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			shape, err := format.Value()
 			if err != nil {
 				return err
@@ -180,7 +180,7 @@ func convMoveCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "move [REF...]",
 		Short: "Move threads to a folder",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			dest, err := c.App.Mail.ResolveFolderTarget(c.Ctx, into)
 			if err != nil {
 				return err
@@ -224,7 +224,7 @@ func convLabelVerb(use, short string, action ui.Action, apply func(*kit.Invocati
 	c := &cobra.Command{
 		Use:   use + " [REF...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			target, err := c.App.Mail.ResolveLabelTarget(c.Ctx, label)
 			if err != nil {
 				return err
@@ -299,7 +299,7 @@ func convSimpleVerb(use, short string, action ui.Action, detail string,
 	c := &cobra.Command{
 		Use:   use + " [REF...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := selectConversations(c, &f)
 			if err != nil {
 				return wrongTable(err, use)
@@ -342,7 +342,7 @@ func convAnswerCmd(use, short string, forward bool) *cobra.Command {
 		Use:   use + " REF",
 		Short: short,
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			del, at, err := d.delivery()
 			if err != nil {
 				return err
@@ -426,7 +426,7 @@ func convAttachmentsListCmd() *cobra.Command {
 		Use:   "list REF",
 		Short: "List every attachment in a thread",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			id, err := c.App.Mail.ResolveConversation(c.Ctx, c.Args[0])
 			if err != nil {
 				return wrongTable(err, "attachments list")
@@ -450,7 +450,7 @@ func convAttachmentsDownloadCmd() *cobra.Command {
 		Use:   "download REF [ATTACHMENT_REF]",
 		Short: "Download and decrypt attachments from a thread",
 		Args:  cobra.RangeArgs(1, 2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			one := len(c.Args) == 2
 			if err := dest.Validate(one); err != nil {
 				return err

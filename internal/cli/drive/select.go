@@ -50,7 +50,11 @@ func (f *filters) unbounded() bool {
 		f.scope == "" && !f.age.Set()
 }
 
-const filterHint = "--pattern, --larger-than, --older-than or --scope"
+const (
+	filterHint = "--pattern, --larger-than, --older-than or --scope"
+	// itemScope is what --all covers when nothing narrows it.
+	itemScope = "a whole subtree"
+)
 
 // selectItems resolves what a bulk verb should act on: the paths named, plus
 // whatever the filters matched under --scope.
@@ -63,7 +67,7 @@ func selectItems(c *kit.Invocation, dc *drivesvc.Context, f *filters) (kit.Selec
 		Columns:    childColumns(),
 		IDOf:       func(ch drivesvc.Child) string { return ch.LinkID },
 		FilterHint: filterHint,
-		Scope:      "a whole subtree",
+		Scope:      itemScope,
 		ByRef: func(ctx stdctx.Context, ref string) (drivesvc.Child, error) {
 			res, err := c.App.Drive.ResolvePath(ctx, dc, ref)
 			if err != nil {

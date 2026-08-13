@@ -3,13 +3,13 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 )
 
 // Raw api escape-hatch tests.
 
 func TestAPIGet(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "api", "GET", "/core/v4/users")
 	var v map[string]interface{}
 	if err := json.Unmarshal([]byte(stdout), &v); err != nil {
@@ -21,6 +21,7 @@ func TestAPIGet(t *testing.T) {
 }
 
 func TestAPIGetWithQuery(t *testing.T) {
+	t.Parallel()
 	stdout := runOK(t, "api", "GET", "/mail/v4/messages",
 		"--query", "Page=0", "--query", "PageSize=1")
 	var v map[string]interface{}
@@ -33,6 +34,8 @@ func TestAPIGetWithQuery(t *testing.T) {
 }
 
 func TestAPIPostDeleteRoundTrip(t *testing.T) {
+	t.Parallel()
+	lease(t, labelSlot)
 	name := testID() + "-api"
 	body := fmt.Sprintf(`{"Name":%q,"Color":"#8080FF","Type":1}`, name)
 	stdout := runOK(t, "api", "POST", "/core/v4/labels", "--body", body)
@@ -61,20 +64,5 @@ func TestAPIPostDeleteRoundTrip(t *testing.T) {
 	code, _ := v2["Code"].(float64)
 	if int(code) != 1000 && int(code) != 1001 {
 		t.Errorf("expected Code 1000/1001, got %v", v2["Code"])
-	}
-}
-
-func TestAPIInvalidJSONBody(t *testing.T) {
-	_, stderr, code := run(t, "api", "POST", "/core/v4/labels", "--body", "{not json}")
-	if code == 0 {
-		t.Error("expected non-zero exit for invalid --body")
-	}
-	assertContains(t, strings.ToLower(stderr), "not valid json")
-}
-
-func TestAPIQueryBadSyntax(t *testing.T) {
-	_, _, code := run(t, "api", "GET", "/core/v4/users", "--query", "Noequalssign")
-	if code == 0 {
-		t.Error("expected non-zero exit for malformed --query")
 	}
 }

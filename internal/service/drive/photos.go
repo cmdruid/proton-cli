@@ -93,13 +93,10 @@ func tagNames(ids []int) []string {
 	return out
 }
 
-// photosRoot fetches the photos share root link and unwraps its node key ring,
-// the parent for every photo and album.
+// photosRoot unwraps the photos share root's node key ring, the parent for every
+// photo and album.
 func (s *Service) photosRoot(ctx context.Context, dc *Context) (*Link, *pgp.KeyRing, error) {
-	root, err := s.getLink(ctx, dc.ShareID, dc.RootLinkID)
-	if err != nil {
-		return nil, nil, err
-	}
+	root := dc.rootLink
 	kr, err := unlockNode(root, dc.ShareKR, dc.AddrKR)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unlock photos root: %w", err)

@@ -88,6 +88,15 @@ func (f *composeFlags) resolvedBody(c *kit.Invocation) (string, error) {
 	return kit.ReadTextArg(c, f.body, "--body")
 }
 
+// hasRecipients reports whether the command line named anybody to send to.
+func (f *composeFlags) hasRecipients() bool {
+	return len(f.to)+len(f.cc)+len(f.bcc) > 0
+}
+
+func noRecipients() error {
+	return kit.Fail("At least one recipient is required.").Hint("--to, --cc or --bcc")
+}
+
 // content assembles a fresh message: recipients, subject and body from the flags
 // (or from --eml, which the flags then override), the resolved sending address,
 // and the signature unless suppressed.
@@ -330,12 +339,18 @@ func sendCmd() *cobra.Command {
 		Use:   "send",
 		Short: "Compose and send a message",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if f.eml == "" && f.subject == "" {
 				return kit.Fail("A subject is required.").Hint("--subject \"Quarterly numbers\"")
 			}
 			if f.eml == "" && f.body == "" {
 				return kit.Fail("A body is required.").Hint("--body \"…\", or --body - to read stdin.")
+			}
+			// Without a document to read them from, the recipients are whatever the
+			// flags say - which is knowable here, before any key is unlocked. With one,
+			// they may come out of it, so that case is judged once the content is built.
+			if f.eml == "" && !f.hasRecipients() {
+				return noRecipients()
 			}
 			del, at, err := d.delivery()
 			if err != nil {
@@ -350,7 +365,7 @@ func sendCmd() *cobra.Command {
 				return err
 			}
 			if !content.HasRecipients() {
-				return kit.Fail("At least one recipient is required.").Hint("--to, --cc or --bcc")
+				return noRecipients()
 			}
 			return deliver(c, u, content, del, at)
 		}),
@@ -391,7 +406,7 @@ func answerCmd(use, short, long string, forward bool) *cobra.Command {
 		Short: short,
 		Long:  long,
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			del, at, err := d.delivery()
 			if err != nil {
 				return err

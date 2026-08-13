@@ -136,8 +136,23 @@ func New(opts Options) (*App, error) {
 	}
 	// The client persists the session file whenever its tokens change (e.g. a
 	// mid-request refresh); it stays free of the persistence format by calling
-	// back into saveSession, which owns the DTO assembly.
+	// back into saveSession, which owns the DTO assembly. It reads them back the
+	// same way, so a session refreshed by a command running alongside this one is
+	// picked up rather than refreshed a second time with a token Proton has already
+	// spent.
 	c.SetPersistHook(func() { _ = a.saveSession() })
+	// A command reaches the network only as the account it was given, so that is
+	// where the requirement is enforced - not before the command body, which would
+	// make every argument the command could have judged for itself cost a sign-in to
+	// discover.
+	c.SetSessionGuard(func() error { return a.Authenticate(context.Background()) })
+	c.SetReloadHook(func() (string, string, bool) {
+		stored, err := session.Load(profileName)
+		if err != nil || stored == nil {
+			return "", "", false
+		}
+		return stored.AccessToken, stored.RefreshToken, true
+	})
 	a.Creds.stdinOwner = a.Stdin
 	a.installScopeResolver()
 	return a, nil
@@ -297,6 +312,11 @@ func (a *App) resume(ctx context.Context) bool {
 // once the session file carries the sealed key password, unlocking asks for
 // nothing at all.
 func (a *App) Unlock(ctx context.Context) (*keys.Unlocked, error) {
+	// There are no keys to unlock for an account nobody is signed in to, and
+	// asking for a password to open them would be asking the wrong question.
+	if err := a.Authenticate(ctx); err != nil {
+		return nil, err
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.cache != nil {

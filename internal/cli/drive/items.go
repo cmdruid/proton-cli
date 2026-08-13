@@ -47,7 +47,7 @@ func itemsListCmd() *cobra.Command {
 		Use:   "list [PATH]",
 		Short: "List what is in a folder",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -73,7 +73,7 @@ func itemsGetCmd() *cobra.Command {
 		Use:   "get PATH",
 		Short: "Show a file or folder's details",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -117,7 +117,7 @@ func itemsUploadCmd() *cobra.Command {
 			"SRC of - reads standard input, which needs DEST to name the file, since a\n" +
 			"stream has no name of its own.",
 		Args: cobra.RangeArgs(1, 2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -271,7 +271,7 @@ func itemsDownloadCmd() *cobra.Command {
 		Use:   "download PATH",
 		Short: "Download a file",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if err := dest.Validate(true); err != nil {
 				return err
 			}
@@ -338,7 +338,7 @@ func itemsUpdateCmd() *cobra.Command {
 			"A name is a field like any other, so changing it is `update --name` rather\n" +
 			"than a verb of its own. To put something somewhere else, use `move`.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -380,7 +380,7 @@ func relocateCmd(use, short string, action ui.Action,
 	c := &cobra.Command{
 		Use:   use + " [PATH...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepSelection(f.set, filterHint, itemScope)}, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -421,7 +421,7 @@ func removeCmd(use, short string, action ui.Action, permanent bool) *cobra.Comma
 	c := &cobra.Command{
 		Use:   use + " [PATH...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepSelection(f.set, filterHint, itemScope)}, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -476,7 +476,7 @@ func revisionsListCmd() *cobra.Command {
 		Use:   "list PATH",
 		Short: "List a file's earlier versions",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -504,7 +504,7 @@ func revisionsRestoreCmd() *cobra.Command {
 		Use:   "restore PATH REVISION_REF",
 		Short: "Restore a file to an earlier version",
 		Args:  cobra.ExactArgs(2),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err
@@ -533,7 +533,7 @@ func foldersCmd() *cobra.Command {
 		Use:   "create PATH",
 		Short: "Create a folder, and any missing folder above it",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
 				return err

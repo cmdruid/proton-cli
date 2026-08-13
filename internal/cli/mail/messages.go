@@ -30,7 +30,7 @@ func listCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List messages in a folder",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			msgs, total, err := c.App.Mail.List(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -58,7 +58,7 @@ func searchCmd() *cobra.Command {
 		Use:   "search",
 		Short: "Search messages through Proton's index",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepAuth}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			msgs, _, err := c.App.Mail.Search(c.Ctx, opts)
 			if err != nil {
 				return err
@@ -83,7 +83,7 @@ func getCmd() *cobra.Command {
 		Use:   "get REF",
 		Short: "Show one message, decrypted",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			shape, err := format.Value()
 			if err != nil {
 				return err
@@ -190,7 +190,7 @@ func moveCmd() *cobra.Command {
 		Long: "Move messages to a folder.\n\n" +
 			"A folder is somewhere a message lives, so moving takes it out of wherever it\n" +
 			"was. To add a tag while leaving it in place, use `label` instead.",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			dest, err := c.App.Mail.ResolveFolderTarget(c.Ctx, into)
 			if err != nil {
 				return err
@@ -240,7 +240,7 @@ func labelVerb(use, short string, action ui.Action, apply func(*kit.Invocation, 
 	c := &cobra.Command{
 		Use:   use + " [REF...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			target, err := c.App.Mail.ResolveLabelTarget(c.Ctx, label)
 			if err != nil {
 				return err
@@ -284,7 +284,7 @@ func starVerb(use, short string, action ui.Action, apply func(*kit.Invocation, [
 	c := &cobra.Command{
 		Use:   use + " [REF...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := selectMessages(c, &f)
 			if err != nil {
 				return wrongTable(err, use)
@@ -318,7 +318,7 @@ func markVerb(use, short string, action ui.Action, apply func(*kit.Invocation, [
 	c := &cobra.Command{
 		Use:   use + " [REF...]",
 		Short: short,
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := selectMessages(c, &f)
 			if err != nil {
 				return wrongTable(err, "mark "+use)
@@ -338,7 +338,7 @@ func trashCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "trash [REF...]",
 		Short: "Move messages to the trash",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := selectMessages(c, &f)
 			if err != nil {
 				return wrongTable(err, "trash")
@@ -358,7 +358,7 @@ func deleteCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "delete [REF...]",
 		Short: "Delete messages permanently",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := selectMessages(c, &f)
 			if err != nil {
 				return wrongTable(err, "delete")
@@ -382,7 +382,7 @@ func unscheduleCmd() *cobra.Command {
 			"The message leaves the queue and returns to Drafts, keeping its ID - the same\n" +
 			"thing the web client's \"Edit and reschedule\" does. To change the time, cancel\n" +
 			"it and send again with --send-at.",
-		RunE: kit.Run([]kit.Step{kit.StepAuth, kit.StepExpand}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			ids, rows, err := scheduled(c, all)
 			if err != nil {
 				return err

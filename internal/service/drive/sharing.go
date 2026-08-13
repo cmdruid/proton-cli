@@ -111,10 +111,7 @@ func (s *Service) Info(ctx context.Context, dc *Context, path string) (*ItemInfo
 	if err != nil {
 		return nil, err
 	}
-	link, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return nil, err
-	}
+	link := res.Link
 	name := res.Name
 	if name == "" {
 		name = "/"
@@ -284,10 +281,7 @@ func (s *Service) RemoveLinks(ctx context.Context, dc *Context, path string) (in
 	if err != nil {
 		return 0, err
 	}
-	link, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return 0, err
-	}
+	link := res.Link
 	removed := 0
 	for _, sid := range link.ShareIDs {
 		if sid == dc.ShareID {
@@ -314,10 +308,7 @@ func (s *Service) CountLinks(ctx context.Context, dc *Context, path string) (int
 	if err != nil {
 		return 0, err
 	}
-	link, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return 0, err
-	}
+	link := res.Link
 	n := 0
 	for _, sid := range link.ShareIDs {
 		if sid == dc.ShareID {
@@ -337,10 +328,7 @@ func (s *Service) ShareStatusOf(ctx context.Context, dc *Context, path string) (
 	if err != nil {
 		return nil, err
 	}
-	link, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return nil, err
-	}
+	link := res.Link
 	st := &ShareStatus{Path: "/" + strings.Trim(path, "/"), Type: "file"}
 	if link.Type == 1 {
 		st.Type = "folder"
@@ -369,10 +357,7 @@ func (s *Service) ShareStatusOf(ctx context.Context, dc *Context, path string) (
 }
 
 func (s *Service) shareForLink(ctx context.Context, dc *Context, res *Resolved) (string, *pgp.SessionKey, error) {
-	link, err := s.getLink(ctx, res.ShareID, res.LinkID)
-	if err != nil {
-		return "", nil, err
-	}
+	link := res.Link
 	for _, sid := range link.ShareIDs {
 		if sid == dc.ShareID {
 			continue
