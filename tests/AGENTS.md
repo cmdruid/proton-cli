@@ -123,12 +123,21 @@ An invocation's cost is the **depth of its request graph**, not the number of as
 ```bash
 just test-report                    # per command: invocations, time, requests, overlap
 just test-report TestCalendar       # or one slice of it
-just test-coverage                  # every METHOD + path template the run reached
+just coverage                       # re-record which of Proton's API the suite reaches
 ```
 
 `overlap` is 1.0 for a strict chain and higher when requests were made together. The report ends with **chains worth flattening**: commands with several requests and an overlap near 1.0. That list is the work, in order.
 
-`just test-coverage` is the guard rail on all of it: it prints the API surface the run actually exercised. An optimisation is only acceptable if that set does not shrink - a response nobody parsed is a response Proton could change without a test noticing.
+### The guard rail
+
+The live suite is the only thing that would notice Proton changing an answer, and it can only notice for requests it actually makes. So both halves of that are written down:
+
+- **what the suite reaches** - `tests/api-coverage.golden`, recorded from a real run by `just coverage`;
+- **what the CLI can send** - read from the source by `TestEveryRequestTheCLICanSendIsOneTheSuiteSends`, which needs no account and so runs in `just test-fast` on every push.
+
+A request the CLI can send that the golden does not hold **fails the build**. There are two ways out, and both have to be argued in the test's own file: `unreachable` for what no run can do (revoking the session it is running on, a paid feature these accounts do not have), and `untested` for a gap somebody chose to leave, which is reported on every run rather than passing quietly. That list is something to shorten.
+
+So an optimisation cannot quietly narrow the live surface: removing the last test that reaches an endpoint turns the build red. When a change legitimately stops the CLI sending something, `just coverage` re-records it and the diff is the review.
 
 ## Writing a Test
 

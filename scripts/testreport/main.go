@@ -281,6 +281,12 @@ var numeric = regexp.MustCompile(`^[0-9]+$`)
 func printCoverage(runs []invocation) {
 	seen := map[string]bool{}
 	for _, r := range runs {
+		// What the raw `api` command sent is what a test asked for by hand. Its
+		// whole purpose is to reach something no command models, so it proves
+		// nothing about the surface the CLI itself covers.
+		if field(r, 1) == "api" {
+			continue
+		}
 		for _, q := range r.Requests {
 			seen[q.Method+" "+template(q.Path)] = true
 		}

@@ -125,9 +125,15 @@ test-report *pattern=".":
         go test ./tests/ -count=1 -run '{{ pattern }}' -timeout 20m -parallel {{ parallel }} || true
     go run ./scripts/testreport "$trace"
 
-[doc("Print the live API surface the last traced run actually reached")]
-test-coverage:
-    go run ./scripts/testreport --coverage "${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
+[doc("Record which of Proton's API the live suite reaches, for the check that no change quietly narrows it")]
+coverage:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trace="${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
+    PROTON_CLI_TEST_TRACE="$trace" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
+        go test ./tests/ -count=1 -timeout 10m -parallel {{ parallel }}
+    go run ./scripts/testreport --coverage "$trace" > tests/api-coverage.golden
+    git --no-pager diff --stat tests/api-coverage.golden || true
 
 [doc("Move every dependency and tool to the latest version")]
 update:
