@@ -42,6 +42,9 @@ const (
 	photos = "photos"
 	// driveInvitations: likewise for the invitations the second account can see.
 	driveInvitations = "drive-invitations"
+	// driveTrash: emptying it acts on everything in it, including what another
+	// test trashed and means to restore.
+	driveTrash = "drive-trash"
 	// The free plan allows only a few calendars, vaults, labels and mail folders,
 	// and the fixture already holds one of each. A test that makes one takes the
 	// spare slot: two at once is how a run learns that Proton counts them, in the
@@ -121,6 +124,8 @@ var touching = []struct {
 	{filterSlot, []string{`"filters", "create"`}},
 	{photos, []string{`photoLinkIDs(t)`}},
 	{driveInvitations, []string{`altInvitationIDs(t)`}},
+	{driveTrash, []string{`"drive", "trash", "empty"`}},
+	{driveTrash, []string{`"drive", "trash", "restore"`}},
 	{driveInvitations, []string{`"share", "add"`, `secondaryEmail()`}},
 }
 
@@ -183,6 +188,8 @@ func resourceConst(resource string) string {
 		return "photos"
 	case driveInvitations:
 		return "driveInvitations"
+	case driveTrash:
+		return "driveTrash"
 	case calendarSlot:
 		return "calendarSlot"
 	case vaultSlot:

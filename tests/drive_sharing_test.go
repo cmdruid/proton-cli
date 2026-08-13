@@ -140,6 +140,25 @@ func TestDriveShareLinkDryRun(t *testing.T) {
 	assertField(t, status, "Shared:", "no")
 }
 
+// A link that already exists is changed rather than replaced, so the address
+// people were given keeps working.
+func TestDriveShareLinkUpdatesTheLinkItAlreadyHas(t *testing.T) {
+	t.Parallel()
+	folder := "/" + testID() + "-relink"
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", folder)
+
+	first := strings.TrimSpace(runOK(t, "drive", "share", "link", folder))
+	updated := runOK(t, "drive", "share", "link", folder, "--password", "hunter2")
+
+	assertField(t, updated, "Password:", "hunter2")
+	if !strings.Contains(updated, tokenOf(t, first)) {
+		t.Errorf("setting a password made a new link:\nwas %q\nnow %s", first, truncateOutput(updated))
+	}
+	assertField(t, runOK(t, "drive", "share", "get", folder), "Link Password:", "hunter2")
+}
+
 // ── members ──
 
 func TestDriveShareAddNotProtonUser(t *testing.T) {
@@ -253,6 +272,47 @@ func altInvitationIDs(t *testing.T) map[string]bool {
 		}
 	}
 	return set
+}
+
+// The other answer an invitation can be given. Accepting is the round trip above;
+// declining has to leave the share without a member.
+func TestDriveShareInvitationCanBeDeclined(t *testing.T) {
+	t.Parallel()
+	lease(t, driveInvitations)
+	folder := "/" + testID() + "-decline"
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", folder)
+
+	before := altInvitationIDs(t)
+	runOK(t, "drive", "share", "add", folder, secondaryEmail())
+	cleanupRun(t, fmt.Sprintf("Revoke member: proton-cli drive share remove %s %s", folder, secondaryEmail()),
+		"drive", "share", "remove", folder, secondaryEmail())
+
+	var invID string
+	waitFor(45*time.Second, 3*time.Second, func() bool {
+		for id := range altInvitationIDs(t) {
+			if !before[id] {
+				invID = id
+				return true
+			}
+		}
+		return false
+	})
+	if invID == "" {
+		t.Fatal("the second account never saw the invitation")
+	}
+
+	runOKSecondary(t, "drive", "invitations", "decline", invID)
+
+	if altInvitationIDs(t)[invID] {
+		t.Error("the invitation is still waiting for an answer after being declined")
+	}
+	st := runJSON(t, "drive", "share", "get", folder)
+	members, _ := st["members"].([]interface{})
+	if strings.Contains(fmt.Sprintf("%v", members), secondaryEmail()) {
+		t.Errorf("declining made the second account a member anyway: %v", members)
+	}
 }
 
 func TestDriveShareInvitationRoundTrip(t *testing.T) {

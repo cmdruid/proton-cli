@@ -41,29 +41,21 @@ const unresolved = "\x00"
 // exceptions that have to be argued for, not a list to grow when a test is
 // inconvenient to write.
 var unreachable = map[string]string{
-	"DELETE /auth/v4/sessions":          "revoking every other session would end the run",
-	"DELETE /auth/v4/sessions/{id}":     "the only session there is to revoke is the one running",
-	"DELETE /core/v4/labels/{id}":       "removing a contact group, which needs a paid plan",
-	"GET /core/v4/keys/salts":           "only a first unlock derives the key password, and the suite resumes a session",
-	"PUT /auth/v4/sessions/local/key":   "written once, at the first unlock, before the suite runs",
-	"PUT /contacts/v4/contacts/label":   "contact groups need a paid plan and these accounts are free",
-	"PUT /contacts/v4/contacts/unlabel": "contact groups need a paid plan and these accounts are free",
+	"DELETE /auth/v4/sessions":                                  "revoking every other session would end the run",
+	"DELETE /auth/v4/sessions/{id}":                             "the only session there is to revoke is the one running",
+	"DELETE /core/v4/labels/{id}":                               "removing a contact group, which needs a paid plan",
+	"POST /drive/shares/{id}/files/{id}/revisions/{id}/restore": "there is never a revision to restore: uploading over a name is refused, so the CLI cannot make a second one",
+	"GET /core/v4/keys/salts":                                   "only a first unlock derives the key password, and the suite resumes a session",
+	"PUT /auth/v4/sessions/local/key":                           "written once, at the first unlock, before the suite runs",
+	"PUT /contacts/v4/contacts/label":                           "contact groups need a paid plan and these accounts are free",
+	"PUT /contacts/v4/contacts/unlabel":                         "contact groups need a paid plan and these accounts are free",
 }
 
 // untested are the requests a run could make and does not. Each is a gap somebody
 // chose to leave, so it is named here and reported on every run rather than
 // passing quietly. The list is something to shorten.
 var untested = map[string]string{
-	"DELETE /drive/volumes/{id}/trash":                          "emptying the drive trash is done only by the seed, which is not traced",
-	"GET /calendar/v1/{id}/events/{id}/attendees":               "reached only by an invitation with more attendees than one page holds",
-	"POST /drive/shares/{id}/files/{id}/revisions/{id}/restore": "restoring an old revision has no test",
-	"POST /pass/v1/share/{id}/alias/custom":                     "making an alias has no test; only the options one can be made from are read",
-	"POST /drive/v2/shares/invitations/{id}/reject":             "declining a share is only dry-run tested; accepting has the round trip",
-	"PUT /drive/shares/{id}/urls/{id}":                          "changing an existing public link, rather than making one, has no test",
-	"PUT /mail/v4/conversations/delete":                         "deleting a whole thread has no test; the message-level one does",
-	"PUT /mail/v4/conversations/read":                           "marking a whole thread read has no test",
-	"PUT /mail/v4/conversations/unlabel":                        "removing a label from a whole thread has no test",
-	"PUT /mail/v4/conversations/unread":                         "marking a whole thread unread has no test",
+	"GET /calendar/v1/{id}/events/{id}/attendees": "reaching it needs an event with more attendees than a page holds, which would mean inviting a hundred addresses from these accounts",
 }
 
 func TestEveryRequestTheCLICanSendIsOneTheSuiteSends(t *testing.T) {

@@ -504,6 +504,63 @@ func TestMailConversationsTrashRoundTrip(t *testing.T) {
 	runOK(t, "mail", "conversations", "move", "--into", "inbox", "--", convID)
 }
 
+// A thread is not the sum of its messages: Proton has its own verbs for one, and
+// marking a thread read is a different request from marking each message in it
+// read. So the thread-level verbs are exercised on a thread.
+func TestMailConversationsMarkAndStar(t *testing.T) {
+	t.Parallel()
+	convID := findConversationFor(t, mutableMail(t))
+
+	runOK(t, "mail", "conversations", "mark", "unread", "--", convID)
+	if !conversationListed(t, convID, "--unread") {
+		t.Error("the thread should be among the unread ones after being marked unread")
+	}
+	runOK(t, "mail", "conversations", "mark", "read", "--", convID)
+	if conversationListed(t, convID, "--unread") {
+		t.Error("the thread should not be among the unread ones after being marked read")
+	}
+
+	runOK(t, "mail", "conversations", "star", "--", convID)
+	if !conversationListed(t, convID, "--folder", "starred") {
+		t.Error("the thread should be starred")
+	}
+	runOK(t, "mail", "conversations", "unstar", "--", convID)
+	if conversationListed(t, convID, "--folder", "starred") {
+		t.Error("the star should be gone")
+	}
+}
+
+// conversationListed reports whether a thread is in the listing the filters name.
+func conversationListed(t *testing.T, convID string, filters ...string) bool {
+	t.Helper()
+	args := append([]string{"mail", "conversations", "list", "--page-size", "50"}, filters...)
+	for _, row := range runJSONArray(t, args...) {
+		if row.(map[string]interface{})["id"] == convID {
+			return true
+		}
+	}
+	return false
+}
+
+// Deleting a thread is permanent and takes the whole thread, so it is tried on
+// one nothing else reads: a draft is a thread of its own, and making one sends
+// nothing.
+func TestMailConversationsDeleteTakesTheWholeThread(t *testing.T) {
+	t.Parallel()
+	subject := testID() + "-conv-delete"
+	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create",
+		"--to", selfEmail(), "--subject", subject, "--body", "a thread of one"))
+	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
+		"mail", "messages", "delete", "--", id)
+	convID := findConversationFor(t, id)
+
+	runOK(t, "mail", "conversations", "delete", "--", convID)
+
+	if _, _, code := run(t, "mail", "messages", "get", "--", id); code != 3 {
+		t.Errorf("the message is still there after its thread was deleted (exit %d)", code)
+	}
+}
+
 // ── attachments ──
 
 func TestMailAttachmentsListAndDownload(t *testing.T) {

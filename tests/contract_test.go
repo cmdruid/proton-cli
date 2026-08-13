@@ -373,6 +373,7 @@ func TestDeleteWithoutConsentRefusesAndChangesNothing(t *testing.T) {
 // and the user typed the reference.
 func TestTrashOfANamedReferenceNeedsNoConsent(t *testing.T) {
 	t.Parallel()
+	lease(t, driveTrash)
 	path := "/" + testID() + "-consent-trash"
 	runOK(t, "drive", "folders", "create", path)
 	cleanupRun(t, "Delete: proton-cli drive items delete "+path,

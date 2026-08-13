@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ── vaults ──
@@ -185,6 +186,27 @@ func TestPassAliasOptions(t *testing.T) {
 	assertContains(t, stdout, "KIND")
 	assertContains(t, stdout, "suffix")
 	assertContains(t, stdout, "mailbox")
+}
+
+// An alias is an address Proton makes for you, so making one is its own request
+// rather than another kind of item written locally.
+func TestPassAliasesCreate(t *testing.T) {
+	t.Parallel()
+	name := testID() + "-alias"
+	// The prefix becomes part of an email address, so it is short and plain, and
+	// the item's name carries the suite's own prefix instead.
+	prefix := fmt.Sprintf("pcli-%d", time.Now().UnixNano()%1_000_000_000)
+	ref := strings.TrimSpace(runOK(t, "pass", "aliases", "create", "--prefix", prefix, "--name", name))
+	cleanupRun(t, fmt.Sprintf("Delete alias: proton-cli pass items delete %s", name),
+		"pass", "items", "delete", name)
+	if !looksLikePairRef(ref) {
+		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", ref)
+	}
+
+	got := runOK(t, "pass", "items", "get", "--", ref)
+	assertField(t, got, "Type:", "alias")
+	assertField(t, got, "Name:", name)
+	assertContains(t, runOK(t, "pass", "aliases", "list"), name)
 }
 
 // ── batch filters (all dry-run) ──

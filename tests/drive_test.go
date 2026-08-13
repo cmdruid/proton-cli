@@ -429,6 +429,7 @@ func TestDriveItemsMove(t *testing.T) {
 
 func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 	t.Parallel()
+	lease(t, driveTrash)
 	folder := "/" + testID() + "-trash"
 	runOK(t, "drive", "folders", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Final delete: proton-cli drive items delete --permanent %s", folder),
@@ -472,6 +473,41 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 	if !back {
 		t.Error("restored folder should be back in root")
 	}
+}
+
+// Emptying the trash is the one command that acts on everything in it, so it
+// takes the trash to itself: another test restoring something would find it
+// permanently gone.
+func TestDriveTrashEmpty(t *testing.T) {
+	t.Parallel()
+	lease(t, driveTrash)
+	folder := "/" + testID() + "-emptytrash"
+	runOK(t, "drive", "folders", "create", folder)
+	linkID, _ := runJSON(t, "drive", "items", "get", folder)["link_id"].(string)
+	if linkID == "" {
+		t.Fatal("drive items get should report the folder's link ID")
+	}
+	// No cleanup: emptying the trash is what removes it, and a folder left in
+	// the trash by a failure is swept by the next seed.
+	runOK(t, "drive", "items", "trash", folder)
+
+	if !trashHolds(t, linkID) {
+		t.Fatal("the trashed folder should be in the trash")
+	}
+	runOK(t, "drive", "trash", "empty")
+	if trashHolds(t, linkID) {
+		t.Error("the trash still holds the folder after being emptied")
+	}
+}
+
+func trashHolds(t *testing.T, linkID string) bool {
+	t.Helper()
+	for _, row := range runJSONArray(t, "drive", "trash", "list") {
+		if row.(map[string]interface{})["link_id"] == linkID {
+			return true
+		}
+	}
+	return false
 }
 
 // ── batch filters (all dry-run) ──

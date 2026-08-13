@@ -30,20 +30,22 @@ proton-cli has one grammar, one verb per idea, and one shape per response. All o
 
 After making code changes, run these in order. Stop on the first failure and fix it before continuing.
 
-1. **Fast tests** - `just test-fast` runs the unit, golden and conformance suites with no credentials and no network. It is the gate that catches an inconsistency.
+1. **Tests** - `just test` runs everything: the credential-free suites first (unit, golden, conformance and offline - `just test-fast` on its own is the inner loop while working), then the live suite against the two accounts, four tests at a time. About three minutes. It fails on the first sign of Proton rate-limiting rather than pressing on, so a failure that says so means lower the concurrency and wait, not fix the code.
 2. **Lint** - **always run `just lint`** and fix everything before considering the work done. It formats Go and Nix and regenerates the command reference, then checks the workflows with `actionlint`, the release configuration with `goreleaser check`, the shell scripts with `shellcheck`, and the Go with `golangci-lint` (CGO-free, so no C compiler needed). CI runs the same recipe and then fails on anything it rewrote, so leaving a generated file stale is the same failure as leaving a finding.
 3. **Build** - `just build` produces the release-shaped binary (`-tags=embed_hv` + the CGO webview helper); it needs the toolchain from `devbox shell`.
 4. **Nix, when `go.mod` moved** - `just flake` builds the flake package from the working tree. `vendorHash` in `flake.nix` goes stale on every dependency change and nothing else catches it; the recipe prints the hash to paste in.
 5. **Packaging, when the release surface moved** - `just snapshot` builds every artifact a tag would, without publishing. Run it after touching `.goreleaser.yaml`, the completions or the embedded helpers.
-6. **Integration tests** - **do not run.** The suite hits the live Proton API, creates real data, and takes several minutes; the user runs it manually and reports back. See [Testing](#testing).
+6. **Coverage, when the CLI's requests moved** - `just coverage` re-records which of Proton's API the live suite reaches. `just test-fast` fails when the CLI can send a request no test has ever sent, so run this after adding or removing one, and read the diff. See [Testing](#testing).
 
 ## Testing
 
 Tests are **integration tests** that run against the live Proton API. They run on the primary and secondary test accounts, and require `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`.
 
-- **`just test-fast` is always safe** - no API, no credentials, seconds to run
-- **Never run the full test suite** (`just test` / `go test ./tests/...`) - only the user triggers that manually
-- **Single integration tests are allowed** (`just test-one TestName`) when verifying a specific change
+- **`just test-fast` is always safe** - no API, no credentials, about a second to run
+- **`just test` is the gate**, and it is yours to run: about three minutes, and it includes `test-fast`
+- **What limits how often you can run it is the sending allowance, not the clock.** A run sends about seventeen messages and these are free accounts, which Proton caps at fifty an hour and a hundred and fifty a day. Two runs back to back are fine; four in an hour will start failing on the quota, and those failures look like bugs but are not. When in doubt, wait rather than debug.
+- **Single tests are cheaper** (`just test-one TestName`) when verifying one change
+- **`just test-report`** says where the time went and how deep each command's request graph was
 - **`just docs`** regenerates `docs/commands/README.md` from the tree; `just lint` runs it too, and CI fails on the diff
 - **Unit test file naming**: name a unit test file after the source file it tests, with `_test.go` appended (e.g. `size.go` → `size_test.go`) - never after a symbol or after a file that doesn't exist. The integration tests under `tests/` are the exception: they are grouped by feature area.
 
