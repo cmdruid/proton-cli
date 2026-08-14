@@ -31,7 +31,15 @@ proton-cli drive items upload --if-exists rename ./report.pdf /Documents   # kee
 proton-cli drive items upload --if-exists skip ./report.pdf /Documents     # leaves what is there alone
 ```
 
-With `--recursive` the answer applies to every file, and folders already there are used rather than refused.
+With `--recursive` the answer is about the folder the tree lands in, since a tree is one thing with one name:
+
+```bash
+proton-cli drive items upload --recursive --if-exists replace ./project /Backup  # into the folder already there, file by file
+proton-cli drive items upload --recursive --if-exists rename ./project /Backup   # the whole tree beside it, as "project (1)"
+proton-cli drive items upload --recursive --if-exists skip ./project /Backup     # writes none of it
+```
+
+A file standing where a folder must go, or a folder where a file must go, is refused before anything is written: neither can take the other's place, and an upload does not remove things.
 
 ### Download
 

@@ -16,14 +16,40 @@ func TestPassVaultsList(t *testing.T) {
 	assertContains(t, stdout, "ID")
 }
 
+// createVault makes a vault, waiting out the seconds Proton goes on counting one
+// that has just been deleted.
+//
+// The free plan allows two and the fixture holds one, so every test that makes a
+// vault takes the same spare slot. The lease hands it over the moment the delete
+// returns, but the quota it is counted against catches up a few seconds later,
+// and until it does the answer is that you cannot have another.
+func createVault(t *testing.T, name string) string {
+	t.Helper()
+	var ref string
+	waitFor(30*time.Second, 2*time.Second, func() bool {
+		stdout, stderr, code := run(t, "pass", "vaults", "create", "--name", name)
+		if code == 0 {
+			ref = strings.TrimSpace(stdout)
+			return true
+		}
+		if !strings.Contains(stderr, "cannot access more vaults") {
+			t.Fatalf("creating a vault failed (exit %d): %s", code, stderr)
+		}
+		return false
+	})
+	if ref == "" {
+		t.Fatal("the spare vault slot never came back")
+	}
+	return ref
+}
+
 func TestPassVaultsCRUD(t *testing.T) {
 	t.Parallel()
 	lease(t, vaultSlot)
 	name := testID() + "-vault"
-	stdout := runOK(t, "pass", "vaults", "create", "--name", name)
-	shareID := strings.TrimSpace(stdout)
+	shareID := createVault(t, name)
 	if !looksLikeID(shareID) {
-		t.Fatalf("expected bare share ID on stdout, got %q", stdout)
+		t.Fatalf("expected bare share ID on stdout, got %q", shareID)
 	}
 	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete -- %s", shareID),
 		"pass", "vaults", "delete", "--", shareID)
@@ -303,7 +329,7 @@ func TestPassVaultRename(t *testing.T) {
 	t.Parallel()
 	lease(t, vaultSlot)
 	name := testID() + "-vault"
-	sid := strings.TrimSpace(runOK(t, "pass", "vaults", "create", "--name", name))
+	sid := createVault(t, name)
 	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete %s", sid),
 		"pass", "vaults", "delete", "--", sid)
 

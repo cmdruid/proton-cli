@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -590,6 +591,115 @@ func assertReads(t *testing.T, path, want string) {
 	if got := reads(t, path); got != want {
 		t.Errorf("%s reads %q, want %q", path, got, want)
 	}
+}
+
+// A tree is one thing with one name, so the answer is about the folder it lands
+// in rather than about each file: it merges into what is there, moves aside
+// whole, or is not written at all.
+func TestDriveItemsUploadTreeIfExistsReplaceMerges(t *testing.T) {
+	t.Parallel()
+	dest, local := uploadedTree(t)
+	writeLocal(t, filepath.Join(local, "a.txt"), "second")
+	writeLocal(t, filepath.Join(local, "c.txt"), "new")
+
+	_, stderr := runOKStderr(t, "drive", "items", "upload", "--recursive", "--if-exists", "replace", local, dest)
+
+	assertContains(t, stderr, "to "+dest+"/project")
+	assertReads(t, dest+"/project/a.txt", "second")
+	assertReads(t, dest+"/project/c.txt", "new")
+	assertReads(t, dest+"/project/sub/b.txt", "deep")
+}
+
+func TestDriveItemsUploadTreeIfExistsRenameKeepsBoth(t *testing.T) {
+	t.Parallel()
+	dest, local := uploadedTree(t)
+	writeLocal(t, filepath.Join(local, "a.txt"), "second")
+
+	_, stderr := runOKStderr(t, "drive", "items", "upload", "--recursive", "--if-exists", "rename", local, dest)
+
+	assertContains(t, stderr, "project (1)")
+	assertReads(t, dest+"/project/a.txt", "first")
+	assertReads(t, dest+"/project (1)/a.txt", "second")
+	assertReads(t, dest+"/project (1)/sub/b.txt", "deep")
+}
+
+func TestDriveItemsUploadTreeIfExistsSkipWritesNothing(t *testing.T) {
+	t.Parallel()
+	dest, local := uploadedTree(t)
+	writeLocal(t, filepath.Join(local, "c.txt"), "new")
+
+	_, stderr := runOKStderr(t, "drive", "items", "upload", "--recursive", "--if-exists", "skip", local, dest)
+
+	assertContains(t, stderr, "Nothing to upload")
+	if holds := childNames(t, dest+"/project"); slices.Contains(holds, "c.txt") {
+		t.Errorf("skipping the tree still wrote into it: %v", holds)
+	}
+}
+
+// A file and a folder cannot take each other's place, so no answer reaches this
+// one - and the refusal has to come before any of the tree is written.
+func TestDriveItemsUploadTreeRefusesAFileWhereAFolderGoes(t *testing.T) {
+	t.Parallel()
+	dest := "/" + testID() + "-mismatch"
+	runOK(t, "drive", "folders", "create", dest)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", dest),
+		"drive", "items", "delete", dest)
+	runOK(t, "drive", "folders", "create", dest+"/project")
+
+	local := treeOnDisk(t)
+	inTheWay := filepath.Join(t.TempDir(), "sub")
+	writeLocal(t, inTheWay, "in the way")
+	runOK(t, "drive", "items", "upload", inTheWay, dest+"/project")
+
+	_, stderr, code := run(t, "drive", "items", "upload", "--recursive", "--if-exists", "replace", local, dest)
+
+	if code != 4 {
+		t.Fatalf("a file where a folder goes should exit 4 (conflict), got %d: %s", code, stderr)
+	}
+	assertContains(t, stderr, `already has a file called "sub"`)
+	if holds := childNames(t, dest+"/project"); len(holds) != 1 || holds[0] != "sub" {
+		t.Errorf("the upload wrote %v before refusing", holds)
+	}
+}
+
+// uploadedTree puts a small tree in Drive and hands back the folder it went into
+// and the local directory it came from.
+func uploadedTree(t *testing.T) (dest, local string) {
+	t.Helper()
+	dest = "/" + testID() + "-tree"
+	runOK(t, "drive", "folders", "create", dest)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", dest),
+		"drive", "items", "delete", dest)
+	local = treeOnDisk(t)
+	runOK(t, "drive", "items", "upload", "--recursive", local, dest)
+	return dest, local
+}
+
+func treeOnDisk(t *testing.T) string {
+	t.Helper()
+	local := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(filepath.Join(local, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeLocal(t, filepath.Join(local, "a.txt"), "first")
+	writeLocal(t, filepath.Join(local, "sub", "b.txt"), "deep")
+	return local
+}
+
+func writeLocal(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func childNames(t *testing.T, folder string) []string {
+	t.Helper()
+	var names []string
+	for _, child := range runJSONArray(t, "drive", "items", "list", folder) {
+		names = append(names, child.(map[string]interface{})["name"].(string))
+	}
+	return names
 }
 
 // Emptying the trash is the one command that acts on everything in it, so it

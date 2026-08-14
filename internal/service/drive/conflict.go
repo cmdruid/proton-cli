@@ -3,6 +3,7 @@ package drive
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -117,6 +118,159 @@ func (s *Service) PlanUpload(ctx context.Context, dc *Context, destPath, name st
 	}
 	return plan, nil
 }
+
+// TreeItem is one thing a tree upload means to write, named by where it goes.
+type TreeItem struct {
+	Path  string
+	IsDir bool
+}
+
+// TreePlan is what uploading a directory will do, worked out before any of it is
+// done.
+//
+// A tree is one thing with one name, so the answer to a name already taken is
+// given about the tree's own folder, the way Proton's own client gives it: kept
+// both puts the whole tree beside what is there under a numbered name, skipped
+// writes none of it, and replaced lands it in the folder already there, file by
+// file.
+type TreePlan struct {
+	// Top is where the tree lands, which is not where it was asked to land when
+	// its name was taken and both are being kept.
+	Top string
+	// Nothing reports that the tree is already there and is being left alone.
+	Nothing bool
+	// Folders are the folders to make, parents before children. A folder already
+	// there is not among them: it is what the files go into.
+	Folders []string
+	// Files are the files to write.
+	Files []TreeFile
+}
+
+// TreeFile is one file a tree upload will write.
+type TreeFile struct {
+	Path string
+	// Replaces says a file of that name is there already, so this one becomes its
+	// next revision rather than a second file.
+	Replaces bool
+}
+
+// PlanTree decides what uploading a directory into top will do.
+//
+// Nothing is written and nothing is half-decided: a folder standing where a file
+// goes, or a file standing where a folder goes, is refused here rather than
+// found part way through, because neither can become the other and an upload is
+// not a command that removes things.
+func (s *Service) PlanTree(ctx context.Context, dc *Context, top string, items []TreeItem, on OnConflict) (*TreePlan, error) {
+	there, err := s.ResolvePath(ctx, dc, top)
+	var missing *errs.NotFound
+	if errors.As(err, &missing) {
+		return freshTree(top, top, items), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !there.IsFolder {
+		return nil, &errs.Exists{Kind: "file", Name: baseOf(top), Where: dirOf(top)}
+	}
+
+	switch on {
+	case ConflictRefuse:
+		return nil, &errs.Exists{Kind: "folder", Name: baseOf(top), Where: dirOf(top)}
+	case ConflictSkip:
+		return &TreePlan{Top: top, Nothing: true}, nil
+	case ConflictRename:
+		parent, err := s.ResolvePath(ctx, dc, dirOf(top))
+		if err != nil {
+			return nil, err
+		}
+		hashKey, err := hashKeyOf(parent.Link, parent.NodeKR)
+		if err != nil {
+			return nil, err
+		}
+		free, err := s.freeNames(ctx, parent, hashKey, baseOf(top))
+		if err != nil {
+			return nil, err
+		}
+		return freshTree(top, join(dirOf(top), free.name), items), nil
+	}
+
+	holds, err := s.holdings(ctx, dc, top, items)
+	if err != nil {
+		return nil, err
+	}
+	plan := &TreePlan{Top: top}
+	for _, it := range items {
+		kind, taken := holds[it.Path]
+		switch {
+		case it.IsDir && !taken:
+			plan.Folders = append(plan.Folders, it.Path)
+		case it.IsDir && kind == folderKind:
+		case it.IsDir:
+			return nil, &errs.Exists{Kind: "file", Name: baseOf(it.Path), Where: dirOf(it.Path)}
+		case !taken:
+			plan.Files = append(plan.Files, TreeFile{Path: it.Path})
+		case kind == fileKind:
+			plan.Files = append(plan.Files, TreeFile{Path: it.Path, Replaces: true})
+		default:
+			return nil, &errs.Exists{Kind: "folder", Name: baseOf(it.Path), Where: dirOf(it.Path)}
+		}
+	}
+	return plan, nil
+}
+
+const (
+	fileKind   = "file"
+	folderKind = "folder"
+)
+
+// freshTree is the plan for a tree that lands somewhere nothing is in the way,
+// which is every path under a folder that did not exist or has just been given a
+// name of its own: there is nothing left to ask about any of it.
+func freshTree(asked, top string, items []TreeItem) *TreePlan {
+	plan := &TreePlan{Top: top, Folders: []string{top}}
+	for _, it := range items {
+		path := top + strings.TrimPrefix(it.Path, asked)
+		if it.IsDir {
+			plan.Folders = append(plan.Folders, path)
+			continue
+		}
+		plan.Files = append(plan.Files, TreeFile{Path: path})
+	}
+	return plan
+}
+
+// holdings reports what the destination already holds at each of the tree's
+// paths.
+//
+// Only folders that exist and that the tree wants are read, so the cost is the
+// overlap between the two trees rather than the size of either: a folder that is
+// not there cannot hold anything, and one the tree does not enter is nobody's
+// business.
+func (s *Service) holdings(ctx context.Context, dc *Context, top string, items []TreeItem) (map[string]string, error) {
+	wanted := map[string]bool{}
+	for _, it := range items {
+		if it.IsDir {
+			wanted[it.Path] = true
+		}
+	}
+	holds := map[string]string{}
+	for queue := []string{top}; len(queue) > 0; queue = queue[1:] {
+		children, err := s.List(ctx, dc, queue[0])
+		if err != nil {
+			return nil, err
+		}
+		for _, child := range children {
+			path := join(queue[0], child.Name)
+			holds[path] = child.Type
+			if child.Type == folderKind && wanted[path] {
+				queue = append(queue, path)
+			}
+		}
+	}
+	return holds, nil
+}
+
+func join(dir, name string) string { return strings.TrimSuffix(dir, "/") + "/" + name }
 
 // available is the answer to "is this name free, and if not, what is": the name
 // asked for when it is free, and otherwise the first numbered variant that is.

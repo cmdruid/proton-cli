@@ -182,8 +182,8 @@ func TestStdoutIDVaultCreate(t *testing.T) {
 	t.Parallel()
 	lease(t, vaultSlot)
 	name := testID() + "-stid-vault"
-	stdout, _ := runOKStderr(t, "pass", "vaults", "create", "--name", name)
-	id := assertBareID(t, stdout, "vaults create")
+	id := createVault(t, name)
+	assertBareID(t, id, "vaults create")
 	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete -- %s", id),
 		"pass", "vaults", "delete", "--", id)
 }
