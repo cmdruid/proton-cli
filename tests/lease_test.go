@@ -45,6 +45,11 @@ const (
 	// driveTrash: emptying it acts on everything in it, including what another
 	// test trashed and means to restore.
 	driveTrash = "drive-trash"
+	// attachmentThread: forwarding the seeded message with attachments puts a
+	// draft in its thread, and a conversation Proton has just had to re-thread
+	// answers for a moment as though none of its messages had any attachments.
+	// A test reading that thread cannot tell that from the truth.
+	attachmentThread = "attachment-thread"
 	// The free plan allows only a few calendars, vaults, labels and mail folders,
 	// and the fixture already holds one of each. A test that makes one takes the
 	// spare slot: two at once is how a run learns that Proton counts them, in the
@@ -124,6 +129,9 @@ var touching = []struct {
 	{filterSlot, []string{`"filters", "create"`}},
 	{photos, []string{`photoLinkIDs(t)`}},
 	{driveInvitations, []string{`altInvitationIDs(t)`}},
+	{attachmentThread, []string{`sharedAttachment(t)`, `"forward"`}},
+	{attachmentThread, []string{`findMessageWithAttachment(t)`, `"conversations"`}},
+	{attachmentThread, []string{`findMessageWithMixedAttachments(t)`, `"conversations"`}},
 	{driveTrash, []string{`"drive", "trash", "empty"`}},
 	{driveTrash, []string{`"drive", "trash", "restore"`}},
 	{driveInvitations, []string{`"share", "add"`, `secondaryEmail()`}},
@@ -190,6 +198,8 @@ func resourceConst(resource string) string {
 		return "driveInvitations"
 	case driveTrash:
 		return "driveTrash"
+	case attachmentThread:
+		return "attachmentThread"
 	case calendarSlot:
 		return "calendarSlot"
 	case vaultSlot:

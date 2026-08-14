@@ -110,12 +110,25 @@ func itemsGetCmd() *cobra.Command {
 
 func itemsUploadCmd() *cobra.Command {
 	var recursive bool
+	ifExists := kit.Enum{
+		Name:   "if-exists",
+		Usage:  "What to do when the folder already has that name",
+		Values: []string{"rename", "replace", "skip"},
+	}
 	c := &cobra.Command{
 		Use:   "upload SRC [DEST]",
 		Short: "Upload a file or directory",
 		Long: "Upload a file or directory.\n\n" +
 			"SRC of - reads standard input, which needs DEST to name the file, since a\n" +
-			"stream has no name of its own.",
+			"stream has no name of its own.\n\n" +
+			"A name already taken is refused, so nothing is overwritten by accident.\n" +
+			"--if-exists answers the question instead:\n\n" +
+			"  replace  write the bytes as a new revision, so the file keeps its\n" +
+			"           history and `items revisions list` shows both\n" +
+			"  rename   keep both, adding a number to the name being uploaded\n" +
+			"  skip     leave what is there alone and upload nothing\n\n" +
+			"With --recursive the answer applies to every file, and folders already\n" +
+			"there are used rather than refused.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
@@ -127,20 +140,26 @@ func itemsUploadCmd() *cobra.Command {
 			if len(c.Args) >= 2 {
 				dest = c.Args[1]
 			}
+			choice, err := ifExists.Value()
+			if err != nil {
+				return err
+			}
+			onConflict := drivesvc.OnConflict(choice)
 			if recursive {
 				if src == "-" {
 					return kit.Fail("--recursive cannot read from standard input.")
 				}
-				return uploadTree(c, dc, src, dest)
+				return uploadTree(c, dc, src, dest, onConflict)
 			}
-			return uploadOne(c, dc, src, dest)
+			return uploadOne(c, dc, src, dest, onConflict)
 		}),
 	}
 	c.Flags().BoolVar(&recursive, "recursive", false, "Upload a directory and everything under it")
+	ifExists.Register(c)
 	return c
 }
 
-func uploadOne(c *kit.Invocation, dc *drivesvc.Context, src, dest string) error {
+func uploadOne(c *kit.Invocation, dc *drivesvc.Context, src, dest string, on drivesvc.OnConflict) error {
 	var r io.Reader
 	var size int64
 	var name string
@@ -179,18 +198,48 @@ func uploadOne(c *kit.Invocation, dc *drivesvc.Context, src, dest string) error 
 		r, size, name = f, fi.Size(), filepath.Base(src)
 	}
 
-	return kit.Mutate(c, ui.ResultSpec{
-		Action: ui.Uploaded, Count: 1, Name: name,
+	plan, err := c.App.Drive.PlanUpload(c.Ctx, dc, dest, name, on)
+	if err != nil {
+		return err
+	}
+	// What the plan says is what gets reported, so a skip is a count of nothing
+	// rather than a claim to have uploaded something, and a dry run promises the
+	// name the file will really end up with.
+	spec := ui.ResultSpec{
+		Action: ui.Uploaded, Count: 1, Name: plan.Name,
 		Detail: "to " + dest, Extra: map[string]any{"size": size},
-	}, func() error {
-		return c.App.Drive.Upload(c.Ctx, dc, dest, name, r, drivesvc.UploadOptions{
-			Label: "Uploading " + name, Progress: ui.NewProgress(c.UI()), TotalHint: size,
+	}
+	switch {
+	case plan.Nothing:
+		spec.Count = 0
+		spec.Detail = fmt.Sprintf("- %s already has %s", dest, name)
+	case plan.Revision:
+		spec.Detail = "to " + dest + " as a new revision"
+	}
+	return sayHowToGoAhead(kit.Mutate(c, spec, func() error {
+		return c.App.Drive.Upload(c.Ctx, dc, plan, r, drivesvc.UploadOptions{
+			Label: "Uploading " + plan.Name, Progress: ui.NewProgress(c.UI()), TotalHint: size,
 		})
-	})
+	}))
+}
+
+// sayHowToGoAhead turns Proton's refusal to write over a name into the question
+// its own client asks, with the three answers this one takes.
+func sayHowToGoAhead(err error) error {
+	var exists *errs.Exists
+	if !errors.As(err, &exists) {
+		return err
+	}
+	exists.Answers = []string{
+		"--if-exists replace to write the bytes as a new revision of it",
+		"--if-exists rename to keep both",
+		"--if-exists skip to leave it alone",
+	}
+	return exists
 }
 
 // uploadTree mirrors a local directory into Drive, creating folders as it goes.
-func uploadTree(c *kit.Invocation, dc *drivesvc.Context, src, dest string) error {
+func uploadTree(c *kit.Invocation, dc *drivesvc.Context, src, dest string, on drivesvc.OnConflict) error {
 	srcAbs, err := filepath.Abs(src)
 	if err != nil {
 		return err
@@ -234,35 +283,67 @@ func uploadTree(c *kit.Invocation, dc *drivesvc.Context, src, dest string) error
 			files++
 		}
 	}
-	return kit.Mutate(c, ui.ResultSpec{
-		Action: ui.Uploaded, Kind: "items", Count: files, Detail: "to " + top,
+	// A folder that is already there is the container the answer is about, not the
+	// thing being written, so with an answer given it is used rather than refused.
+	makeFolder := func(path string) error {
+		err := c.App.Drive.CreateFolder(c.Ctx, dc, path)
+		var exists *errs.Exists
+		if on != drivesvc.ConflictRefuse && errors.As(err, &exists) {
+			return nil
+		}
+		return err
+	}
+	return sayHowToGoAhead(kit.Mutate(c, ui.ResultSpec{
+		Action: ui.Uploaded, Kind: "items", Count: files,
+		Detail: "to " + top + treeConflictClause(on),
 	}, func() error {
-		if err := c.App.Drive.CreateFolder(c.Ctx, dc, top); err != nil {
+		if err := makeFolder(top); err != nil {
 			return err
 		}
 		for _, u := range plan {
 			if u.dir {
-				if err := c.App.Drive.CreateFolder(c.Ctx, dc, u.remote); err != nil {
+				if err := makeFolder(u.remote); err != nil {
 					return err
 				}
+				continue
+			}
+			dir, name := filepath.ToSlash(filepath.Dir(u.remote)), filepath.Base(u.remote)
+			filePlan, err := c.App.Drive.PlanUpload(c.Ctx, dc, dir, name, on)
+			if err != nil {
+				return err
+			}
+			if filePlan.Nothing {
 				continue
 			}
 			f, err := os.Open(u.local)
 			if err != nil {
 				return err
 			}
-			err = c.App.Drive.Upload(c.Ctx, dc, filepath.ToSlash(filepath.Dir(u.remote)),
-				filepath.Base(u.remote), f, drivesvc.UploadOptions{
-					Label:    "Uploading " + filepath.Base(u.remote),
-					Progress: ui.NewProgress(c.UI()), TotalHint: u.size,
-				})
+			err = c.App.Drive.Upload(c.Ctx, dc, filePlan, f, drivesvc.UploadOptions{
+				Label:    "Uploading " + filePlan.Name,
+				Progress: ui.NewProgress(c.UI()), TotalHint: u.size,
+			})
 			_ = f.Close()
 			if err != nil {
 				return err
 			}
 		}
 		return nil
-	})
+	}))
+}
+
+// treeConflictClause says what a tree upload did about the names already taken,
+// since the count alone cannot: it counts what the local tree holds.
+func treeConflictClause(on drivesvc.OnConflict) string {
+	switch on {
+	case drivesvc.ConflictSkip:
+		return ", keeping what is already there"
+	case drivesvc.ConflictReplace:
+		return ", replacing what is already there"
+	case drivesvc.ConflictRename:
+		return ", keeping both where a name is taken"
+	}
+	return ""
 }
 
 func itemsDownloadCmd() *cobra.Command {

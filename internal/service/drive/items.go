@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -144,7 +145,11 @@ func (s *Service) CreateFolder(ctx context.Context, dc *Context, fullPath string
 		"NodeKey":                 nodeKey,
 		"NodeHashKey":             hashKeyEnc,
 	}
-	return s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/drive/shares/" + p.ShareID + "/folders", Body: body}, nil)
+	err = s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/drive/shares/" + p.ShareID + "/folders", Body: body}, nil)
+	if proton.AlreadyExists(err) {
+		return &errs.Exists{Kind: "folder", Name: name, Where: parent}
+	}
+	return err
 }
 
 func (s *Service) Rename(ctx context.Context, dc *Context, path, newName string) error {

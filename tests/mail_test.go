@@ -855,6 +855,7 @@ func TestMailConversationsReadSummary(t *testing.T) {
 
 func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 	stdout := runOK(t, "mail", "conversations", "get", "--summary", convID)
@@ -1012,6 +1013,7 @@ func TestMailMessagesReadIncludeInlineTags(t *testing.T) {
 
 func TestMailConversationsReadShowsAttachmentsPerMessage(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 	stdout := runOK(t, "mail", "conversations", "get", convID)
@@ -1021,6 +1023,7 @@ func TestMailConversationsReadShowsAttachmentsPerMessage(t *testing.T) {
 
 func TestMailConversationsReadIncludeInline(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID := findMessageWithMixedAttachments(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1039,6 +1042,7 @@ func TestMailConversationsReadIncludeInline(t *testing.T) {
 
 func TestMailConversationsAttachmentsList(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1067,6 +1071,7 @@ func TestMailConversationsAttachmentsList(t *testing.T) {
 
 func TestMailConversationsAttachmentsListIncludeInline(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID := findMessageWithMixedAttachments(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1078,6 +1083,7 @@ func TestMailConversationsAttachmentsListIncludeInline(t *testing.T) {
 
 func TestMailConversationsAttachmentsDownloadAll(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1095,6 +1101,7 @@ func TestMailConversationsAttachmentsDownloadAll(t *testing.T) {
 
 func TestMailConversationsAttachmentsDownloadAllSkipsInline(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID := findMessageWithMixedAttachments(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1114,6 +1121,7 @@ func TestMailConversationsAttachmentsDownloadAllSkipsInline(t *testing.T) {
 
 func TestMailConversationsAttachmentsDownloadOneByID(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, attID, attName := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 
@@ -1132,6 +1140,7 @@ func TestMailConversationsAttachmentsDownloadOneByID(t *testing.T) {
 
 func TestMailConversationsAttachmentsDownloadUnknownID(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 

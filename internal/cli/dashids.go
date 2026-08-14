@@ -29,18 +29,44 @@ func preprocessArgs(args []string) []string {
 }
 
 // looksLikeDashedProtonID reports whether s starts with a single '-' and is
-// otherwise shaped like a Proton ID (≥60 chars, ends "==", URL-safe base64).
+// otherwise shaped like an ID Proton issues.
+//
+// There are two such shapes, and both are checked exactly rather than loosely,
+// because inserting "--" in front of something that was meant as a flag value
+// would be worse than the collision it avoids:
+//
+//   - what most things are named by: at least 60 characters of URL-safe base64,
+//     padded to a multiple of four, so ending "==";
+//   - what a Drive share invitation is named by: sixteen bytes unpadded, which
+//     is exactly 22 characters and never contains "=".
 func looksLikeDashedProtonID(s string) bool {
-	if len(s) < 60 {
+	if s == "" || s[0] != '-' || (len(s) > 1 && s[1] == '-') {
 		return false
 	}
-	if s[0] != '-' || (len(s) > 1 && s[1] == '-') {
+	if !isBase64URL(s[1:]) {
 		return false
 	}
-	if !strings.HasSuffix(s, "==") {
-		return false
+	switch {
+	case len(s) >= 60 && strings.HasSuffix(s, "=="):
+		return true
+	case len(s) == 22 && !strings.Contains(s, "="):
+		return true
 	}
-	for i := 1; i < len(s); i++ {
+	return false
+}
+
+// mightBeDashedReference is the looser question, asked only to decide whether to
+// explain "--" instead of letting cobra talk about shorthand flags.
+//
+// Advice can afford to be generous where the rewriting above cannot: a short ID
+// is eight characters counting the dash, which is also a length a cluster of
+// shorthand flags could have, so it is worth mentioning but not worth acting on.
+func mightBeDashedReference(s string) bool {
+	return len(s) >= 8 && s[0] == '-' && s[1] != '-' && isBase64URL(s[1:])
+}
+
+func isBase64URL(s string) bool {
+	for i := 0; i < len(s); i++ {
 		c := s[i]
 		switch {
 		case c >= 'A' && c <= 'Z':
@@ -65,7 +91,7 @@ func rewrapFlagError(err error, argv []string) error {
 	if errors.As(err, &nee) {
 		if shorts := nee.GetSpecifiedShortnames(); shorts != "" {
 			token := "-" + shorts
-			if looksLikeDashedProtonID(token) {
+			if mightBeDashedReference(token) {
 				return fmt.Errorf(
 					"that argument looks like a flag because it starts with '-'.\n"+
 						"       If it is an ID, insert -- before it:\n"+

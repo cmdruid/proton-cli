@@ -48,6 +48,27 @@ const (
 	conversationNotFoundCode = 20052
 )
 
+// succeeded reports whether a Proton code is one of the ways of saying it worked:
+// done, one answer per item, or accepted and being carried out in the background.
+func succeeded(code int) bool {
+	switch code {
+	case okCode, multiCode, acceptedCode:
+		return true
+	}
+	return false
+}
+
+const (
+	okCode       = 1000
+	multiCode    = 1001
+	acceptedCode = 1002
+)
+
+// The code Proton answers with when the name is already taken where it was to
+// be written. The web clients read the same code to know a duplicate was found
+// and ask what to do about it (useUploadFile.ts).
+const alreadyExistsCode = 2500
+
 // DoesNotExist reports whether err is Proton saying that what was named is not
 // there, so a caller holding the reference can say so in its own words.
 func DoesNotExist(err error) bool {
@@ -60,6 +81,14 @@ func DoesNotExist(err error) bool {
 		return true
 	}
 	return apiErr.HTTPStatus == 404
+}
+
+// AlreadyExists reports whether err is Proton refusing to write a second thing
+// under a name that is taken, so a caller that knows which name and which folder
+// can say so instead of passing the code on.
+func AlreadyExists(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Code == alreadyExistsCode
 }
 
 // ExitCode maps an HTTP failure to the CLI's exit-code scheme.

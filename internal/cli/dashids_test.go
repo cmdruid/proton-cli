@@ -13,6 +13,10 @@ const (
 	dashedID    = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A=="
 	plainID     = "NWM5AYGxFIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A5C-ADmohv7TjXfYbDEIHZPQ=="
 	shortDashed = "-abc=="
+	// What Proton names a Drive share invitation: sixteen bytes of base64url,
+	// unpadded, which is 22 characters and starts with '-' about one time in
+	// sixty.
+	invitationID = "-e7KRBCZiwIuhVvaE2v41A"
 )
 
 func TestLooksLikeDashedProtonID(t *testing.T) {
@@ -31,6 +35,10 @@ func TestLooksLikeDashedProtonID(t *testing.T) {
 		{"empty", "", false},
 		{"single dash", "-", false},
 		{"flag with eq sign", "--name=John Doe Long Title Goes Here Lorem ipsum aaaaaaaa==", false},
+		{"drive invitation ID", invitationID, true},
+		{"a word of another length", "-nearly-an-invitation", false},
+		{"22 characters that are not base64", "-not.an.invitation.id!", false},
+		{"short ID, left to the advice", "-e7KRBCZ", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

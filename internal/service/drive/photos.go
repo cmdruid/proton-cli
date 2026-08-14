@@ -262,7 +262,11 @@ func (s *Service) PhotoUpload(ctx context.Context, dc *Context, name string, r i
 		"CaptureTime":     captureTime,
 		"ContentHash":     contentHash,
 	}
-	return s.Upload(ctx, dc, "/", name, bytes.NewReader(data), opts)
+	plan, err := s.PlanUpload(ctx, dc, "/", name, ConflictRefuse)
+	if err != nil {
+		return err
+	}
+	return s.Upload(ctx, dc, plan, bytes.NewReader(data), opts)
 }
 
 // AlbumCreate creates a new (unlocked) photo album.

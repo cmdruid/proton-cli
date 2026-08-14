@@ -50,27 +50,50 @@ func (s *Service) AliasOptions(ctx context.Context, shareID string) ([]AliasSuff
 	return sx, mx, nil
 }
 
-func (s *Service) AliasCreate(ctx context.Context, u *keys.Unlocked, shareID, prefix, suffix, mailbox, name string) (string, error) {
+// AliasPlan is the address an alias will have, worked out before it is made.
+//
+// Proton decides the tail: `aliases options` offers suffixes it invents on the
+// spot, each signed, and whichever gets used must be sent back with the
+// signature it came with. So the address is knowable in advance, but only by
+// asking - which is also what makes a suffix nobody offered a refusal that
+// arrives before anything exists.
+type AliasPlan struct {
+	// Address is what mail sent to the alias will be addressed to.
+	Address string
+
+	prefix  string
+	signed  string
+	mailbox int
+}
+
+// PlanAlias works out the address, the suffix to sign it with, and the mailbox it
+// forwards to, without making anything.
+func (s *Service) PlanAlias(ctx context.Context, shareID, prefix, suffix, mailbox string) (*AliasPlan, error) {
 	suffixes, mailboxes, err := s.AliasOptions(ctx, shareID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	signed, err := pickSuffix(suffixes, suffix)
+	chosen, err := pickSuffix(suffixes, suffix)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	mbox, err := pickMailbox(mailboxes, mailbox)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	return &AliasPlan{
+		Address: prefix + chosen.Suffix,
+		prefix:  prefix, signed: chosen.SignedSuffix, mailbox: mbox,
+	}, nil
+}
+
+// AliasCreate makes the alias the plan describes and returns the new item's ID.
+func (s *Service) AliasCreate(ctx context.Context, u *keys.Unlocked, shareID string, plan *AliasPlan, name string) (string, error) {
 	sk, err := s.decryptShareKeys(ctx, shareID, u)
 	if err != nil {
 		return "", err
 	}
 	shareKey, rotation := sk.latest()
-	if name == "" {
-		name = prefix
-	}
 	item := &pb.Item{Metadata: &pb.Metadata{Name: name}, Content: &pb.Content{Content: &pb.Content_Alias{Alias: &pb.ItemAlias{}}}}
 	itemKey, err := aead.NewKey()
 	if err != nil {
@@ -89,9 +112,9 @@ func (s *Service) AliasCreate(ctx context.Context, u *keys.Unlocked, shareID, pr
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "POST", Path: "/pass/v1/share/" + shareID + "/alias/custom",
 		Body: map[string]any{
-			"Prefix":       prefix,
-			"SignedSuffix": signed,
-			"MailboxIDs":   []int{mbox},
+			"Prefix":       plan.prefix,
+			"SignedSuffix": plan.signed,
+			"MailboxIDs":   []int{plan.mailbox},
 			"Item": map[string]any{
 				"Content":              base64.StdEncoding.EncodeToString(ct),
 				"ContentFormatVersion": 7,
@@ -105,23 +128,23 @@ func (s *Service) AliasCreate(ctx context.Context, u *keys.Unlocked, shareID, pr
 	return r.Item.ItemID, nil
 }
 
-func pickSuffix(s []AliasSuffix, wanted string) (string, error) {
+func pickSuffix(s []AliasSuffix, wanted string) (AliasSuffix, error) {
 	if wanted == "" {
 		if len(s) == 0 {
-			return "", fmt.Errorf("no alias suffixes available")
+			return AliasSuffix{}, fmt.Errorf("no alias suffixes available")
 		}
-		return s[0].SignedSuffix, nil
+		return s[0], nil
 	}
 	for _, x := range s {
 		if x.Suffix == wanted || strings.HasSuffix(x.Suffix, wanted) {
-			return x.SignedSuffix, nil
+			return x, nil
 		}
 	}
 	avail := make([]string, 0, len(s))
 	for _, x := range s {
 		avail = append(avail, x.Suffix)
 	}
-	return "", fmt.Errorf("suffix %q not found; available: %s", wanted, strings.Join(avail, ", "))
+	return AliasSuffix{}, fmt.Errorf("suffix %q not found; available: %s", wanted, strings.Join(avail, ", "))
 }
 
 func pickMailbox(m []AliasMailbox, wanted string) (int, error) {

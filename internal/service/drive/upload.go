@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
@@ -46,63 +45,25 @@ func (b *encBlock) listEntry() map[string]any {
 	}
 }
 
-func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string, r io.Reader, opts UploadOptions) error {
+// Upload writes r into Drive as the file the plan describes.
+//
+// The plan says where the bytes go and under what name, and whether they become
+// a new file or a new revision of the one already there. Deciding that before
+// any of this runs is what lets the command report - and a dry run promise - the
+// same thing that happens.
+func (s *Service) Upload(ctx context.Context, dc *Context, plan *UploadPlan, r io.Reader, opts UploadOptions) error {
+	if plan.Nothing {
+		return nil
+	}
 	if opts.MIMEType == "" {
 		opts.MIMEType = "application/octet-stream"
 	}
-	parent, err := s.ResolvePath(ctx, dc, destPath)
-	if err != nil {
-		return fmt.Errorf("target folder not found: %w", err)
-	}
-	if !parent.IsFolder {
-		return fmt.Errorf("%s is not a folder", destPath)
-	}
-	hk, err := hashKeyOf(parent.Link, parent.NodeKR)
-	if err != nil {
-		return err
-	}
-	hash, err := lookupHash(strings.ToLower(name), hk)
-	if err != nil {
-		return err
-	}
-	encName, err := encryptName(name, parent.NodeKR, dc.AddrKR)
-	if err != nil {
-		return err
-	}
-	nodeKey, nodePass, nodePassSig, nodePriv, err := genNodeKeys(parent.NodeKR, dc.AddrKR)
-	if err != nil {
-		return err
-	}
-	nodeKR, err := pgp.NewKeyRing(nodePriv)
-	if err != nil {
-		return err
-	}
-	sessionKey, contentKP, contentKPSig, err := genFileKeys(nodeKR, dc.AddrKR)
-	if err != nil {
-		return err
-	}
+	parent := plan.parent
 
-	var createResult struct {
-		Code int
-		File struct{ ID, RevisionID string }
-	}
-	if err := s.C.Decode(ctx, proton.Request{
-		Method: "POST", Path: "/drive/shares/" + parent.ShareID + "/files",
-		Body: map[string]any{
-			"Name": encName, "Hash": hash,
-			"ParentLinkID":   parent.LinkID,
-			"NodePassphrase": nodePass, "NodePassphraseSignature": nodePassSig,
-			"SignatureAddress":          dc.AddrEmail,
-			"NodeKey":                   nodeKey,
-			"MIMEType":                  opts.MIMEType,
-			"ContentKeyPacket":          contentKP,
-			"ContentKeyPacketSignature": contentKPSig,
-		},
-	}, &createResult); err != nil {
+	linkID, revisionID, sessionKey, nodeKR, err := s.startRevision(ctx, dc, plan, opts.MIMEType)
+	if err != nil {
 		return err
 	}
-	linkID := createResult.File.ID
-	revisionID := createResult.File.RevisionID
 
 	var verResult struct {
 		VerificationCode string
@@ -126,6 +87,7 @@ func (s *Service) Upload(ctx context.Context, dc *Context, destPath, name string
 		ctx, parent.ShareID, linkID, revisionID, dc.AddrID,
 		sessionKey, nodeKR, dc.AddrKR, verCode, r, prog,
 	)
+
 	if err != nil {
 		return err
 	}

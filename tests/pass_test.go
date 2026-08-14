@@ -196,17 +196,46 @@ func TestPassAliasesCreate(t *testing.T) {
 	// The prefix becomes part of an email address, so it is short and plain, and
 	// the item's name carries the suite's own prefix instead.
 	prefix := fmt.Sprintf("pcli-%d", time.Now().UnixNano()%1_000_000_000)
-	ref := strings.TrimSpace(runOK(t, "pass", "aliases", "create", "--prefix", prefix, "--name", name))
+	stdout, stderr := runOKStderr(t, "pass", "aliases", "create", "--prefix", prefix, "--name", name)
+	ref := strings.TrimSpace(stdout)
 	cleanupRun(t, fmt.Sprintf("Delete alias: proton-cli pass items delete %s", name),
 		"pass", "items", "delete", name)
 	if !looksLikePairRef(ref) {
 		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", ref)
 	}
 
-	got := runOK(t, "pass", "items", "get", "--", ref)
-	assertField(t, got, "Type:", "alias")
-	assertField(t, got, "Name:", name)
-	assertContains(t, runOK(t, "pass", "aliases", "list"), name)
+	// The address is what an alias is for, so creating one says which address it
+	// made rather than the prefix it was asked for.
+	assertContains(t, stderr, "@")
+	said := addressIn(t, stderr)
+
+	got := runJSON(t, "pass", "items", "get", "--", ref)
+	if got["type"] != "alias" || got["name"] != name {
+		t.Errorf("the item reads type %v name %v, want an alias called %s", got["type"], got["name"], name)
+	}
+	// The address Proton made from the prefix is the whole point of an alias, so
+	// the item has to carry it. Proton appends a word of its own to the prefix.
+	address, _ := got["alias"].(string)
+	if !strings.HasPrefix(address, prefix) || !strings.Contains(address, "@") {
+		t.Fatalf("alias address is %q, want an address built from %q", address, prefix)
+	}
+	if said != address {
+		t.Errorf("creating said %q but the alias is %q", said, address)
+	}
+	assertContains(t, runOK(t, "pass", "items", "get", "--", ref), address)
+	assertContains(t, runOK(t, "pass", "aliases", "list"), address)
+}
+
+// addressIn picks the email address out of a confirmation line.
+func addressIn(t *testing.T, line string) string {
+	t.Helper()
+	for _, word := range strings.Fields(strings.TrimSuffix(strings.TrimSpace(line), ".")) {
+		if strings.Contains(word, "@") {
+			return strings.TrimSuffix(word, ".")
+		}
+	}
+	t.Fatalf("no address in %q", line)
+	return ""
 }
 
 // ── batch filters (all dry-run) ──

@@ -145,6 +145,22 @@ func TestCalendarEventsNotFound(t *testing.T) {
 
 // eventPath is the raw API path for an event. The CLI hands an event's two
 // halves back as one reference, but the endpoint wants them apart.
+// eventIfStillThere reads one event of a shared calendar, and answers nil when it
+// is not there any more: the listing this walks is of a calendar other tests are
+// making and deleting events in, so one going missing mid-walk is ordinary.
+func eventIfStillThere(t *testing.T, calendarID, eventID string) map[string]interface{} {
+	t.Helper()
+	stdout, _, code := run(t, "--output", "json", "api", "GET", "/calendar/v1/"+calendarID+"/events/"+eventID)
+	if code != 0 {
+		return nil
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("api GET of event %s returned unreadable JSON: %v", eventID, err)
+	}
+	return out
+}
+
 func eventPath(t *testing.T, ref string) string {
 	t.Helper()
 	cal, ev, ok := strings.Cut(ref, "/")
@@ -388,7 +404,10 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 			"--end", time.Now().Add(120*time.Hour).Format("2006-01-02"))
 		for _, e := range evs {
 			id := e.(map[string]interface{})["id"].(string)
-			ev := runJSON(t, "api", "GET", "/calendar/v1/"+primaryCal+"/events/"+id)
+			ev := eventIfStillThere(t, primaryCal, id)
+			if ev == nil {
+				continue
+			}
 			if u, _ := eventField(ev, "UID").(string); u == uid {
 				if org, _ := eventField(ev, "IsOrganizer").(float64); int(org) == 0 {
 					primaryEventID = id

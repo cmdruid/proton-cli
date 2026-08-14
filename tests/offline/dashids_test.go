@@ -17,6 +17,10 @@ const dashedSyntheticID = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5
 // takes as one slash-joined token.
 const dashedSyntheticPair = dashedSyntheticID + "/" + dashedSyntheticID
 
+// dashedInvitationID is the other shape Proton issues: a Drive share invitation
+// is sixteen bytes of URL-safe base64, unpadded, so 22 characters with no "=".
+const dashedInvitationID = "-e7KRBCZiwIuhVvaE2v41A"
+
 // assertNotFlagParseError fails the test if stderr looks like cobra's
 // "unknown shorthand flag" complaint - i.e. arg parsing rejected the ID.
 func assertNotFlagParseError(t *testing.T, stderr string) {
@@ -63,6 +67,8 @@ func TestLeadingDashIDIsAccepted(t *testing.T) {
 		{"pass items get", []string{"pass", "items", "get", dashedSyntheticPair}},
 		{"pass items delete", []string{"pass", "items", "delete", dashedSyntheticPair}},
 		{"drive trash restore", []string{"drive", "trash", "restore", dashedSyntheticID}},
+		{"drive invitations accept", []string{"drive", "invitations", "accept", dashedInvitationID}},
+		{"drive invitations decline", []string{"drive", "invitations", "decline", dashedInvitationID}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

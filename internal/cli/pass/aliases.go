@@ -40,7 +40,7 @@ func aliasesListCmd() *cobra.Command {
 				Total: ui.Unknown, Page: ui.Unpaged,
 				Columns: []ui.Column[passsvc.Item]{
 					{Header: "ID", ID: true, Cell: itemRef},
-					{Header: "ADDRESS", Flex: true, Cell: func(it passsvc.Item) string { return it.Email }},
+					{Header: "ADDRESS", Flex: true, Cell: func(it passsvc.Item) string { return it.Alias }},
 					{Header: "NAME", Flex: true, Cell: func(it passsvc.Item) string { return it.Name }},
 				},
 			}, aliases, func(it passsvc.Item) []string { return []string{it.ShareID, it.ItemID} })
@@ -68,10 +68,26 @@ func aliasesCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return kit.Create(c, ui.ResultSpec{
-				Action: ui.Created, Kind: "aliases", Name: prefix + suffix,
-			}, func() (string, error) {
-				itemID, err := c.App.Pass.AliasCreate(c.Ctx, c.U, shareID, prefix, suffix, mailbox, name)
+			// The address is the answer, so it is worked out before the alias is
+			// made: the confirmation, the machine output and a dry run then all name
+			// the same address rather than the prefix it was asked for.
+			plan, err := c.App.Pass.PlanAlias(c.Ctx, shareID, prefix, suffix, mailbox)
+			if err != nil {
+				return err
+			}
+			if name == "" {
+				name = prefix
+			}
+			spec := ui.ResultSpec{Action: ui.Created, Kind: "aliases", Name: name}
+			if !c.App.DryRun {
+				// Proton invents a suffix each time it is asked for one, so the
+				// address is only settled by using this one. A preview can name the
+				// alias it would make but not the address it would get.
+				spec.Detail = "as " + plan.Address
+				spec.Extra = map[string]any{"alias": plan.Address}
+			}
+			return kit.Create(c, spec, func() (string, error) {
+				itemID, err := c.App.Pass.AliasCreate(c.Ctx, c.U, shareID, plan, name)
 				if err != nil {
 					return "", err
 				}

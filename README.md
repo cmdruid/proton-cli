@@ -86,6 +86,7 @@ Threads, attachments, filters, and auto-reply. → [Mail](docs/commands/mail.md)
 ```bash
 proton-cli drive items list /Documents
 proton-cli drive items upload --recursive ./project /Backup
+proton-cli drive items upload --if-exists replace ./report.pdf /Documents
 proton-cli drive items download /Documents/report.pdf --output-dir .
 proton-cli drive items move /Documents/report.pdf --into /Archive
 proton-cli drive share link /Documents/report.pdf --expires 7d --password hunter2

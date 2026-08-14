@@ -41,14 +41,13 @@ const unresolved = "\x00"
 // exceptions that have to be argued for, not a list to grow when a test is
 // inconvenient to write.
 var unreachable = map[string]string{
-	"DELETE /auth/v4/sessions":                                  "revoking every other session would end the run",
-	"DELETE /auth/v4/sessions/{id}":                             "the only session there is to revoke is the one running",
-	"DELETE /core/v4/labels/{id}":                               "removing a contact group, which needs a paid plan",
-	"POST /drive/shares/{id}/files/{id}/revisions/{id}/restore": "there is never a revision to restore: uploading over a name is refused, so the CLI cannot make a second one",
-	"GET /core/v4/keys/salts":                                   "only a first unlock derives the key password, and the suite resumes a session",
-	"PUT /auth/v4/sessions/local/key":                           "written once, at the first unlock, before the suite runs",
-	"PUT /contacts/v4/contacts/label":                           "contact groups need a paid plan and these accounts are free",
-	"PUT /contacts/v4/contacts/unlabel":                         "contact groups need a paid plan and these accounts are free",
+	"DELETE /auth/v4/sessions":          "revoking every other session would end the run",
+	"DELETE /auth/v4/sessions/{id}":     "the only session there is to revoke is the one running",
+	"DELETE /core/v4/labels/{id}":       "removing a contact group, which needs a paid plan",
+	"GET /core/v4/keys/salts":           "only a first unlock derives the key password, and the suite resumes a session",
+	"PUT /auth/v4/sessions/local/key":   "written once, at the first unlock, before the suite runs",
+	"PUT /contacts/v4/contacts/label":   "contact groups need a paid plan and these accounts are free",
+	"PUT /contacts/v4/contacts/unlabel": "contact groups need a paid plan and these accounts are free",
 }
 
 // untested are the requests a run could make and does not. Each is a gap somebody

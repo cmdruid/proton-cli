@@ -276,6 +276,11 @@ func section(title string) { fmt.Printf("\n── %s ──\n", title) }
 // comparable.
 var opaque = regexp.MustCompile(`^[A-Za-z0-9_=-]{20,}$`)
 
+// words are path segments that are as long as an ID but are part of the endpoint.
+// Guessing from the characters cannot work: an invitation ID is twenty-two of
+// them and about one in a hundred is all letters, so the words are named instead.
+var words = map[string]bool{"checkAvailableHashes": true}
+
 var numeric = regexp.MustCompile(`^[0-9]+$`)
 
 func printCoverage(runs []invocation) {
@@ -309,7 +314,7 @@ func template(path string) string {
 	segments := strings.Split(path, "/")
 	for i, s := range segments {
 		switch {
-		case opaque.MatchString(s):
+		case opaque.MatchString(s) && !words[s]:
 			segments[i] = "{id}"
 		case numeric.MatchString(s):
 			segments[i] = "{n}"

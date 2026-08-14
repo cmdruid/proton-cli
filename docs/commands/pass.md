@@ -104,3 +104,11 @@ proton-cli pass aliases options                              # available suffixe
 proton-cli pass aliases create --prefix shop --mailbox me@proton.me
 proton-cli pass aliases create --prefix shop --suffix @passmail.net --mailbox me@proton.me --name "Online shops" --vault Personal
 ```
+
+Proton makes the address from the prefix you choose plus a word of its own, so creating one says which address it made:
+
+```
+✓ Created alias "shop" as shop.jasmine329@passinbox.com.
+```
+
+The address is on the item afterwards, in `pass items get` and in the `ADDRESS` column of `pass aliases list`, and `--output json` carries it as `alias`.

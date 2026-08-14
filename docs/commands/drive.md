@@ -23,6 +23,16 @@ pg_dump mydb | proton-cli drive items upload - /Backups/db.sql
 
 Uploads show progress on stderr and print `✓ Uploaded <name>` when done.
 
+A name already taken is refused, so nothing is overwritten by accident. `--if-exists` answers the question instead:
+
+```bash
+proton-cli drive items upload --if-exists replace ./report.pdf /Documents  # a new revision of it
+proton-cli drive items upload --if-exists rename ./report.pdf /Documents   # keeps both, as "report (1).pdf"
+proton-cli drive items upload --if-exists skip ./report.pdf /Documents     # leaves what is there alone
+```
+
+With `--recursive` the answer applies to every file, and folders already there are used rather than refused.
+
 ### Download
 
 ```bash
@@ -60,10 +70,14 @@ Filters: `--pattern` (glob), `--larger-than`, `--smaller-than`, `--older-than`, 
 
 ### Revisions
 
+Uploading over a file with `--if-exists replace` keeps the previous contents as a revision, and any revision can be put back.
+
 ```bash
 proton-cli drive items revisions list /Documents/report.pdf
 proton-cli drive items revisions restore /Documents/report.pdf REVISION_ID
 ```
+
+Proton carries a restore out in the background, so the file goes back to the earlier contents a moment after the command returns.
 
 ## Folders
 

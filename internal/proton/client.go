@@ -430,9 +430,13 @@ func (c *Client) renewSession(ctx context.Context, failed string) error {
 	return nil
 }
 
-// Decode is Do + JSON unmarshal into out (out may be nil for discard). A 2xx
-// with a Proton Code that isn't 1000 (OK) or 1001 (multi-response OK) is
-// treated as an API error.
+// Decode is Do + JSON unmarshal into out (out may be nil for discard).
+//
+// Proton answers every request with a code of its own, and the thousands are the
+// ways of succeeding: 1000 done, 1001 a response per item, 1002 accepted and
+// being done in the background (which is how restoring a revision answers, and
+// what the web client's own type says it means). Anything else with a body is an
+// API error, whatever the status line said.
 func (c *Client) Decode(ctx context.Context, req Request, out any) error {
 	resp, err := c.Do(ctx, req)
 	if err != nil {
@@ -442,7 +446,7 @@ func (c *Client) Decode(ctx context.Context, req Request, out any) error {
 		Code  int
 		Error string
 	}
-	if json.Unmarshal(resp.Body, &env) == nil && env.Code != 0 && env.Code != 1000 && env.Code != 1001 {
+	if json.Unmarshal(resp.Body, &env) == nil && env.Code != 0 && !succeeded(env.Code) {
 		return &APIError{HTTPStatus: resp.Status, Code: env.Code, Message: env.Error, RawBody: resp.Body}
 	}
 	if out == nil {

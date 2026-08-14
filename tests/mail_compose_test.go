@@ -214,6 +214,7 @@ func TestMailMessagesReplyDryRun(t *testing.T) {
 
 func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, _, attName := sharedAttachment(t)
 	marker := testID() + "-forwarded"
 
@@ -257,6 +258,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 
 func TestMailMessagesForwardWithoutAttachments(t *testing.T) {
 	t.Parallel()
+	lease(t, attachmentThread)
 	msgID, _, attName := sharedAttachment(t)
 	subject := testID() + "-fwd-noatt"
 

@@ -103,6 +103,7 @@ func itemFields(it *passsvc.Item) []ui.Field {
 		{Label: "Name", Value: it.Name},
 		{Label: "Username", Value: it.Username},
 		{Label: "Email", Value: it.Email},
+		{Label: "Alias", Value: it.Alias},
 		{Label: "Password", Value: it.Password},
 		{Label: "TOTP", Value: it.TOTP},
 	}

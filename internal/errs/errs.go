@@ -81,6 +81,27 @@ func (e *NotFound) Error() string {
 }
 func (e *NotFound) ExitCode() int { return 3 }
 
+// Exists means the name is already taken where it was going to be written. Exit
+// 4, the same code as an ambiguous reference, because both are the answer that
+// what was named matches something already there rather than being wrong.
+type Exists struct {
+	// Kind is the singular noun for what is in the way: "file", "folder".
+	Kind string
+	Name string
+	// Where is the container that already holds it.
+	Where string
+	// Answers are the ways the command offers to go ahead anyway, which only the
+	// command knows: they are its own flags.
+	Answers []string
+}
+
+func (e *Exists) Hints() []string { return e.Answers }
+
+func (e *Exists) Error() string {
+	return fmt.Sprintf("%s already has a %s called %q.", e.Where, e.Kind, e.Name)
+}
+func (e *Exists) ExitCode() int { return 4 }
+
 // Candidate is one entry in an Ambiguous error's disambiguation list.
 type Candidate struct {
 	ID string

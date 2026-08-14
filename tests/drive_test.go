@@ -475,6 +475,123 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 	}
 }
 
+// The three answers to a name that is taken, and the refusal when none is given.
+// Each is its own upload path, and replacing is the only way this CLI can make a
+// file have a history at all.
+func TestDriveItemsUploadRefusesADuplicate(t *testing.T) {
+	t.Parallel()
+	folder, src := uploadedTwice(t, "first")
+
+	stdout, stderr, code := run(t, "drive", "items", "upload", src, folder)
+	if code != 4 {
+		t.Fatalf("a taken name should exit 4 (conflict), got %d: %s%s", code, stdout, stderr)
+	}
+	assertContains(t, stderr, "already has a file")
+	for _, answer := range []string{"replace", "rename", "skip"} {
+		assertContains(t, stderr, "--if-exists "+answer)
+	}
+}
+
+func TestDriveItemsUploadIfExistsSkipLeavesItAlone(t *testing.T) {
+	t.Parallel()
+	folder, src := uploadedTwice(t, "first")
+	if err := os.WriteFile(src, []byte("second"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr := runOKStderr(t, "drive", "items", "upload", "--if-exists", "skip", src, folder)
+
+	assertContains(t, stderr, "Nothing to upload")
+	assertReads(t, folder+"/note.txt", "first")
+}
+
+func TestDriveItemsUploadIfExistsRenameKeepsBoth(t *testing.T) {
+	t.Parallel()
+	folder, src := uploadedTwice(t, "first")
+	if err := os.WriteFile(src, []byte("second"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr := runOKStderr(t, "drive", "items", "upload", "--if-exists", "rename", src, folder)
+
+	// The number goes before the extension, in brackets, after a space - the same
+	// name Proton's own client gives the copy it keeps.
+	assertContains(t, stderr, "note (1).txt")
+	assertReads(t, folder+"/note.txt", "first")
+	assertReads(t, folder+"/note (1).txt", "second")
+}
+
+func TestDriveItemsUploadIfExistsReplaceKeepsHistory(t *testing.T) {
+	t.Parallel()
+	folder, src := uploadedTwice(t, "first")
+	if err := os.WriteFile(src, []byte("second"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr := runOKStderr(t, "drive", "items", "upload", "--if-exists", "replace", src, folder)
+	assertContains(t, stderr, "as a new revision")
+	assertReads(t, folder+"/note.txt", "second")
+
+	revs := runJSONArray(t, "drive", "items", "revisions", "list", folder+"/note.txt")
+	if len(revs) != 2 {
+		t.Fatalf("replacing should leave the earlier revision, got %d", len(revs))
+	}
+	var earlier string
+	for _, row := range revs {
+		r := row.(map[string]interface{})
+		if state, _ := r["state"].(float64); int(state) != 1 {
+			earlier, _ = r["id"].(string)
+		}
+	}
+	if earlier == "" {
+		t.Fatalf("no superseded revision among %v", revs)
+	}
+
+	runOK(t, "drive", "items", "revisions", "restore", folder+"/note.txt", earlier)
+	// Proton answers a restore with "accepted" and carries it out in the
+	// background, so the earlier contents come back a moment later.
+	waitFor(30*time.Second, 2*time.Second, func() bool {
+		return reads(t, folder+"/note.txt") == "first"
+	})
+	assertReads(t, folder+"/note.txt", "first")
+}
+
+// uploadedTwice makes a folder holding note.txt, and hands back the folder and a
+// local file of the same name to upload over it.
+func uploadedTwice(t *testing.T, content string) (folder, src string) {
+	t.Helper()
+	folder = "/" + testID() + "-conflict"
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+		"drive", "items", "delete", folder)
+
+	src = filepath.Join(t.TempDir(), "note.txt")
+	if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runOK(t, "drive", "items", "upload", src, folder)
+	return folder, src
+}
+
+// reads downloads a file and hands back what it holds.
+func reads(t *testing.T, path string) string {
+	t.Helper()
+	out := filepath.Join(t.TempDir(), "downloaded")
+	runOK(t, "drive", "items", "download", "--output", out, path)
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(got)
+}
+
+func assertReads(t *testing.T, path, want string) {
+	t.Helper()
+	if got := reads(t, path); got != want {
+		t.Errorf("%s reads %q, want %q", path, got, want)
+	}
+}
+
 // Emptying the trash is the one command that acts on everything in it, so it
 // takes the trash to itself: another test restoring something would find it
 // permanently gone.

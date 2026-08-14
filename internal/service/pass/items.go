@@ -28,6 +28,7 @@ type Item struct {
 	Note       string   `json:"note,omitempty"`
 	Username   string   `json:"username,omitempty"`
 	Email      string   `json:"email,omitempty"`
+	Alias      string   `json:"alias,omitempty"`
 	Password   string   `json:"password,omitempty"`
 	TOTP       string   `json:"totp,omitempty"`
 	URLs       []string `json:"urls,omitempty"`
@@ -124,6 +125,7 @@ func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID
 			KeyRotation      int
 			CreateTime       int64
 			ModifyTime       int64
+			AliasEmail       string
 		}
 	}
 	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: fmt.Sprintf("/pass/v1/share/%s/item/%s", shareID, itemID)}, &r); err != nil {
@@ -160,6 +162,7 @@ func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID
 	out.State = r.Item.State
 	out.CreateTime = r.Item.CreateTime
 	out.ModifyTime = r.Item.ModifyTime
+	out.Alias = r.Item.AliasEmail
 	return out, nil
 }
 
@@ -648,6 +651,7 @@ func (s *Service) fetchItems(ctx context.Context, shareID string, sk *shareKeys)
 				KeyRotation      int
 				CreateTime       int64
 				ModifyTime       int64
+				AliasEmail       string
 			}
 			if err := json.Unmarshal(raw, &enc); err != nil {
 				continue
@@ -686,6 +690,7 @@ func (s *Service) fetchItems(ctx context.Context, shareID string, sk *shareKeys)
 			item.State = enc.State
 			item.CreateTime = enc.CreateTime
 			item.ModifyTime = enc.ModifyTime
+			item.Alias = enc.AliasEmail
 			out = append(out, *item)
 		}
 		if r.Items.LastToken == "" || len(r.Items.RevisionsData) == 0 {
