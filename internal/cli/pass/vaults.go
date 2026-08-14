@@ -36,7 +36,7 @@ func vaultColumns() []ui.Column[passsvc.Vault] {
 func vaultList(c *kit.Invocation) *kit.Lookup[passsvc.Vault] {
 	return &kit.Lookup[passsvc.Vault]{
 		Kind:   "vault",
-		Load:   func(ctx context.Context) ([]passsvc.Vault, error) { return c.App.Pass.VaultsList(ctx, c.U) },
+		Load:   func(ctx context.Context) ([]passsvc.Vault, error) { return c.App.Pass.VaultsList(ctx) },
 		ID:     func(v passsvc.Vault) string { return v.ShareID },
 		Handle: func(v passsvc.Vault) string { return v.Name },
 	}
@@ -47,7 +47,7 @@ func vaultsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List your vaults",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			vaults, err := vaultList(c).Rows(c.Ctx)
 			if err != nil {
 				return err
@@ -66,14 +66,14 @@ func vaultsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a vault",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if name == "" {
 				return kit.Fail("A vault needs a name.").Hint("--name Work")
 			}
 			return kit.Create(c, ui.ResultSpec{
 				Action: ui.Created, Kind: "vaults", Name: name,
 			}, func() (string, error) {
-				return c.App.Pass.VaultCreate(c.Ctx, c.U, name)
+				return c.App.Pass.VaultCreate(c.Ctx, name)
 			})
 		}),
 	}
@@ -87,7 +87,7 @@ func vaultsUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Rename a vault",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			if name == "" {
 				return kit.Fail("Nothing to change.").Hint("pass --name.")
 			}
@@ -95,7 +95,7 @@ func vaultsUpdateCmd() *cobra.Command {
 				Action: ui.Updated, Kind: "vaults", Count: 1, Name: name,
 				IDs: []string{c.Args[0]},
 			}, func() error {
-				return c.App.Pass.VaultEdit(c.Ctx, c.U, c.Args[0], name)
+				return c.App.Pass.VaultEdit(c.Ctx, c.Args[0], name)
 			})
 		}),
 	}
@@ -108,7 +108,7 @@ func vaultsDeleteCmd() *cobra.Command {
 		Use:   "delete REF...",
 		Short: "Delete vaults, and everything in them",
 		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := kit.SelectFrom(c, "vaults", vaultColumns(), vaultList(c))
 			if err != nil {
 				return err

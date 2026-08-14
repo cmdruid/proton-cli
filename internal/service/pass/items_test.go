@@ -55,7 +55,7 @@ func TestLatestItemKeyReturnsTheKeyItOpenedAndItsOwnRotation(t *testing.T) {
 	d := &keyDoer{body: latestKeyJSON(t, shareKey, itemKey, 4)}
 	sk := &shareKeys{keys: map[int][]byte{2: make([]byte, 32), 4: shareKey}}
 
-	got, rotation, err := New(d).latestItemKey(context.Background(), sk, "share", "item")
+	got, rotation, err := New(d, testKeys(nil)).latestItemKey(context.Background(), sk, "share", "item")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestLatestItemKeyRefusesWhatItCannotOpen(t *testing.T) {
 	t.Run("a rotation the share has no key for", func(t *testing.T) {
 		d := &keyDoer{body: latestKeyJSON(t, shareKey, itemKey, 9)}
 		sk := &shareKeys{keys: map[int][]byte{1: shareKey}}
-		if _, _, err := New(d).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
+		if _, _, err := New(d, testKeys(nil)).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
 			t.Error("accepted a rotation with no matching share key")
 		}
 	})
@@ -92,7 +92,7 @@ func TestLatestItemKeyRefusesWhatItCannotOpen(t *testing.T) {
 	t.Run("a key wrapped to a different share key", func(t *testing.T) {
 		d := &keyDoer{body: latestKeyJSON(t, shareKey, itemKey, 1)}
 		sk := &shareKeys{keys: map[int][]byte{1: make([]byte, 32)}}
-		if _, _, err := New(d).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
+		if _, _, err := New(d, testKeys(nil)).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
 			t.Error("accepted a key it could not open")
 		}
 	})
@@ -101,7 +101,7 @@ func TestLatestItemKeyRefusesWhatItCannotOpen(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{"Key": map[string]any{"Key": "not base64!!", "KeyRotation": 1}})
 		d := &keyDoer{body: body}
 		sk := &shareKeys{keys: map[int][]byte{1: shareKey}}
-		if _, _, err := New(d).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
+		if _, _, err := New(d, testKeys(nil)).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
 			t.Error("accepted a key that is not base64")
 		}
 	})
@@ -110,7 +110,7 @@ func TestLatestItemKeyRefusesWhatItCannotOpen(t *testing.T) {
 		// The error used to be discarded, which left the rotation at zero.
 		d := &keyDoer{err: context.DeadlineExceeded}
 		sk := &shareKeys{keys: map[int][]byte{1: shareKey}}
-		if _, _, err := New(d).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
+		if _, _, err := New(d, testKeys(nil)).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
 			t.Error("a failed request was treated as an answer")
 		}
 	})

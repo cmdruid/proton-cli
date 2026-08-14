@@ -6,7 +6,6 @@
 package calendar
 
 import (
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
 	"github.com/spf13/cobra"
@@ -25,12 +24,12 @@ func New() *cobra.Command {
 // that tells the recipient's client what to do with it.
 //
 // Invitations are system mail, so they carry no signature.
-func sendICS(c *kit.Invocation, u *keys.Unlocked, to []string, subject, body, ics, method string) error {
-	sender, err := mailsvc.ResolveSender(u, mailsvc.SenderRequest{})
+func sendICS(c *kit.Invocation, to []string, subject, body, ics, method string) error {
+	sender, err := c.App.Mail.ResolveSender(c.Ctx, mailsvc.SenderRequest{})
 	if err != nil {
 		return err
 	}
-	_, err = c.App.Mail.Send(c.Ctx, u, mailsvc.Content{
+	_, err = c.App.Mail.Send(c.Ctx, mailsvc.Content{
 		From:    sender,
 		To:      mailsvc.ParseRecipients(to),
 		Subject: subject,

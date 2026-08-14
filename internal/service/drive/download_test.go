@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"strings"
 	"testing"
 )
@@ -124,5 +126,16 @@ func TestAuthorPrefersTheNewerField(t *testing.T) {
 	// Anonymous content names nobody, and is verified against the node key.
 	if got := (revision{}).author(); got != "" {
 		t.Errorf("author = %q, want nobody", got)
+	}
+}
+
+// testKeys hands a service the key hierarchy a test wants it to decrypt with.
+// A test that decrypts nothing passes nil, which is never asked for.
+func testKeys(u *keys.Unlocked) keys.Get {
+	return func(context.Context) (*keys.Unlocked, error) {
+		if u == nil {
+			return nil, errors.New("this test has no keys")
+		}
+		return u, nil
 	}
 }

@@ -26,7 +26,7 @@ key password
         └── pass vault keys     (vault and item keys)
 ```
 
-Unlocking happens lazily: commands that only list metadata never touch your keys, and commands that read or write content unlock exactly the branch they need.
+Unlocking happens lazily, and alongside everything else: a command that only lists metadata never touches your keys, and one that decrypts asks for them at the same time as the content they will open, so the keys cost no round trip of their own. Below the user key, only the branch a command actually reads is unwrapped - a calendar's keys, a vault's, a file's.
 
 ## What is encrypted with what
 

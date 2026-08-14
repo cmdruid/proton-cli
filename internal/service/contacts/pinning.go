@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	gopenpgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -29,7 +28,7 @@ type ContactCrypto struct {
 // contact stores for email, or nil when the address has no contact or no
 // pinned key. It is best-effort on decrypt/decode: a hiccup returns (nil, nil)
 // so it never blocks sending, but a contact-lookup API error propagates.
-func (s *Service) PinnedKeysFor(ctx context.Context, u *keys.Unlocked, email string) (*ContactCrypto, error) {
+func (s *Service) PinnedKeysFor(ctx context.Context, email string) (*ContactCrypto, error) {
 	id, ok, err := s.contactIDByEmail(ctx, email)
 	if err != nil {
 		return nil, err
@@ -37,7 +36,7 @@ func (s *Service) PinnedKeysFor(ctx context.Context, u *keys.Unlocked, email str
 	if !ok {
 		return nil, nil
 	}
-	ct, err := s.Get(ctx, u, id)
+	ct, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, nil
 	}
@@ -136,7 +135,11 @@ func (s *Service) rawContactCards(ctx context.Context, id string) ([]rawCard, er
 // editableSignedCard fetches a contact's raw cards, verifies and parses the
 // signed card into an editable model, and returns the remaining (encrypted/
 // clear) cards verbatim so callers can re-attach them unchanged on PUT.
-func (s *Service) editableSignedCard(ctx context.Context, u *keys.Unlocked, id string) (*vcard.Signed, []map[string]any, error) {
+func (s *Service) editableSignedCard(ctx context.Context, id string) (*vcard.Signed, []map[string]any, error) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	cards, err := s.rawContactCards(ctx, id)
 	if err != nil {
 		return nil, nil, err
@@ -167,7 +170,11 @@ func (s *Service) editableSignedCard(ctx context.Context, u *keys.Unlocked, id s
 }
 
 // putSignedCard re-signs the model and PUTs it alongside the preserved cards.
-func (s *Service) putSignedCard(ctx context.Context, u *keys.Unlocked, id string, model vcard.Signed, others []map[string]any) error {
+func (s *Service) putSignedCard(ctx context.Context, id string, model vcard.Signed, others []map[string]any) error {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return err
+	}
 	signedCard, err := pgp.SignCard(vcard.BuildSigned(model), u.UserKR)
 	if err != nil {
 		return err
@@ -183,12 +190,12 @@ func (s *Service) putSignedCard(ctx context.Context, u *keys.Unlocked, id string
 // PinKey pins armoredKey to the contact for email as the preferred key. Encrypt
 // and sign default to true (matching the web client's "trust key" flow) unless
 // overridden. The signed card is re-signed; all other cards are preserved.
-func (s *Service) PinKey(ctx context.Context, u *keys.Unlocked, id, email, armoredKey string, encrypt, sign *bool, scheme string) error {
+func (s *Service) PinKey(ctx context.Context, id, email, armoredKey string, encrypt, sign *bool, scheme string) error {
 	keyValue, err := encodePinnedKey(armoredKey)
 	if err != nil {
 		return err
 	}
-	model, others, err := s.editableSignedCard(ctx, u, id)
+	model, others, err := s.editableSignedCard(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -213,12 +220,12 @@ func (s *Service) PinKey(ctx context.Context, u *keys.Unlocked, id, email, armor
 	if scheme != "" {
 		e.Scheme = scheme
 	}
-	return s.putSignedCard(ctx, u, id, *model, others)
+	return s.putSignedCard(ctx, id, *model, others)
 }
 
 // UnpinKey removes all pinned keys and crypto flags a contact stores for email.
-func (s *Service) UnpinKey(ctx context.Context, u *keys.Unlocked, id, email string) error {
-	model, others, err := s.editableSignedCard(ctx, u, id)
+func (s *Service) UnpinKey(ctx context.Context, id, email string) error {
+	model, others, err := s.editableSignedCard(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -230,7 +237,7 @@ func (s *Service) UnpinKey(ctx context.Context, u *keys.Unlocked, id, email stri
 	e.Encrypt = nil
 	e.Sign = nil
 	e.Scheme = ""
-	return s.putSignedCard(ctx, u, id, *model, others)
+	return s.putSignedCard(ctx, id, *model, others)
 }
 
 // encodePinnedKey converts an armored public key (or the public part of a

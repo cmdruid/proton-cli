@@ -13,9 +13,12 @@ import (
 	"github.com/roman-16/proton-cli/internal/vcard"
 )
 
-type Service struct{ C proton.Doer }
+type Service struct {
+	C    proton.Doer
+	keys keys.Get
+}
 
-func New(c proton.Doer) *Service { return &Service{C: c} }
+func New(c proton.Doer, k keys.Get) *Service { return &Service{C: c, keys: k} }
 
 type Contact struct {
 	ID       string   `json:"id"`
@@ -79,7 +82,7 @@ func signedPart(name, uid string, emails []string, previous *vcard.Signed) vcard
 	return model
 }
 
-func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error) {
+func (s *Service) List(ctx context.Context) ([]Contact, error) {
 	var out []Contact
 	for page := 0; ; page++ {
 		var r struct {
@@ -89,7 +92,12 @@ func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error)
 			}
 		}
 		q := proton.Query("Page", fmt.Sprintf("%d", page), "PageSize", "50")
-		if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/contacts/v4/contacts/export", Query: q}, &r); err != nil {
+		// The first page and the keys are asked for together; every page after it
+		// finds them already there.
+		u, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+			return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/contacts/v4/contacts/export", Query: q}, &r)
+		})
+		if err != nil {
 			return nil, err
 		}
 		if len(r.Contacts) == 0 {
@@ -111,14 +119,17 @@ func (s *Service) List(ctx context.Context, u *keys.Unlocked) ([]Contact, error)
 	return out, nil
 }
 
-func (s *Service) Get(ctx context.Context, u *keys.Unlocked, id string) (*Contact, error) {
+func (s *Service) Get(ctx context.Context, id string) (*Contact, error) {
 	var r struct {
 		Contact struct {
 			ID    string
 			Cards []map[string]any
 		}
 	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/contacts/v4/contacts/" + id}, &r); err != nil {
+	u, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+		return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/contacts/v4/contacts/" + id}, &r)
+	})
+	if err != nil {
 		return nil, err
 	}
 	cards, verdicts, err := pgp.DecryptCardsRaw(r.Contact.Cards, u.UserKR, u.UserKR, nil)
@@ -131,11 +142,11 @@ func (s *Service) Get(ctx context.Context, u *keys.Unlocked, id string) (*Contac
 	return &c, nil
 }
 
-func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, r string) (string, error) {
+func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
 	if idcache.IsFullID(r) {
 		return r, nil
 	}
-	contacts, err := s.List(ctx, u)
+	contacts, err := s.List(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -162,7 +173,11 @@ func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked, r string) (stri
 	return c.ID, nil
 }
 
-func (s *Service) Create(ctx context.Context, u *keys.Unlocked, nc NewContact) (string, error) {
+func (s *Service) Create(ctx context.Context, nc NewContact) (string, error) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return "", err
+	}
 	if nc.Name == "" && len(nc.Emails) == 0 {
 		return "", fmt.Errorf("name or email is required")
 	}
@@ -205,8 +220,8 @@ func (s *Service) Create(ctx context.Context, u *keys.Unlocked, nc NewContact) (
 	return "", nil
 }
 
-func (s *Service) Update(ctx context.Context, u *keys.Unlocked, id string, patch NewContact) error {
-	existing, err := s.Get(ctx, u, id)
+func (s *Service) Update(ctx context.Context, id string, patch NewContact) error {
+	existing, err := s.Get(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -229,6 +244,10 @@ func (s *Service) Update(ctx context.Context, u *keys.Unlocked, id string, patch
 	name := merged.Name
 	if name == "" && len(merged.Emails) > 0 {
 		name = merged.Emails[0]
+	}
+	u, err := s.keys(ctx)
+	if err != nil {
+		return err
 	}
 	signedCard, err := pgp.SignCard(vcard.BuildSigned(signedPart(name, uid, merged.Emails, &old)), u.UserKR)
 	if err != nil {

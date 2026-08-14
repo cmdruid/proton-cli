@@ -4,7 +4,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
 	"github.com/roman-16/proton-cli/internal/ui"
@@ -56,14 +55,10 @@ func exportCmd() *cobra.Command {
 				Action: ui.Exported, Kind: "messages", Count: sel.Len(), IDs: sel.IDs,
 				Detail: "to " + dest.Describe(), Preview: sel.Preview(),
 			}, func() error {
-				u, err := c.App.Unlock(c.Ctx)
-				if err != nil {
-					return err
-				}
 				if shape == formatMbox {
-					return exportMbox(c, u, sel.IDs, &dest, !noAttachments)
+					return exportMbox(c, sel.IDs, &dest, !noAttachments)
 				}
-				return exportEML(c, u, sel.IDs, &dest, !noAttachments)
+				return exportEML(c, sel.IDs, &dest, !noAttachments)
 			})
 		}),
 	}
@@ -76,9 +71,9 @@ func exportCmd() *cobra.Command {
 
 // exportEML writes one document per message, named after when it arrived and what
 // it says, which sorts chronologically and stays readable.
-func exportEML(c *kit.Invocation, u *keys.Unlocked, ids []string, dest *kit.Destination, withAttachments bool) error {
+func exportEML(c *kit.Invocation, ids []string, dest *kit.Destination, withAttachments bool) error {
 	for _, id := range ids {
-		doc, meta, err := c.App.Mail.Export(c.Ctx, u, id, withAttachments)
+		doc, meta, err := c.App.Mail.Export(c.Ctx, id, withAttachments)
 		if err != nil {
 			return err
 		}
@@ -93,10 +88,10 @@ func exportEML(c *kit.Invocation, u *keys.Unlocked, ids []string, dest *kit.Dest
 //
 // One entry at a time: an archive is as large as a mailbox, so holding the whole
 // thing in memory to write it would put a ceiling on what can be exported.
-func exportMbox(c *kit.Invocation, u *keys.Unlocked, ids []string, dest *kit.Destination, withAttachments bool) error {
+func exportMbox(c *kit.Invocation, ids []string, dest *kit.Destination, withAttachments bool) error {
 	_, err := dest.Stream(c, "mail.mbox", func(w io.Writer) error {
 		for _, id := range ids {
-			doc, meta, err := c.App.Mail.Export(c.Ctx, u, id, withAttachments)
+			doc, meta, err := c.App.Mail.Export(c.Ctx, id, withAttachments)
 			if err != nil {
 				return err
 			}
@@ -146,14 +141,10 @@ func conversationExportCmd() *cobra.Command {
 				Action: ui.Exported, Kind: "messages", Count: len(ids), IDs: ids,
 				Detail: "to " + dest.Describe(),
 			}, func() error {
-				u, err := c.App.Unlock(c.Ctx)
-				if err != nil {
-					return err
-				}
 				if shape == formatMbox {
-					return exportMbox(c, u, ids, &dest, !noAttachments)
+					return exportMbox(c, ids, &dest, !noAttachments)
 				}
-				return exportEML(c, u, ids, &dest, !noAttachments)
+				return exportEML(c, ids, &dest, !noAttachments)
 			})
 		}),
 	}

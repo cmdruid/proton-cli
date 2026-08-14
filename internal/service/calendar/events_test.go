@@ -81,7 +81,7 @@ func TestRawEventsBetweenAsksForAllFourWindows(t *testing.T) {
 		"2": {{rawJSON("c")}},
 		"3": {{rawJSON("d")}},
 	}}
-	got, err := New(d).rawEventsBetween(context.Background(), "cal1", someWindow())
+	got, err := New(d, testKeys(nil)).rawEventsBetween(context.Background(), "cal1", someWindow())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestRawEventsBetweenDeduplicatesAcrossWindows(t *testing.T) {
 		"0": {{rawJSON("a")}},
 		"1": {{rawJSON("a")}},
 	}}
-	got, err := New(d).rawEventsBetween(context.Background(), "cal1", someWindow())
+	got, err := New(d, testKeys(nil)).rawEventsBetween(context.Background(), "cal1", someWindow())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestRawEventsBetweenWalksEveryPage(t *testing.T) {
 	d := &windowDoer{byType: map[string][][]map[string]any{
 		"0": {{rawJSON("a")}, {rawJSON("b")}, {rawJSON("c")}},
 	}}
-	got, err := New(d).rawEventsBetween(context.Background(), "cal1", someWindow())
+	got, err := New(d, testKeys(nil)).rawEventsBetween(context.Background(), "cal1", someWindow())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestRawEventsBetweenNeverSendsANegativeBound(t *testing.T) {
 	// The endpoint refuses a negative timestamp, and a zero time is what an unset
 	// range looks like.
 	d := &windowDoer{byType: map[string][][]map[string]any{}}
-	if _, err := New(d).rawEventsBetween(context.Background(), "cal1", ical.Days(time.Time{}, time.Time{})); err != nil {
+	if _, err := New(d, testKeys(nil)).rawEventsBetween(context.Background(), "cal1", ical.Days(time.Time{}, time.Time{})); err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range d.askedFor() {
@@ -260,7 +260,7 @@ func TestResolveAttendeesNeedsNoSessionKey(t *testing.T) {
 	d := &attendeeDoer{proton: map[string]bool{"alice@proton.me": true}}
 	// A service with no calendar keys: anything that tried to build the event's
 	// cards here would have nothing to build them with.
-	s := New(d)
+	s := New(d, testKeys(nil))
 
 	atts, clear, keys, external, err := s.resolveAttendees(context.Background(), "uid-1",
 		[]string{"alice@proton.me", "bob@example.test", " ", "alice@proton.me"})

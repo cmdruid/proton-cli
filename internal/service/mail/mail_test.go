@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"errors"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"net/url"
 	"strings"
 	"testing"
@@ -210,7 +211,7 @@ func bodyLabelID(t *testing.T, r proton.Request) string {
 
 func TestTrashHitsLabelEndpoint(t *testing.T) {
 	f := &fakeDoer{}
-	s := New(f)
+	s := New(f, testKeys(nil))
 	if err := s.Trash(context.Background(), []string{"a", "b"}); err != nil {
 		t.Fatalf("Trash: %v", err)
 	}
@@ -224,7 +225,7 @@ func TestTrashHitsLabelEndpoint(t *testing.T) {
 
 func TestUnscheduleHitsCancelSendEndpoint(t *testing.T) {
 	f := &fakeDoer{}
-	s := New(f)
+	s := New(f, testKeys(nil))
 	if err := s.Unschedule(context.Background(), []string{"a", "b"}); err != nil {
 		t.Fatalf("Unschedule: %v", err)
 	}
@@ -236,7 +237,7 @@ func TestUnscheduleHitsCancelSendEndpoint(t *testing.T) {
 
 func TestResolveScheduledFullIDPassthrough(t *testing.T) {
 	full := strings.Repeat("a", 86) + "=="
-	got, err := New(&fakeDoer{}).ResolveScheduled(context.Background(), full)
+	got, err := New(&fakeDoer{}, testKeys(nil)).ResolveScheduled(context.Background(), full)
 	if err != nil {
 		t.Fatalf("ResolveScheduled: %v", err)
 	}
@@ -247,7 +248,7 @@ func TestResolveScheduledFullIDPassthrough(t *testing.T) {
 
 func TestResolveScheduledNotFound(t *testing.T) {
 	// fakeDoer.Decode ignores the out param, so Search yields zero messages.
-	_, err := New(&fakeDoer{}).ResolveScheduled(context.Background(), "no-such-subject")
+	_, err := New(&fakeDoer{}, testKeys(nil)).ResolveScheduled(context.Background(), "no-such-subject")
 	var nf *errs.NotFound
 	if !errors.As(err, &nf) {
 		t.Errorf("ResolveScheduled(miss) err = %v, want *errs.NotFound", err)
@@ -274,7 +275,7 @@ func TestOrganisingVerbsUseTheRightLabel(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeDoer{}
-			if err := tc.call(New(f)); err != nil {
+			if err := tc.call(New(f, testKeys(nil))); err != nil {
 				t.Fatalf("%s: %v", tc.name, err)
 			}
 			if got := bodyLabelID(t, f.last); got != tc.want {
@@ -293,5 +294,16 @@ func TestResolveFolderPassesUnknownThrough(t *testing.T) {
 	}
 	if got := ResolveFolder("ARCHIVE"); got != labelArchive {
 		t.Errorf("ResolveFolder is case-insensitive: got %q", got)
+	}
+}
+
+// testKeys hands a service the key hierarchy a test wants it to decrypt with.
+// A test that decrypts nothing passes nil, which is never asked for.
+func testKeys(u *keys.Unlocked) keys.Get {
+	return func(context.Context) (*keys.Unlocked, error) {
+		if u == nil {
+			return nil, errors.New("this test has no keys")
+		}
+		return u, nil
 	}
 }

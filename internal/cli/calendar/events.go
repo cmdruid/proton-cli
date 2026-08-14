@@ -69,11 +69,7 @@ func resolveEvent(c *kit.Invocation, ref string) (calendarID, eventID, occurrenc
 	if first, second, err := kit.ExpandPair(c.App, base); err != nil || first != "" {
 		return first, second, occurrence, err
 	}
-	u, err := c.App.Unlock(c.Ctx)
-	if err != nil {
-		return "", "", "", err
-	}
-	calendarID, eventID, resolved, err := c.App.Calendar.ResolveEvent(c.Ctx, u, base)
+	calendarID, eventID, resolved, err := c.App.Calendar.ResolveEvent(c.Ctx, base)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -114,13 +110,13 @@ func eventsListCmd() *cobra.Command {
 			"reference that names it. Every calendar is included unless --calendar\n" +
 			"narrows it to one.",
 		Args: cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			calIDs, err := listedCalendars(c, calendar)
 			if err != nil {
 				return err
 			}
 			first, last := days.Or(calsvc.DefaultDays())
-			events, err := c.App.Calendar.EventsList(c.Ctx, c.U, calIDs, ical.Days(first, last))
+			events, err := c.App.Calendar.EventsList(c.Ctx, calIDs, ical.Days(first, last))
 			if err != nil {
 				return err
 			}
@@ -140,16 +136,16 @@ func eventsGetCmd() *cobra.Command {
 		Use:   "get REF",
 		Short: "Show one event, decrypted",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			calID, eventID, occurrence, err := resolveEvent(c, c.Args[0])
 			if err != nil {
 				return err
 			}
-			ev, err := c.App.Calendar.EventGet(c.Ctx, c.U, calID, eventID, occurrence)
+			ev, err := c.App.Calendar.EventGet(c.Ctx, calID, eventID, occurrence)
 			if err != nil {
 				return err
 			}
-			name, err := c.App.Calendar.CalendarName(c.Ctx, c.U, ev.CalendarID)
+			name, err := c.App.Calendar.CalendarName(c.Ctx, ev.CalendarID)
 			if err != nil {
 				return err
 			}
@@ -235,7 +231,7 @@ func eventsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create an event",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if d.title == "" || d.start == "" {
 				return kit.Fail("An event needs a title and a start.").
 					Hint(`--title Dentist --start 2026-04-16T14:00`)
@@ -265,7 +261,7 @@ func eventsCreateCmd() *cobra.Command {
 				Action: ui.Created, Kind: "events", Name: d.title,
 			}, func() (string, error) {
 				var err error
-				res, err = c.App.Calendar.EventCreate(c.Ctx, c.U, calID, calsvc.EventInput{
+				res, err = c.App.Calendar.EventCreate(c.Ctx, calID, calsvc.EventInput{
 					Title: d.title, Location: d.location, Description: d.description,
 					Start: start, End: start.Add(dur), AllDay: d.allDay, Zone: zone,
 					RRule: d.rrule, Reminders: d.reminders, Attendees: attendees,
@@ -301,7 +297,7 @@ func eventsUpdateCmd() *cobra.Command {
 			"occurrence. Add --future to change it and every later one, or drop the @ part\n" +
 			"of the reference to change the whole series.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			calID, eventID, occurrence, err := resolveEvent(c, c.Args[0])
 			if err != nil {
 				return err
@@ -322,11 +318,11 @@ func eventsUpdateCmd() *cobra.Command {
 				var err error
 				switch {
 				case occurrence == "":
-					res, err = c.App.Calendar.EventUpdate(c.Ctx, c.U, calID, eventID, patch)
+					res, err = c.App.Calendar.EventUpdate(c.Ctx, calID, eventID, patch)
 				case future:
-					res, err = c.App.Calendar.SeriesSplit(c.Ctx, c.U, calID, eventID, occurrence, patch)
+					res, err = c.App.Calendar.SeriesSplit(c.Ctx, calID, eventID, occurrence, patch)
 				default:
-					res, err = c.App.Calendar.OccurrenceUpdate(c.Ctx, c.U, calID, eventID, occurrence, patch)
+					res, err = c.App.Calendar.OccurrenceUpdate(c.Ctx, calID, eventID, occurrence, patch)
 				}
 				return err
 			}); err != nil {
@@ -443,7 +439,7 @@ func eventsRespondCmd() *cobra.Command {
 		Use:   "respond REF",
 		Short: "Answer an invitation, telling the organizer",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			answer, err := status.Value()
 			if err != nil {
 				return err
@@ -466,13 +462,13 @@ func eventsRespondCmd() *cobra.Command {
 				Detail: answer, IDs: []string{kit.JoinPair(calID, eventID)},
 			}, func() error {
 				var err error
-				res, err = c.App.Calendar.EventRespond(c.Ctx, c.U, calID, eventID, code)
+				res, err = c.App.Calendar.EventRespond(c.Ctx, calID, eventID, code)
 				return err
 			}); err != nil {
 				return err
 			}
 			if res != nil && res.Reply != nil {
-				if err := sendICS(c, c.U, res.Reply.Recipients, res.Reply.Subject, res.Reply.Body, res.Reply.ICS, "REPLY"); err != nil {
+				if err := sendICS(c, res.Reply.Recipients, res.Reply.Subject, res.Reply.Body, res.Reply.ICS, "REPLY"); err != nil {
 					c.Note("You responded, but telling the organizer by email failed: %v", err)
 				}
 			}
@@ -494,7 +490,7 @@ func eventsDeleteCmd() *cobra.Command {
 			"occurrence. Add --future to delete it and every later one, or drop the @ part\n" +
 			"of the reference to delete the whole series.",
 		Args: cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			type target struct {
 				ref                        string
 				calID, eventID, occurrence string
@@ -510,7 +506,7 @@ func eventsDeleteCmd() *cobra.Command {
 					return kit.Fail("--future needs a reference that names an occurrence.").
 						Hint("`events list` prints one, as CALENDAR/EVENT@2026-04-16T09:00")
 				}
-				ev, err := c.App.Calendar.EventGet(c.Ctx, c.U, calID, eventID, occurrence)
+				ev, err := c.App.Calendar.EventGet(c.Ctx, calID, eventID, occurrence)
 				if err != nil {
 					return err
 				}
@@ -518,7 +514,7 @@ func eventsDeleteCmd() *cobra.Command {
 				// Removing a series removes every occurrence of it, so that is what
 				// the confirmation and the dry run have to show.
 				if occurrence == "" && ev.RRule != "" && !future {
-					occs, err := c.App.Calendar.EventOccurrences(c.Ctx, c.U, calID, eventID, previewLimit)
+					occs, err := c.App.Calendar.EventOccurrences(c.Ctx, calID, eventID, previewLimit)
 					if err != nil {
 						return err
 					}
@@ -542,11 +538,11 @@ func eventsDeleteCmd() *cobra.Command {
 					var err error
 					switch {
 					case t.occurrence == "":
-						err = c.App.Calendar.EventDelete(c.Ctx, c.U, t.calID, t.eventID)
+						err = c.App.Calendar.EventDelete(c.Ctx, t.calID, t.eventID)
 					case future:
-						err = c.App.Calendar.SeriesTruncate(c.Ctx, c.U, t.calID, t.eventID, t.occurrence)
+						err = c.App.Calendar.SeriesTruncate(c.Ctx, t.calID, t.eventID, t.occurrence)
 					default:
-						err = c.App.Calendar.OccurrenceDelete(c.Ctx, c.U, t.calID, t.eventID, t.occurrence)
+						err = c.App.Calendar.OccurrenceDelete(c.Ctx, t.calID, t.eventID, t.occurrence)
 					}
 					if err != nil {
 						return err
@@ -580,7 +576,7 @@ func tellAttendees(c *kit.Invocation, res *calsvc.EventResult) error {
 		return nil
 	}
 	m := res.Mail
-	if err := sendICS(c, c.U, m.Recipients, m.Subject, m.Body, m.ICS, m.Method); err != nil {
+	if err := sendICS(c, m.Recipients, m.Subject, m.Body, m.ICS, m.Method); err != nil {
 		c.Note("The change was saved, but the email to %s failed: %v",
 			ui.Quantity(len(m.Recipients), "attendees"), err)
 	}

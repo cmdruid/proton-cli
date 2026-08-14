@@ -29,7 +29,7 @@ func resolveItem(c *kit.Invocation, ref string) (shareID, itemID string, err err
 	if first, second, err := kit.ExpandPair(c.App, ref); err != nil || first != "" {
 		return first, second, err
 	}
-	return c.App.Pass.ResolveItem(c.Ctx, c.U, []string{ref})
+	return c.App.Pass.ResolveItem(c.Ctx, []string{ref})
 }
 
 // resolveVault accepts a vault name or ID, defaulting to the first vault.
@@ -38,7 +38,7 @@ func resolveVault(c *kit.Invocation, ref string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return c.App.Pass.ResolveVault(c.Ctx, c.U, expanded)
+	return c.App.Pass.ResolveVault(c.Ctx, expanded)
 }
 
 func yesNo(b bool) string {

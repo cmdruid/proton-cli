@@ -3,7 +3,6 @@ package mail
 import (
 	"path/filepath"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
 	"github.com/roman-16/proton-cli/internal/ui"
@@ -83,18 +82,14 @@ func attachmentsDownloadCmd() *cobra.Command {
 			if err := dest.Validate(one); err != nil {
 				return err
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
 			msgID, err := c.App.Mail.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return wrongTable(err, "attachments download")
 			}
 			if one {
-				return downloadOne(c, u, msgID, c.Args[1], &dest)
+				return downloadOne(c, msgID, c.Args[1], &dest)
 			}
-			return downloadAll(c, u, msgID, &dest, includeInline)
+			return downloadAll(c, msgID, &dest, includeInline)
 		}),
 	}
 	dest.Register(c)
@@ -102,8 +97,8 @@ func attachmentsDownloadCmd() *cobra.Command {
 	return c
 }
 
-func downloadOne(c *kit.Invocation, u *keys.Unlocked, msgID, attID string, dest *kit.Destination) error {
-	data, name, err := c.App.Mail.AttachmentDownload(c.Ctx, u, msgID, attID)
+func downloadOne(c *kit.Invocation, msgID, attID string, dest *kit.Destination) error {
+	data, name, err := c.App.Mail.AttachmentDownload(c.Ctx, msgID, attID)
 	if err != nil {
 		return err
 	}
@@ -120,7 +115,7 @@ func downloadOne(c *kit.Invocation, u *keys.Unlocked, msgID, attID string, dest 
 	}, func() error { return nil })
 }
 
-func downloadAll(c *kit.Invocation, u *keys.Unlocked, msgID string, dest *kit.Destination, includeInline bool) error {
+func downloadAll(c *kit.Invocation, msgID string, dest *kit.Destination, includeInline bool) error {
 	atts, err := c.App.Mail.AttachmentsList(c.Ctx, msgID, includeInline)
 	if err != nil {
 		return wrongTable(err, "attachments download")
@@ -135,7 +130,7 @@ func downloadAll(c *kit.Invocation, u *keys.Unlocked, msgID string, dest *kit.De
 		Detail: "to " + dest.Describe(),
 	}, func() error {
 		for _, at := range atts {
-			data, _, err := c.App.Mail.AttachmentDownload(c.Ctx, u, msgID, at.ID)
+			data, _, err := c.App.Mail.AttachmentDownload(c.Ctx, msgID, at.ID)
 			if err != nil {
 				return kit.Fail("could not download %s: %v", at.Name, err)
 			}

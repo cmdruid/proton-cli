@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
 	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -99,8 +98,8 @@ type ItemField struct {
 // The vaults are read at the same time and their items joined in the order the
 // vaults came in, so the answer does not depend on which vault replied first. A
 // vault that cannot be read is left out, as it was before.
-func (s *Service) ItemsList(ctx context.Context, u *keys.Unlocked, vaultFilter string) ([]Item, error) {
-	vaults, err := s.VaultsList(ctx, u)
+func (s *Service) ItemsList(ctx context.Context, vaultFilter string) ([]Item, error) {
+	vaults, err := s.VaultsList(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +115,7 @@ func (s *Service) ItemsList(ctx context.Context, u *keys.Unlocked, vaultFilter s
 	fetches := make([]func(context.Context) error, len(wanted))
 	for i, v := range wanted {
 		fetches[i] = func(ctx context.Context) error {
-			sk, err := s.decryptShareKeys(ctx, v.ShareID, u)
+			sk, err := s.decryptShareKeys(ctx, v.ShareID)
 			if err != nil {
 				return nil
 			}
@@ -137,8 +136,8 @@ func (s *Service) ItemsList(ctx context.Context, u *keys.Unlocked, vaultFilter s
 	return out, nil
 }
 
-func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID string) (*Item, error) {
-	sk, err := s.decryptShareKeys(ctx, shareID, u)
+func (s *Service) ItemGet(ctx context.Context, shareID, itemID string) (*Item, error) {
+	sk, err := s.decryptShareKeys(ctx, shareID)
 	if err != nil {
 		return nil, err
 	}
@@ -210,12 +209,12 @@ func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID
 	return out, nil
 }
 
-func (s *Service) ResolveItem(ctx context.Context, u *keys.Unlocked, args []string) (string, string, error) {
+func (s *Service) ResolveItem(ctx context.Context, args []string) (string, string, error) {
 	if len(args) == 2 {
 		return args[0], args[1], nil
 	}
 	needle := strings.ToLower(args[0])
-	items, err := s.ItemsList(ctx, u, "")
+	items, err := s.ItemsList(ctx, "")
 	if err != nil {
 		return "", "", err
 	}
@@ -313,8 +312,8 @@ func wifiSecurity(s string) pb.WifiSecurity {
 	}
 }
 
-func (s *Service) ItemCreate(ctx context.Context, u *keys.Unlocked, shareID string, nc NewItem) (string, error) {
-	sk, err := s.decryptShareKeys(ctx, shareID, u)
+func (s *Service) ItemCreate(ctx context.Context, shareID string, nc NewItem) (string, error) {
+	sk, err := s.decryptShareKeys(ctx, shareID)
 	if err != nil {
 		return "", err
 	}
@@ -413,11 +412,11 @@ type Patch struct {
 // an edit that only moved an alias's forwarding leaves behind.
 func (p Patch) Empty() bool { return p == Patch{} }
 
-func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemID string, patch Patch) error {
+func (s *Service) ItemEdit(ctx context.Context, shareID, itemID string, patch Patch) error {
 	if patch.Empty() {
 		return nil
 	}
-	sk, err := s.decryptShareKeys(ctx, shareID, u)
+	sk, err := s.decryptShareKeys(ctx, shareID)
 	if err != nil {
 		return err
 	}

@@ -40,7 +40,7 @@ func TestPhotosListTagFilterSetsTagParam(t *testing.T) {
 
 	t.Run("tag filter sets the Tag param", func(t *testing.T) {
 		f := &stubDoer{respBody: []byte(`{"Photos":[]}`)}
-		if _, err := New(f).PhotosList(context.Background(), dc, 2, true); err != nil {
+		if _, err := New(f, testKeys(nil)).PhotosList(context.Background(), dc, 2, true); err != nil {
 			t.Fatalf("PhotosList: %v", err)
 		}
 		if got := f.last().Query.Get("Tag"); got != "2" {
@@ -50,7 +50,7 @@ func TestPhotosListTagFilterSetsTagParam(t *testing.T) {
 
 	t.Run("unfiltered omits Tag", func(t *testing.T) {
 		f := &stubDoer{respBody: []byte(`{"Photos":[]}`)}
-		if _, err := New(f).PhotosList(context.Background(), dc, 0, false); err != nil {
+		if _, err := New(f, testKeys(nil)).PhotosList(context.Background(), dc, 0, false); err != nil {
 			t.Fatalf("PhotosList: %v", err)
 		}
 		if f.last().Query.Has("Tag") {
@@ -60,7 +60,7 @@ func TestPhotosListTagFilterSetsTagParam(t *testing.T) {
 
 	t.Run("tags surface as names, not ints", func(t *testing.T) {
 		f := &stubDoer{respBody: []byte(`{"Photos":[{"LinkID":"l1","Tags":[0,2,42]}]}`)}
-		photos, err := New(f).PhotosList(context.Background(), dc, 0, false)
+		photos, err := New(f, testKeys(nil)).PhotosList(context.Background(), dc, 0, false)
 		if err != nil {
 			t.Fatalf("PhotosList: %v", err)
 		}
@@ -132,7 +132,7 @@ func TestTagNames(t *testing.T) {
 func TestPhotosUnfavoriteRemovesFavoriteTag(t *testing.T) {
 	f := &stubDoer{}
 	dc := &Context{VolumeID: "vol1"}
-	if err := New(f).PhotosUnfavorite(context.Background(), dc, []string{"link-a"}); err != nil {
+	if err := New(f, testKeys(nil)).PhotosUnfavorite(context.Background(), dc, []string{"link-a"}); err != nil {
 		t.Fatalf("PhotosUnfavorite: %v", err)
 	}
 	req := f.last()

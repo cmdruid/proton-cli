@@ -45,7 +45,7 @@ func TestBuildInlinePackageFlattensHTMLAndWrapsKeys(t *testing.T) {
 	}
 	plans := []plannedRecipient{{email: "bob@ext.com", scheme: schemeExternalInline, armoredKey: recPub}}
 
-	pkg, ok, err := New(nil).buildInlinePackage(c, atts, plans)
+	pkg, ok, err := New(nil, testKeys(nil)).buildInlinePackage(c, atts, plans)
 	if err != nil {
 		t.Fatalf("buildInlinePackage: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestBuildInlinePackageIsSkippedWithoutInlineRecipients(t *testing.T) {
 	c := Content{From: &Sender{KR: sndKR}, Body: "hi"}
 	plans := []plannedRecipient{{email: "a@proton.me", scheme: schemeInternal}}
 
-	_, ok, err := New(nil).buildInlinePackage(c, nil, plans)
+	_, ok, err := New(nil, testKeys(nil)).buildInlinePackage(c, nil, plans)
 	if err != nil {
 		t.Fatalf("buildInlinePackage: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestBuildBodyPackagesSplitsPerScheme(t *testing.T) {
 		{email: "clear@example.com", scheme: schemeClear},
 	}
 
-	pkgs, err := New(nil).buildBodyPackages(c, Delivery{}, nil, plans, "", "")
+	pkgs, err := New(nil, testKeys(nil)).buildBodyPackages(c, Delivery{}, nil, plans, "", "")
 	if err != nil {
 		t.Fatalf("buildBodyPackages: %v", err)
 	}

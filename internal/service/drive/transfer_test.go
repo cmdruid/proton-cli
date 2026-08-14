@@ -381,7 +381,7 @@ func TestRequestBlockLinksRetriesThenSucceeds(t *testing.T) {
 		{err: &proton.APIError{HTTPStatus: 502}},
 		{body: `{"UploadLinks":[{"Token":"a","BareURL":"http://x/1"},{"Token":"b","BareURL":"http://x/2"}]}`},
 	}}
-	links, err := New(d).requestBlockLinks(context.Background(), "sh", "lk", "rev", "ad",
+	links, err := New(d, testKeys(nil)).requestBlockLinks(context.Background(), "sh", "lk", "rev", "ad",
 		[]*encBlock{{index: 1}, {index: 2}})
 	if err != nil {
 		t.Fatalf("requestBlockLinks: %v", err)
@@ -398,7 +398,7 @@ func TestRequestBlockLinksCountMismatch(t *testing.T) {
 	d := &seqDoer{steps: []doerStep{
 		{body: `{"UploadLinks":[{"Token":"a","BareURL":"u"}]}`},
 	}}
-	_, err := New(d).requestBlockLinks(context.Background(), "s", "l", "r", "a",
+	_, err := New(d, testKeys(nil)).requestBlockLinks(context.Background(), "s", "l", "r", "a",
 		[]*encBlock{{index: 1}, {index: 2}})
 	if err == nil {
 		t.Fatal("expected a count-mismatch error (2 blocks, 1 link)")
@@ -407,7 +407,7 @@ func TestRequestBlockLinksCountMismatch(t *testing.T) {
 
 func TestRequestBlockLinksNonRetryable(t *testing.T) {
 	d := &seqDoer{steps: []doerStep{{err: &proton.APIError{HTTPStatus: 404}}}}
-	_, err := New(d).requestBlockLinks(context.Background(), "s", "l", "r", "a",
+	_, err := New(d, testKeys(nil)).requestBlockLinks(context.Background(), "s", "l", "r", "a",
 		[]*encBlock{{index: 1}})
 	if err == nil {
 		t.Fatal("expected an error")

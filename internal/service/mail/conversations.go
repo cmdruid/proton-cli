@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -81,13 +80,21 @@ func (s *Service) ConversationsSearch(ctx context.Context, opts SearchOptions) (
 	return out, r.Total, nil
 }
 
-func (s *Service) ConversationRead(ctx context.Context, u *keys.Unlocked, id string) (*ConversationFull, error) {
+func (s *Service) ConversationRead(ctx context.Context, id string) (*ConversationFull, error) {
 	var r struct {
 		Conversation rawConversation
 		Messages     []rawMessage
 	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/conversations/" + id}, &r); err != nil {
-		return nil, s.crossTableProbe(ctx, id, err, "conversations")
+	var fetchErr error
+	u, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+		fetchErr = s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/conversations/" + id}, &r)
+		return fetchErr
+	})
+	if fetchErr != nil {
+		return nil, s.crossTableProbe(ctx, id, fetchErr, "conversations")
+	}
+	if err != nil {
+		return nil, err
 	}
 	sort.SliceStable(r.Messages, func(i, j int) bool { return r.Messages[i].Time < r.Messages[j].Time })
 	msgs := make([]Full, 0, len(r.Messages))

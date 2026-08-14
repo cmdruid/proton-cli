@@ -22,7 +22,7 @@ func trashCmd() *cobra.Command {
 
 // trashed lists the items in the trash, across every vault.
 func trashed(c *kit.Invocation) ([]passsvc.Item, error) {
-	items, err := c.App.Pass.ItemsList(c.Ctx, c.U, "")
+	items, err := c.App.Pass.ItemsList(c.Ctx, "")
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func trashListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List what is in the trash",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			items, err := trashed(c)
 			if err != nil {
 				return err
@@ -58,7 +58,7 @@ func trashRestoreCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "restore [REF...]",
 		Short: "Put items back where they came from",
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			targets, err := trashTargets(c, all)
 			if err != nil {
 				return err
@@ -85,7 +85,7 @@ func trashEmptyCmd() *cobra.Command {
 		Use:   "empty",
 		Short: "Delete everything in the trash, permanently",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			items, err := trashed(c)
 			if err != nil {
 				return err
@@ -125,7 +125,7 @@ func trashTargets(c *kit.Invocation, all bool) ([]passsvc.Item, error) {
 		if err != nil {
 			return nil, err
 		}
-		it, err := c.App.Pass.ItemGet(c.Ctx, c.U, shareID, itemID)
+		it, err := c.App.Pass.ItemGet(c.Ctx, shareID, itemID)
 		if err != nil {
 			return nil, err
 		}

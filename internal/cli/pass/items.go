@@ -46,7 +46,7 @@ func itemsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List items across your vaults",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			kind, err := itemType.Value()
 			if err != nil {
 				return err
@@ -55,7 +55,7 @@ func itemsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			items, err := c.App.Pass.ItemsList(c.Ctx, c.U, vaultRef)
+			items, err := c.App.Pass.ItemsList(c.Ctx, vaultRef)
 			if err != nil {
 				return err
 			}
@@ -81,12 +81,12 @@ func itemsGetCmd() *cobra.Command {
 			"Passwords, TOTP secrets and private keys are printed in full: this is the\n" +
 			"command for reading a secret, so it does not hide one.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			shareID, itemID, err := resolveItem(c, c.Args[0])
 			if err != nil {
 				return err
 			}
-			it, err := c.App.Pass.ItemGet(c.Ctx, c.U, shareID, itemID)
+			it, err := c.App.Pass.ItemGet(c.Ctx, shareID, itemID)
 			if err != nil {
 				return err
 			}
@@ -226,7 +226,7 @@ func itemsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create an item",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			kind, err := itemType.Value()
 			if err != nil {
 				return err
@@ -247,7 +247,7 @@ func itemsCreateCmd() *cobra.Command {
 				Action: ui.Created, Kind: "items", Name: d.nc.Name,
 				Extra: map[string]any{"type": kind},
 			}, func() (string, error) {
-				itemID, err := c.App.Pass.ItemCreate(c.Ctx, c.U, shareID, d.nc)
+				itemID, err := c.App.Pass.ItemCreate(c.Ctx, shareID, d.nc)
 				if err != nil {
 					return "", err
 				}
@@ -275,7 +275,7 @@ func itemsUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Change an item's fields",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			wifi, err := security.Value()
 			if err != nil {
 				return err
@@ -303,7 +303,7 @@ func itemsUpdateCmd() *cobra.Command {
 				if err := c.App.Pass.AliasEdit(c.Ctx, shareID, itemID, a.patch); err != nil {
 					return err
 				}
-				return c.App.Pass.ItemEdit(c.Ctx, c.U, shareID, itemID, patch)
+				return c.App.Pass.ItemEdit(c.Ctx, shareID, itemID, patch)
 			})
 		}),
 	}
@@ -336,7 +336,7 @@ func bulkItemCmd(use, short string, action ui.Action, detail string,
 		Use:   use + " [REF...]",
 		Short: short,
 		RunE: kit.Run([]kit.Step{
-			kit.StepSelection(f.set, itemFilterHint, itemScope), kit.StepExpand, kit.StepUnlock,
+			kit.StepSelection(f.set, itemFilterHint, itemScope), kit.StepExpand,
 		}, func(c *kit.Invocation) error {
 			sel, err := selectItems(c, &f)
 			if err != nil {
@@ -402,7 +402,7 @@ func selectItems(c *kit.Invocation, f *filters) (kit.Selection[passsvc.Item], er
 			if err != nil {
 				return passsvc.Item{}, err
 			}
-			it, err := c.App.Pass.ItemGet(ctx, c.U, shareID, itemID)
+			it, err := c.App.Pass.ItemGet(ctx, shareID, itemID)
 			if err != nil {
 				return passsvc.Item{}, err
 			}
@@ -441,7 +441,7 @@ func matchItems(ctx stdctx.Context, c *kit.Invocation, f *filters) ([]passsvc.It
 	if err != nil {
 		return nil, err
 	}
-	items, err := c.App.Pass.ItemsList(ctx, c.U, vaultRef)
+	items, err := c.App.Pass.ItemsList(ctx, vaultRef)
 	if err != nil {
 		return nil, err
 	}

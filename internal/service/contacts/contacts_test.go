@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -122,7 +123,7 @@ func TestPinnedKeysForReadsSignedCard(t *testing.T) {
 	}
 	u := &keys.Unlocked{UserKR: kr}
 
-	cc, err := New(d).PinnedKeysFor(context.Background(), u, "bob@example.com")
+	cc, err := New(d, testKeys(u)).PinnedKeysFor(context.Background(), "bob@example.com")
 	if err != nil {
 		t.Fatalf("PinnedKeysFor: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestPinnedKeysForReadsSignedCard(t *testing.T) {
 
 func TestPinnedKeysForNoConfigIsMiss(t *testing.T) {
 	d := &contactDoer{emails: []map[string]any{{"ContactID": "c1", "Defaults": 1}}}
-	cc, err := New(d).PinnedKeysFor(context.Background(), &keys.Unlocked{UserKR: testKeyRing(t)}, "x@example.com")
+	cc, err := New(d, testKeys(&keys.Unlocked{UserKR: testKeyRing(t)})).PinnedKeysFor(context.Background(), "x@example.com")
 	if err != nil || cc != nil {
 		t.Errorf("Defaults==1 should be a clean miss; got %+v, %v", cc, err)
 	}
@@ -160,7 +161,7 @@ func TestPinKeyAddsKeyAndPreservesOtherCards(t *testing.T) {
 	u := &keys.Unlocked{UserKR: kr}
 
 	armored, keyValue := armoredPubKey(t)
-	if err := New(d).PinKey(context.Background(), u, "c1", "bob@example.com", armored, nil, nil, ""); err != nil {
+	if err := New(d, testKeys(u)).PinKey(context.Background(), "c1", "bob@example.com", armored, nil, nil, ""); err != nil {
 		t.Fatalf("PinKey: %v", err)
 	}
 
@@ -191,7 +192,7 @@ func TestPinKeyRejectsUnverifiedCard(t *testing.T) {
 	u := &keys.Unlocked{UserKR: kr}
 
 	armored, _ := armoredPubKey(t)
-	if err := New(d).PinKey(context.Background(), u, "c1", "bob@example.com", armored, nil, nil, ""); err == nil {
+	if err := New(d, testKeys(u)).PinKey(context.Background(), "c1", "bob@example.com", armored, nil, nil, ""); err == nil {
 		t.Error("PinKey should refuse to edit a card it cannot verify")
 	}
 }
@@ -206,7 +207,7 @@ func TestUnpinKeyRemovesKeys(t *testing.T) {
 	d := &contactDoer{cards: []map[string]any{signedCard(t, kr, base)}}
 	u := &keys.Unlocked{UserKR: kr}
 
-	if err := New(d).UnpinKey(context.Background(), u, "c1", "bob@example.com"); err != nil {
+	if err := New(d, testKeys(u)).UnpinKey(context.Background(), "c1", "bob@example.com"); err != nil {
 		t.Fatalf("UnpinKey: %v", err)
 	}
 	model := vcard.ParseSigned(putSignedCardText(t, d))
@@ -244,3 +245,14 @@ func TestPrependUnique(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// testKeys hands a service the key hierarchy a test wants it to decrypt with.
+// A test that decrypts nothing passes nil, which is never asked for.
+func testKeys(u *keys.Unlocked) keys.Get {
+	return func(context.Context) (*keys.Unlocked, error) {
+		if u == nil {
+			return nil, errors.New("this test has no keys")
+		}
+		return u, nil
+	}
+}

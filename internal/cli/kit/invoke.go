@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/app"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
@@ -14,15 +13,12 @@ import (
 )
 
 // Invocation is the prepared context handed to a command body. The steps a
-// command declares populate it - authenticate, unlock, expand short IDs - so no
+// command declares populate it - expand short IDs, check a selection - so no
 // handler repeats that preamble.
 type Invocation struct {
 	Ctx  context.Context
 	App  *app.App
 	Args []string
-	// U is the unlocked key hierarchy, present when the command declared
-	// StepUnlock.
-	U *keys.Unlocked
 	// Cmd is the running command, so a handler can tell a flag left alone from
 	// one explicitly set to its zero value.
 	Cmd *cobra.Command
@@ -48,20 +44,6 @@ type Step func(*Invocation) error
 // Handler is a command body.
 type Handler func(*Invocation) error
 
-// StepUnlock decrypts the key hierarchy up front and puts it in U.
-//
-// Declare it when the command always needs keys. When unlocking should wait
-// until arguments have been resolved, call c.App.Unlock inline instead: it
-// memoises, so the extra call costs nothing.
-func StepUnlock(c *Invocation) error {
-	u, err := c.App.Unlock(c.Ctx)
-	if err != nil {
-		return err
-	}
-	c.U = u
-	return nil
-}
-
 // StepExpand turns short IDs in the positional arguments into full ones. It
 // leaves anything that is not short-ID-shaped alone, so applying it everywhere is
 // safe.
@@ -84,9 +66,10 @@ func StepExpand(c *Invocation) error {
 // validation preceding the network is a rule rather than a habit: a value that
 // could never have been sent should not first cost a sign-in to discover.
 //
-// Which is why no step asserts that an account exists. The requirement belongs to
-// the request, and the client holds it there, so a command body judges what it can
-// judge first and only then finds out whether anyone is signed in.
+// Which is why no step asserts that an account exists, and why none of them
+// unlocks the account's keys: both requirements belong to the request, and the
+// client holds them there, so a command body judges what it can judge first and
+// only then finds out whether anyone is signed in.
 func Run(steps []Step, h Handler) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		if err := validateFlags(cmd); err != nil {

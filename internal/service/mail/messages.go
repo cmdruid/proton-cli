@@ -272,13 +272,32 @@ func (s *Service) senderKeyRing(ctx context.Context, email string) *pgp.KeyRing 
 	return kr
 }
 
-func (s *Service) Read(ctx context.Context, u *keys.Unlocked, id string) (*Full, error) {
-	raw, err := s.fetchMessageRaw(ctx, id)
+func (s *Service) Read(ctx context.Context, id string) (*Full, error) {
+	raw, u, err := s.messageAndKeys(ctx, id)
 	if err != nil {
-		return nil, s.crossTableProbe(ctx, id, err, "messages")
+		return nil, err
 	}
 	full := s.decryptMessage(ctx, u, *raw)
 	return &full, nil
+}
+
+// messageAndKeys reads a message and the keys it will be decrypted with at the
+// same time, which is every read this service does: the body is encrypted, so
+// one is useless without the other and neither is needed to ask for it.
+func (s *Service) messageAndKeys(ctx context.Context, id string) (*rawMessage, *keys.Unlocked, error) {
+	var raw *rawMessage
+	var fetchErr error
+	u, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+		raw, fetchErr = s.fetchMessageRaw(ctx, id)
+		return fetchErr
+	})
+	if fetchErr != nil {
+		return nil, nil, s.crossTableProbe(ctx, id, fetchErr, "messages")
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return raw, u, nil
 }
 
 func (s *Service) fetchMessageRaw(ctx context.Context, id string) (*rawMessage, error) {

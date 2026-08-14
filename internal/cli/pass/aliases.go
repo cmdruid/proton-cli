@@ -27,12 +27,12 @@ func aliasesListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List your aliases",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			vaultRef, err := kit.Expand(c.App, vault)
 			if err != nil {
 				return err
 			}
-			items, err := c.App.Pass.ItemsList(c.Ctx, c.U, vaultRef)
+			items, err := c.App.Pass.ItemsList(c.Ctx, vaultRef)
 			if err != nil {
 				return err
 			}
@@ -62,12 +62,12 @@ func aliasesToggleCmd(use, short string, action ui.Action, enabled bool) *cobra.
 		Use:   use + " REF",
 		Short: short,
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			shareID, itemID, err := resolveItem(c, c.Args[0])
 			if err != nil {
 				return err
 			}
-			it, err := c.App.Pass.ItemGet(c.Ctx, c.U, shareID, itemID)
+			it, err := c.App.Pass.ItemGet(c.Ctx, shareID, itemID)
 			if err != nil {
 				return err
 			}
@@ -94,7 +94,7 @@ func aliasesCreateCmd() *cobra.Command {
 			"The address is a prefix you choose plus a suffix Proton offers; mail sent to it\n" +
 			"arrives in the mailboxes you name. `aliases options` lists both.",
 		Args: cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if prefix == "" {
 				return kit.Fail("An alias needs a prefix.").
 					Hint("--prefix shop", "proton-cli pass aliases options")
@@ -122,7 +122,7 @@ func aliasesCreateCmd() *cobra.Command {
 				spec.Extra = map[string]any{"alias": plan.Address}
 			}
 			return kit.Create(c, spec, func() (string, error) {
-				itemID, err := c.App.Pass.AliasCreate(c.Ctx, c.U, shareID, plan, name)
+				itemID, err := c.App.Pass.AliasCreate(c.Ctx, shareID, plan, name)
 				if err != nil {
 					return "", err
 				}
@@ -150,7 +150,7 @@ func aliasesOptionsCmd() *cobra.Command {
 		Use:   "options",
 		Short: "List the suffixes and mailboxes an alias can use",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			shareID, err := resolveVault(c, "")
 			if err != nil {
 				return err

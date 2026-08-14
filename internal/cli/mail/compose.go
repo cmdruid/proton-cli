@@ -4,7 +4,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/ical"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
@@ -100,7 +99,7 @@ func noRecipients() error {
 // content assembles a fresh message: recipients, subject and body from the flags
 // (or from --eml, which the flags then override), the resolved sending address,
 // and the signature unless suppressed.
-func (f *composeFlags) content(c *kit.Invocation, u *keys.Unlocked) (mailsvc.Content, error) {
+func (f *composeFlags) content(c *kit.Invocation) (mailsvc.Content, error) {
 	body, err := f.resolvedBody(c)
 	if err != nil {
 		return mailsvc.Content{}, err
@@ -127,7 +126,7 @@ func (f *composeFlags) content(c *kit.Invocation, u *keys.Unlocked) (mailsvc.Con
 		f.mergeEML(&out, parsed, c)
 	}
 
-	sender, err := mailsvc.ResolveSender(u, mailsvc.SenderRequest{Explicit: f.from})
+	sender, err := c.App.Mail.ResolveSender(c.Ctx, mailsvc.SenderRequest{Explicit: f.from})
 	if err != nil {
 		return mailsvc.Content{}, err
 	}
@@ -147,7 +146,7 @@ func (f *composeFlags) content(c *kit.Invocation, u *keys.Unlocked) (mailsvc.Con
 
 // applyTo overlays the flags the user actually passed onto a loaded draft, leaving
 // everything unmentioned untouched.
-func (f *composeFlags) applyTo(c *kit.Invocation, u *keys.Unlocked, draft *mailsvc.Draft) (mailsvc.Content, error) {
+func (f *composeFlags) applyTo(c *kit.Invocation, draft *mailsvc.Draft) (mailsvc.Content, error) {
 	out := draft.Content
 	if c.Changed("to") {
 		out.To = mailsvc.ParseRecipients(f.to)
@@ -175,7 +174,7 @@ func (f *composeFlags) applyTo(c *kit.Invocation, u *keys.Unlocked, draft *mails
 		out.HTML = !f.plain
 	}
 	if c.Changed("from") {
-		sender, err := mailsvc.ResolveSender(u, mailsvc.SenderRequest{Explicit: f.from})
+		sender, err := c.App.Mail.ResolveSender(c.Ctx, mailsvc.SenderRequest{Explicit: f.from})
 		if err != nil {
 			return out, err
 		}
@@ -274,9 +273,9 @@ func (f *deliveryFlags) delivery() (mailsvc.Delivery, time.Time, error) {
 // withPinnedKeys consults Contacts for each recipient's pinned keys. A pinned key
 // means the message is encrypted to the key the user trusts rather than to
 // whatever the server hands back.
-func withPinnedKeys(c *kit.Invocation, u *keys.Unlocked, del *mailsvc.Delivery, content mailsvc.Content) error {
+func withPinnedKeys(c *kit.Invocation, del *mailsvc.Delivery, content mailsvc.Content) error {
 	for _, email := range content.RecipientAddresses() {
-		pin, err := c.App.Contacts.PinnedKeysFor(c.Ctx, u, email)
+		pin, err := c.App.Contacts.PinnedKeysFor(c.Ctx, email)
 		if err != nil {
 			return err
 		}
@@ -299,7 +298,7 @@ func withPinnedKeys(c *kit.Invocation, u *keys.Unlocked, del *mailsvc.Delivery, 
 
 // deliver sends content, reporting the schedule when one was set. It is the shared
 // tail of send, reply and forward.
-func deliver(c *kit.Invocation, u *keys.Unlocked, content mailsvc.Content, del mailsvc.Delivery, at time.Time) error {
+func deliver(c *kit.Invocation, content mailsvc.Content, del mailsvc.Delivery, at time.Time) error {
 	action, detail := ui.Sent, ""
 	if !at.IsZero() {
 		action = ui.Scheduled
@@ -309,20 +308,20 @@ func deliver(c *kit.Invocation, u *keys.Unlocked, content mailsvc.Content, del m
 		Action: action, Kind: "messages",
 		Name: content.Subject, Detail: detail,
 	}, func() (string, error) {
-		if err := withPinnedKeys(c, u, &del, content); err != nil {
+		if err := withPinnedKeys(c, &del, content); err != nil {
 			return "", err
 		}
-		return c.App.Mail.Send(c.Ctx, u, content, del)
+		return c.App.Mail.Send(c.Ctx, content, del)
 	})
 }
 
 // saveDraft stores content without sending, which is what --draft does on reply
 // and forward.
-func saveDraft(c *kit.Invocation, u *keys.Unlocked, content mailsvc.Content) error {
+func saveDraft(c *kit.Invocation, content mailsvc.Content) error {
 	return kit.Create(c, ui.ResultSpec{
 		Action: ui.Saved, Kind: "drafts", Name: content.Subject, Detail: "as a draft",
 	}, func() (string, error) {
-		d, err := c.App.Mail.DraftCreate(c.Ctx, u, content)
+		d, err := c.App.Mail.DraftCreate(c.Ctx, content)
 		if err != nil {
 			return "", err
 		}
@@ -356,18 +355,14 @@ func sendCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
-			content, err := f.content(c, u)
+			content, err := f.content(c)
 			if err != nil {
 				return err
 			}
 			if !content.HasRecipients() {
 				return noRecipients()
 			}
-			return deliver(c, u, content, del, at)
+			return deliver(c, content, del, at)
 		}),
 	}
 	f.registerRecipients(c)
@@ -411,22 +406,18 @@ func answerCmd(use, short, long string, forward bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
 			id, err := c.App.Mail.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return wrongTable(err, use)
 			}
-			content, err := buildAnswer(c, u, id, &f, answerAction(forward, replyAll), noQuote, noAttachments)
+			content, err := buildAnswer(c, id, &f, answerAction(forward, replyAll), noQuote, noAttachments)
 			if err != nil {
 				return wrongTable(err, use)
 			}
 			if asDraft {
-				return saveDraft(c, u, content)
+				return saveDraft(c, content)
 			}
-			return deliver(c, u, content, del, at)
+			return deliver(c, content, del, at)
 		}),
 	}
 	f.registerRecipients(c)
@@ -445,7 +436,7 @@ func answerCmd(use, short, long string, forward bool) *cobra.Command {
 	return c
 }
 
-func buildAnswer(c *kit.Invocation, u *keys.Unlocked, id string, f *composeFlags,
+func buildAnswer(c *kit.Invocation, id string, f *composeFlags,
 	action int, noQuote, noAttachments bool) (mailsvc.Content, error) {
 	body, err := f.resolvedBody(c)
 	if err != nil {
@@ -469,7 +460,7 @@ func buildAnswer(c *kit.Invocation, u *keys.Unlocked, id string, f *composeFlags
 	if c.Changed("html") {
 		spec.HTML = &f.html
 	}
-	return c.App.Mail.Answer(c.Ctx, u, id, spec)
+	return c.App.Mail.Answer(c.Ctx, id, spec)
 }
 
 func answerAction(forward, replyAll bool) int {

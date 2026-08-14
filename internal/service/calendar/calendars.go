@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
@@ -53,7 +52,11 @@ func (s *Service) CalendarsList(ctx context.Context) ([]Calendar, error) {
 // of calendars to turn one ID into one string is a request for something already
 // in hand. A calendar this account is not a member of is reported by its ID,
 // which is the only name it has here.
-func (s *Service) CalendarName(ctx context.Context, u *keys.Unlocked, calendarID string) (string, error) {
+func (s *Service) CalendarName(ctx context.Context, calendarID string) (string, error) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return "", err
+	}
 	b, err := s.calendarBootstrap(ctx, calendarID)
 	if err != nil {
 		return "", err
@@ -64,7 +67,11 @@ func (s *Service) CalendarName(ctx context.Context, u *keys.Unlocked, calendarID
 	return calendarID, nil
 }
 
-func (s *Service) CalendarCreate(ctx context.Context, u *keys.Unlocked, name, color string) (string, error) {
+func (s *Service) CalendarCreate(ctx context.Context, name, color string) (string, error) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return "", err
+	}
 	addrKR, addr, err := u.PrimaryAddr()
 	if err != nil {
 		return "", err
@@ -102,7 +109,11 @@ func (s *Service) CalendarDelete(ctx context.Context, id string) error {
 	return s.C.Decode(ctx, proton.Request{Method: "DELETE", Path: "/calendar/v1/" + id}, nil)
 }
 
-func (s *Service) calendarMemberID(ctx context.Context, u *keys.Unlocked, calendarID string) (string, error) {
+func (s *Service) calendarMemberID(ctx context.Context, calendarID string) (string, error) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return "", err
+	}
 	b, err := s.calendarBootstrap(ctx, calendarID)
 	if err != nil {
 		return "", err
@@ -115,8 +126,8 @@ func (s *Service) calendarMemberID(ctx context.Context, u *keys.Unlocked, calend
 
 // CalendarRename updates a calendar's display name and/or color (stored as
 // per-member settings). Empty fields are left unchanged.
-func (s *Service) CalendarRename(ctx context.Context, u *keys.Unlocked, calendarID, name, color string) error {
-	memberID, err := s.calendarMemberID(ctx, u, calendarID)
+func (s *Service) CalendarRename(ctx context.Context, calendarID, name, color string) error {
+	memberID, err := s.calendarMemberID(ctx, calendarID)
 	if err != nil {
 		return err
 	}

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/ical"
@@ -151,12 +150,12 @@ type stored struct {
 // it is not part of what the event says, and an event that arrived without one this
 // key can open is still an event: folding it into the same read would make a
 // missing participant list look like an unreadable event.
-func (s *Service) decrypt(ck *calKeys, u *keys.Unlocked, raw rawEvent) stored {
+func (s *Service) decrypt(ctx context.Context, ck *calKeys, raw rawEvent) stored {
 	// An invitation you received wraps its content to the invited address rather
 	// than to the calendar key.
 	packet, decKR := raw.SharedKeyPacket, ck.calKR
 	if packet == "" && raw.AddressKeyPacket != "" {
-		if kr, ok := u.AddrKR(raw.AddressID); ok {
+		if kr, ok := s.addressKeyRing(ctx, raw.AddressID); ok {
 			packet, decKR = raw.AddressKeyPacket, kr
 		}
 	}
@@ -178,7 +177,7 @@ func (s *Service) decrypt(ck *calKeys, u *keys.Unlocked, raw rawEvent) stored {
 // answering from the ones that are there. Only when nothing could be read at all
 // is that reported - which is also what makes a single named calendar strict,
 // since then the one failure is the only one.
-func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarIDs []string, w ical.Window) ([]Event, error) {
+func (s *Service) EventsList(ctx context.Context, calendarIDs []string, w ical.Window) ([]Event, error) {
 	var (
 		mu    sync.Mutex
 		wg    sync.WaitGroup
@@ -190,7 +189,7 @@ func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarIDs 
 		wg.Add(1)
 		go func(calID string) {
 			defer wg.Done()
-			events, err := s.calendarEvents(ctx, u, calID, w)
+			events, err := s.calendarEvents(ctx, calID, w)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -218,8 +217,8 @@ func (s *Service) EventsList(ctx context.Context, u *keys.Unlocked, calendarIDs 
 	return out, nil
 }
 
-func (s *Service) calendarEvents(ctx context.Context, u *keys.Unlocked, calendarID string, w ical.Window) ([]Event, error) {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) calendarEvents(ctx context.Context, calendarID string, w ical.Window) ([]Event, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +228,7 @@ func (s *Service) calendarEvents(ctx context.Context, u *keys.Unlocked, calendar
 	}
 	events := make([]stored, 0, len(raws))
 	for _, raw := range raws {
-		events = append(events, s.decrypt(ck, u, raw))
+		events = append(events, s.decrypt(ctx, ck, raw))
 	}
 	return expand(events, w), nil
 }
@@ -449,7 +448,7 @@ func (e stored) occurrenceRow(occ ical.Occurrence) Event {
 // The event and the keys that read it are asked for at the same time. The
 // reference names the event, so neither request needs the other's answer - only
 // the decryption between them does.
-func (s *Service) EventGet(ctx context.Context, u *keys.Unlocked, calendarID, eventID, occurrence string) (*Event, error) {
+func (s *Service) EventGet(ctx context.Context, calendarID, eventID, occurrence string) (*Event, error) {
 	var (
 		ck  *calKeys
 		raw rawEvent
@@ -457,7 +456,7 @@ func (s *Service) EventGet(ctx context.Context, u *keys.Unlocked, calendarID, ev
 	if err := fetch.Together(ctx,
 		func(ctx context.Context) error {
 			var err error
-			ck, err = s.unlockCalendar(ctx, u, calendarID)
+			ck, err = s.unlockCalendar(ctx, calendarID)
 			return err
 		},
 		func(ctx context.Context) error {
@@ -468,7 +467,7 @@ func (s *Service) EventGet(ctx context.Context, u *keys.Unlocked, calendarID, ev
 	); err != nil {
 		return nil, err
 	}
-	e := s.decrypt(ck, u, raw)
+	e := s.decrypt(ctx, ck, raw)
 	if occurrence == "" {
 		ev := e.row()
 		if e.readErr == nil && e.model.Recurring() {
@@ -481,7 +480,7 @@ func (s *Service) EventGet(ctx context.Context, u *keys.Unlocked, calendarID, ev
 	if e.readErr != nil {
 		return nil, e.readErr
 	}
-	occ, err := s.resolveOccurrence(ctx, ck, u, calendarID, e, occurrence)
+	occ, err := s.resolveOccurrence(ctx, ck, calendarID, e, occurrence)
 	if err != nil {
 		return nil, err
 	}
@@ -497,19 +496,19 @@ const maxSeriesReport = 1000
 //
 // It is what a confirmation shows before removing a whole series: a count is not
 // enough to check, and the occurrences are the things that would go.
-func (s *Service) EventOccurrences(ctx context.Context, u *keys.Unlocked, calendarID, eventID string, limit int) ([]Event, error) {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) EventOccurrences(ctx context.Context, calendarID, eventID string, limit int) ([]Event, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return nil, err
 	}
-	master, err := s.readMaster(ctx, ck, u, calendarID, eventID)
+	master, err := s.readMaster(ctx, ck, calendarID, eventID)
 	if err != nil {
 		return nil, err
 	}
 	if !master.model.Recurring() {
 		return []Event{master.row()}, nil
 	}
-	chain, err := s.loadSeries(ctx, ck, u, calendarID, master)
+	chain, err := s.loadSeries(ctx, ck, calendarID, master)
 	if err != nil {
 		return nil, err
 	}
@@ -543,12 +542,12 @@ func (s *Service) rawEvent(ctx context.Context, calendarID, eventID string) (raw
 	return r.Event, nil
 }
 
-func (s *Service) storedEvent(ctx context.Context, ck *calKeys, u *keys.Unlocked, calendarID, eventID string) (stored, error) {
+func (s *Service) storedEvent(ctx context.Context, ck *calKeys, calendarID, eventID string) (stored, error) {
 	raw, err := s.rawEvent(ctx, calendarID, eventID)
 	if err != nil {
 		return stored{}, err
 	}
-	return s.decrypt(ck, u, raw), nil
+	return s.decrypt(ctx, ck, raw), nil
 }
 
 // ── creating ──
@@ -586,8 +585,8 @@ type Mail struct {
 	Method     string
 }
 
-func (s *Service) EventCreate(ctx context.Context, u *keys.Unlocked, calendarID string, in EventInput) (*EventResult, error) {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) EventCreate(ctx context.Context, calendarID string, in EventInput) (*EventResult, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return nil, err
 	}
@@ -743,7 +742,7 @@ func (s *Service) attendeeKeyRing(ctx context.Context, email string) (*pgp.KeyRi
 
 // ResolveEvent finds an event by title across every calendar over the days the
 // default window covers.
-func (s *Service) ResolveEvent(ctx context.Context, u *keys.Unlocked, needle string) (calendarID, eventID, occurrence string, err error) {
+func (s *Service) ResolveEvent(ctx context.Context, needle string) (calendarID, eventID, occurrence string, err error) {
 	cals, err := s.CalendarsList(ctx)
 	if err != nil {
 		return "", "", "", err
@@ -752,7 +751,7 @@ func (s *Service) ResolveEvent(ctx context.Context, u *keys.Unlocked, needle str
 	for _, c := range cals {
 		ids = append(ids, c.ID)
 	}
-	events, err := s.EventsList(ctx, u, ids, ical.Days(DefaultDays()))
+	events, err := s.EventsList(ctx, ids, ical.Days(DefaultDays()))
 	if err != nil {
 		return "", "", "", err
 	}

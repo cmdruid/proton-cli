@@ -16,9 +16,12 @@ import (
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-type Service struct{ C proton.Doer }
+type Service struct {
+	C    proton.Doer
+	keys keys.Get
+}
 
-func New(c proton.Doer) *Service { return &Service{C: c} }
+func New(c proton.Doer, k keys.Get) *Service { return &Service{C: c, keys: k} }
 
 type Context struct {
 	ShareID    string
@@ -35,25 +38,30 @@ type Context struct {
 	rootLink *Link
 }
 
-func (s *Service) Resolve(ctx context.Context, u *keys.Unlocked) (*Context, error) {
+func (s *Service) Resolve(ctx context.Context) (*Context, error) {
 	var r struct {
 		Volumes []struct {
 			VolumeID string
 			Share    struct{ ShareID, LinkID string }
 		}
 	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/volumes"}, &r); err != nil {
+	// The keys leave with the first request rather than after it: the volume has
+	// to answer before the share can be named, and the share cannot be opened
+	// without them.
+	if _, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+		return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/volumes"}, &r)
+	}); err != nil {
 		return nil, err
 	}
 	if len(r.Volumes) == 0 {
 		return nil, fmt.Errorf("no volumes found")
 	}
-	return s.unlockShare(ctx, u, r.Volumes[0].Share.ShareID, r.Volumes[0].Share.LinkID, r.Volumes[0].VolumeID)
+	return s.unlockShare(ctx, r.Volumes[0].Share.ShareID, r.Volumes[0].Share.LinkID, r.Volumes[0].VolumeID)
 }
 
 // ResolvePhotos resolves the dedicated photos share (ShareType 4) and unwraps
 // its keys, parallel to Resolve for the main volume.
-func (s *Service) ResolvePhotos(ctx context.Context, u *keys.Unlocked) (*Context, error) {
+func (s *Service) ResolvePhotos(ctx context.Context) (*Context, error) {
 	var r struct {
 		Shares []struct {
 			ShareID  string
@@ -66,12 +74,14 @@ func (s *Service) ResolvePhotos(ctx context.Context, u *keys.Unlocked) (*Context
 	}
 	q := url.Values{}
 	q.Set("ShowAll", "1")
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/shares", Query: q}, &r); err != nil {
+	if _, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+		return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/shares", Query: q}, &r)
+	}); err != nil {
 		return nil, err
 	}
 	for _, sh := range r.Shares {
 		if sh.Type == 4 && !sh.Locked {
-			return s.unlockShare(ctx, u, sh.ShareID, sh.LinkID, sh.VolumeID)
+			return s.unlockShare(ctx, sh.ShareID, sh.LinkID, sh.VolumeID)
 		}
 	}
 	return nil, &errs.NotFound{Kind: "photos share"}
@@ -79,10 +89,10 @@ func (s *Service) ResolvePhotos(ctx context.Context, u *keys.Unlocked) (*Context
 
 // unlockShare opens a share's key and its root folder.
 //
-// The share and the root folder are asked for at the same time: the volume named
-// both, so neither request needs the other's answer, and only unwrapping the root
-// folder's key needs the share's.
-func (s *Service) unlockShare(ctx context.Context, u *keys.Unlocked, shareID, rootLinkID, volumeID string) (*Context, error) {
+// The share, the root folder and the account's own keys are asked for at the same
+// time: the volume named the first two and the third depends on nothing, so only
+// the unwrapping that follows has an order.
+func (s *Service) unlockShare(ctx context.Context, shareID, rootLinkID, volumeID string) (*Context, error) {
 	var sh struct {
 		AddressID           string
 		Key                 string
@@ -90,6 +100,7 @@ func (s *Service) unlockShare(ctx context.Context, u *keys.Unlocked, shareID, ro
 		PassphraseSignature string
 	}
 	var rootLink *Link
+	var u *keys.Unlocked
 	if err := fetch.Together(ctx,
 		func(ctx context.Context) error {
 			return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/shares/" + shareID}, &sh)
@@ -97,6 +108,11 @@ func (s *Service) unlockShare(ctx context.Context, u *keys.Unlocked, shareID, ro
 		func(ctx context.Context) error {
 			var err error
 			rootLink, err = s.getLink(ctx, shareID, rootLinkID)
+			return err
+		},
+		func(ctx context.Context) error {
+			var err error
+			u, err = s.keys(ctx)
 			return err
 		},
 	); err != nil {

@@ -117,23 +117,26 @@ func New(opts Options) (*App, error) {
 	}
 
 	a := &App{
-		Profile:  profileName,
-		Creds:    newCredentials(u, email),
-		API:      c,
-		Account:  account.New(c),
-		Mail:     mail.New(c),
-		Drive:    drive.New(c),
-		Calendar: calendar.New(c),
-		Contacts: contacts.New(c),
-		Pass:     pass.New(c),
-		UI:       u,
-		DryRun:   opts.DryRun,
-		FullIDs:  opts.FullIDs,
-		Yes:      opts.Yes,
-		IDCache:  idcache.New(idCachePath(profileName)),
-		userID:   userID,
-		email:    email,
+		Profile: profileName,
+		Creds:   newCredentials(u, email),
+		API:     c,
+		Account: account.New(c),
+		UI:      u,
+		DryRun:  opts.DryRun,
+		FullIDs: opts.FullIDs,
+		Yes:     opts.Yes,
+		IDCache: idcache.New(idCachePath(profileName)),
+		userID:  userID,
+		email:   email,
 	}
+	// A service that decrypts holds the keys it decrypts with, the way it holds the
+	// client it fetches with. Unlock is memoised, so the hierarchy is fetched at
+	// most once per invocation and only if something actually asks for it.
+	a.Mail = mail.New(c, a.Unlock)
+	a.Drive = drive.New(c, a.Unlock)
+	a.Calendar = calendar.New(c, a.Unlock)
+	a.Contacts = contacts.New(c, a.Unlock)
+	a.Pass = pass.New(c, a.Unlock)
 	// The client persists the session file whenever its tokens change (e.g. a
 	// mid-request refresh); it stays free of the persistence format by calling
 	// back into saveSession, which owns the DTO assembly. It reads them back the
@@ -307,6 +310,10 @@ func (a *App) resume(ctx context.Context) bool {
 }
 
 // Unlock returns the decrypted key hierarchy, memoised for the invocation.
+//
+// It is what every service that decrypts holds as its keys.Get, so the hierarchy
+// is fetched once, on the first command that reaches a decryption, and not at all
+// by a command that reaches none.
 //
 // The password is requested lazily, and only on the path that actually needs it:
 // once the session file carries the sealed key password, unlocking asks for

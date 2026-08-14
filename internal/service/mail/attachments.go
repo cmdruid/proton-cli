@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
@@ -76,7 +75,7 @@ func (s *Service) AttachmentsList(ctx context.Context, msgID string, includeInli
 	return out, nil
 }
 
-func (s *Service) AttachmentDownload(ctx context.Context, u *keys.Unlocked, msgID, attID string) ([]byte, string, error) {
+func (s *Service) AttachmentDownload(ctx context.Context, msgID, attID string) ([]byte, string, error) {
 	var r struct {
 		Message struct {
 			AddressID   string
@@ -85,7 +84,10 @@ func (s *Service) AttachmentDownload(ctx context.Context, u *keys.Unlocked, msgI
 			}
 		}
 	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/messages/" + msgID}, &r); err != nil {
+	u, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+		return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/messages/" + msgID}, &r)
+	})
+	if err != nil {
 		return nil, "", err
 	}
 	var keyPackets, name string

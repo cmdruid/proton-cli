@@ -51,18 +51,14 @@ func draftsCreateCmd() *cobra.Command {
 		Short: "Save a draft without sending it",
 		Args:  cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
-			content, err := f.content(c, u)
+			content, err := f.content(c)
 			if err != nil {
 				return err
 			}
 			return kit.Create(c, ui.ResultSpec{
 				Action: ui.Created, Kind: "drafts", Name: content.Subject,
 			}, func() (string, error) {
-				d, err := c.App.Mail.DraftCreate(c.Ctx, u, content)
+				d, err := c.App.Mail.DraftCreate(c.Ctx, content)
 				if err != nil {
 					return "", err
 				}
@@ -88,19 +84,15 @@ func draftsUpdateCmd() *cobra.Command {
 			"adds files and --detach removes one by name or ID.",
 		Args: cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
 			id, err := c.App.Mail.ResolveDraft(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
 			}
-			draft, err := c.App.Mail.DraftLoad(c.Ctx, u, id)
+			draft, err := c.App.Mail.DraftLoad(c.Ctx, id)
 			if err != nil {
 				return err
 			}
-			content, err := f.applyTo(c, u, draft)
+			content, err := f.applyTo(c, draft)
 			if err != nil {
 				return err
 			}
@@ -123,7 +115,7 @@ func draftsUpdateCmd() *cobra.Command {
 						return err
 					}
 				}
-				_, err := c.App.Mail.DraftUpdate(c.Ctx, u, id, content)
+				_, err := c.App.Mail.DraftUpdate(c.Ctx, id, content)
 				return err
 			})
 		}),
@@ -169,15 +161,11 @@ func draftsSendCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
 			id, err := c.App.Mail.ResolveDraft(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
 			}
-			draft, err := c.App.Mail.DraftLoad(c.Ctx, u, id)
+			draft, err := c.App.Mail.DraftLoad(c.Ctx, id)
 			if err != nil {
 				return err
 			}
@@ -195,7 +183,7 @@ func draftsSendCmd() *cobra.Command {
 				Name: draft.Content.Subject, Detail: detail,
 				IDs: []string{id}, EmitID: true,
 			}, func() error {
-				if err := withPinnedKeys(c, u, &del, draft.Content); err != nil {
+				if err := withPinnedKeys(c, &del, draft.Content); err != nil {
 					return err
 				}
 				return c.App.Mail.SendDraft(c.Ctx, draft, del)

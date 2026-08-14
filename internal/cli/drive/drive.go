@@ -23,24 +23,16 @@ func New() *cobra.Command {
 	return c
 }
 
-// context unlocks the Drive volume. Every command needs it, and it is memoised on
-// the app, so asking for it repeatedly is free.
+// context opens the Drive volume. Every command needs it, and it is memoised on
+// the service, so asking for it repeatedly is free.
 func context(c *kit.Invocation) (*drivesvc.Context, error) {
-	u, err := c.App.Unlock(c.Ctx)
-	if err != nil {
-		return nil, err
-	}
-	return c.App.Drive.Resolve(c.Ctx, u)
+	return c.App.Drive.Resolve(c.Ctx)
 }
 
-// photosContext unlocks the photo volume, which Proton keeps separate from the
+// photosContext opens the photo volume, which Proton keeps separate from the
 // file tree.
 func photosContext(c *kit.Invocation) (*drivesvc.Context, error) {
-	u, err := c.App.Unlock(c.Ctx)
-	if err != nil {
-		return nil, err
-	}
-	return c.App.Drive.ResolvePhotos(c.Ctx, u)
+	return c.App.Drive.ResolvePhotos(c.Ctx)
 }
 
 // itemType names what a link is, in Proton's own words rather than in the API's

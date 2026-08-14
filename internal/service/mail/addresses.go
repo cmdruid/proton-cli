@@ -126,7 +126,15 @@ type SenderRequest struct {
 // active, sendable, receivable addresses can compose, they are ordered by the
 // account's own Order, and a plus alias resolves through its base address so a
 // reply to "me+tag@proton.me" leaves from that alias.
-func ResolveSender(u *keys.Unlocked, req SenderRequest) (*Sender, error) {
+func (s *Service) ResolveSender(ctx context.Context, req SenderRequest) (*Sender, error) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return resolveSender(u, req)
+}
+
+func resolveSender(u *keys.Unlocked, req SenderRequest) (*Sender, error) {
 	sendable := make([]keys.Address, 0, len(u.Addresses))
 	for _, a := range u.Addresses {
 		if _, ok := u.AddrKR(a.ID); ok && a.CanSend() {

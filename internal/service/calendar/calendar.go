@@ -30,6 +30,7 @@ func zoneOf(name string) (*time.Location, error) {
 
 type Service struct {
 	C         proton.Doer
+	keys      keys.Get
 	canonical map[string]canonicalAddr
 	zoneCache
 
@@ -41,7 +42,7 @@ type Service struct {
 	calendars  fetch.Memo[[]Calendar]
 }
 
-func New(c proton.Doer) *Service { return &Service{C: c} }
+func New(c proton.Doer, k keys.Get) *Service { return &Service{C: c, keys: k} }
 
 // member is one account's membership of one calendar. Proton keeps the display
 // name, colour and description here rather than on the calendar, because they are
@@ -104,6 +105,17 @@ func ourMember(members []member, u *keys.Unlocked) (member, *pgp.KeyRing, bool) 
 	return member{}, nil, false
 }
 
+// addressKeyRing is the key ring for one of our own addresses, when we hold it.
+// An event invited to an address whose keys will not open is left encrypted
+// rather than refused, which is what the caller's readErr already says.
+func (s *Service) addressKeyRing(ctx context.Context, addressID string) (*pgp.KeyRing, bool) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return nil, false
+	}
+	return u.AddrKR(addressID)
+}
+
 type calKeys struct {
 	calKR    *pgp.KeyRing
 	addrKR   *pgp.KeyRing
@@ -112,13 +124,17 @@ type calKeys struct {
 }
 
 // unlockCalendar opens a calendar's keys.
-func (s *Service) unlockCalendar(ctx context.Context, u *keys.Unlocked, calendarID string) (*calKeys, error) {
+func (s *Service) unlockCalendar(ctx context.Context, calendarID string) (*calKeys, error) {
 	return s.unlocked.Do(calendarID, func() (*calKeys, error) {
-		b, err := s.calendarBootstrap(ctx, calendarID)
+		var b *bootstrap
+		u, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+			var err error
+			b, err = s.calendarBootstrap(ctx, calendarID)
+			return err
+		})
 		if err != nil {
 			return nil, err
 		}
-
 		me, addrKR, ok := ourMember(b.Members, u)
 		if !ok {
 			return nil, fmt.Errorf("no matching address key for calendar %s", calendarID)

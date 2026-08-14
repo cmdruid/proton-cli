@@ -37,10 +37,10 @@ type AnswerSpec struct {
 // sending address, derives subject and recipients from the parent, carries the
 // parent's attachments on a forward, and lays the body out as new text,
 // signature, then the quoted original.
-func (s *Service) Answer(ctx context.Context, u *keys.Unlocked, parentID string, spec AnswerSpec) (Content, error) {
-	raw, err := s.fetchMessageRaw(ctx, parentID)
+func (s *Service) Answer(ctx context.Context, parentID string, spec AnswerSpec) (Content, error) {
+	raw, u, err := s.messageAndKeys(ctx, parentID)
 	if err != nil {
-		return Content{}, s.crossTableProbe(ctx, parentID, err, "messages")
+		return Content{}, err
 	}
 
 	// A reply leaves from the address the parent arrived on, which for a message
@@ -49,7 +49,7 @@ func (s *Service) Answer(ctx context.Context, u *keys.Unlocked, parentID string,
 	if raw.isSent() {
 		parentAddress = senderAddress(raw.Sender)
 	}
-	sender, err := ResolveSender(u, SenderRequest{
+	sender, err := resolveSender(u, SenderRequest{
 		Explicit:        spec.From,
 		ParentAddress:   parentAddress,
 		ParentAddressID: raw.AddressID,

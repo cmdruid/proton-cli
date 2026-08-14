@@ -15,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	gomime "github.com/ProtonMail/go-mime"
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/mailtext"
 )
 
@@ -31,10 +30,10 @@ import (
 // and the original DKIM and ARC headers will not verify against a rebuilt body.
 
 // Export renders a message as a complete RFC 822 document.
-func (s *Service) Export(ctx context.Context, u *keys.Unlocked, id string, withAttachments bool) ([]byte, *ExportMeta, error) {
-	raw, err := s.fetchMessageRaw(ctx, id)
+func (s *Service) Export(ctx context.Context, id string, withAttachments bool) ([]byte, *ExportMeta, error) {
+	raw, u, err := s.messageAndKeys(ctx, id)
 	if err != nil {
-		return nil, nil, s.crossTableProbe(ctx, id, err, "messages")
+		return nil, nil, err
 	}
 	kr, ok := u.AddrKR(raw.AddressID)
 	if !ok {

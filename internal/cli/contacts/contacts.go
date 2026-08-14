@@ -48,8 +48,8 @@ func listCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List contacts",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
-			all, err := c.App.Contacts.List(c.Ctx, c.U)
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			all, err := c.App.Contacts.List(c.Ctx)
 			if err != nil {
 				return err
 			}
@@ -63,12 +63,12 @@ func getCmd() *cobra.Command {
 		Use:   "get REF",
 		Short: "Show one contact in full",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			id, err := c.App.Contacts.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
 			}
-			ct, err := c.App.Contacts.Get(c.Ctx, c.U, id)
+			ct, err := c.App.Contacts.Get(c.Ctx, id)
 			if err != nil {
 				return err
 			}
@@ -119,7 +119,7 @@ func createCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a contact",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if d.nc.Name == "" && len(d.nc.Emails) == 0 {
 				return kit.Fail("A contact needs at least a name or an email address.").
 					Hint("--name \"Jane Roe\"", "--email jane@example.com")
@@ -127,7 +127,7 @@ func createCmd() *cobra.Command {
 			return kit.Create(c, ui.ResultSpec{
 				Action: ui.Created, Kind: "contacts", Name: d.nc.Name,
 			}, func() (string, error) {
-				return c.App.Contacts.Create(c.Ctx, c.U, d.nc)
+				return c.App.Contacts.Create(c.Ctx, d.nc)
 			})
 		}),
 	}
@@ -144,8 +144,8 @@ func updateCmd() *cobra.Command {
 			"Only what you pass is replaced. --email and --phone replace the whole list\n" +
 			"rather than adding to it, so pass every address you want the contact to keep.",
 		Args: cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			id, err := c.App.Contacts.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
 			}
@@ -153,7 +153,7 @@ func updateCmd() *cobra.Command {
 				Action: ui.Updated, Kind: "contacts", Count: 1,
 				Name: d.nc.Name, IDs: []string{id},
 			}, func() error {
-				return c.App.Contacts.Update(c.Ctx, c.U, id, d.nc)
+				return c.App.Contacts.Update(c.Ctx, id, d.nc)
 			})
 		}),
 	}
@@ -166,17 +166,17 @@ func deleteCmd() *cobra.Command {
 		Use:   "delete REF...",
 		Short: "Delete contacts",
 		Args:  cobra.MinimumNArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			sel, err := kit.Select(c, kit.Selector[ctsvc.Contact]{
 				Noun:    "contacts",
 				Columns: columns(),
 				IDOf:    func(ct ctsvc.Contact) string { return ct.ID },
 				ByRef: func(ctx context.Context, ref string) (ctsvc.Contact, error) {
-					id, err := c.App.Contacts.Resolve(ctx, c.U, ref)
+					id, err := c.App.Contacts.Resolve(ctx, ref)
 					if err != nil {
 						return ctsvc.Contact{}, err
 					}
-					ct, err := c.App.Contacts.Get(ctx, c.U, id)
+					ct, err := c.App.Contacts.Get(ctx, id)
 					if err != nil {
 						return ctsvc.Contact{}, err
 					}

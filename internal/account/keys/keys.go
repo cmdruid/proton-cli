@@ -21,6 +21,34 @@ type Unlocked struct {
 	Addresses []Address
 }
 
+// Get hands back the unlocked hierarchy, fetching it the first time it is asked
+// for and remembering it after.
+//
+// It is a function rather than a value because keys are one more thing to fetch
+// rather than a state to be in: a command that never decrypts should never pay
+// for them, and one that does should be able to ask for them at the same time as
+// everything else it needs instead of before it.
+type Get func(context.Context) (*Unlocked, error)
+
+// Alongside fetches the hierarchy at the same time as the caller's own request.
+//
+// Nothing about the keys depends on what is being fetched and nothing about the
+// fetch depends on the keys, so a command that decrypts pays for them in time it
+// was spending anyway. Both are always waited for here, which is what keeps the
+// password prompt a first unlock may raise inside the command that asked for it.
+func (get Get) Alongside(ctx context.Context, request func(context.Context) error) (*Unlocked, error) {
+	var u *Unlocked
+	err := fetch.Together(ctx,
+		request,
+		func(ctx context.Context) error {
+			var err error
+			u, err = get(ctx)
+			return err
+		},
+	)
+	return u, err
+}
+
 type User struct {
 	ID   string
 	Name string

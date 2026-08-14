@@ -176,14 +176,14 @@ func calendarsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a calendar",
 		Args:  cobra.NoArgs,
-		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if name == "" {
 				return kit.Fail("A calendar needs a name.").Hint("--name Work")
 			}
 			return kit.Create(c, ui.ResultSpec{
 				Action: ui.Created, Kind: "calendars", Name: name,
 			}, func() (string, error) {
-				return c.App.Calendar.CalendarCreate(c.Ctx, c.U, name, color.Value())
+				return c.App.Calendar.CalendarCreate(c.Ctx, name, color.Value())
 			})
 		}),
 	}
@@ -199,7 +199,7 @@ func calendarsUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Rename or recolor a calendar",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			if name == "" && !color.Set() {
 				return kit.Fail("Nothing to change.").Hint("pass --name or --color.")
 			}
@@ -207,7 +207,7 @@ func calendarsUpdateCmd() *cobra.Command {
 				Action: ui.Updated, Kind: "calendars", Count: 1, Name: name,
 				IDs: []string{c.Args[0]},
 			}, func() error {
-				return c.App.Calendar.CalendarRename(c.Ctx, c.U, c.Args[0], name, color.Value())
+				return c.App.Calendar.CalendarRename(c.Ctx, c.Args[0], name, color.Value())
 			})
 		}),
 	}

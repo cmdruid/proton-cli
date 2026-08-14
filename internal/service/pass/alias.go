@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
 	"github.com/roman-16/proton-cli/internal/proton"
 	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
@@ -216,8 +215,8 @@ func (s *Service) PlanAlias(ctx context.Context, shareID, prefix, suffix string,
 }
 
 // AliasCreate makes the alias the plan describes and returns the new item's ID.
-func (s *Service) AliasCreate(ctx context.Context, u *keys.Unlocked, shareID string, plan *AliasPlan, name string) (string, error) {
-	sk, err := s.decryptShareKeys(ctx, shareID, u)
+func (s *Service) AliasCreate(ctx context.Context, shareID string, plan *AliasPlan, name string) (string, error) {
+	sk, err := s.decryptShareKeys(ctx, shareID)
 	if err != nil {
 		return "", err
 	}

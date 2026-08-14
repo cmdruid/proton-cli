@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -163,7 +162,7 @@ func (c series) allOverrideIDs() []string {
 // Proton has an endpoint for exactly this - the chain is what its own clients
 // need in order to know which occurrences have been edited - so the separately
 // edited ones are looked up rather than guessed at from a date window.
-func (s *Service) loadSeries(ctx context.Context, ck *calKeys, u *keys.Unlocked, calendarID string, master stored) (series, error) {
+func (s *Service) loadSeries(ctx context.Context, ck *calKeys, calendarID string, master stored) (series, error) {
 	out := series{master: master}
 	for page := 0; ; page++ {
 		q := url.Values{}
@@ -178,7 +177,7 @@ func (s *Service) loadSeries(ctx context.Context, ck *calKeys, u *keys.Unlocked,
 			if raw.ID == master.raw.ID || raw.CalendarID != calendarID {
 				continue
 			}
-			e := s.decrypt(ck, u, raw)
+			e := s.decrypt(ctx, ck, raw)
 			if e.readErr != nil || !e.model.IsOverride() {
 				continue
 			}
@@ -202,7 +201,7 @@ type occurrenceTarget struct {
 	override *stored
 }
 
-func (s *Service) resolveOccurrence(ctx context.Context, ck *calKeys, u *keys.Unlocked, calendarID string, master stored, occurrence string) (occurrenceTarget, error) {
+func (s *Service) resolveOccurrence(ctx context.Context, ck *calKeys, calendarID string, master stored, occurrence string) (occurrenceTarget, error) {
 	if !master.model.Recurring() {
 		return occurrenceTarget{}, errs.Problemf("%s is not a recurring event, so it has no occurrences.", master.raw.ID)
 	}
@@ -215,7 +214,7 @@ func (s *Service) resolveOccurrence(ctx context.Context, ck *calKeys, u *keys.Un
 	if err != nil {
 		return occurrenceTarget{}, err
 	}
-	chain, err := s.loadSeries(ctx, ck, u, calendarID, master)
+	chain, err := s.loadSeries(ctx, ck, calendarID, master)
 	if err != nil {
 		return occurrenceTarget{}, err
 	}
@@ -265,12 +264,12 @@ func (t occurrenceTarget) currentVEvent() ical.VEvent {
 // the times but the recurrence rule, the exclusions, the reminders, the colour and
 // whether the account is the organizer. An update that rebuilt those from
 // defaults would quietly resurrect deleted occurrences and reset reminders.
-func (s *Service) EventUpdate(ctx context.Context, u *keys.Unlocked, calendarID, eventID string, p EventPatch) (*EventResult, error) {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) EventUpdate(ctx context.Context, calendarID, eventID string, p EventPatch) (*EventResult, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return nil, err
 	}
-	old, err := s.storedEvent(ctx, ck, u, calendarID, eventID)
+	old, err := s.storedEvent(ctx, ck, calendarID, eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +287,7 @@ func (s *Service) EventUpdate(ctx context.Context, u *keys.Unlocked, calendarID,
 		// The exclusions and the separately edited occurrences name instants this
 		// series no longer has, so they go with the pattern that created them.
 		updated.ExDates = nil
-		chain, err := s.loadSeries(ctx, ck, u, calendarID, old)
+		chain, err := s.loadSeries(ctx, ck, calendarID, old)
 		if err != nil {
 			return nil, err
 		}
@@ -325,16 +324,16 @@ func (s *Service) EventUpdate(ctx context.Context, u *keys.Unlocked, calendarID,
 
 // OccurrenceUpdate changes one instance of a series, writing the extra record
 // that replaces it. The series itself keeps its rule and its other occurrences.
-func (s *Service) OccurrenceUpdate(ctx context.Context, u *keys.Unlocked, calendarID, eventID, occurrence string, p EventPatch) (*EventResult, error) {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) OccurrenceUpdate(ctx context.Context, calendarID, eventID, occurrence string, p EventPatch) (*EventResult, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return nil, err
 	}
-	master, err := s.readMaster(ctx, ck, u, calendarID, eventID)
+	master, err := s.readMaster(ctx, ck, calendarID, eventID)
 	if err != nil {
 		return nil, err
 	}
-	target, err := s.resolveOccurrence(ctx, ck, u, calendarID, master, occurrence)
+	target, err := s.resolveOccurrence(ctx, ck, calendarID, master, occurrence)
 	if err != nil {
 		return nil, err
 	}
@@ -407,16 +406,16 @@ func (s *Service) OccurrenceUpdate(ctx context.Context, u *keys.Unlocked, calend
 
 // SeriesSplit changes one instance and every later one: the series is ended just
 // before it, and a new series takes over from there.
-func (s *Service) SeriesSplit(ctx context.Context, u *keys.Unlocked, calendarID, eventID, occurrence string, p EventPatch) (*EventResult, error) {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) SeriesSplit(ctx context.Context, calendarID, eventID, occurrence string, p EventPatch) (*EventResult, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return nil, err
 	}
-	master, err := s.readMaster(ctx, ck, u, calendarID, eventID)
+	master, err := s.readMaster(ctx, ck, calendarID, eventID)
 	if err != nil {
 		return nil, err
 	}
-	target, err := s.resolveOccurrence(ctx, ck, u, calendarID, master, occurrence)
+	target, err := s.resolveOccurrence(ctx, ck, calendarID, master, occurrence)
 	if err != nil {
 		return nil, err
 	}
@@ -494,14 +493,14 @@ func (s *Service) SeriesSplit(ctx context.Context, u *keys.Unlocked, calendarID,
 
 // EventDelete removes a stored event, and with it every occurrence of a series
 // that was edited on its own.
-func (s *Service) EventDelete(ctx context.Context, u *keys.Unlocked, calendarID, eventID string) error {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) EventDelete(ctx context.Context, calendarID, eventID string) error {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return err
 	}
 	ops := []syncOp{deleteOp(eventID)}
-	if e, err := s.storedEvent(ctx, ck, u, calendarID, eventID); err == nil && e.readErr == nil && e.model.Recurring() {
-		chain, err := s.loadSeries(ctx, ck, u, calendarID, e)
+	if e, err := s.storedEvent(ctx, ck, calendarID, eventID); err == nil && e.readErr == nil && e.model.Recurring() {
+		chain, err := s.loadSeries(ctx, ck, calendarID, e)
 		if err != nil {
 			return err
 		}
@@ -515,16 +514,16 @@ func (s *Service) EventDelete(ctx context.Context, u *keys.Unlocked, calendarID,
 
 // OccurrenceDelete cancels one instance of a series, leaving the rule and every
 // other occurrence intact.
-func (s *Service) OccurrenceDelete(ctx context.Context, u *keys.Unlocked, calendarID, eventID, occurrence string) error {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) OccurrenceDelete(ctx context.Context, calendarID, eventID, occurrence string) error {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return err
 	}
-	master, err := s.readMaster(ctx, ck, u, calendarID, eventID)
+	master, err := s.readMaster(ctx, ck, calendarID, eventID)
 	if err != nil {
 		return err
 	}
-	target, err := s.resolveOccurrence(ctx, ck, u, calendarID, master, occurrence)
+	target, err := s.resolveOccurrence(ctx, ck, calendarID, master, occurrence)
 	if err != nil {
 		return err
 	}
@@ -555,16 +554,16 @@ func (s *Service) OccurrenceDelete(ctx context.Context, u *keys.Unlocked, calend
 
 // SeriesTruncate removes one instance and every later one by ending the series
 // just before it.
-func (s *Service) SeriesTruncate(ctx context.Context, u *keys.Unlocked, calendarID, eventID, occurrence string) error {
-	ck, err := s.unlockCalendar(ctx, u, calendarID)
+func (s *Service) SeriesTruncate(ctx context.Context, calendarID, eventID, occurrence string) error {
+	ck, err := s.unlockCalendar(ctx, calendarID)
 	if err != nil {
 		return err
 	}
-	master, err := s.readMaster(ctx, ck, u, calendarID, eventID)
+	master, err := s.readMaster(ctx, ck, calendarID, eventID)
 	if err != nil {
 		return err
 	}
-	target, err := s.resolveOccurrence(ctx, ck, u, calendarID, master, occurrence)
+	target, err := s.resolveOccurrence(ctx, ck, calendarID, master, occurrence)
 	if err != nil {
 		return err
 	}
@@ -597,8 +596,8 @@ func (s *Service) SeriesTruncate(ctx context.Context, u *keys.Unlocked, calendar
 
 // readMaster fetches the event a reference addresses and insists it can be read,
 // which every scoped change needs before it can decide what to write.
-func (s *Service) readMaster(ctx context.Context, ck *calKeys, u *keys.Unlocked, calendarID, eventID string) (stored, error) {
-	e, err := s.storedEvent(ctx, ck, u, calendarID, eventID)
+func (s *Service) readMaster(ctx context.Context, ck *calKeys, calendarID, eventID string) (stored, error) {
+	e, err := s.storedEvent(ctx, ck, calendarID, eventID)
 	if err != nil {
 		return stored{}, err
 	}

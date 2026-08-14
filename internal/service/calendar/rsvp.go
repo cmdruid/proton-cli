@@ -146,7 +146,7 @@ type RespondResult struct {
 // EventRespond replies to an invitation by updating the account's attendee
 // participation status (accept/tentative/decline) and, matching WebClients,
 // preparing a METHOD:REPLY notification for the organizer.
-func (s *Service) EventRespond(ctx context.Context, u *keys.Unlocked, calendarID, eventID string, status int) (*RespondResult, error) {
+func (s *Service) EventRespond(ctx context.Context, calendarID, eventID string, status int) (*RespondResult, error) {
 	var r struct{ Event rawEvent }
 	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/calendar/v1/" + calendarID + "/events/" + eventID}, &r); err != nil {
 		return nil, err
@@ -156,6 +156,10 @@ func (s *Service) EventRespond(ctx context.Context, u *keys.Unlocked, calendarID
 		return nil, errs.WithExit(1, fmt.Errorf("you are the organizer of this event; RSVP is for attendees"))
 	}
 
+	u, err := s.keys(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tokenToEmail, err := s.selfTokens(ctx, ev.UID, u.Addresses)
 	if err != nil {
 		return nil, err
@@ -184,8 +188,8 @@ func (s *Service) EventRespond(ctx context.Context, u *keys.Unlocked, calendarID
 	res := &RespondResult{Status: statusWord(status)}
 	// The organizer reply needs the decrypted title and organizer, so it is
 	// best-effort: the answer is already recorded even if unlocking fails.
-	if ck, err := s.unlockCalendar(ctx, u, calendarID); err == nil {
-		e := s.decrypt(ck, u, ev)
+	if ck, err := s.unlockCalendar(ctx, calendarID); err == nil {
+		e := s.decrypt(ctx, ck, ev)
 		if e.readErr != nil {
 			return res, nil
 		}

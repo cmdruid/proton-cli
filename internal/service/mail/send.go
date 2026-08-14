@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
 // Send stores Content as a draft and delivers it. If anything after draft
 // creation fails, the draft is discarded, so an aborted send leaves nothing
 // behind in Drafts.
-func (s *Service) Send(ctx context.Context, u *keys.Unlocked, c Content, del Delivery) (string, error) {
+func (s *Service) Send(ctx context.Context, c Content, del Delivery) (string, error) {
 	if !c.HasRecipients() {
 		return "", fmt.Errorf("at least one recipient is required")
 	}
-	d, err := s.DraftCreate(ctx, u, c)
+	d, err := s.DraftCreate(ctx, c)
 	if err != nil {
 		return "", err
 	}

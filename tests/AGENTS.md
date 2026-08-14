@@ -295,12 +295,9 @@ Two-ID references are one slash-separated token: `pass items get SHARE_ID/ITEM_I
 
 Anything judgeable from the command line alone must fail without a session: an unknown setting key, a value outside a declared domain, a colour off Proton's palette, a missing required flag, a selection that names nothing. A test for one of those belongs in `tests/offline`, where it costs 5ms and no credentials, and should assert the whole accepted domain appears in the message.
 
-This holds because **no step asserts that an account exists**. The requirement belongs to the request, and the client holds it there (`SetSessionGuard`), so a command body judges what it can judge and only then finds out whether anyone is signed in. Two places keep the requirement earlier, on purpose:
+This holds because **no step asserts that an account exists, and none of them unlocks its keys**. Both requirements belong to the request: the client holds the session one (`SetSessionGuard`), and a service holds the key one, asking for the hierarchy where it decrypts rather than before the command body runs. So a command judges what it can judge and only then finds out whether anyone is signed in. One place keeps the requirement earlier, on purpose: **a dry run of a mutation**, because a preview is a claim about what the command would do, and without an account it would not do it.
 
-- **unlocking keys**, because there are none to unlock for an account nobody is signed in to, and asking for a password to open them would be asking the wrong question;
-- **a dry run of a mutation**, because a preview is a claim about what the command would do, and without an account it would not do it.
-
-So a command that declares `kit.StepUnlock` answers "not signed in" before its own checks unless it declares them as a step first - which is what `kit.StepSelection` is for, and what `drive items delete` and `pass items trash` use. If you add a check to a key-using command and want it judged from the command line, put it in a step ahead of `StepUnlock` and move its test to `tests/offline`.
+So a check a command makes for itself - a missing `--name`, a prefix an alias cannot do without - is answered from the command line even for commands that decrypt, and its test belongs in `tests/offline`.
 
 ## Cobra and Positional IDs
 

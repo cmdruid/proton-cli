@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/fetch"
@@ -27,9 +26,15 @@ type Vault struct {
 	AddressID   string `json:"address_id,omitempty"`
 }
 
-func (s *Service) VaultsList(ctx context.Context, u *keys.Unlocked) ([]Vault, error) {
-	raw, err := s.getShares(ctx)
-	if err != nil {
+func (s *Service) VaultsList(ctx context.Context) ([]Vault, error) {
+	// Every vault in the answer will be opened with the account's keys, so they
+	// are asked for while the list is on its way.
+	var raw []json.RawMessage
+	if _, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+		var err error
+		raw, err = s.getShares(ctx)
+		return err
+	}); err != nil {
 		return nil, err
 	}
 	type share struct {
@@ -65,7 +70,7 @@ func (s *Service) VaultsList(ctx context.Context, u *keys.Unlocked) ([]Vault, er
 			continue
 		}
 		fetches = append(fetches, func(ctx context.Context) error {
-			_, _ = s.decryptShareKeys(ctx, sh.ShareID, u)
+			_, _ = s.decryptShareKeys(ctx, sh.ShareID)
 			return nil
 		})
 	}
@@ -79,7 +84,7 @@ func (s *Service) VaultsList(ctx context.Context, u *keys.Unlocked) ([]Vault, er
 			Members: sh.TargetMembers, AddressID: sh.AddressID,
 		}
 		if sh.Content != "" {
-			sk, err := s.decryptShareKeys(ctx, sh.ShareID, u)
+			sk, err := s.decryptShareKeys(ctx, sh.ShareID)
 			if err == nil {
 				if key, ok := sk.keys[sh.ContentKeyRotation]; ok {
 					if vv, err := decryptVault(sh.Content, key); err == nil {
@@ -94,7 +99,11 @@ func (s *Service) VaultsList(ctx context.Context, u *keys.Unlocked) ([]Vault, er
 	return out, nil
 }
 
-func (s *Service) VaultCreate(ctx context.Context, u *keys.Unlocked, name string) (string, error) {
+func (s *Service) VaultCreate(ctx context.Context, name string) (string, error) {
+	u, err := s.keys(ctx)
+	if err != nil {
+		return "", err
+	}
 	vault := &pb.Vault{Name: name}
 	rawKey, err := aead.NewKey()
 	if err != nil {
@@ -139,7 +148,7 @@ func (s *Service) VaultDelete(ctx context.Context, shareID string) error {
 
 // VaultEdit renames a vault, preserving its description and display settings by
 // re-encrypting the existing vault content with the latest share key.
-func (s *Service) VaultEdit(ctx context.Context, u *keys.Unlocked, shareID, newName string) error {
+func (s *Service) VaultEdit(ctx context.Context, shareID, newName string) error {
 	shares, err := s.getShares(ctx)
 	if err != nil {
 		return err
@@ -165,7 +174,7 @@ func (s *Service) VaultEdit(ctx context.Context, u *keys.Unlocked, shareID, newN
 	if !found {
 		return &errs.NotFound{Kind: "vault", Ref: shareID}
 	}
-	sk, err := s.decryptShareKeys(ctx, shareID, u)
+	sk, err := s.decryptShareKeys(ctx, shareID)
 	if err != nil {
 		return err
 	}
@@ -195,8 +204,8 @@ func (s *Service) VaultEdit(ctx context.Context, u *keys.Unlocked, shareID, newN
 	}, nil)
 }
 
-func (s *Service) ResolveVault(ctx context.Context, u *keys.Unlocked, nameOrID string) (string, error) {
-	vaults, err := s.VaultsList(ctx, u)
+func (s *Service) ResolveVault(ctx context.Context, nameOrID string) (string, error) {
+	vaults, err := s.VaultsList(ctx)
 	if err != nil {
 		return "", err
 	}

@@ -22,6 +22,23 @@ func TestASelectionThatNamesNothingIsRefused(t *testing.T) {
 	}
 }
 
+// A command that will decrypt still judges its own arguments first. Keys are one
+// more thing to fetch rather than a state to be in, so needing them no longer
+// makes "not signed in" the answer to a command line that was wrong anyway.
+func TestACommandThatDecryptsStillJudgesItsArgumentsFirst(t *testing.T) {
+	for _, tt := range []struct {
+		args   []string
+		phrase string
+	}{
+		{[]string{"pass", "items", "create"}, "An item needs a name"},
+		{[]string{"pass", "aliases", "create"}, "An alias needs a prefix"},
+		{[]string{"contacts", "create"}, "A contact needs at least a name or an email address"},
+		{[]string{"calendar", "events", "create", "--calendar", "Work"}, "An event needs a title and a start"},
+	} {
+		refuses(t, 1, tt.args, tt.phrase)
+	}
+}
+
 func TestSendingNeedsSomethingToSend(t *testing.T) {
 	refuses(t, 1, []string{"mail", "messages", "send"}, "required")
 	refuses(t, 1, []string{"mail", "messages", "send", "--subject", "x", "--body", "y"},

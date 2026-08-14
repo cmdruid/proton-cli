@@ -137,11 +137,11 @@ func membersCmd(use, short string, action ui.Action, preposition string) *cobra.
 		Use:   use + " REF CONTACT_REF...",
 		Short: short,
 		Args:  cobra.MinimumNArgs(2),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			groupID := c.Args[0]
 			ids := make([]string, 0, len(c.Args)-1)
 			for _, ref := range c.Args[1:] {
-				id, err := c.App.Contacts.Resolve(c.Ctx, c.U, ref)
+				id, err := c.App.Contacts.Resolve(c.Ctx, ref)
 				if err != nil {
 					return err
 				}

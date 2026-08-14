@@ -185,7 +185,7 @@ func TestSelfTokensNamesAddressesByTheirCanonicalForm(t *testing.T) {
 		return canonicalJSON(map[string]string{"my.self@proton.me": "myself@proton.me"}), nil
 	}}
 
-	got, err := New(d).selfTokens(context.Background(), "uid-9", []keys.Address{{Email: "my.self@proton.me"}})
+	got, err := New(d, testKeys(nil)).selfTokens(context.Background(), "uid-9", []keys.Address{{Email: "my.self@proton.me"}})
 	if err != nil {
 		t.Fatalf("selfTokens: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestCanonicalEmailsAsksOnceAndRefusesAnUnanswerableAddress(t *testing.T) {
 			calls++
 			return canonicalJSON(map[string]string{"a.b@proton.me": "ab@proton.me", "c@x.test": "c@x.test"}), nil
 		}}
-		s := New(d)
+		s := New(d, testKeys(nil))
 		if _, err := s.canonicalEmails(context.Background(), []string{"a.b@proton.me", "c@x.test", "a.b@proton.me"}); err != nil {
 			t.Fatalf("canonicalEmails: %v", err)
 		}
@@ -224,7 +224,7 @@ func TestCanonicalEmailsAsksOnceAndRefusesAnUnanswerableAddress(t *testing.T) {
 		d := &routeDoer{handler: func(r proton.Request) ([]byte, error) {
 			return canonicalJSON(nil), nil
 		}}
-		if _, err := New(d).canonicalEmails(context.Background(), []string{"who@x.test"}); err == nil {
+		if _, err := New(d, testKeys(nil)).canonicalEmails(context.Background(), []string{"who@x.test"}); err == nil {
 			t.Fatal("expected an error when the server does not answer for an address")
 		}
 	})
@@ -316,7 +316,7 @@ func TestEventRespondUpdatesPartstat(t *testing.T) {
 	}}
 	u := &keys.Unlocked{Addresses: []keys.Address{{ID: "a1", Email: "me@proton.me"}}}
 
-	res, err := New(d).EventRespond(context.Background(), u, "cal1", "ev1", partstatAccepted)
+	res, err := New(d, testKeys(u)).EventRespond(context.Background(), "cal1", "ev1", partstatAccepted)
 	if err != nil {
 		t.Fatalf("EventRespond: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestEventRespondRejectsOrganizer(t *testing.T) {
 	d := &routeDoer{handler: func(r proton.Request) ([]byte, error) { return event, nil }}
 	u := &keys.Unlocked{Addresses: []keys.Address{{Email: "me@proton.me"}}}
 
-	_, err := New(d).EventRespond(context.Background(), u, "cal1", "ev1", partstatAccepted)
+	_, err := New(d, testKeys(u)).EventRespond(context.Background(), "cal1", "ev1", partstatAccepted)
 	if err == nil {
 		t.Fatal("expected an error when responding as the organizer")
 	}
@@ -368,12 +368,23 @@ func TestEventRespondNotAttendee(t *testing.T) {
 	}}
 	u := &keys.Unlocked{Addresses: []keys.Address{{Email: "me@proton.me"}}}
 
-	_, err := New(d).EventRespond(context.Background(), u, "cal1", "ev1", partstatAccepted)
+	_, err := New(d, testKeys(u)).EventRespond(context.Background(), "cal1", "ev1", partstatAccepted)
 	var nf *errs.NotFound
 	if !errors.As(err, &nf) {
 		t.Fatalf("expected *errs.NotFound (exit 3), got %v", err)
 	}
 	if _, ok := d.putTo("/attendees/"); ok {
 		t.Error("must not update partstat when the caller is not an attendee")
+	}
+}
+
+// testKeys hands a service the key hierarchy a test wants it to decrypt with.
+// A test that decrypts nothing passes nil, which is never asked for.
+func testKeys(u *keys.Unlocked) keys.Get {
+	return func(context.Context) (*keys.Unlocked, error) {
+		if u == nil {
+			return nil, errors.New("this test has no keys")
+		}
+		return u, nil
 	}
 }

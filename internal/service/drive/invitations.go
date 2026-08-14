@@ -81,7 +81,7 @@ func (s *Service) invitationDetails(ctx context.Context, id string) (Invitation,
 	}, nil
 }
 
-func (s *Service) AcceptInvitation(ctx context.Context, u *keys.Unlocked, invitationID string) error {
+func (s *Service) AcceptInvitation(ctx context.Context, invitationID string) error {
 	var details struct {
 		Invitation struct {
 			KeyPacket    string
@@ -90,6 +90,10 @@ func (s *Service) AcceptInvitation(ctx context.Context, u *keys.Unlocked, invita
 	}
 	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/v2/shares/invitations/" + invitationID}, &details); err != nil {
 		return fmt.Errorf("get invitation: %w", err)
+	}
+	u, err := s.keys(ctx)
+	if err != nil {
+		return err
 	}
 	addrKR := inviteeAddrKR(u, details.Invitation.InviteeEmail)
 	if addrKR == nil {

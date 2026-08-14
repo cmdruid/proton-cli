@@ -92,11 +92,7 @@ func getCmd() *cobra.Command {
 			if err != nil {
 				return wrongTable(err, "get")
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
-			msg, err := c.App.Mail.Read(c.Ctx, u, id)
+			msg, err := c.App.Mail.Read(c.Ctx, id)
 			if err != nil {
 				return wrongTable(err, "get")
 			}

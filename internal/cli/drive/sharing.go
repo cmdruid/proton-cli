@@ -258,11 +258,7 @@ func invitationVerb(use, short string, action ui.Action) *cobra.Command {
 				for _, id := range c.Args {
 					var err error
 					if use == "accept" {
-						u, uerr := c.App.Unlock(c.Ctx)
-						if uerr != nil {
-							return uerr
-						}
-						err = c.App.Drive.AcceptInvitation(c.Ctx, u, id)
+						err = c.App.Drive.AcceptInvitation(c.Ctx, id)
 					} else {
 						err = c.App.Drive.RejectInvitation(c.Ctx, id)
 					}

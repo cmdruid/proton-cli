@@ -40,18 +40,18 @@ func keysListCmd() *cobra.Command {
 		Use:   "list REF",
 		Short: "List the keys pinned to a contact",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			id, err := c.App.Contacts.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
 			}
-			ct, err := c.App.Contacts.Get(c.Ctx, c.U, id)
+			ct, err := c.App.Contacts.Get(c.Ctx, id)
 			if err != nil {
 				return err
 			}
 			var rows []pinnedKey
 			for _, email := range ct.Emails {
-				crypto, err := c.App.Contacts.PinnedKeysFor(c.Ctx, c.U, email)
+				crypto, err := c.App.Contacts.PinnedKeysFor(c.Ctx, email)
 				if err != nil {
 					return err
 				}
@@ -94,7 +94,7 @@ func keysPinCmd() *cobra.Command {
 		Use:   "pin REF",
 		Short: "Pin a public key so mail to a contact is encrypted to it",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			if keyPath == "" {
 				return kit.Fail("A key is required.").
 					Hint("--key jane-pubkey.asc, or --key - to read an armoured key from stdin.")
@@ -107,7 +107,7 @@ func keysPinCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
+			id, err := c.App.Contacts.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
 			}
@@ -124,7 +124,7 @@ func keysPinCmd() *cobra.Command {
 				Action: ui.Pinned, Kind: "keys", Count: 1,
 				Detail: "for " + target,
 			}, func() error {
-				return c.App.Contacts.PinKey(c.Ctx, c.U, id, target, armored, encrypt, nil, pgpScheme)
+				return c.App.Contacts.PinKey(c.Ctx, id, target, armored, encrypt, nil, pgpScheme)
 			})
 		}),
 	}
@@ -141,8 +141,8 @@ func keysUnpinCmd() *cobra.Command {
 		Use:   "unpin REF",
 		Short: "Remove the keys pinned to a contact",
 		Args:  cobra.ExactArgs(1),
-		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
-			id, err := c.App.Contacts.Resolve(c.Ctx, c.U, c.Args[0])
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			id, err := c.App.Contacts.Resolve(c.Ctx, c.Args[0])
 			if err != nil {
 				return err
 			}
@@ -154,7 +154,7 @@ func keysUnpinCmd() *cobra.Command {
 				Action: ui.Unpinned, Kind: "keys", Count: 1,
 				Detail: "for " + target,
 			}, func() error {
-				return c.App.Contacts.UnpinKey(c.Ctx, c.U, id, target)
+				return c.App.Contacts.UnpinKey(c.Ctx, id, target)
 			})
 		}),
 	}
@@ -169,7 +169,7 @@ func pickEmail(c *kit.Invocation, id, flag string) (string, error) {
 	if flag != "" {
 		return flag, nil
 	}
-	ct, err := c.App.Contacts.Get(c.Ctx, c.U, id)
+	ct, err := c.App.Contacts.Get(c.Ctx, id)
 	if err != nil {
 		return "", err
 	}

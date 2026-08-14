@@ -91,11 +91,7 @@ func convGetCmd() *cobra.Command {
 			if err != nil {
 				return wrongTable(err, "get")
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
-			conv, err := c.App.Mail.ConversationRead(c.Ctx, u, id)
+			conv, err := c.App.Mail.ConversationRead(c.Ctx, id)
 			if err != nil {
 				return wrongTable(err, "get")
 			}
@@ -347,10 +343,6 @@ func convAnswerCmd(use, short string, forward bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
 			convID, err := c.App.Mail.ResolveConversation(c.Ctx, c.Args[0])
 			if err != nil {
 				return wrongTable(err, use)
@@ -363,14 +355,14 @@ func convAnswerCmd(use, short string, forward bool) *cobra.Command {
 				return kit.Fail("That thread has no messages.")
 			}
 			newest := ids[len(ids)-1]
-			content, err := buildAnswer(c, u, newest, &f, answerAction(forward, replyAll), noQuote, noAttachments)
+			content, err := buildAnswer(c, newest, &f, answerAction(forward, replyAll), noQuote, noAttachments)
 			if err != nil {
 				return err
 			}
 			if asDraft {
-				return saveDraft(c, u, content)
+				return saveDraft(c, content)
 			}
-			return deliver(c, u, content, del, at)
+			return deliver(c, content, del, at)
 		}),
 	}
 	f.registerRecipients(c)
@@ -455,10 +447,6 @@ func convAttachmentsDownloadCmd() *cobra.Command {
 			if err := dest.Validate(one); err != nil {
 				return err
 			}
-			u, err := c.App.Unlock(c.Ctx)
-			if err != nil {
-				return err
-			}
 			convID, err := c.App.Mail.ResolveConversation(c.Ctx, c.Args[0])
 			if err != nil {
 				return wrongTable(err, "attachments download")
@@ -470,7 +458,7 @@ func convAttachmentsDownloadCmd() *cobra.Command {
 			if one {
 				for _, at := range list {
 					if at.ID == c.Args[1] {
-						return downloadOne(c, u, at.MessageID, at.ID, &dest)
+						return downloadOne(c, at.MessageID, at.ID, &dest)
 					}
 				}
 				return kit.Fail("No attachment %s in that thread.", c.Args[1]).Exit(3)
@@ -489,7 +477,7 @@ func convAttachmentsDownloadCmd() *cobra.Command {
 				Detail: "to " + dest.Describe(),
 			}, func() error {
 				for _, at := range list {
-					data, _, err := c.App.Mail.AttachmentDownload(c.Ctx, u, at.MessageID, at.ID)
+					data, _, err := c.App.Mail.AttachmentDownload(c.Ctx, at.MessageID, at.ID)
 					if err != nil {
 						return kit.Fail("could not download %s: %v", at.Name, err)
 					}

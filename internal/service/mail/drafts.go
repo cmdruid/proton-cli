@@ -141,8 +141,12 @@ func draftPayload(c Content, armoredBody string) map[string]any {
 // DraftCreate stores Content as a draft: the body is encrypted to the sender's
 // key, attachments carried over from a parent get their session keys re-wrapped,
 // and new attachments are uploaded against the new draft.
-func (s *Service) DraftCreate(ctx context.Context, u *keys.Unlocked, c Content) (*Draft, error) {
+func (s *Service) DraftCreate(ctx context.Context, c Content) (*Draft, error) {
 	armored, err := prepareBody(&c)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.keys(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +201,7 @@ func (s *Service) DraftCreate(ctx context.Context, u *keys.Unlocked, c Content) 
 // DraftUpdate rewrites a stored draft's recipients, subject and body, and
 // uploads any newly added attachments. Attachments already on the draft are
 // separate resources and are left alone; DraftDetach removes one.
-func (s *Service) DraftUpdate(ctx context.Context, u *keys.Unlocked, id string, c Content) (*Draft, error) {
+func (s *Service) DraftUpdate(ctx context.Context, id string, c Content) (*Draft, error) {
 	armored, err := prepareBody(&c)
 	if err != nil {
 		return nil, err
@@ -213,17 +217,17 @@ func (s *Service) DraftUpdate(ctx context.Context, u *keys.Unlocked, id string, 
 	}
 	// Re-read so the returned draft carries every attachment, pre-existing and
 	// newly uploaded, with its session key.
-	return s.DraftLoad(ctx, u, id)
+	return s.DraftLoad(ctx, id)
 }
 
 // DraftLoad reads a stored draft back into Content, decrypting its body and
 // recovering each attachment's session key so the draft can be sent as-is.
-func (s *Service) DraftLoad(ctx context.Context, u *keys.Unlocked, id string) (*Draft, error) {
-	raw, err := s.fetchMessageRaw(ctx, id)
+func (s *Service) DraftLoad(ctx context.Context, id string) (*Draft, error) {
+	raw, u, err := s.messageAndKeys(ctx, id)
 	if err != nil {
-		return nil, s.crossTableProbe(ctx, id, err, "messages")
+		return nil, err
 	}
-	sender, err := ResolveSender(u, SenderRequest{ParentAddressID: raw.AddressID})
+	sender, err := resolveSender(u, SenderRequest{ParentAddressID: raw.AddressID})
 	if err != nil {
 		return nil, err
 	}

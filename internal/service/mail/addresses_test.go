@@ -47,7 +47,7 @@ func TestResolveSenderUsesAccountOrder(t *testing.T) {
 		addr("b", "second@proton.me", 2),
 		addr("a", "first@proton.me", 1),
 	)
-	got, err := ResolveSender(u, SenderRequest{})
+	got, err := resolveSender(u, SenderRequest{})
 	if err != nil {
 		t.Fatalf("ResolveSender: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestResolveSenderSkipsAddressesThatCannotSend(t *testing.T) {
 		addr("c", "send-only@proton.me", 3, sendOnly),
 		addr("d", "usable@proton.me", 4),
 	)
-	got, err := ResolveSender(u, SenderRequest{})
+	got, err := resolveSender(u, SenderRequest{})
 	if err != nil {
 		t.Fatalf("ResolveSender: %v", err)
 	}
@@ -75,19 +75,19 @@ func TestResolveSenderSkipsAddressesThatCannotSend(t *testing.T) {
 func TestResolveSenderExplicitByEmailAndID(t *testing.T) {
 	u := unlockedWith(addr("a", "first@proton.me", 1), addr("b", "work@example.com", 2))
 	for _, want := range []string{"work@example.com", "WORK@EXAMPLE.COM", "b"} {
-		got, err := ResolveSender(u, SenderRequest{Explicit: want})
+		got, err := resolveSender(u, SenderRequest{Explicit: want})
 		if err != nil {
-			t.Fatalf("ResolveSender(%q): %v", want, err)
+			t.Fatalf("resolveSender(%q): %v", want, err)
 		}
 		if got.Address.ID != "b" {
-			t.Errorf("ResolveSender(%q) picked %q, want address b", want, got.Address.ID)
+			t.Errorf("resolveSender(%q) picked %q, want address b", want, got.Address.ID)
 		}
 	}
 }
 
 func TestResolveSenderExplicitPlusAliasKeepsTheAlias(t *testing.T) {
 	u := unlockedWith(addr("a", "me@proton.me", 1))
-	got, err := ResolveSender(u, SenderRequest{Explicit: "me+shopping@proton.me"})
+	got, err := resolveSender(u, SenderRequest{Explicit: "me+shopping@proton.me"})
 	if err != nil {
 		t.Fatalf("ResolveSender: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestResolveSenderExplicitPlusAliasKeepsTheAlias(t *testing.T) {
 
 func TestResolveSenderUnknownExplicitIsNotFound(t *testing.T) {
 	u := unlockedWith(addr("a", "me@proton.me", 1))
-	_, err := ResolveSender(u, SenderRequest{Explicit: "nope@elsewhere.test"})
+	_, err := resolveSender(u, SenderRequest{Explicit: "nope@elsewhere.test"})
 	if err == nil {
 		t.Fatal("expected an error for an address that is not on the account")
 	}
@@ -114,7 +114,7 @@ func TestResolveSenderFollowsTheParentAddress(t *testing.T) {
 	u := unlockedWith(addr("a", "first@proton.me", 1), addr("b", "work@example.com", 2))
 
 	// A reply leaves from the address the parent arrived on, not the default.
-	got, err := ResolveSender(u, SenderRequest{ParentAddressID: "b"})
+	got, err := resolveSender(u, SenderRequest{ParentAddressID: "b"})
 	if err != nil {
 		t.Fatalf("ResolveSender: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestResolveSenderFollowsTheParentAddress(t *testing.T) {
 
 	// Matching on the address the mail was sent to works too, for a parent whose
 	// AddressID is no longer around.
-	got, err = ResolveSender(u, SenderRequest{ParentAddress: "work@example.com"})
+	got, err = resolveSender(u, SenderRequest{ParentAddress: "work@example.com"})
 	if err != nil {
 		t.Fatalf("ResolveSender: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestResolveSenderFollowsTheParentAddress(t *testing.T) {
 
 func TestResolveSenderParentPlusAliasSendsAsTheAlias(t *testing.T) {
 	u := unlockedWith(addr("a", "me@proton.me", 1))
-	got, err := ResolveSender(u, SenderRequest{ParentAddress: "me+newsletter@proton.me", ParentAddressID: "a"})
+	got, err := resolveSender(u, SenderRequest{ParentAddress: "me+newsletter@proton.me", ParentAddressID: "a"})
 	if err != nil {
 		t.Fatalf("ResolveSender: %v", err)
 	}

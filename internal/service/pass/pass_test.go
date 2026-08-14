@@ -1,6 +1,9 @@
 package pass
 
 import (
+	"context"
+	"errors"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"testing"
 
 	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
@@ -65,5 +68,16 @@ func TestExtraFieldToItemDecodesEachContentType(t *testing.T) {
 		if got.Value != c.wantVal {
 			t.Errorf("%s: value = %q, want %q", c.name, got.Value, c.wantVal)
 		}
+	}
+}
+
+// testKeys hands a service the key hierarchy a test wants it to decrypt with.
+// A test that decrypts nothing passes nil, which is never asked for.
+func testKeys(u *keys.Unlocked) keys.Get {
+	return func(context.Context) (*keys.Unlocked, error) {
+		if u == nil {
+			return nil, errors.New("this test has no keys")
+		}
+		return u, nil
 	}
 }

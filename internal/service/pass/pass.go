@@ -13,14 +13,15 @@ import (
 )
 
 type Service struct {
-	C proton.Doer
+	C    proton.Doer
+	keys keys.Get
 	// A share's keys are wanted twice by most commands - once to read the vault's
 	// name and again to read what is in it - and once per vault by any command that
 	// covers them all.
 	shareKeys fetch.Memo[*shareKeys]
 }
 
-func New(c proton.Doer) *Service { return &Service{C: c} }
+func New(c proton.Doer, k keys.Get) *Service { return &Service{C: c, keys: k} }
 
 type shareKeys struct{ keys map[int][]byte }
 
@@ -42,14 +43,17 @@ func (s *Service) getShares(ctx context.Context) ([]json.RawMessage, error) {
 	return r.Shares, nil
 }
 
-func (s *Service) decryptShareKeys(ctx context.Context, shareID string, u *keys.Unlocked) (*shareKeys, error) {
+func (s *Service) decryptShareKeys(ctx context.Context, shareID string) (*shareKeys, error) {
 	return s.shareKeys.Do(shareID, func() (*shareKeys, error) {
 		var r struct {
 			ShareKeys struct {
 				Keys []json.RawMessage
 			}
 		}
-		if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/pass/v1/share/" + shareID + "/key", Query: proton.Query("Page", "0")}, &r); err != nil {
+		u, err := s.keys.Alongside(ctx, func(ctx context.Context) error {
+			return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/pass/v1/share/" + shareID + "/key", Query: proton.Query("Page", "0")}, &r)
+		})
+		if err != nil {
 			return nil, err
 		}
 		out := &shareKeys{keys: map[int][]byte{}}

@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -52,7 +53,8 @@ const (
 )
 
 type Service struct {
-	C proton.Doer
+	C    proton.Doer
+	keys keys.Get
 
 	// senderKeys caches fetched sender public key rings (per email) for body
 	// signature verification. A nil entry means "no key available" - cached so
@@ -67,7 +69,7 @@ type Service struct {
 	settingsErr   error
 }
 
-func New(c proton.Doer) *Service { return &Service{C: c} }
+func New(c proton.Doer, k keys.Get) *Service { return &Service{C: c, keys: k} }
 
 type Message struct {
 	ID             string   `json:"id"`
