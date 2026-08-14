@@ -252,6 +252,83 @@ func TestPassAliasesCreate(t *testing.T) {
 	assertContains(t, runOK(t, "pass", "aliases", "list"), address)
 }
 
+// An address is half an answer: an alias is a route, so reading one says where
+// its mail arrives, whether it is receiving at all, and what it has carried.
+func TestPassAliasesGetShowsTheRoute(t *testing.T) {
+	t.Parallel()
+	ref, _ := makeAlias(t)
+
+	got := runJSON(t, "pass", "items", "get", "--", ref)
+	if got["alias_status"] != "enabled" {
+		t.Errorf("a new alias reads status %v, want enabled", got["alias_status"])
+	}
+	boxes, _ := got["alias_mailboxes"].([]interface{})
+	if len(boxes) == 0 {
+		t.Fatalf("the alias forwards nowhere: %v", got)
+	}
+	if mailbox, _ := boxes[0].(string); !strings.Contains(mailbox, "@") {
+		t.Errorf("it forwards to %q, want an address", mailbox)
+	}
+	if _, ok := got["alias_activity"].(map[string]interface{}); !ok {
+		t.Errorf("no activity on the alias: %v", got)
+	}
+	assertField(t, runOK(t, "pass", "items", "get", "--", ref), "Forwards To:", boxes[0].(string))
+}
+
+// An alias that starts attracting spam is switched off, not deleted: deleting it
+// burns the address, and nothing brings it back.
+func TestPassAliasesDisableAndEnable(t *testing.T) {
+	t.Parallel()
+	ref, address := makeAlias(t)
+
+	_, stderr := runOKStderr(t, "pass", "aliases", "disable", "--", ref)
+	assertContains(t, stderr, "Disabled alias")
+	if got := runJSON(t, "pass", "items", "get", "--", ref); got["alias_status"] != "disabled" {
+		t.Errorf("after disabling, the alias reads %v", got["alias_status"])
+	}
+	// The list knows without asking after each address, so it says so too.
+	listed := runOK(t, "pass", "aliases", "list")
+	assertContains(t, listed, "disabled")
+	assertContains(t, listed, address)
+
+	runOK(t, "pass", "aliases", "enable", "--", ref)
+	if got := runJSON(t, "pass", "items", "get", "--", ref); got["alias_status"] != "enabled" {
+		t.Errorf("after enabling, the alias reads %v", got["alias_status"])
+	}
+}
+
+// Where an alias forwards and what it sends as are fields of the item, so they
+// are changed by the same command that changes every other field.
+func TestPassItemsUpdateAliasRoute(t *testing.T) {
+	t.Parallel()
+	ref, _ := makeAlias(t)
+	mailbox := runJSON(t, "pass", "items", "get", "--", ref)["alias_mailboxes"].([]interface{})[0].(string)
+	sender := "Jane " + testID()
+
+	runOK(t, "pass", "items", "update", "--mailbox", mailbox, "--display-name", sender, "--", ref)
+
+	got := runJSON(t, "pass", "items", "get", "--", ref)
+	boxes, _ := got["alias_mailboxes"].([]interface{})
+	if len(boxes) != 1 || boxes[0] != mailbox {
+		t.Errorf("the alias forwards to %v, want %q", boxes, mailbox)
+	}
+	if got["alias_display_name"] != sender {
+		t.Errorf("the alias sends as %v, want %q", got["alias_display_name"], sender)
+	}
+}
+
+// makeAlias creates an alias and hands back its reference and its address.
+func makeAlias(t *testing.T) (ref, address string) {
+	t.Helper()
+	name := testID() + "-alias"
+	prefix := fmt.Sprintf("pcli-%d", time.Now().UnixNano()%1_000_000_000)
+	stdout, stderr := runOKStderr(t, "pass", "aliases", "create", "--prefix", prefix, "--name", name)
+	ref = strings.TrimSpace(stdout)
+	cleanupRun(t, fmt.Sprintf("Delete alias: proton-cli pass items delete %s", name),
+		"pass", "items", "delete", name)
+	return ref, addressIn(t, stderr)
+}
+
 // addressIn picks the email address out of a confirmation line.
 func addressIn(t *testing.T, line string) string {
 	t.Helper()

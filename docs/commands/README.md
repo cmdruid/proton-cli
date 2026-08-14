@@ -63,6 +63,8 @@ Files and folders in Drive
 | `drive items get PATH` | Show a file or folder's details |
 | `drive items list [PATH]` | List what is in a folder |
 | `drive items move [PATH...]` | Move files or folders into another folder |
+| `drive items revisions delete PATH REVISION_REF` | Delete an earlier version permanently |
+| `drive items revisions download PATH REVISION_REF` | Download an earlier version of a file |
 | `drive items revisions list PATH` | List a file's earlier versions |
 | `drive items revisions restore PATH REVISION_REF` | Restore a file to an earlier version |
 | `drive items trash [PATH...]` | Move files or folders to the trash |
@@ -171,6 +173,8 @@ Vaults, logins and secrets
 | Command | What it does |
 | --- | --- |
 | `pass aliases create` | Create an alias |
+| `pass aliases disable REF` | Stop receiving mail sent to an alias |
+| `pass aliases enable REF` | Start receiving mail sent to an alias |
 | `pass aliases list` | List your aliases |
 | `pass aliases options` | List the suffixes and mailboxes an alias can use |
 | `pass items create` | Create an item |

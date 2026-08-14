@@ -2,6 +2,7 @@ package pass
 
 import (
 	stdctx "context"
+	"fmt"
 	"time"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
@@ -104,9 +105,18 @@ func itemFields(it *passsvc.Item) []ui.Field {
 		{Label: "Username", Value: it.Username},
 		{Label: "Email", Value: it.Email},
 		{Label: "Alias", Value: it.Alias},
-		{Label: "Password", Value: it.Password},
-		{Label: "TOTP", Value: it.TOTP},
+		{Label: "Status", Value: it.AliasStatus},
 	}
+	for _, m := range it.AliasMailboxes {
+		fields = append(fields, ui.Field{Label: "Forwards To", Value: m})
+	}
+	fields = append(fields,
+		ui.Field{Label: "Display Name", Value: it.AliasDisplayName},
+		ui.Field{Label: "SimpleLogin Note", Value: it.AliasNote},
+		ui.Field{Label: "Activity", Value: activity(it.AliasActivity)},
+		ui.Field{Label: "Password", Value: it.Password},
+		ui.Field{Label: "TOTP", Value: it.TOTP},
+	)
 	for _, u := range it.URLs {
 		fields = append(fields, ui.Field{Label: "URL", Value: u})
 	}
@@ -137,6 +147,17 @@ func itemFields(it *passsvc.Item) []ui.Field {
 		fields = append(fields, ui.Field{Label: f.Name, Value: f.Value})
 	}
 	return append(fields, ui.Field{Label: "ID", Value: itemRef(*it), ID: true})
+}
+
+// activity is what an alias has carried lately, over the fourteen days Proton
+// counts. An alias nobody has written to yet reports zeros, which is an answer;
+// anything that is not an alias reports nothing.
+func activity(a *passsvc.AliasActivity) string {
+	if a == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d forwarded, %d replied, %d blocked (last 14 days)",
+		a.Forwarded, a.Replied, a.Blocked)
 }
 
 // fields are everything an item can carry. create and update share them so the two
@@ -174,6 +195,21 @@ func (d *fields) register(c *cobra.Command, verb string) {
 	f.StringVar(&d.nc.Country, "country", "", verb+" the country (identity)")
 	f.StringVar(&d.nc.Birthdate, "birthdate", "", verb+" the birthdate (identity)")
 	f.StringVar(&d.nc.Website, "website", "", verb+" the website (identity)")
+}
+
+// aliasFields are the two an alias carries beside the item's own, which only an
+// edit takes: an alias is born from `aliases create`, since Proton and not this
+// CLI decides what its address is.
+type aliasFields struct {
+	patch passsvc.AliasPatch
+}
+
+func (a *aliasFields) register(c *cobra.Command) {
+	f := c.Flags()
+	f.StringArrayVar(&a.patch.Mailboxes, "mailbox", nil,
+		"Replace where mail to it arrives (alias, repeatable)")
+	f.StringVar(&a.patch.DisplayName, "display-name", "",
+		"Replace the name recipients see on mail from it (alias)")
 }
 
 func itemsCreateCmd() *cobra.Command {
@@ -230,6 +266,7 @@ func itemsCreateCmd() *cobra.Command {
 
 func itemsUpdateCmd() *cobra.Command {
 	var d fields
+	var a aliasFields
 	security := &kit.Enum{
 		Name: "security", Usage: "Wi-Fi security (wifi)",
 		Values: []string{"WPA", "WPA2", "WPA3", "WEP"},
@@ -263,11 +300,15 @@ func itemsUpdateCmd() *cobra.Command {
 				Action: ui.Updated, Kind: "items", Count: 1, Name: d.nc.Name,
 				IDs: []string{kit.JoinPair(shareID, itemID)},
 			}, func() error {
+				if err := c.App.Pass.AliasEdit(c.Ctx, shareID, itemID, a.patch); err != nil {
+					return err
+				}
 				return c.App.Pass.ItemEdit(c.Ctx, c.U, shareID, itemID, patch)
 			})
 		}),
 	}
 	d.register(c, "Replace")
+	a.register(c)
 	security.Register(c)
 	return c
 }

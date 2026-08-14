@@ -28,7 +28,6 @@ type Item struct {
 	Note       string   `json:"note,omitempty"`
 	Username   string   `json:"username,omitempty"`
 	Email      string   `json:"email,omitempty"`
-	Alias      string   `json:"alias,omitempty"`
 	Password   string   `json:"password,omitempty"`
 	TOTP       string   `json:"totp,omitempty"`
 	URLs       []string `json:"urls,omitempty"`
@@ -55,10 +54,37 @@ type Item struct {
 	Birthdate     string `json:"birthdate,omitempty"`
 	Website       string `json:"website,omitempty"`
 
+	// alias: the address, and the route behind it. Everything but the status
+	// takes a request of its own, so a list carries the first two and one item
+	// read carries them all.
+	Alias            string         `json:"alias,omitempty"`
+	AliasStatus      string         `json:"alias_status,omitempty"`
+	AliasMailboxes   []string       `json:"alias_mailboxes,omitempty"`
+	AliasDisplayName string         `json:"alias_display_name,omitempty"`
+	AliasNote        string         `json:"alias_note,omitempty"`
+	AliasActivity    *AliasActivity `json:"alias_activity,omitempty"`
+
 	// extra custom fields (any item type)
 	Fields []ItemField `json:"fields,omitempty"`
 
 	raw *pb.Item
+}
+
+// aliasDisabled is the item flag Proton sets on an alias that has been switched
+// off, so whether an alias is receiving is known from the item itself rather than
+// from a request per address.
+const aliasDisabled = 1 << 2
+
+// aliasStatus is the word for an alias's switch. Only an alias has one.
+func aliasStatus(kind string, flags int) string {
+	switch {
+	case kind != "alias":
+		return ""
+	case flags&aliasDisabled != 0:
+		return "disabled"
+	default:
+		return "enabled"
+	}
 }
 
 // ItemField is a custom extra field attached to an item.
@@ -121,6 +147,7 @@ func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID
 			ItemID           string
 			Revision         int
 			State            int
+			Flags            int
 			Content, ItemKey string
 			KeyRotation      int
 			CreateTime       int64
@@ -163,6 +190,23 @@ func (s *Service) ItemGet(ctx context.Context, u *keys.Unlocked, shareID, itemID
 	out.CreateTime = r.Item.CreateTime
 	out.ModifyTime = r.Item.ModifyTime
 	out.Alias = r.Item.AliasEmail
+	out.AliasStatus = aliasStatus(out.Type, r.Item.Flags)
+	if out.Type != "alias" {
+		return out, nil
+	}
+	// An address with nothing behind it is half an answer, so reading an alias
+	// reads its route too: where its mail arrives, what it sends as, and what it
+	// has carried. Pass asks the same question when it opens one.
+	detail, err := s.AliasDetails(ctx, shareID, itemID)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range detail.Mailboxes {
+		out.AliasMailboxes = append(out.AliasMailboxes, m.Email)
+	}
+	out.AliasDisplayName = detail.DisplayName
+	out.AliasNote = detail.Note
+	out.AliasActivity = &detail.Activity
 	return out, nil
 }
 
@@ -365,7 +409,14 @@ type Patch struct {
 	Birthdate, Website                         string
 }
 
+// Empty reports whether the patch changes nothing about the item, which is what
+// an edit that only moved an alias's forwarding leaves behind.
+func (p Patch) Empty() bool { return p == Patch{} }
+
 func (s *Service) ItemEdit(ctx context.Context, u *keys.Unlocked, shareID, itemID string, patch Patch) error {
+	if patch.Empty() {
+		return nil
+	}
 	sk, err := s.decryptShareKeys(ctx, shareID, u)
 	if err != nil {
 		return err
@@ -647,6 +698,7 @@ func (s *Service) fetchItems(ctx context.Context, shareID string, sk *shareKeys)
 				ItemID           string
 				Revision         int
 				State            int
+				Flags            int
 				Content, ItemKey string
 				KeyRotation      int
 				CreateTime       int64
@@ -691,6 +743,7 @@ func (s *Service) fetchItems(ctx context.Context, shareID string, sk *shareKeys)
 			item.CreateTime = enc.CreateTime
 			item.ModifyTime = enc.ModifyTime
 			item.Alias = enc.AliasEmail
+			item.AliasStatus = aliasStatus(item.Type, enc.Flags)
 			out = append(out, *item)
 		}
 		if r.Items.LastToken == "" || len(r.Items.RevisionsData) == 0 {

@@ -557,6 +557,110 @@ func TestDriveItemsUploadIfExistsReplaceKeepsHistory(t *testing.T) {
 	assertReads(t, folder+"/note.txt", "first")
 }
 
+// Wanting an old version's bytes is not wanting them back in place, so reading
+// one leaves the file alone.
+func TestDriveRevisionsDownloadLeavesTheFileAlone(t *testing.T) {
+	t.Parallel()
+	folder, path, earlier := fileWithHistory(t)
+
+	out := filepath.Join(t.TempDir(), "earlier.txt")
+	_, stderr := runOKStderr(t, "drive", "items", "revisions", "download", "--output", out, path, earlier)
+
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "first" {
+		t.Errorf("the earlier revision reads %q, want %q", got, "first")
+	}
+	// The date is what tells two versions of one file apart, so the confirmation
+	// says which one arrived rather than only the name they share.
+	assertContains(t, stderr, "as it was on")
+	assertReads(t, folder+"/note.txt", "second")
+}
+
+func TestDriveRevisionsDeleteDropsOneVersion(t *testing.T) {
+	t.Parallel()
+	_, path, earlier := fileWithHistory(t)
+
+	runOK(t, "drive", "items", "revisions", "delete", path, earlier)
+
+	revs := runJSONArray(t, "drive", "items", "revisions", "list", path)
+	if len(revs) != 1 {
+		t.Fatalf("deleting one of two revisions left %d", len(revs))
+	}
+	assertReads(t, path, "second")
+}
+
+// The current version is what the file is made of, so neither command that acts
+// on history will touch it: restoring it is nothing, and deleting it is deleting
+// the file, which is a different command.
+func TestDriveRevisionsRefuseTheCurrentVersion(t *testing.T) {
+	t.Parallel()
+	_, path, _ := fileWithHistory(t)
+	current := currentRevision(t, path)
+
+	_, stderr, code := run(t, "--yes", "drive", "items", "revisions", "delete", path, current)
+	if code == 0 {
+		t.Errorf("deleting the current version was allowed")
+	}
+	assertContains(t, stderr, "current version")
+
+	_, stderr, code = run(t, "--yes", "drive", "items", "revisions", "restore", path, current)
+	if code == 0 {
+		t.Errorf("restoring the current version was allowed")
+	}
+	assertContains(t, stderr, "already at")
+}
+
+// A revision nobody can find is an unfound reference like any other, which the
+// CLI answers with exit 3 rather than passing the string to Proton.
+func TestDriveRevisionsUnknownReferenceExitsNotFound(t *testing.T) {
+	t.Parallel()
+	_, path, _ := fileWithHistory(t)
+
+	_, _, code := run(t, "drive", "items", "revisions", "restore", path, "nosuchrevision")
+	if code != 3 {
+		t.Errorf("expected exit 3 for an unknown revision, got %d", code)
+	}
+}
+
+// fileWithHistory makes a file with two versions, and hands back the folder, the
+// file, and the ID of the version that was superseded.
+func fileWithHistory(t *testing.T) (folder, path, earlier string) {
+	t.Helper()
+	folder, src := uploadedTwice(t, "first")
+	if err := os.WriteFile(src, []byte("second"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runOK(t, "drive", "items", "upload", "--if-exists", "replace", src, folder)
+
+	path = folder + "/note.txt"
+	for _, row := range runJSONArray(t, "drive", "items", "revisions", "list", path) {
+		r := row.(map[string]interface{})
+		if state, _ := r["state"].(float64); int(state) != 1 {
+			earlier, _ = r["id"].(string)
+		}
+	}
+	if earlier == "" {
+		t.Fatalf("%s has no superseded revision", path)
+	}
+	return folder, path, earlier
+}
+
+func currentRevision(t *testing.T, path string) string {
+	t.Helper()
+	for _, row := range runJSONArray(t, "drive", "items", "revisions", "list", path) {
+		r := row.(map[string]interface{})
+		if state, _ := r["state"].(float64); int(state) == 1 {
+			id, _ := r["id"].(string)
+			return id
+		}
+	}
+	t.Fatalf("%s has no current revision", path)
+	return ""
+}
+
 // uploadedTwice makes a folder holding note.txt, and hands back the folder and a
 // local file of the same name to upload over it.
 func uploadedTwice(t *testing.T, content string) (folder, src string) {

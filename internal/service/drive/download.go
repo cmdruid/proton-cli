@@ -74,19 +74,37 @@ func (r revision) author() string {
 }
 
 func (s *Service) Download(ctx context.Context, dc *Context, path string, w io.Writer, opts DownloadOptions) error {
-	res, err := s.ResolvePath(ctx, dc, path)
+	res, err := s.resolveFile(ctx, dc, path)
 	if err != nil {
 		return err
 	}
-	if res.IsFolder {
-		return fmt.Errorf("%s is a folder, not a file", path)
-	}
-	return s.downloadFile(ctx, res.ShareID, res.Link, res.NodeKR, w, opts)
+	return s.downloadFile(ctx, res.ShareID, res.Link, res.NodeKR, activeRevisionID(res.Link), res.Link.Size, w, opts)
 }
 
-// downloadFile streams and decrypts the active revision of a file link whose
-// node key ring (nodeKR) has already been unwrapped.
-func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, nodeKR *pgp.KeyRing, w io.Writer, opts DownloadOptions) error {
+// DownloadRevision streams and decrypts one earlier version of a file.
+//
+// Reading an old version is a read: the file keeps whatever it holds now, which
+// is the difference between wanting the bytes back and wanting them back in
+// place.
+func (s *Service) DownloadRevision(ctx context.Context, fr *FileRevision, w io.Writer, opts DownloadOptions) error {
+	return s.downloadFile(ctx, fr.res.ShareID, fr.res.Link, fr.res.NodeKR, fr.ID, fr.Size, w, opts)
+}
+
+// activeRevisionID is the version a file holds now, which is what a download
+// means when nobody names another. A link with no file properties has none, and
+// downloadFile is where that is reported.
+func activeRevisionID(link *Link) string {
+	if link.FileProperties == nil {
+		return ""
+	}
+	return link.FileProperties.ActiveRevision.ID
+}
+
+// downloadFile streams and decrypts one revision of a file link whose node key
+// ring (nodeKR) has already been unwrapped. The content session key belongs to
+// the file rather than to any one revision, so every version opens with it.
+func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, nodeKR *pgp.KeyRing,
+	revisionID string, size int64, w io.Writer, opts DownloadOptions) error {
 	if link.FileProperties == nil {
 		return fmt.Errorf("%s: no file properties", link.LinkID)
 	}
@@ -99,7 +117,7 @@ func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, 
 		return fmt.Errorf("get file session key: %w", err)
 	}
 
-	rev, err := s.revision(ctx, shareID, link)
+	rev, err := s.revision(ctx, shareID, link.LinkID, revisionID)
 	if err != nil {
 		return err
 	}
@@ -112,7 +130,7 @@ func (s *Service) downloadFile(ctx context.Context, shareID string, link *Link, 
 	}
 
 	prog := progress.Of(opts.Progress)
-	prog.Start(link.Size, opts.Label)
+	prog.Start(size, opts.Label)
 	defer prog.Done()
 
 	author := newBlockAuthor(s, link.SignatureEmail, nodeKR)
@@ -188,15 +206,14 @@ func (a *blockAuthor) verify(ctx context.Context, plain *pgp.PlainMessage, encSi
 	return ""
 }
 
-// revision reads every page of the active revision's block list.
-func (s *Service) revision(ctx context.Context, shareID string, link *Link) (revision, error) {
+// revision reads every page of a revision's block list.
+func (s *Service) revision(ctx context.Context, shareID, linkID, revID string) (revision, error) {
 	const pageSize = 50
-	revID := link.FileProperties.ActiveRevision.ID
 	var out revision
 	for from := 1; ; {
 		q := proton.Request{
 			Method: "GET",
-			Path:   fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", shareID, link.LinkID, revID),
+			Path:   fmt.Sprintf("/drive/shares/%s/files/%s/revisions/%s", shareID, linkID, revID),
 		}
 		q.Query = make(map[string][]string)
 		q.Query.Set("FromBlockIndex", strconv.Itoa(from))

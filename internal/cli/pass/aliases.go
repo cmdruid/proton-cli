@@ -15,7 +15,9 @@ import (
 
 func aliasesCmd() *cobra.Command {
 	c := &cobra.Command{Use: "aliases", Short: "Hide-my-email addresses that forward to you"}
-	c.AddCommand(aliasesListCmd(), aliasesCreateCmd(), aliasesOptionsCmd())
+	c.AddCommand(aliasesListCmd(), aliasesCreateCmd(), aliasesOptionsCmd(),
+		aliasesToggleCmd("enable", "Start receiving mail sent to an alias", ui.Enabled, true),
+		aliasesToggleCmd("disable", "Stop receiving mail sent to an alias", ui.Disabled, false))
 	return c
 }
 
@@ -40,6 +42,7 @@ func aliasesListCmd() *cobra.Command {
 				Total: ui.Unknown, Page: ui.Unpaged,
 				Columns: []ui.Column[passsvc.Item]{
 					{Header: "ID", ID: true, Cell: itemRef},
+					{Header: "STATUS", Cell: func(it passsvc.Item) string { return it.AliasStatus }},
 					{Header: "ADDRESS", Flex: true, Cell: func(it passsvc.Item) string { return it.Alias }},
 					{Header: "NAME", Flex: true, Cell: func(it passsvc.Item) string { return it.Name }},
 				},
@@ -50,14 +53,46 @@ func aliasesListCmd() *cobra.Command {
 	return c
 }
 
+// aliasesToggleCmd builds enable and disable, which differ only in which way the
+// switch goes. A disabled alias keeps its address and stops receiving, so it is
+// the answer to an address that has started attracting spam - `items delete`
+// burns the address instead, and cannot be taken back.
+func aliasesToggleCmd(use, short string, action ui.Action, enabled bool) *cobra.Command {
+	return &cobra.Command{
+		Use:   use + " REF",
+		Short: short,
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepExpand, kit.StepUnlock}, func(c *kit.Invocation) error {
+			shareID, itemID, err := resolveItem(c, c.Args[0])
+			if err != nil {
+				return err
+			}
+			it, err := c.App.Pass.ItemGet(c.Ctx, c.U, shareID, itemID)
+			if err != nil {
+				return err
+			}
+			if it.Type != "alias" {
+				return kit.Fail("%s is a %s, not an alias.", it.Name, it.Type)
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: action, Kind: "aliases", Count: 1, Name: it.Name,
+				Detail: "- " + it.Alias, IDs: []string{kit.JoinPair(shareID, itemID)},
+			}, func() error {
+				return c.App.Pass.AliasSetEnabled(c.Ctx, shareID, itemID, enabled)
+			})
+		}),
+	}
+}
+
 func aliasesCreateCmd() *cobra.Command {
-	var prefix, suffix, mailbox, name, vault string
+	var mailboxes []string
+	var prefix, suffix, name, vault string
 	c := &cobra.Command{
 		Use:   "create",
 		Short: "Create an alias",
 		Long: "Create an alias.\n\n" +
 			"The address is a prefix you choose plus a suffix Proton offers; mail sent to it\n" +
-			"arrives in the mailbox you name. `aliases options` lists both.",
+			"arrives in the mailboxes you name. `aliases options` lists both.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{kit.StepUnlock}, func(c *kit.Invocation) error {
 			if prefix == "" {
@@ -71,7 +106,7 @@ func aliasesCreateCmd() *cobra.Command {
 			// The address is the answer, so it is worked out before the alias is
 			// made: the confirmation, the machine output and a dry run then all name
 			// the same address rather than the prefix it was asked for.
-			plan, err := c.App.Pass.PlanAlias(c.Ctx, shareID, prefix, suffix, mailbox)
+			plan, err := c.App.Pass.PlanAlias(c.Ctx, shareID, prefix, suffix, mailboxes)
 			if err != nil {
 				return err
 			}
@@ -97,7 +132,7 @@ func aliasesCreateCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&prefix, "prefix", "", "The part before the @")
 	c.Flags().StringVar(&suffix, "suffix", "", "The part from the @ onwards (default: the first Proton offers)")
-	c.Flags().StringVar(&mailbox, "mailbox", "", "Where mail to the alias should arrive")
+	c.Flags().StringArrayVar(&mailboxes, "mailbox", nil, "Where mail to the alias should arrive (repeatable)")
 	c.Flags().StringVar(&name, "name", "", "Name for the alias item")
 	c.Flags().StringVar(&vault, "vault", "", "Which vault to keep it in, by name or ID")
 	return c

@@ -78,14 +78,20 @@ Filters: `--pattern` (glob), `--larger-than`, `--smaller-than`, `--older-than`, 
 
 ### Revisions
 
-Uploading over a file with `--if-exists replace` keeps the previous contents as a revision, and any revision can be put back.
+Uploading over a file with `--if-exists replace` keeps what was there as a revision.
 
 ```bash
 proton-cli drive items revisions list /Documents/report.pdf
-proton-cli drive items revisions restore /Documents/report.pdf REVISION_ID
+proton-cli drive items revisions download /Documents/report.pdf 8f3a1c22 --output ./earlier.pdf
+proton-cli drive items revisions restore /Documents/report.pdf 8f3a1c22
+proton-cli drive items revisions delete /Documents/report.pdf 8f3a1c22     # permanent
 ```
 
-Proton carries a restore out in the background, so the file goes back to the earlier contents a moment after the command returns.
+`download` leaves the file as it is: it reads an old version out, where `restore` puts one back in place. It takes `--output`, `--output-dir` and `--force` like every other download, and `--output -` streams the old version into a pipe.
+
+Proton carries a restore out in the background, so the file goes back to the earlier contents a moment after the command returns. The version it succeeds stays in the history, so a restore can itself be undone.
+
+The version the file is at now is the one thing neither command touches: restoring it would do nothing, and deleting it would be deleting the file.
 
 ## Folders
 

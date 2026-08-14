@@ -523,8 +523,15 @@ func removeCmd(use, short string, action ui.Action, permanent bool) *cobra.Comma
 // ── revisions ──
 
 func revisionsCmd() *cobra.Command {
-	c := &cobra.Command{Use: "revisions", Short: "Earlier versions of a file"}
-	c.AddCommand(revisionsListCmd(), revisionsRestoreCmd())
+	c := &cobra.Command{
+		Use:   "revisions",
+		Short: "Earlier versions of a file",
+		Long: "Earlier versions of a file.\n\n" +
+			"Uploading over a file with `--if-exists replace` keeps what was there as a\n" +
+			"revision. Any of them can be read back without disturbing the file, put back\n" +
+			"in place, or dropped from the history.",
+	}
+	c.AddCommand(revisionsListCmd(), revisionsDownloadCmd(), revisionsRestoreCmd(), revisionsDeleteCmd())
 	return c
 }
 
@@ -562,10 +569,65 @@ func revisionsListCmd() *cobra.Command {
 					{Header: "STATE", Cell: func(r drivesvc.Revision) string { return revisionState(r.State) }},
 					{Header: "SIZE", Right: true, Cell: func(r drivesvc.Revision) string { return units.Size(r.Size) }},
 					{Header: "CREATED", Cell: func(r drivesvc.Revision) string { return units.Time(r.CreateTime) }},
+					{Header: "AUTHOR", Flex: true, Cell: func(r drivesvc.Revision) string { return r.Author }},
 				},
 			}, revs, func(r drivesvc.Revision) []string { return []string{r.ID} })
 		}),
 	}
+}
+
+// findRevision resolves the file and the version every PATH REVISION_REF command
+// addresses, so each of them says which version it is about to act on rather than
+// the reference it was handed.
+func findRevision(c *kit.Invocation) (*drivesvc.FileRevision, error) {
+	dc, err := context(c)
+	if err != nil {
+		return nil, err
+	}
+	return c.App.Drive.FindRevision(c.Ctx, dc, c.Args[0], c.Args[1])
+}
+
+func revisionsDownloadCmd() *cobra.Command {
+	var dest kit.Destination
+	c := &cobra.Command{
+		Use:   "download PATH REVISION_REF",
+		Short: "Download an earlier version of a file",
+		Long: "Download an earlier version of a file.\n\n" +
+			"The file keeps whatever it holds now: this reads an old version out, where\n" +
+			"`revisions restore` puts one back in place.",
+		Args: cobra.ExactArgs(2),
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			if err := dest.Validate(true); err != nil {
+				return err
+			}
+			rev, err := findRevision(c)
+			if err != nil {
+				return err
+			}
+			label := fmt.Sprintf("Downloading %s of %s", units.Time(rev.CreateTime), rev.File)
+
+			if dest.Stdout() {
+				return c.App.Drive.DownloadRevision(c.Ctx, rev, c.UI().Out, drivesvc.DownloadOptions{
+					Label: label, OnSignatureIssue: signatureIssue(c, rev.File),
+				})
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Downloaded, Count: 1, Name: rev.File,
+				Detail: fmt.Sprintf("as it was on %s to %s", units.Time(rev.CreateTime), dest.Describe()),
+				IDs:    []string{rev.ID},
+			}, func() error {
+				_, err := dest.Stream(c, rev.File, func(w io.Writer) error {
+					return c.App.Drive.DownloadRevision(c.Ctx, rev, w, drivesvc.DownloadOptions{
+						Label: label, Progress: ui.NewProgress(c.UI()),
+						OnSignatureIssue: signatureIssue(c, rev.File),
+					})
+				})
+				return err
+			})
+		}),
+	}
+	dest.Register(c)
+	return c
 }
 
 func revisionsRestoreCmd() *cobra.Command {
@@ -574,15 +636,36 @@ func revisionsRestoreCmd() *cobra.Command {
 		Short: "Restore a file to an earlier version",
 		Args:  cobra.ExactArgs(2),
 		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
-			dc, err := context(c)
+			rev, err := findRevision(c)
 			if err != nil {
 				return err
 			}
 			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Restored, Count: 1, Name: path.Base(c.Args[0]),
-				Detail: "to an earlier revision", IDs: []string{c.Args[1]},
+				Action: ui.Restored, Count: 1, Name: rev.File,
+				Detail: "to the version from " + units.Time(rev.CreateTime), IDs: []string{rev.ID},
 			}, func() error {
-				return c.App.Drive.RevisionRestore(c.Ctx, dc, c.Args[0], c.Args[1])
+				return c.App.Drive.RevisionRestore(c.Ctx, rev)
+			})
+		}),
+	}
+}
+
+func revisionsDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete PATH REVISION_REF",
+		Short: "Delete an earlier version permanently",
+		Args:  cobra.ExactArgs(2),
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			rev, err := findRevision(c)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Deleted, Kind: "revisions", Count: 1,
+				Name: units.Time(rev.CreateTime), Detail: "of " + rev.File,
+				IDs: []string{rev.ID},
+			}, func() error {
+				return c.App.Drive.RevisionDelete(c.Ctx, rev)
 			})
 		}),
 	}

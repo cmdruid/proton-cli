@@ -97,12 +97,12 @@ Deleting a vault takes everything in it, so it names the vault and asks first.
 
 ## Aliases
 
-Hide-my-email aliases that forward to one of your mailboxes.
+Hide-my-email aliases that forward to your own mailboxes.
 
 ```bash
 proton-cli pass aliases options                              # available suffixes and mailboxes
 proton-cli pass aliases create --prefix shop --mailbox me@proton.me
-proton-cli pass aliases create --prefix shop --suffix @passmail.net --mailbox me@proton.me --name "Online shops" --vault Personal
+proton-cli pass aliases create --prefix shop --suffix @passmail.net --mailbox me@proton.me --mailbox work@proton.me --name "Online shops" --vault Personal
 ```
 
 Proton makes the address from the prefix you choose plus a word of its own, so creating one says which address it made:
@@ -111,4 +111,32 @@ Proton makes the address from the prefix you choose plus a word of its own, so c
 ✓ Created alias "shop" as shop.jasmine329@passinbox.com.
 ```
 
-The address is on the item afterwards, in `pass items get` and in the `ADDRESS` column of `pass aliases list`, and `--output json` carries it as `alias`.
+An alias is an item, so it is read and edited like one:
+
+```console
+$ proton-cli pass items get shop
+Type            alias
+Name            shop
+Alias           shop.jasmine329@passinbox.com
+Status          enabled
+Forwards To     me@proton.me
+Display Name    Jane R
+Activity        12 forwarded, 0 replied, 3 blocked (last 14 days)
+ID              Aq7…/9Kd…
+```
+
+```bash
+proton-cli pass items update shop --mailbox work@proton.me    # where its mail arrives
+proton-cli pass items update shop --display-name "Jane R"     # what recipients see it sent as
+proton-cli pass items update shop --name "Online shops"       # the item's own name
+```
+
+When an address starts attracting spam, switch it off rather than delete it - a disabled alias keeps its address and stops receiving, while deleting it burns the address for good:
+
+```bash
+proton-cli pass aliases disable shop
+proton-cli pass aliases enable shop
+proton-cli pass aliases list                                  # STATUS says which are off
+```
+
+`--output json` carries the address as `alias` and the rest as `alias_status`, `alias_mailboxes`, `alias_display_name` and `alias_activity`.
