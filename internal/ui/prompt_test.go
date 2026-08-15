@@ -1,6 +1,9 @@
 package ui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Presence is what counts, whatever the value - the same rule NO_COLOR follows,
 // so the two variables need only one mental model between them.
@@ -46,6 +49,39 @@ func TestCanPromptRespectsBothTheFlagAndTheEnvironment(t *testing.T) {
 			t.Error("a non-terminal stdin cannot be asked a question")
 		}
 	})
+}
+
+// The questions a sign-in asks form one block, so they are measured like one.
+// Unaligned labels put every answer at a different column and make the block
+// read as three unrelated questions rather than one form.
+func TestAskAlignsTheLabelsItWasGiven(t *testing.T) {
+	unsetenv(t, "PROTON_NO_INPUT")
+	u, _, errb := fixture(t, Options{In: strings.NewReader("you@proton.me\n123456\n")})
+	p := u.Ask("Email", "Password", "Two-factor code")
+	if _, err := p.Line("Email"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Line("Two-factor code"); err != nil {
+		t.Fatal(err)
+	}
+	want := "Email:            Two-factor code:  "
+	if got := errb.String(); got != want {
+		t.Errorf("prompts are not aligned\n got %q\nwant %q", got, want)
+	}
+}
+
+// One reader for the whole block is what keeps a value typed before its question
+// was asked. A reader per question buffers ahead and then throws the buffer away.
+func TestAskKeepsWhatWasTypedAhead(t *testing.T) {
+	unsetenv(t, "PROTON_NO_INPUT")
+	u, _, _ := fixture(t, Options{In: strings.NewReader("you@proton.me\n123456\n")})
+	p := u.Ask("Email", "Two-factor code")
+	if got, _ := p.Line("Email"); got != "you@proton.me" {
+		t.Fatalf("first answer = %q", got)
+	}
+	if got, _ := p.Line("Two-factor code"); got != "123456" {
+		t.Errorf("second answer = %q, want the line typed ahead", got)
+	}
 }
 
 // Refusing to prompt has to produce an error a reader can act on, naming both

@@ -41,6 +41,7 @@ func listCmd() *cobra.Command {
 			return kit.List(c, ui.TableSpec[mailsvc.Message]{
 				Noun: "messages", Columns: messageColumns(),
 				Total: total, Page: opts.Page, PageSize: opts.PageSize,
+				Filtered: opts.Unread || starred,
 			}, msgs, func(m mailsvc.Message) []string { return []string{m.ID} })
 		}),
 	}
@@ -69,6 +70,9 @@ func searchCmd() *cobra.Command {
 			return kit.List(c, ui.TableSpec[mailsvc.Message]{
 				Noun: "messages", Columns: messageColumns(),
 				Total: ui.Unknown, Page: ui.Unpaged, Limit: opts.Limit,
+				// A search is a filter by definition, so an empty result means
+				// nothing matched rather than that there is no mail.
+				Filtered: true,
 			}, msgs, func(m mailsvc.Message) []string { return []string{m.ID} })
 		}),
 	}
@@ -159,7 +163,7 @@ func messageHeader(msg *mailsvc.Full) []ui.Field {
 	}
 	return append(fields,
 		ui.Field{Label: "Date", Value: units.Time(msg.Time)},
-		ui.Field{Label: "Signature", Value: string(msg.Signature), Always: true},
+		kit.SignatureField(string(msg.Signature)),
 		ui.Field{Label: "ID", Value: msg.ID, ID: true},
 	)
 }

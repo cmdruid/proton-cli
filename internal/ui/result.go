@@ -34,6 +34,9 @@ const (
 // The set below is the complete vocabulary of things this CLI does. A command
 // that wants a word not in this list is a command that has invented one.
 type Action struct {
+	// Past opens the confirmation, and carries a preposition when the sentence
+	// needs one to reach its subject: "Signed in as you@proton.me", not "Signed
+	// in you@proton.me".
 	Past string // "Moved"  → "✓ Moved 3 messages to trash."
 	Verb string // "move"   → "Dry run - would move 3 messages to trash:"
 	Key  string // "moved"  → {"action": "moved"}
@@ -79,7 +82,7 @@ var (
 	Set          = Action{"Set", "set", "set", Ordinary}
 	Invited      = Action{"Invited", "invite", "invited", Ordinary}
 	Revoked      = Action{"Revoked", "revoke", "revoked", Ordinary}
-	SignedIn     = Action{"Signed in", "sign in", "signed_in", Ordinary}
+	SignedIn     = Action{"Signed in as", "sign in as", "signed_in", Ordinary}
 	SignedOut    = Action{"Signed out", "sign out", "signed_out", Ordinary}
 )
 

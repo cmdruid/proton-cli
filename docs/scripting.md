@@ -7,7 +7,7 @@ Data goes to stdout, everything else to stderr, and exit codes say what went wro
 Commands that create something print the new ID to stdout, so a plain assignment works:
 
 ```bash
-LABEL=$(proton-cli mail settings labels create --name Work --color "#8080FF")
+LABEL=$(proton-cli mail settings labels create --name Work --color purple)
 VAULT=$(proton-cli pass vaults create --name Automation)
 MSG=$(proton-cli mail messages send --to me@proton.me --subject Deploy --body "Done.")
 ```

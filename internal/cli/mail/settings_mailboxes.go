@@ -45,7 +45,7 @@ func mailboxColumns(folder bool) []ui.Column[mailsvc.Label] {
 	cols := []ui.Column[mailsvc.Label]{
 		{Header: "ID", ID: true, Cell: func(l mailsvc.Label) string { return l.ID }},
 		{Header: "NAME", Flex: true, Cell: func(l mailsvc.Label) string { return l.Name }},
-		{Header: "COLOR", Cell: func(l mailsvc.Label) string { return l.Color }},
+		kit.ColorColumn(func(l mailsvc.Label) string { return l.Color }),
 	}
 	if folder {
 		cols = append(cols, ui.Column[mailsvc.Label]{

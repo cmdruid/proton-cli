@@ -3,11 +3,11 @@ package kit
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/roman-16/proton-cli/internal/app"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
+	"github.com/roman-16/proton-cli/internal/ref"
 	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -201,14 +201,14 @@ func Create(c *Invocation, spec ui.ResultSpec, apply func() (string, error)) err
 // Anything that is not short-ID-shaped, and anything the cache has not seen,
 // passes through untouched: it may well be a name or a subject that the service
 // layer will resolve. An ambiguous prefix is an error, never a guess.
-func Expand(a *app.App, ref string) (string, error) {
-	if ref == "" || idcache.IsFullID(ref) || !idcache.IsShortID(ref) {
-		return ref, nil
+func Expand(a *app.App, reference string) (string, error) {
+	if reference == "" || ref.Full(reference) || !ref.Short(reference) {
+		return reference, nil
 	}
 	if a == nil || a.IDCache == nil {
-		return ref, nil
+		return reference, nil
 	}
-	full, err := a.IDCache.Resolve(ref)
+	full, err := a.IDCache.Resolve(reference)
 	if err == nil {
 		return full, nil
 	}
@@ -218,11 +218,11 @@ func Expand(a *app.App, ref string) (string, error) {
 		for _, cand := range amb.Candidates {
 			lines = append(lines, "  "+cand)
 		}
-		return "", errs.Problemf("%q matches %d cached IDs.", ref, len(amb.Candidates)).
+		return "", errs.Problemf("%q matches %d cached IDs.", reference, len(amb.Candidates)).
 			Hint(lines...).Exit(4)
 	}
 	if errors.Is(err, idcache.ErrNotFound) {
-		return ref, nil
+		return reference, nil
 	}
 	return "", err
 }
@@ -230,17 +230,23 @@ func Expand(a *app.App, ref string) (string, error) {
 // Pair splits a compound reference into its two halves.
 //
 // Proton addresses some things with two IDs - a Pass item lives in a share, an
-// event lives in a calendar. Writing them as one slash-separated token keeps
-// every command to a single REF, and is unambiguous because Proton's IDs are
-// base64url and never contain a slash.
+// event lives in a calendar - and this CLI writes the two as one token so that
+// every command still takes a single REF. The notation itself is internal/ref's,
+// which is what keeps the reference this splits identical to the one the
+// listings print.
 //
-// A reference with no slash is returned as the second half with an empty first,
-// since that is the shape a human handle takes.
-func Pair(ref string) (first, second string) {
-	if i := strings.IndexByte(ref, '/'); i >= 0 {
-		return ref[:i], ref[i+1:]
+// A reference with no separator is returned as the second half with an empty
+// first, since that is the shape a human handle takes.
+func Pair(reference string) (first, second string) {
+	parts, occurrence := ref.Split(reference)
+	if len(parts) < 2 {
+		return "", reference
 	}
-	return "", ref
+	second = ref.Join(parts[1:]...)
+	if occurrence != "" {
+		second += ref.Occurrence + occurrence
+	}
+	return parts[0], second
 }
 
 // ExpandPair splits a compound reference and expands each half, so a short ID
@@ -250,8 +256,8 @@ func Pair(ref string) (first, second string) {
 // reference never looks short to it - and a Drive path is full of slashes too,
 // so a step that applies to every argument would take paths apart as well. Only
 // a command that knows it is holding two IDs can safely separate them.
-func ExpandPair(a *app.App, ref string) (first, second string, err error) {
-	first, second = Pair(ref)
+func ExpandPair(a *app.App, reference string) (first, second string, err error) {
+	first, second = Pair(reference)
 	if first == "" {
 		return "", second, nil
 	}
@@ -269,7 +275,7 @@ func JoinPair(first, second string) string {
 	if first == "" {
 		return second
 	}
-	return first + "/" + second
+	return ref.Join(first, second)
 }
 
 // Dedupe removes repeated strings, preserving order. Selections union explicit
@@ -289,6 +295,10 @@ func Dedupe(ss []string) []string {
 
 // Note reports something incidental on stderr.
 func (c *Invocation) Note(format string, a ...any) { c.UI().Notef(format, a...) }
+
+// Warn reports a caveat on stderr: something true and worth noticing that did
+// not stop the command. It is not an error and does not change the exit code.
+func (c *Invocation) Warn(format string, a ...any) { c.UI().Warnf(format, a...) }
 
 // Fail starts a user error. It is the same as errs.Problemf, re-exported so a
 // command package needs one import for the whole vocabulary.

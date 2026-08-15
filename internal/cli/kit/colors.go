@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -20,25 +21,81 @@ var AccentColors = []struct{ name, hex string }{
 	{"forest", "#258723"}, {"pickle", "#807304"},
 }
 
+// AccentColor resolves a colour the user typed to the hex Proton stores.
+//
+// Both spellings are accepted, because both are spellings of the same thing: the
+// palette has twenty entries and every one of them has a name. A list that shows
+// "purple" and a flag that only takes "#8080FF" would be the CLI printing
+// something it will not read back, which is the one thing its references are
+// meant never to do.
+//
+// Empty resolves to empty, so a caller can supply its own default.
+func AccentColor(color string) (string, error) {
+	if color == "" {
+		return "", nil
+	}
+	for _, c := range AccentColors {
+		if strings.EqualFold(c.hex, color) || strings.EqualFold(c.name, color) {
+			return c.hex, nil
+		}
+	}
+	lines := []string{"use a name or a hex value:"}
+	for _, c := range AccentColors {
+		lines = append(lines, fmt.Sprintf("  %-11s %s", c.name, c.hex))
+	}
+	return "", Fail("%q is not a Proton accent color.", color).Hint(lines...)
+}
+
 // ValidateAccentColor rejects anything outside Proton's palette, naming the whole
-// palette when it does. Empty is allowed so a caller can supply its own default.
+// palette when it does.
 //
 // The check is local because the API's own refusal says only that the colour was
 // invalid, which leaves the user no better off than before.
 func ValidateAccentColor(color string) error {
-	if color == "" {
-		return nil
-	}
+	_, err := AccentColor(color)
+	return err
+}
+
+// AccentName is Proton's own name for a colour, or "" for a hex outside the
+// palette. It mirrors getColorName in WebClients (packages/shared/lib/colors.ts).
+func AccentName(hex string) string {
 	for _, c := range AccentColors {
-		if strings.EqualFold(c.hex, color) {
-			return nil
+		if strings.EqualFold(c.hex, hex) {
+			return c.name
 		}
 	}
-	lines := []string{"use one of:"}
-	for _, c := range AccentColors {
-		lines = append(lines, fmt.Sprintf("  %-11s %s", c.name, c.hex))
+	return ""
+}
+
+// ColorColumn is the COLOR column, wherever a collection has one.
+//
+// It shows the colour rather than describing it: a swatch painted in the colour
+// itself, and beside it the name Proton uses. A hex code is what the API stores,
+// not what a person reads, so it appears only for a value outside the palette -
+// where there is no name to give.
+//
+// Machine output is untouched: the hex is the field, as it always was.
+func ColorColumn[T any](hex func(T) string) ui.Column[T] {
+	return ui.Column[T]{
+		Header: "COLOR",
+		Swatch: hex,
+		Cell: func(row T) string {
+			v := hex(row)
+			if name := AccentName(v); name != "" {
+				return name
+			}
+			return v
+		},
 	}
-	return Fail("%q is not a Proton accent color.", color).Hint(lines...)
+}
+
+// ColorField is ColorColumn's counterpart for a record.
+func ColorField(hex string) ui.Field {
+	value := hex
+	if name := AccentName(hex); name != "" {
+		value = name
+	}
+	return ui.Field{Label: "Color", Value: value, Swatch: hex}
 }
 
 // DefaultAccentColor is the purple Proton offers first, used wherever a colour is
@@ -68,22 +125,33 @@ func (c *Color) Register(cmd *cobra.Command) {
 	c.target = c.Default
 	usage := c.Usage
 	if usage == "" {
-		usage = "Accent color, as a hex value"
+		usage = "Accent color, by name (purple) or hex (#8080FF)"
 	}
 	cmd.Flags().StringVar(&c.target, c.Name, c.Default, usage)
 	_ = cmd.RegisterFlagCompletionFunc(c.Name,
 		func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+			// Completing the names rather than the hexes offers the spelling a
+			// person can recognise; the hex trails as the description.
 			out := make([]string, 0, len(AccentColors))
 			for _, a := range AccentColors {
-				out = append(out, a.hex+"\t"+a.name)
+				out = append(out, a.name+"\t"+a.hex)
 			}
 			return out, cobra.ShellCompDirectiveNoFileComp
 		})
 	registerCheck(cmd, c.Name, nil, c)
 }
 
-// Value returns the validated colour, or "" when none was given.
-func (c *Color) Value() string { return c.target }
+// Value returns the colour as Proton stores it, whichever spelling was given, or
+// "" when none was.
+func (c *Color) Value() string {
+	hex, err := AccentColor(c.target)
+	if err != nil {
+		// Unreachable: validate has already refused anything unresolvable, before
+		// the command body ran.
+		return c.target
+	}
+	return hex
+}
 
 // Set reports whether a colour was supplied.
 func (c *Color) Set() bool { return c.target != "" }

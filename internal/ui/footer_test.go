@@ -87,3 +87,29 @@ func TestQuantityAgreesInNumber(t *testing.T) {
 		}
 	}
 }
+
+// An empty collection means two very different things, and one word cannot say
+// both: "No messages." reads as an empty account, which is alarming when the
+// truth is that a filter matched nothing.
+func TestFooterTellsAnEmptyCollectionFromAnUnmatchedFilter(t *testing.T) {
+	empty := Footer(FooterSpec{Noun: "messages", Total: Unknown, Page: Unpaged})
+	if empty != "No messages." {
+		t.Errorf("an empty collection reads %q", empty)
+	}
+	unmatched := Footer(FooterSpec{Noun: "messages", Total: Unknown, Page: Unpaged, Filtered: true})
+	if unmatched != "No messages match." {
+		t.Errorf("an unmatched filter reads %q", unmatched)
+	}
+}
+
+// Filtered only changes the empty case: a filter that matched is reported the
+// same way any other collection is.
+func TestFooterFilteredOnlyChangesTheEmptyCase(t *testing.T) {
+	for _, count := range []int{1, 12} {
+		plain := Footer(FooterSpec{Noun: "messages", Count: count, Total: Unknown, Page: Unpaged})
+		filtered := Footer(FooterSpec{Noun: "messages", Count: count, Total: Unknown, Page: Unpaged, Filtered: true})
+		if plain != filtered {
+			t.Errorf("count %d: %q vs %q", count, plain, filtered)
+		}
+	}
+}

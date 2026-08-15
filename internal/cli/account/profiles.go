@@ -41,12 +41,16 @@ func profilesListCmd() *cobra.Command {
 					{Header: "EMAIL", Flex: true, Cell: func(p session.Profile) string { return p.Email }},
 					{Header: "UNLOCKED", Cell: func(p session.Profile) string { return yesNo(p.Unlocked) }},
 					{Header: "SAVED", Cell: func(p session.Profile) string { return units.Time(p.PersistedAt) }},
-					{Header: "ACTIVE", Accent: true, Cell: func(p session.Profile) string {
-						if p.Name == active {
-							return ui.GlyphSuccess
-						}
-						return ""
-					}},
+					{
+						Header: "ACTIVE",
+						Tone:   func(session.Profile) ui.Tone { return ui.ToneGood },
+						Cell: func(p session.Profile) string {
+							if p.Name == active {
+								return ui.GlyphSuccess
+							}
+							return ""
+						},
+					},
 				},
 			}, profiles, nil)
 		}),

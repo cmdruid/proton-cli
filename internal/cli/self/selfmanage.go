@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/selfmanage"
 )
 
@@ -24,7 +25,7 @@ const (
 func resolveExe() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("locate executable: %w", err)
+		return "", kit.Fail("Could not locate the running binary: %v", err)
 	}
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
@@ -34,21 +35,26 @@ func resolveExe() (string, error) {
 
 // guardManaged refuses to modify a package-managed install, naming the right
 // command for the requested action instead.
+//
+// The refusal is a problem with a remedy, like every other refusal in the CLI:
+// the manager that owns this copy is stated, and what to run instead is a line
+// under Try rather than a clause buried in the sentence.
 func guardManaged(exe string, action selfAction) error {
 	kind := selfmanage.Classify(exe)
 	if kind == selfmanage.KindStandalone {
 		return nil
 	}
-	via, cmd := managedHint(kind, action)
+	via, remedy := managedHint(kind, action)
+	problem := kit.Fail("proton-cli was installed with %s, which owns this copy.", via)
 	if kind == selfmanage.KindNix {
-		return fmt.Errorf("proton-cli was installed via %s (%s); %s", via, exe, cmd)
+		problem = kit.Fail("proton-cli was installed with %s, which owns %s.", via, exe)
 	}
-	return fmt.Errorf("proton-cli was installed via %s; %s", via, cmd)
+	return problem.Hint(remedy)
 }
 
-// managedHint maps a package-managed install to a human name and the command
-// that performs the requested action through that manager.
-func managedHint(kind selfmanage.Kind, action selfAction) (via, cmd string) {
+// managedHint maps a package-managed install to a human name and the remedy that
+// performs the requested action through that manager.
+func managedHint(kind selfmanage.Kind, action selfAction) (via, remedy string) {
 	update := action == actionUpdate
 	switch kind {
 	case selfmanage.KindNix:
@@ -58,43 +64,50 @@ func managedHint(kind selfmanage.Kind, action selfAction) (via, cmd string) {
 		return "Nix", "remove it through your flake or nixpkgs configuration"
 	case selfmanage.KindHomebrew:
 		if update {
-			return "Homebrew", "run `brew upgrade --cask proton-cli`"
+			return "Homebrew", "brew upgrade --cask proton-cli"
 		}
-		return "Homebrew", "run `brew uninstall --cask proton-cli`"
+		return "Homebrew", "brew uninstall --cask proton-cli"
 	case selfmanage.KindNpm:
 		if update {
-			return "npm", "run `npm update -g @roman-16/proton-cli`"
+			return "npm", "npm update -g @roman-16/proton-cli"
 		}
-		return "npm", "run `npm uninstall -g @roman-16/proton-cli`"
+		return "npm", "npm uninstall -g @roman-16/proton-cli"
 	case selfmanage.KindWinget:
 		if update {
-			return "winget", "run `winget upgrade Roman-16.ProtonCLI`"
+			return "winget", "winget upgrade Roman-16.ProtonCLI"
 		}
-		return "winget", "run `winget uninstall Roman-16.ProtonCLI`"
+		return "winget", "winget uninstall Roman-16.ProtonCLI"
 	}
 	return "", ""
 }
 
-// permissionHint names the likely package manager for the current OS, used when
-// an operation is refused because the target is not user-writable (a system or
-// root-owned install).
-func permissionHint(action selfAction) string {
+// permissionRemedies name the likely package manager for the current OS, used
+// when an operation is refused because the target is not user-writable (a system
+// or root-owned install).
+func permissionRemedies(action selfAction) []string {
+	uninstall := action == actionUninstall
 	switch runtime.GOOS {
 	case "darwin":
-		if action == actionUninstall {
-			return "Homebrew (`brew uninstall --cask proton-cli`)"
+		if uninstall {
+			return []string{"brew uninstall --cask proton-cli"}
 		}
-		return "Homebrew (`brew upgrade --cask proton-cli`)"
+		return []string{"brew upgrade --cask proton-cli"}
 	case "windows":
-		if action == actionUninstall {
-			return "winget (`winget uninstall Roman-16.ProtonCLI`)"
+		if uninstall {
+			return []string{"winget uninstall Roman-16.ProtonCLI"}
 		}
-		return "winget (`winget upgrade Roman-16.ProtonCLI`)"
+		return []string{"winget upgrade Roman-16.ProtonCLI"}
 	default:
-		if action == actionUninstall {
-			return "your distribution's package manager (e.g. sudo pacman -R proton-cli, apt remove proton-cli, dnf remove proton-cli, apk del proton-cli)"
+		if uninstall {
+			return []string{
+				"use your distribution's package manager, one of:",
+				"  sudo pacman -R proton-cli",
+				"  sudo apt remove proton-cli",
+				"  sudo dnf remove proton-cli",
+				"  sudo apk del proton-cli",
+			}
 		}
-		return "your distribution's package manager (pacman/AUR, apt, dnf, apk, ...)"
+		return []string{"update it with the package manager that installed it (pacman/AUR, apt, dnf, apk, …)"}
 	}
 }
 
@@ -106,11 +119,11 @@ func selfManageError(err error, exe string, action selfAction) error {
 		if action == actionUninstall {
 			verb = "remove"
 		}
-		return fmt.Errorf("cannot %s %s: permission denied. It looks like a system or package-managed "+
-			"install; use %s", verb, exe, permissionHint(action))
+		return kit.Fail("Cannot %s %s: permission denied, so this looks like a system or "+
+			"package-managed install.", verb, exe).Hint(permissionRemedies(action)...)
 	}
 	if action == actionUninstall {
 		return fmt.Errorf("remove %s: %w", exe, err)
 	}
-	return fmt.Errorf("install update: %w", err)
+	return fmt.Errorf("install the update: %w", err)
 }

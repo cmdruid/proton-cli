@@ -4,9 +4,13 @@
 // it is shaped in JSON or YAML. Nothing outside this package writes to the
 // process streams.
 //
-// The package knows nothing about Proton: no IDs are resolved here, no caches
-// are written, no API types are imported. That keeps it testable against golden
-// files with no fixtures.
+// The package knows nothing about Proton's service: no IDs are resolved here, no
+// caches are written, no API types are imported. That keeps it testable against
+// golden files with no fixtures.
+//
+// It does know the notation a reference is written in, because it prints them -
+// but it borrows that from internal/ref rather than restating it, so a reference
+// this package renders is by construction one the cli layer will read back.
 package ui
 
 import (
@@ -217,6 +221,32 @@ func (u *UI) Hint(msg string) {
 	}
 	_, _ = fmt.Fprintln(u.Err, u.errTheme.Hint(msg))
 }
+
+// Warn reports something that is true, is not a failure, and is worth noticing:
+// a file that arrived but could not be attributed, a change that was saved but
+// whose notification bounced, a filter about to cover more than the reader
+// probably means.
+//
+// It is the third severity, and the CLI needs exactly three. Without it every
+// caveat prints as flat commentary in the same colour as "Downloading…", which
+// is how a warning about an unverifiable signature ends up sitting invisibly
+// above a green tick.
+//
+// Continuation lines are indented under the first, so a wrapped caveat stays
+// visually attached to its mark.
+func (u *UI) Warn(msg string) {
+	if u.Quiet || msg == "" {
+		return
+	}
+	lines := strings.Split(msg, "\n")
+	_, _ = fmt.Fprintf(u.Err, "%s %s\n", u.errTheme.Caution(GlyphCaution), lines[0])
+	for _, cont := range lines[1:] {
+		_, _ = fmt.Fprintf(u.Err, "  %s\n", cont)
+	}
+}
+
+// Warnf is Warn with formatting.
+func (u *UI) Warnf(format string, a ...any) { u.Warn(fmt.Sprintf(format, a...)) }
 
 // encode writes v to Out in the machine format. It is the single marshalling
 // path, so JSON and YAML can never disagree about field names: goccy/go-yaml

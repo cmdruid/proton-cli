@@ -7,7 +7,6 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
 	"github.com/roman-16/proton-cli/internal/vcard"
@@ -143,7 +142,7 @@ func (s *Service) Get(ctx context.Context, id string) (*Contact, error) {
 }
 
 func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		return r, nil
 	}
 	contacts, err := s.List(ctx)

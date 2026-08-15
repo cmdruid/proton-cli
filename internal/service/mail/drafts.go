@@ -8,7 +8,6 @@ import (
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/mailtext"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
@@ -89,7 +88,7 @@ func (s *Service) DraftsList(ctx context.Context, page, pageSize int) ([]Message
 // ResolveDraft resolves a REF within the Drafts folder, so editing or sending a
 // draft by subject can never reach a message that has already gone out.
 func (s *Service) ResolveDraft(ctx context.Context, r string) (string, error) {
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		return r, nil
 	}
 	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "drafts", Limit: 20})

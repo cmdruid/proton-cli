@@ -170,7 +170,7 @@ func eventsGetCmd() *cobra.Command {
 					{Label: "Zone", Value: ev.Zone},
 					{Label: "Reminders", Value: strings.Join(ev.Reminders, ", ")},
 					{Label: "Calendar", Value: name},
-					{Label: "Signature", Value: string(ev.Signature), Always: true},
+					kit.SignatureField(string(ev.Signature)),
 					{Label: "ID", Value: eventRef(*ev), ID: true},
 				},
 			})
@@ -469,7 +469,7 @@ func eventsRespondCmd() *cobra.Command {
 			}
 			if res != nil && res.Reply != nil {
 				if err := sendICS(c, res.Reply.Recipients, res.Reply.Subject, res.Reply.Body, res.Reply.ICS, "REPLY"); err != nil {
-					c.Note("You responded, but telling the organizer by email failed: %v", err)
+					c.Warn("You responded, but telling the organizer by email failed: %v", err)
 				}
 			}
 			return nil
@@ -577,7 +577,7 @@ func tellAttendees(c *kit.Invocation, res *calsvc.EventResult) error {
 	}
 	m := res.Mail
 	if err := sendICS(c, m.Recipients, m.Subject, m.Body, m.ICS, m.Method); err != nil {
-		c.Note("The change was saved, but the email to %s failed: %v",
+		c.Warn("The change was saved, but the email to %s failed: %v",
 			ui.Quantity(len(m.Recipients), "attendees"), err)
 	}
 	return nil

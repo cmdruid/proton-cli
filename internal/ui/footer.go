@@ -19,6 +19,11 @@ type FooterSpec struct {
 	// Limit is the cap the caller asked for, when reaching it means more may
 	// exist. Zero when the request was not capped.
 	Limit int
+	// Filtered says the request narrowed the collection. It only changes what an
+	// empty result means: "no messages" reads as an empty account, which is
+	// alarming when it is really an unmatched filter, and useless when the reader
+	// wants to know which of the two it is.
+	Filtered bool
 }
 
 const (
@@ -31,12 +36,16 @@ const (
 // Footer renders the one-line summary that follows a table on stderr.
 //
 //	No messages.
+//	No messages match.
 //	12 messages.
 //	25 of 312 messages. Next page: --page 1
 //	25 of 312 messages. (last page)
 //	25 messages. More may exist; raise --limit.
 func Footer(s FooterSpec) string {
 	if s.Count == 0 {
+		if s.Filtered {
+			return "No " + s.Noun + " match."
+		}
 		return "No " + s.Noun + "."
 	}
 	paged := s.Page >= 0 && s.PageSize > 0 && s.Total > s.Count

@@ -132,3 +132,50 @@ func TestRecordShortensIDsOnTerminal(t *testing.T) {
 		t.Errorf("ID should be shortened on a terminal: %q", out.String())
 	}
 }
+
+// The signature verdict is the one field that carries a verdict rather than a
+// value, and the only one where not noticing is a security problem. Each of the
+// four reads differently; only "invalid" is an alarm.
+func TestRecordSignatureVerdicts(t *testing.T) {
+	u, out, errb := fixture(t, Options{})
+	u.theme = Theme{enabled: true, wide: true}
+	for _, verdict := range []struct {
+		value string
+		tone  Tone
+	}{
+		{"verified", ToneGood},
+		{"unsigned", ToneNeutral},
+		{"unverified", ToneCaution},
+		{"invalid", ToneBad},
+	} {
+		if err := Record(u, RecordSpec{Fields: []Field{
+			{Label: "Subject", Value: "Invoice #2291 is ready"},
+			{Label: "Signature", Value: verdict.value, Tone: verdict.tone, Always: true},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check(t, "record_signature", out, errb)
+}
+
+// A colour on a record must not change what a pipe receives.
+func TestRecordToneLeavesTheTextAlone(t *testing.T) {
+	spec := RecordSpec{Fields: []Field{
+		{Label: "Signature", Value: "invalid", Tone: ToneBad, Always: true},
+		{Label: "Color", Value: "purple", Swatch: "#8080FF"},
+	}}
+
+	plain, plainOut, _ := fixture(t, Options{})
+	if err := Record(plain, spec); err != nil {
+		t.Fatal(err)
+	}
+	coloured, colOut, _ := fixture(t, Options{})
+	coloured.theme = Theme{enabled: true, wide: true}
+	if err := Record(coloured, spec); err != nil {
+		t.Fatal(err)
+	}
+	if stripANSI(colOut.String()) != plainOut.String() {
+		t.Errorf("colour changed the text\ncoloured (stripped):\n%s\nplain:\n%s",
+			stripANSI(colOut.String()), plainOut.String())
+	}
+}

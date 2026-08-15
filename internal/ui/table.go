@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unicode/utf8"
 
 	"golang.org/x/term"
 )
@@ -15,17 +14,35 @@ type Column[T any] struct {
 	// Header is the column title: one uppercase word, or SNAKE_CASE. Never a
 	// glyph - a reader should be able to say the name out loud.
 	Header string
-	Cell   func(T) string
+	// Cell extracts the text. It is what every column but a status column uses;
+	// see Marks for the exception.
+	Cell func(T) string
 	// ID marks the cell as a Proton reference: shortened on a terminal unless
 	// full IDs were asked for, and coloured as an ID.
 	ID bool
-	// Accent highlights the cell, for compact status markers.
-	Accent bool
+	// Tone says what the cell's value means, for the columns that carry a verdict
+	// or a marker rather than plain data. Nil is ToneNeutral throughout.
+	Tone func(T) Tone
+	// Marks replaces Cell for a status column, whose glyphs each mean something
+	// different and are therefore toned one by one.
+	Marks func(T) Marks
+	// Swatch returns the hex colour the cell's value names, drawn as a dot in
+	// front of it. It is how a label, folder, calendar or group shows the colour
+	// Proton gave it, instead of printing a hex code at a person.
+	Swatch func(T) string
 	// Flex allows the column to be narrowed when the table is wider than the
 	// terminal. Columns without it keep their natural width.
 	Flex bool
 	// Right aligns the cell to the right, for counts and sizes.
 	Right bool
+}
+
+// tone is the cell's tone, or ToneNeutral when the column declares none.
+func (c Column[T]) tone(row T) Tone {
+	if c.Tone == nil {
+		return ToneNeutral
+	}
+	return c.Tone(row)
 }
 
 // TableSpec describes a collection: the columns to draw, and the facts the
@@ -36,11 +53,13 @@ type TableSpec[T any] struct {
 	Noun    string
 	Columns []Column[T]
 
-	// Total, Page, PageSize and Limit describe the request; see FooterSpec.
+	// Total, Page, PageSize, Limit and Filtered describe the request; see
+	// FooterSpec.
 	Total    int
 	Page     int
 	PageSize int
 	Limit    int
+	Filtered bool
 
 	// Rows, when set, replaces the marshalled items in machine formats. Use it
 	// when the wire shape differs from the table's row type.
@@ -70,6 +89,7 @@ func Table[T any](u *UI, spec TableSpec[T], items []T) error {
 	u.Hint(Footer(FooterSpec{
 		Noun: spec.Noun, Count: len(items), Total: spec.Total,
 		Page: spec.Page, PageSize: spec.PageSize, Limit: spec.Limit,
+		Filtered: spec.Filtered,
 	}))
 	return nil
 }
@@ -114,16 +134,33 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 	short := u.ShortIDs()
 
 	rows := make([][]string, 0, len(items))
+	styles := make([][]cellStyle, 0, len(items))
 	for _, it := range items {
 		row := make([]string, len(cols))
+		style := make([]cellStyle, len(cols))
 		for i, c := range cols {
-			v := c.Cell(it)
-			if c.ID {
-				v = Short(v, short)
+			var v string
+			switch {
+			case c.Marks != nil:
+				style[i].marks = c.Marks(it)
+				v = style[i].marks.String()
+			case c.ID:
+				v = Short(c.Cell(it), short)
+				style[i].id = true
+			default:
+				v = c.Cell(it)
+				if c.Swatch != nil && v != "" {
+					// The dot is part of the cell's text, so it is measured and
+					// truncated with it rather than smuggled in at draw time.
+					style[i].swatch = c.Swatch(it)
+					v = GlyphSwatch + " " + v
+				}
 			}
+			style[i].tone = c.tone(it)
 			row[i] = v
 		}
 		rows = append(rows, row)
+		styles = append(styles, style)
 	}
 
 	widths := layout(cols, rows, u.width())
@@ -138,7 +175,7 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 	_, _ = fmt.Fprintln(u.Out, theme.Hint(strings.TrimRight(strings.Join(heads, "  "), " ")))
 	_, _ = fmt.Fprintln(u.Out, theme.Rule(strings.Join(rules, "  ")))
 
-	for _, row := range rows {
+	for r, row := range rows {
 		// Cells are assembled first so trailing empty ones can be dropped whole.
 		// Trimming the finished line instead would be wrong: styling wraps a cell,
 		// so padding can end up inside an escape sequence where no trim reaches it.
@@ -146,18 +183,11 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 		last := -1
 		for i, c := range cols {
 			if row[i] == "" {
-				cells[i] = strings.Repeat(" ", widths[i])
+				cells[i] = spaces(widths[i])
 				continue
 			}
 			last = i
-			cell := pad(truncate(row[i], widths[i]), widths[i], c.Right)
-			switch {
-			case c.ID:
-				cell = theme.ID(cell)
-			case c.Accent:
-				cell = theme.Accent(cell)
-			}
-			cells[i] = cell
+			cells[i] = theme.cell(pad(truncate(row[i], widths[i]), widths[i], c.Right), styles[r][i])
 		}
 		if last < 0 {
 			_, _ = fmt.Fprintln(u.Out)
@@ -165,17 +195,45 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 		}
 		// The rightmost populated cell needs no padding after it.
 		if !cols[last].Right {
-			cells[last] = pad(truncate(row[last], widths[last]), widths[last], false)
-			cells[last] = strings.TrimRight(cells[last], " ")
-			switch {
-			case cols[last].ID:
-				cells[last] = theme.ID(cells[last])
-			case cols[last].Accent:
-				cells[last] = theme.Accent(cells[last])
-			}
+			bare := strings.TrimRight(truncate(row[last], widths[last]), " ")
+			cells[last] = theme.cell(bare, styles[r][last])
 		}
 		_, _ = fmt.Fprintln(u.Out, strings.Join(cells[:last+1], "  "))
 	}
+}
+
+// cellStyle is how one cell is painted, decided while the row is built so the
+// drawing loop has nothing left to work out.
+type cellStyle struct {
+	// swatch is the hex whose dot opens the cell, when the column names a colour.
+	swatch string
+	// marks are the individually toned glyphs of a status cell.
+	marks Marks
+	id    bool
+	tone  Tone
+}
+
+// cell paints one finished cell.
+//
+// A swatch colours only its leading dot, and a status run only its glyphs: the
+// text beside them is ordinary, and painting that too would make every row a
+// different colour instead of pointing at the one thing that has one.
+//
+// Both forms keep whatever padding follows outside the escapes, and both fall
+// back to a plain cell if truncation has eaten the prefix they describe.
+func (t Theme) cell(s string, st cellStyle) string {
+	switch {
+	case st.swatch != "" && strings.HasPrefix(s, GlyphSwatch):
+		return t.Paint(st.swatch, GlyphSwatch) + s[len(GlyphSwatch):]
+	case len(st.marks) > 0:
+		if plain := st.marks.String(); strings.HasPrefix(s, plain) {
+			return t.paintMarks(st.marks) + s[len(plain):]
+		}
+		return s
+	case st.id:
+		return t.ID(s)
+	}
+	return t.tone(st.tone, s)
 }
 
 // layout sizes every column to its content, then, while the table is wider than
@@ -185,17 +243,16 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 //
 // maxWidth <= 0 means unlimited: nothing is truncated.
 //
-// Widths are counted in runes. A few glyphs the flag column uses render two
-// cells wide, which can nudge the columns after them; the flag column is
-// therefore always last, where nothing follows to misalign.
+// Widths are counted in terminal cells, so a subject in Japanese and a subject
+// in German each end where the column does.
 func layout[T any](cols []Column[T], rows [][]string, maxWidth int) []int {
 	widths := make([]int, len(cols))
 	for i, c := range cols {
-		widths[i] = utf8.RuneCountInString(c.Header)
+		widths[i] = Cells(c.Header)
 	}
 	for _, row := range rows {
 		for i, cell := range row {
-			if n := utf8.RuneCountInString(cell); n > widths[i] {
+			if n := Cells(cell); n > widths[i] {
 				widths[i] = n
 			}
 		}
@@ -248,25 +305,6 @@ func (u *UI) width() int {
 	return cols
 }
 
-func pad(s string, width int, right bool) string {
-	n := utf8.RuneCountInString(s)
-	if n >= width {
-		return s
-	}
-	fill := strings.Repeat(" ", width-n)
-	if right {
-		return fill + s
-	}
-	return s + fill
-}
+func pad(s string, width int, right bool) string { return padCells(s, width, right) }
 
-func truncate(s string, max int) string {
-	if utf8.RuneCountInString(s) <= max {
-		return s
-	}
-	r := []rune(s)
-	if max <= 1 {
-		return string(r[:max])
-	}
-	return string(r[:max-1]) + "…"
-}
+func truncate(s string, max int) string { return truncateCells(s, max) }

@@ -33,10 +33,23 @@ $base = if ($Version) {
     "https://github.com/$repo/releases/latest/download"
 }
 
+# The three notes the script makes, matching the sh installer and the binary:
+# a tick for something that went right, a bang for something worth knowing.
+function Write-Info { param([string]$Message) Write-Host "  $Message" }
+function Write-Success { param([string]$Message)
+    Write-Host '  ' -NoNewline
+    Write-Host '✓' -ForegroundColor Green -NoNewline
+    Write-Host " $Message"
+}
+function Write-Step { param([string]$Command, [string]$Purpose)
+    Write-Host ("    {0,-32} " -f $Command) -NoNewline
+    Write-Host $Purpose -ForegroundColor DarkGray
+}
+
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("proton-cli-" + [Guid]::NewGuid())
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 try {
-    Write-Host "Downloading $asset$(if ($Version) { " (v$($Version.TrimStart('v')))" })..."
+    Write-Info "Downloading $asset$(if ($Version) { " (v$($Version.TrimStart('v')))" })…"
     Invoke-WebRequest -Uri "$base/$asset" -OutFile "$tmp\$asset" -UseBasicParsing
     Invoke-WebRequest -Uri "$base/checksums.txt" -OutFile "$tmp\checksums.txt" -UseBasicParsing
 
@@ -45,14 +58,16 @@ try {
     if (-not $expected) { throw "no checksum entry for $asset in checksums.txt" }
     $actual = (Get-FileHash -Algorithm SHA256 -Path "$tmp\$asset").Hash.ToLower()
     if ($expected.ToLower() -ne $actual) { throw "checksum mismatch for $asset (expected $expected, got $actual)" }
-    Write-Host "Checksum verified."
+    Write-Success 'Checksum verified'
 
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     $dest = Join-Path $InstallDir 'proton-cli.exe'
     Move-Item -Path "$tmp\$asset" -Destination $dest -Force
 
-    $installed = (& $dest --version 2>$null)
-    Write-Host "Installed $installed to $dest" -ForegroundColor Green
+    # `--version` prints "proton-cli version X.Y.Z"; the bare number reads better
+    # in a sentence that already names the program.
+    $installed = ((& $dest --version 2>$null) -split '\s+')[-1]
+    Write-Success "Installed proton-cli $installed → $dest"
 }
 finally {
     Remove-Item -Path $tmp -Recurse -Force -ErrorAction SilentlyContinue
@@ -66,5 +81,12 @@ if (($userPath -split ';') -notcontains $InstallDir) {
     $env:Path = "$env:Path;$InstallDir"
 }
 
-Write-Host "Enable shell completions with: proton-cli completion powershell"
-Write-Host "Uninstall any time with: proton-cli uninstall"
+# Close on what to do rather than on how to undo it: somebody who has just run an
+# install command is looking for the first command, not the last one.
+Write-Host ''
+Write-Info 'Next:'
+Write-Step 'proton-cli account login' 'sign in'
+Write-Step 'proton-cli --help' 'what it can do'
+Write-Step 'proton-cli completion powershell' 'tab completion'
+Write-Host ''
+Write-Info 'Remove it again any time with: proton-cli uninstall'

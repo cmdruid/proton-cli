@@ -35,12 +35,16 @@ func sessionsListCmd() *cobra.Command {
 					{Header: "ID", ID: true, Cell: func(s proton.Session) string { return s.UID }},
 					{Header: "CLIENT", Flex: true, Cell: func(s proton.Session) string { return s.ClientID }},
 					{Header: "CREATED", Cell: func(s proton.Session) string { return units.Time(s.CreateTime) }},
-					{Header: "CURRENT", Accent: true, Cell: func(s proton.Session) string {
-						if s.Current {
-							return ui.GlyphSuccess
-						}
-						return ""
-					}},
+					{
+						Header: "CURRENT",
+						Tone:   func(proton.Session) ui.Tone { return ui.ToneGood },
+						Cell: func(s proton.Session) string {
+							if s.Current {
+								return ui.GlyphSuccess
+							}
+							return ""
+						},
+					},
 				},
 			}, sessions, func(s proton.Session) []string { return []string{s.UID} })
 		}),

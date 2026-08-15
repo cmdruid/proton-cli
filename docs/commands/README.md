@@ -242,7 +242,7 @@ Update proton-cli to the latest release
 
 | Command | What it does |
 | --- | --- |
-| `update [version]` | Update proton-cli to the latest release |
+| `update [VERSION]` | Update proton-cli to the latest release |
 
 ### `version`
 

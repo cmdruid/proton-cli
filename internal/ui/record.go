@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
 )
 
 // Field is one labelled value in a record.
@@ -20,6 +19,11 @@ type Field struct {
 	Always bool
 	// ID styles the value as a Proton reference and shortens it on a terminal.
 	ID bool
+	// Tone says what the value means, for the fields that carry a verdict rather
+	// than plain data.
+	Tone Tone
+	// Swatch is the hex the value names, drawn as a dot in front of it.
+	Swatch string
 }
 
 // RecordSpec describes a single object.
@@ -59,7 +63,7 @@ func writeFields(u *UI, fields []Field, indent string) {
 
 	width := 0
 	for _, f := range visible {
-		if n := utf8.RuneCountInString(f.Label); n > width {
+		if n := Cells(f.Label); n > width {
 			width = n
 		}
 	}
@@ -70,13 +74,18 @@ func writeFields(u *UI, fields []Field, indent string) {
 	for _, f := range visible {
 		label := pad(f.Label+":", width, false)
 		value := f.Value
-		if f.ID {
+		switch {
+		case f.ID:
 			value = theme.ID(Short(value, short))
+		case f.Swatch != "":
+			value = theme.Paint(f.Swatch, GlyphSwatch) + " " + value
+		default:
+			value = theme.tone(f.Tone, value)
 		}
 		lines := strings.Split(value, "\n")
 		_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, theme.Hint(label), lines[0])
 		for _, cont := range lines[1:] {
-			_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, strings.Repeat(" ", width), cont)
+			_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, spaces(width), cont)
 		}
 	}
 }

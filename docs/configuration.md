@@ -105,13 +105,12 @@ Try:   proton-cli account logout --profile work
 
 ## Environment variables
 
-Six, and none of them can name an account.
+Five, and none of them can name an account.
 
 | Variable | Description |
 | --- | --- |
 | `PROTON_PROFILE` | Active profile (default: `default`) |
 | `PROTON_API_URL` | API base URL (default: `https://mail.proton.me/api`) |
-| `PROTON_APP_VERSION` | App version header (default: `Other`) |
 | `NO_COLOR` | Set to any value, even empty, to turn colored output off ([no-color.org](https://no-color.org)) |
 | `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
 | `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
@@ -129,14 +128,16 @@ Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton
 
 | Flag | Effect |
 | --- | --- |
-| `--output text\|json\|yaml` | Output format (default `text`) |
-| `--profile NAME` | Which profile to act as |
-| `--dry-run` | Preview a mutation without applying it |
-| `--yes` | Answer confirmation prompts with yes; needed by a script that removes things ([why](language.md#when-it-asks-first)) |
+| `-p`, `--profile NAME` | Which profile to act as |
+| `-o`, `--output text\|json\|yaml` | Output format (default `text`) |
+| `-n`, `--dry-run` | Preview a mutation without applying it |
+| `-y`, `--yes` | Answer confirmation prompts with yes; needed by a script that removes things ([why](language.md#when-it-asks-first)) |
+| `-q`, `--quiet` | Suppress the non-essential stderr output |
 | `--full-ids` | Don't shorten IDs in interactive output |
 | `--no-color` | Turn colored output off (env: `NO_COLOR`) |
-| `--quiet` | Suppress the non-essential stderr output |
 | `--log-level debug\|info\|warn\|error` | Logging verbosity (env: `PROTON_LOG_LEVEL`) |
 | `--no-input` | Never prompt; a missing credential becomes an error (env: `PROTON_NO_INPUT`) |
-| `--api-url URL` | Point at a different API host |
-| `--app-version STRING` | Override the app version header |
+
+Five flags have a single-letter form, and they are the five you type most: `-p`, `-o`, `-n`, `-q`, `-y`. They cluster, so `-qn` is a quiet dry run. The letters are global and no subcommand may take one, so `-p` is the profile everywhere and never something else.
+
+`--api-url URL` points the CLI at a different API host. It works but is hidden from `--help`, because it is for developing proton-cli rather than for using it.

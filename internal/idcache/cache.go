@@ -163,39 +163,3 @@ func (c *Cache) writeAtomic(ids []string) error {
 	}
 	return os.Rename(tmpName, c.path)
 }
-
-// IsFullID reports whether s looks like a complete Proton ID: at least 60
-// characters ending in "==". The canonical heuristic shared by the
-// service-layer Resolve methods.
-func IsFullID(s string) bool {
-	return len(s) >= 60 && strings.HasSuffix(s, "==")
-}
-
-// IsShortID reports whether s could be a short Proton-ID prefix:
-//
-//   - 8 to 59 characters,
-//   - URL-safe base64 charset only (A-Z, a-z, 0-9, '-', '_'),
-//   - does NOT end in "==" (which would make it a full ID).
-//
-// The predicate is intentionally loose: many search terms ("Personal",
-// "invoice-2024", "proton-cli-test-1234") technically match. That's OK
-// because ResolvePrefix only USES the cache when there's a match -
-// cache misses fall through to the original input so the service-layer
-// keyword-search path handles them. Ambiguous cache hits (the same
-// prefix mapping to 2+ full IDs) still error with exit 4.
-func IsShortID(s string) bool {
-	if len(s) < 8 || len(s) >= 60 || strings.HasSuffix(s, "==") {
-		return false
-	}
-	for _, c := range s {
-		switch {
-		case c >= 'A' && c <= 'Z':
-		case c >= 'a' && c <= 'z':
-		case c >= '0' && c <= '9':
-		case c == '-' || c == '_':
-		default:
-			return false
-		}
-	}
-	return true
-}

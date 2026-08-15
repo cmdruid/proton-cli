@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 )
 
@@ -182,83 +181,6 @@ func TestClear(t *testing.T) {
 	}
 }
 
-func TestIsFullID(t *testing.T) {
-	tests := []struct {
-		in   string
-		want bool
-	}{
-		{strings.Repeat("a", 86) + "==", true},
-		{strings.Repeat("a", 88) + "==", true},
-		{strings.Repeat("a", 58) + "==", true},  // exactly 60 chars (boundary, accepted)
-		{strings.Repeat("a", 57) + "==", false}, // 59 chars: too short
-		{strings.Repeat("a", 88), false},        // missing ==
-		{"", false},
-		{"some search term that is long enough though", false}, // no ==
-	}
-	for _, tc := range tests {
-		t.Run(tc.in[:min(len(tc.in), 12)], func(t *testing.T) {
-			if got := IsFullID(tc.in); got != tc.want {
-				t.Errorf("IsFullID(%q) = %v, want %v", tc.in, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestIsShortID(t *testing.T) {
-	// IsShortID is a loose shape check: any base64-charset string of the
-	// right length matches. Disambiguation between "real ID prefix" and
-	// "search term" happens at ResolvePrefix time - cache miss falls
-	// through to the caller, ambiguous cache hits exit 4.
-	tests := []struct {
-		name string
-		in   string
-		want bool
-	}{
-		// Real Proton ID prefixes.
-		{"8-char base64 mixed case", "AbC12345", true},
-		{"realistic 8-char prefix", "NWM5AYGx", true},
-		{"all lowercase 8 chars", "abc12345", true},
-		{"30-char base64 with hyphen", "abc12345_xy7zSTUFF-base64body", true},
-		// Search-term shapes that also match - ResolvePrefix handles them
-		// via cache-miss fallthrough.
-		{"capitalized name", "Personal", true},
-		{"test fixture name", "proton-cli-test-1234-5678-ref", true},
-		{"hyphenated lowercase name", "john-doe-2026", true},
-		// Negatives by length / shape.
-		{"7 chars too short", "AbC1234", false},
-		{"60 chars too long for short", strings.Repeat("A", 60), false},
-		{"ends with ==", "abc12345xyz==", false},
-		{"contains space", "abc 1234", false},
-		{"contains slash (not URL-safe)", "abc/1234", false},
-		{"contains plus (not URL-safe)", "abc+1234", false},
-		{"empty", "", false},
-		{"all underscores", "________", true},
-		{"all hyphens", "--------", true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := IsShortID(tc.in); got != tc.want {
-				t.Errorf("IsShortID(%q) = %v, want %v", tc.in, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestFullAndShortMutuallyExclusive(t *testing.T) {
-	cases := []string{
-		strings.Repeat("a", 88) + "==",
-		"abc12345",
-		strings.Repeat("a", 30),
-		"",
-		"hi",
-	}
-	for _, s := range cases {
-		if IsFullID(s) && IsShortID(s) {
-			t.Errorf("both predicates matched %q", s)
-		}
-	}
-}
-
 func equalSlice(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -269,11 +191,4 @@ func equalSlice(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

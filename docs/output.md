@@ -18,16 +18,16 @@ proton-cli drive items download /report.pdf --output - > report.pdf
 $ proton-cli mail messages list --unread --page-size 3
 ID        FROM              SUBJECT                DATE              FLAGS
 ────────  ────────────────  ─────────────────────  ────────────────  ─────
-5bH2mQxK  Fastmail Billing  Invoice #2291 ready    2026-04-15 14:32  ●★📎
+5bH2mQxK  Fastmail Billing  Invoice #2291 ready    2026-04-15 14:32  ●★2
 9xL4pQrT  Trailhead         Weekly digest          2026-04-15 09:02  ●
 2mNp7RsV  Jane Roe          Re: Quarterly numbers  2026-04-14 17:48
 
 3 of 47 messages. Next page: --page 1
 ```
 
-The `ID` column is always first and always called `ID`. Dates use one format. The `FLAGS` column reads `●` unread, `★` starred, `📎` has attachments.
+The `ID` column is always first and always called `ID`. Dates use one format. The `FLAGS` column reads `●` unread, `★` starred, and a number for how many files are attached.
 
-An empty collection prints **nothing** on stdout - just `No messages.` on stderr - so a redirect yields an empty file rather than a stray header.
+An empty collection prints **nothing** on stdout - just `No messages.` on stderr - so a redirect yields an empty file rather than a stray header. When a filter was applied it reads `No messages match.` instead, so an unmatched search never looks like an empty account.
 
 ### Records
 
@@ -171,7 +171,19 @@ The one exception is [`proton-cli api`](commands/api.md), which passes Proton's 
 
 ## Colour
 
-Interactive text output is coloured in Proton's own accents: headers and footers dimmed, IDs and status markers highlighted, `✓` green, `Error:` red.
+Colour is used for one thing: making the parts that carry a verdict, or a colour of their own, worth stopping on. Everything else stays plain, so what is coloured means something.
+
+| What | Colour |
+| --- | --- |
+| Headers, footers, field labels | Dimmed |
+| IDs | Proton purple |
+| `✓` a change that succeeded | Green |
+| `!` a caveat worth knowing | Orange |
+| `Error:` | Red |
+| `●` unread | Proton purple |
+| `★` starred | Orange, as in Proton Mail |
+| `Signature:` | Green verified, orange unverified, red invalid |
+| `■` beside a label, folder, calendar or group | The colour Proton stores for it |
 
 Colour is off whenever output is piped or redirected, whenever `--output json` or `yaml` is used, and when you say so:
 
@@ -180,7 +192,9 @@ proton-cli mail messages list --no-color
 NO_COLOR=1 proton-cli mail messages list
 ```
 
-Colour never changes the layout: with it on or off, a script receives identical bytes.
+Colour never changes the layout, and never carries meaning on its own: with it on or off, a script receives identical bytes and a reader gets the same words. Every verdict is spelled out - `invalid`, `unverified` - so nothing depends on being able to see the difference between green and red.
+
+Widths are measured in terminal cells rather than characters, so a table stays aligned for a subject written in Japanese or a filename with an emoji in it.
 
 ## Widths
 

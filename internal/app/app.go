@@ -69,18 +69,17 @@ type App struct {
 }
 
 type Options struct {
-	Profile    string
-	APIURL     string
-	AppVersion string
-	Version    string
-	Output     ui.Format
-	LogLevel   slog.Level
-	Quiet      bool
-	DryRun     bool
-	FullIDs    bool
-	NoColor    bool
-	NoInput    bool
-	Yes        bool
+	Profile  string
+	APIURL   string
+	Version  string
+	Output   ui.Format
+	LogLevel slog.Level
+	Quiet    bool
+	DryRun   bool
+	FullIDs  bool
+	NoColor  bool
+	NoInput  bool
+	Yes      bool
 }
 
 func New(opts Options) (*App, error) {
@@ -93,7 +92,6 @@ func New(opts Options) (*App, error) {
 	}
 
 	apiURL := firstNonEmpty(opts.APIURL, os.Getenv("PROTON_API_URL"))
-	appVer := firstNonEmpty(opts.AppVersion, os.Getenv("PROTON_APP_VERSION"))
 	userAgent := defaultUserAgent(opts.Version)
 
 	u := ui.New(ui.Options{
@@ -105,7 +103,7 @@ func New(opts Options) (*App, error) {
 		FullIDs:  opts.FullIDs,
 	})
 	c := proton.New(proton.Options{
-		AppVersion: appVer, BaseURL: apiURL, Logger: u.Log, Profile: profileName.String(),
+		BaseURL: apiURL, Logger: u.Log, Profile: profileName.String(),
 		UserAgent: userAgent, DryRun: opts.DryRun,
 	})
 

@@ -1,0 +1,9 @@
+== stdout ==
+ID                        NAME      COLOR
+────────────────────────  ────────  ────────────
+kQ81mDx4T9wLpN4vRs8kZc==  Work      ■ purple
+7Kd91mQxT2wLpN8vRs4kZc==  Personal  ■ strawberry
+3Ns8pT2vX9kLd4vZn1cQs6==  Receipts  ■ pacific
+9xL4pQrTz2mKd8vBn6cXs1==  Imported  ■ #123456
+== stderr ==
+4 labels.

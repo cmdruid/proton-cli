@@ -31,12 +31,7 @@ It refuses to touch a package-managed install (apt, dnf, apk, AUR,
 Homebrew, winget, npm, Nix) and tells you the right command instead.
 
 Only the binary is removed by default. Pass --purge to also delete local
-data (saved sessions and the ID cache) under your config directory.
-
-Examples:
-  proton-cli uninstall --dry-run       # show what would be removed
-  proton-cli uninstall --yes           # remove the binary without asking
-  proton-cli uninstall --yes --purge   # also remove local data`,
+data (saved sessions and the ID cache) under your config directory.`,
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			return runUninstall(c, purge)
@@ -77,7 +72,7 @@ func runUninstall(c *kit.Invocation, purge bool) error {
 		}
 		if dataDir != "" {
 			if err := os.RemoveAll(dataDir); err != nil {
-				c.Note("warning: could not remove %s: %v", dataDir, err)
+				c.Warn("Could not remove %s: %v", dataDir, err)
 			}
 		}
 		return nil
@@ -91,10 +86,16 @@ func runUninstall(c *kit.Invocation, purge bool) error {
 	if runtime.GOOS == "windows" {
 		c.Note("A temporary copy will be cleaned up after this process exits.")
 	}
+	// What is left behind is the part worth stopping on: the binary is gone, so
+	// nothing here can remove the credential afterwards.
 	if dataDir != "" {
-		c.Note("Sign out this session from Proton (web/app) to invalidate any tokens it held.")
+		c.Warn("The session this machine held is still valid at Proton.\n" +
+			"Sign it out from any Proton app to invalidate the tokens it carried.")
 	} else {
-		c.Note("Saved sessions and cache were left in place (use --purge to remove them).")
+		if d, err := session.Dir(); err == nil {
+			c.Warn("Your saved session is still on this machine, at %s.\n"+
+				"Re-run with --purge to remove it, and sign the session out from any Proton app.", d)
+		}
 	}
 	return nil
 }

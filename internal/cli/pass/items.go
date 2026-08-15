@@ -389,7 +389,7 @@ const (
 
 func selectItems(c *kit.Invocation, f *filters) (kit.Selection[passsvc.Item], error) {
 	if f.all && f.vault == "" && !f.itemType.Set() && !f.age.Set() {
-		c.Note("--all with no other filter covers every vault. Add --vault to narrow it.")
+		c.Warn("--all with no other filter covers every vault. Add --vault to narrow it.")
 	}
 	sel := kit.Selector[passsvc.Item]{
 		Noun:       "items",

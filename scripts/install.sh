@@ -44,25 +44,57 @@ main() {
 	tmp="$(mktemp -d)"
 	trap 'rm -rf "$tmp"' EXIT INT HUP TERM
 
-	info "Downloading ${asset}${VERSION:+ (v${VERSION#v})}..."
+	info "Downloading ${asset}${VERSION:+ (v${VERSION#v})}…"
 	download "$base/$asset" "$tmp/$asset" ||
 		die "download failed: $base/$asset (no prebuilt binary for $os/$arch in this release?)"
 	download "$base/checksums.txt" "$tmp/checksums.txt" ||
 		die "could not download checksums.txt from $base"
 
 	verify_checksum "$tmp/$asset" "$tmp/checksums.txt" "$asset"
-	info "Checksum verified."
+	success "Checksum verified"
 
 	mkdir -p "$INSTALL_DIR"
 	install -m 0755 "$tmp/$asset" "$INSTALL_DIR/$BIN" 2>/dev/null ||
 		die "could not install to $INSTALL_DIR (set --install-dir to a writable directory)"
 
-	installed="$("$INSTALL_DIR/$BIN" --version 2>/dev/null || echo "$BIN")"
-	success "Installed $installed to $INSTALL_DIR/$BIN"
+	# `--version` prints "proton-cli version X.Y.Z"; the bare number reads better
+	# in a sentence that already names the program.
+	installed="$("$INSTALL_DIR/$BIN" --version 2>/dev/null | awk '{print $NF}')"
+	success "Installed ${BIN}${installed:+ $installed} → $(tilde "$INSTALL_DIR/$BIN")"
 
 	check_path
-	completions_hint
-	info "Uninstall any time with: proton-cli uninstall"
+	next_steps
+}
+
+# next_steps closes on what to do rather than on how to undo it. Somebody who has
+# just run an install command is looking for the first command, not the last one.
+next_steps() {
+	printf '\n' >&2
+	heading 'Next:'
+	step 'proton-cli account login' 'sign in'
+	step 'proton-cli --help' 'what it can do'
+	step "proton-cli completion $(current_shell)" 'tab completion'
+	printf '\n' >&2
+	info "Remove it again any time with: proton-cli uninstall"
+}
+
+# current_shell names the shell to generate completions for, so the line can be
+# pasted rather than adapted.
+current_shell() {
+	case "$(basename "${SHELL:-sh}")" in
+	zsh) echo zsh ;;
+	fish) echo fish ;;
+	*) echo bash ;;
+	esac
+}
+
+# tilde shortens a path under the home directory, which is where the default
+# install goes and where the full path says nothing extra.
+tilde() {
+	case "$1" in
+	"$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+	*) printf '%s' "$1" ;;
+	esac
 }
 
 parse_args() {
@@ -140,10 +172,6 @@ check_path() {
 	esac
 }
 
-completions_hint() {
-	info "Enable shell completions with: proton-cli completion bash|zsh|fish"
-}
-
 need_downloader() {
 	if command -v curl >/dev/null 2>&1; then
 		DL=curl
@@ -165,13 +193,19 @@ download() {
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "need '$1'"; }
 
-if [ -t 2 ]; then
-	C_GREEN="$(printf '\033[32m')"; C_YELLOW="$(printf '\033[33m')"; C_RED="$(printf '\033[31m')"; C_OFF="$(printf '\033[0m')"
+# Colour follows the same rule the binary itself follows: a courtesy for a person
+# at a terminal, and absent from anything captured. NO_COLOR is honoured here too
+# (https://no-color.org), so one setting covers the install and everything after.
+if [ -t 2 ] && [ -z "${NO_COLOR+x}" ] && [ "${TERM:-dumb}" != dumb ]; then
+	C_GREEN="$(printf '\033[32m')"; C_YELLOW="$(printf '\033[33m')"; C_RED="$(printf '\033[31m')"
+	C_DIM="$(printf '\033[2m')"; C_OFF="$(printf '\033[0m')"
 else
-	C_GREEN=""; C_YELLOW=""; C_RED=""; C_OFF=""
+	C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""; C_OFF=""
 fi
 
 info() { printf '  %s\n' "$1" >&2; }
+heading() { printf '  %s\n' "$1" >&2; }
+step() { printf '    %-32s %s%s%s\n' "$1" "$C_DIM" "$2" "$C_OFF" >&2; }
 success() { printf '  %s✓%s %s\n' "$C_GREEN" "$C_OFF" "$1" >&2; }
 warn() { printf '  %s!%s %s\n' "$C_YELLOW" "$C_OFF" "$1" >&2; }
 die() { printf '  %s✗%s %s\n' "$C_RED" "$C_OFF" "$1" >&2; exit 1; }

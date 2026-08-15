@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/pflag"
 )
 
@@ -13,41 +15,7 @@ const (
 	dashedID    = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A=="
 	plainID     = "NWM5AYGxFIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A5C-ADmohv7TjXfYbDEIHZPQ=="
 	shortDashed = "-abc=="
-	// What Proton names a Drive share invitation: sixteen bytes of base64url,
-	// unpadded, which is 22 characters and starts with '-' about one time in
-	// sixty.
-	invitationID = "-e7KRBCZiwIuhVvaE2v41A"
 )
-
-func TestLooksLikeDashedProtonID(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want bool
-	}{
-		{"canonical leading-dash ID", dashedID, true},
-		{"plain ID without leading dash", plainID, false},
-		{"verbose long flag", "--verbose", false},
-		{"short flag", "-v", false},
-		{"too short", shortDashed, false},
-		{"missing == suffix", "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A", false},
-		{"non-base64 chars", "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr!whe$bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A==", false},
-		{"empty", "", false},
-		{"single dash", "-", false},
-		{"flag with eq sign", "--name=John Doe Long Title Goes Here Lorem ipsum aaaaaaaa==", false},
-		{"drive invitation ID", invitationID, true},
-		{"a word of another length", "-nearly-an-invitation", false},
-		{"22 characters that are not base64", "-not.an.invitation.id!", false},
-		{"short ID, left to the advice", "-e7KRBCZ", false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := looksLikeDashedProtonID(tc.in); got != tc.want {
-				t.Errorf("looksLikeDashedProtonID(%q) = %v, want %v", tc.in, got, tc.want)
-			}
-		})
-	}
-}
 
 func TestPreprocessArgs(t *testing.T) {
 	t.Run("plain ID untouched", func(t *testing.T) {
@@ -175,6 +143,99 @@ func TestUnknownFlagIsReportedAsAFlag(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "unknown flag") {
 			t.Errorf("%v: error %q should name the flag", args, err)
+		}
+	}
+}
+
+// ── leading-dash references ──
+//
+// Proton's IDs are base64, '-' is one of its sixty-four characters, and so about
+// one ID in sixty-four begins with a dash. Every one of those is a reference the
+// CLI printed and argv hands to the flag parser first.
+
+// These are real IDs, taken from a live account, not invented. A test written
+// against invented IDs is a test written against the same assumptions as the
+// code it checks.
+const (
+	realVault     = "-x76EpiVSJf2oHzHgyC2D_jF8Oi0yWMKsQdUvh1axN5Xx2bDFGUd-4ArpN5CZZrPXRvP6aMQjV8cgTDEvXBRQw=="
+	realItem      = "_fb26gvMWjnM7US4_wpTNm_LqIAx5LJk9c0Rj7dUR4eobSmnTl1qNsiczzmIpgio08-67uw8sneSwGLPwkN5Vw=="
+	realDriveLink = "-Qt-s7R_oGCru5u3Kv6Y8Q"
+)
+
+// The promise: a reference the CLI prints is one it will read back.
+//
+// This is the property, stated end to end rather than in pieces. Every reference
+// is rendered exactly as a listing renders it - shortened for a terminal, full
+// for a pipe - and then has to survive being typed back as the next command's
+// argument.
+//
+// It failed in both forms before. `pass items list` printed SHARE/ITEM rows that
+// answered "Unknown shorthand flag: 'x'", and a shortened Drive link did the
+// same, because deciding by shape alone cannot tell "-Qt-s7R_" from a run of
+// eight shorthand flags.
+func TestEveryReferenceTheCLIPrintsCanBeTypedBackIn(t *testing.T) {
+	for _, tc := range []struct{ name, command, reference string }{
+		{"a Pass item", "pass items get", ui.Short(kit.JoinPair(realVault, realItem), false)},
+		{"a Pass item, shortened", "pass items get", ui.Short(kit.JoinPair(realVault, realItem), true)},
+		{"a Drive link", "drive photos download", realDriveLink},
+		{"a Drive link, shortened", "drive photos download", ui.Short(realDriveLink, true)},
+		{"an event occurrence", "calendar events get", ui.Short(realVault+"/"+realItem+"@2026-04-22T09:00", true)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			argv := append([]string{"proton-cli"}, strings.Fields(tc.command)...)
+			argv = append(argv, tc.reference)
+
+			cmd, rest, err := newRoot().Find(preprocessArgs(argv)[1:])
+			if err != nil {
+				t.Fatalf("%q: %v", tc.reference, err)
+			}
+			if err := cmd.ParseFlags(rest); err != nil {
+				t.Fatalf("%q could not be typed back in: %v", tc.reference, err)
+			}
+			if got := cmd.Flags().Args(); len(got) != 1 || got[0] != tc.reference {
+				t.Errorf("%q arrived as %q", tc.reference, got)
+			}
+		})
+	}
+}
+
+// A reference that is a flag's value was never in danger: pflag reads the token
+// after a value-taking flag whatever it starts with. Inserting "--" there is what
+// breaks it, handing "--" to the flag and stranding the reference.
+func TestADashedReferenceReachesTheFlagItWasGivenTo(t *testing.T) {
+	argv := preprocessArgs([]string{
+		"proton-cli", "drive", "photos", "list", "--album", realDriveLink,
+	})
+	cmd, rest, err := newRoot().Find(argv[1:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.ParseFlags(rest); err != nil {
+		t.Fatal(err)
+	}
+	if got := cmd.Flags().Lookup("album").Value.String(); got != realDriveLink {
+		t.Errorf("--album = %q, want the ID", got)
+	}
+}
+
+// After a boolean flag, a reference really is positional and really does need
+// protecting.
+func TestPreprocessArgsStillProtectsAPositionalAfterABoolFlag(t *testing.T) {
+	in := []string{"proton-cli", "mail", "messages", "trash", "--unread", realDriveLink}
+	want := []string{"proton-cli", "mail", "messages", "trash", "--unread", "--", realDriveLink}
+	if got := preprocessArgs(in); !equalSlice(got, want) {
+		t.Errorf("preprocessArgs left a positional unprotected:\n got %v\nwant %v", got, want)
+	}
+}
+
+// A token that really does name shorthand flags this command has must stay
+// flags. That reading wins over "it looks like a reference", and it is the one
+// thing the length heuristics could never get right.
+func TestPreprocessArgsLeavesRealShorthandFlagsAlone(t *testing.T) {
+	for _, token := range []string{"-o", "-ojson", "-h", "-v"} {
+		in := []string{"proton-cli", "mail", "messages", "list", token}
+		if got := preprocessArgs(in); !equalSlice(got, in) {
+			t.Errorf("preprocessArgs rewrote the flags %q: %v", token, got)
 		}
 	}
 }

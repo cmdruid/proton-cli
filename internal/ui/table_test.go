@@ -1,34 +1,51 @@
 package ui
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
 
 // message is the shape a mail list renders, reduced to what the table needs.
 type message struct {
-	id      string
-	from    string
-	subject string
-	date    string
-	flags   string
+	id          string
+	from        string
+	subject     string
+	date        string
+	unread      bool
+	starred     bool
+	attachments int
 }
 
+// The fixture mirrors the real mail columns, status column included, so the
+// golden files pin the shape the CLI actually prints.
 func messageColumns() []Column[message] {
 	return []Column[message]{
 		{Header: "ID", ID: true, Cell: func(m message) string { return m.id }},
 		{Header: "FROM", Flex: true, Cell: func(m message) string { return m.from }},
 		{Header: "SUBJECT", Flex: true, Cell: func(m message) string { return m.subject }},
 		{Header: "DATE", Cell: func(m message) string { return m.date }},
-		{Header: "FLAGS", Accent: true, Cell: func(m message) string { return m.flags }},
+		{Header: "FLAGS", Marks: func(m message) Marks {
+			var mk Marks
+			if m.unread {
+				mk = append(mk, Mark{GlyphUnread, ToneAccent})
+			}
+			if m.starred {
+				mk = append(mk, Mark{GlyphStarred, ToneCaution})
+			}
+			if m.attachments > 0 {
+				mk = append(mk, Mark{strconv.Itoa(m.attachments), ToneMuted})
+			}
+			return mk
+		}},
 	}
 }
 
 func messages() []message {
 	return []message{
-		{"5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv==", "Fastmail Billing", "Invoice #2291 is ready", "2026-04-15 14:32", GlyphUnread + GlyphStarred + GlyphAttachment},
-		{"9xL4pQrTz2mKd8vBn6cXs1wYf5hJ3gAe7bUi0oQm4nWr2tYv==", "Trailhead Weekly", "The north trail is open again", "2026-04-15 09:02", GlyphUnread},
-		{"2mNp7RsVx8kLd4vZn1cQs6wYf9hJ5gAe3bUi0oQm7nWr4tYv==", "Jane Roe", "Re: Quarterly numbers", "2026-04-14 17:48", ""},
+		{"5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv==", "Fastmail Billing", "Invoice #2291 is ready", "2026-04-15 14:32", true, true, 3},
+		{"9xL4pQrTz2mKd8vBn6cXs1wYf5hJ3gAe7bUi0oQm4nWr2tYv==", "Trailhead Weekly", "The north trail is open again", "2026-04-15 09:02", true, false, 0},
+		{"2mNp7RsVx8kLd4vZn1cQs6wYf9hJ5gAe3bUi0oQm7nWr4tYv==", "Jane Roe", "Re: Quarterly numbers", "2026-04-14 17:48", false, false, 0},
 	}
 }
 
@@ -224,11 +241,89 @@ func TestTableColourDoesNotAffectLayout(t *testing.T) {
 	}
 }
 
+// The palette itself is pinned, not just the layout.
+//
+// Every other golden file is captured with colour off, which means the escapes
+// have never been reviewable in a diff: a wrong colour, or a colour applied to
+// the wrong span, could only be found by looking at a terminal. This is the one
+// file where changing a colour shows up as a change.
+func TestTableColoured(t *testing.T) {
+	u, out, errb := fixture(t, Options{})
+	u.theme, u.errTheme = Theme{enabled: true, wide: true}, Theme{enabled: true, wide: true}
+	err := Table(u, TableSpec[message]{
+		Noun: "messages", Columns: messageColumns(), Total: Unknown, Page: Unpaged,
+	}, messages())
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "table_coloured", out, errb)
+}
+
+// A label's colour is shown rather than described. The dot is painted in the
+// colour itself and the name beside it stays ordinary text, so a list of labels
+// reads as a list rather than as twenty competing colours.
+func TestTableSwatch(t *testing.T) {
+	type label struct{ id, name, color string }
+	labels := []label{
+		{"kQ81mDx4T9wLpN4vRs8kZc==", "Work", "#8080FF"},
+		{"7Kd91mQxT2wLpN8vRs4kZc==", "Personal", "#EC3E7C"},
+		{"3Ns8pT2vX9kLd4vZn1cQs6==", "Receipts", "#179FD9"},
+		{"9xL4pQrTz2mKd8vBn6cXs1==", "Imported", "#123456"},
+	}
+	cols := []Column[label]{
+		{Header: "ID", ID: true, Cell: func(l label) string { return l.id }},
+		{Header: "NAME", Flex: true, Cell: func(l label) string { return l.name }},
+		{
+			Header: "COLOR",
+			Swatch: func(l label) string { return l.color },
+			Cell: func(l label) string {
+				// Mirrors kit.ColorColumn: the palette's name, or the hex when
+				// Proton has no name for it.
+				if l.color == "#8080FF" {
+					return "purple"
+				}
+				if l.color == "#EC3E7C" {
+					return "strawberry"
+				}
+				if l.color == "#179FD9" {
+					return "pacific"
+				}
+				return l.color
+			},
+		},
+	}
+
+	t.Run("plain", func(t *testing.T) {
+		u, out, errb := fixture(t, Options{FullIDs: true})
+		if err := Table(u, TableSpec[label]{Noun: "labels", Columns: cols, Total: Unknown, Page: Unpaged}, labels); err != nil {
+			t.Fatal(err)
+		}
+		check(t, "table_swatch", out, errb)
+	})
+
+	t.Run("the dot is painted, the name is not", func(t *testing.T) {
+		u, out, _ := fixture(t, Options{})
+		u.theme = Theme{enabled: true, wide: true}
+		if err := Table(u, TableSpec[label]{Noun: "labels", Columns: cols, Total: Unknown, Page: Unpaged}, labels); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "\x1b[38;2;128;128;255m"+GlyphSwatch+"\x1b[0m") {
+			t.Errorf("the swatch should be painted in the colour it names:\n%s", out.String())
+		}
+		if strings.Contains(out.String(), "\x1b[38;2;128;128;255mWork") {
+			t.Errorf("the name should stay ordinary text:\n%s", out.String())
+		}
+	})
+}
+
+// stripANSI removes escape sequences so output can be measured as it is seen.
+// A sequence ends at its final byte, anywhere in @ to ~, so this handles the
+// colour codes and the progress line's clear-to-end-of-line alike.
 func stripANSI(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {
 		if s[i] == 0x1b {
-			for i < len(s) && s[i] != 'm' {
+			for i < len(s) && (s[i] < '@' || s[i] > '~' || s[i] == '[') {
 				i++
 			}
 			i++

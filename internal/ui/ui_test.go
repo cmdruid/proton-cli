@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/roman-16/proton-cli/internal/errs"
 )
 
 // The ui package is the only place that decides what the CLI looks like, so its
@@ -204,5 +206,49 @@ func TestParseLogLevelRejectsABadEnvironmentValue(t *testing.T) {
 	t.Setenv("PROTON_LOG_LEVEL", "chatty")
 	if _, err := ParseLogLevel(""); err == nil {
 		t.Error("an unusable PROTON_LOG_LEVEL should be reported, not ignored")
+	}
+}
+
+// The CLI needs exactly three severities and had only two.
+//
+// A caveat is not a failure and not chatter: the command worked, and something
+// about how it worked is worth knowing. Printed as an ordinary note it sits
+// invisibly above a green tick, which is how a warning that a file could not be
+// attributed ends up reading as an all-clear.
+func TestSeverities(t *testing.T) {
+	u, out, errb := fixture(t, Options{})
+	u.errTheme = Theme{enabled: true, wide: true}
+
+	u.Note("Downloading report.pdf.")
+	u.Warn("report.pdf downloaded, but the signature on block 3 is unverified,\nso who wrote it cannot be confirmed.")
+	u.Hint("3 messages.")
+	WriteError(u.Err, errs.Problemf("No message matching %q.", "Invoice #9999"), u.errTheme)
+
+	check(t, "severities", out, errb)
+}
+
+// Every severity is commentary, so none of it may reach the answer stream.
+func TestSeveritiesStayOffTheAnswerStream(t *testing.T) {
+	u, out, errb := fixture(t, Options{})
+	u.Note("note")
+	u.Warn("warn")
+	u.Hint("hint")
+	if out.Len() != 0 {
+		t.Errorf("commentary reached stdout: %q", out.String())
+	}
+	if errb.Len() == 0 {
+		t.Error("commentary should reach stderr")
+	}
+}
+
+// --quiet silences commentary of every severity, including caveats: a script
+// that asked for quiet gets its data and nothing else.
+func TestQuietSilencesEverySeverity(t *testing.T) {
+	u, out, errb := fixture(t, Options{Quiet: true})
+	u.Note("note")
+	u.Warn("warn")
+	u.Hint("hint")
+	if out.Len() != 0 || errb.Len() != 0 {
+		t.Errorf("--quiet still wrote out=%q err=%q", out.String(), errb.String())
 	}
 }

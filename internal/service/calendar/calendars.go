@@ -7,8 +7,8 @@ import (
 
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
 	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/roman-16/proton-cli/internal/ref"
 )
 
 type Calendar struct {
@@ -149,7 +149,7 @@ func (s *Service) CalendarRename(ctx context.Context, calendarID, name, color st
 // names the calendar outright should not cost the list of all of them. A name has
 // to be looked up, and nothing named at all means the first one.
 func (s *Service) ResolveCalendarID(ctx context.Context, nameOrID string) (string, error) {
-	if idcache.IsFullID(nameOrID) {
+	if ref.Full(nameOrID) {
 		return nameOrID, nil
 	}
 	cals, err := s.CalendarsList(ctx)

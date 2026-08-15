@@ -135,7 +135,7 @@ func calendarColumns() []ui.Column[calsvc.Calendar] {
 	return []ui.Column[calsvc.Calendar]{
 		{Header: "ID", ID: true, Cell: func(cal calsvc.Calendar) string { return cal.ID }},
 		{Header: "NAME", Flex: true, Cell: func(cal calsvc.Calendar) string { return cal.Name }},
-		{Header: "COLOR", Cell: func(cal calsvc.Calendar) string { return cal.Color }},
+		kit.ColorColumn(func(cal calsvc.Calendar) string { return cal.Color }),
 		{Header: "MEMBERS", Right: true, Cell: func(cal calsvc.Calendar) string {
 			return strconv.Itoa(cal.MemberCount)
 		}},

@@ -41,6 +41,7 @@ func convListCmd() *cobra.Command {
 			return kit.List(c, ui.TableSpec[mailsvc.Conversation]{
 				Noun: "conversations", Columns: conversationColumns(),
 				Total: total, Page: opts.Page, PageSize: opts.PageSize,
+				Filtered: opts.Unread,
 			}, convs, func(cv mailsvc.Conversation) []string { return []string{cv.ID} })
 		}),
 	}
@@ -68,6 +69,7 @@ func convSearchCmd() *cobra.Command {
 			return kit.List(c, ui.TableSpec[mailsvc.Conversation]{
 				Noun: "conversations", Columns: conversationColumns(),
 				Total: ui.Unknown, Page: ui.Unpaged, Limit: opts.Limit,
+				Filtered: true,
 			}, convs, func(cv mailsvc.Conversation) []string { return []string{cv.ID} })
 		}),
 	}
@@ -161,7 +163,7 @@ func threadSummary(c *kit.Invocation, conv *mailsvc.ConversationFull) error {
 			{Header: "DATE", Cell: func(p threadPreview) string { return p.Date }},
 			{Header: "FROM", Flex: true, Cell: func(p threadPreview) string { return p.From }},
 			{Header: "PREVIEW", Flex: true, Cell: func(p threadPreview) string { return p.Preview }},
-			{Header: "FLAGS", Accent: true, Cell: func(p threadPreview) string {
+			{Header: "FLAGS", Marks: func(p threadPreview) ui.Marks {
 				return flags(false, false, p.Attachments)
 			}},
 		},

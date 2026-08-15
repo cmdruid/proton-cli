@@ -31,17 +31,16 @@ import (
 var version = "dev"
 
 type globalFlags struct {
-	profile    string
-	apiURL     string
-	appVersion string
-	output     string
-	quiet      bool
-	logLevel   string
-	dryRun     bool
-	yes        bool
-	fullIDs    bool
-	noColor    bool
-	noInput    bool
+	profile  string
+	apiURL   string
+	output   string
+	quiet    bool
+	logLevel string
+	dryRun   bool
+	yes      bool
+	fullIDs  bool
+	noColor  bool
+	noInput  bool
 }
 
 // Command groups on the root, so `--help` reads as a map of the product rather
@@ -70,19 +69,37 @@ func newRoot() *cobra.Command {
 		SilenceErrors: true,
 	}
 
+	// A shorthand is a second name for a flag, which cuts against the rule that a
+	// name means one thing. Each one here earns that by being typed constantly and
+	// by being the letter every other tool already uses for the idea, so it is
+	// guessed rather than learned. The rest of the global flags have no shorthand:
+	// nobody types --no-input twice a day, and a letter chosen for a flag that
+	// does not need one is a letter spent.
+	//
+	// The whole shorthand namespace belongs to this command. No leaf may take a
+	// letter, which is what stops -p meaning `--profile` here and `--page` two
+	// words later; the conformance test enforces it.
 	pf := root.PersistentFlags()
-	pf.StringVar(&g.profile, "profile", "", "Profile to act as (env: PROTON_PROFILE; default: default)")
-	pf.StringVar(&g.apiURL, "api-url", "", "API base URL (env: PROTON_API_URL)")
-	pf.StringVar(&g.appVersion, "app-version", "", "App version header (env: PROTON_APP_VERSION)")
-	pf.StringVar(&g.output, "output", "text", "Output format: text, json, yaml")
-	pf.BoolVar(&g.quiet, "quiet", false, "Suppress non-essential stderr output")
+	pf.StringVarP(&g.profile, "profile", "p", "", "Profile to act as (env: PROTON_PROFILE; default: default)")
+	pf.StringVarP(&g.output, "output", "o", "text", "Output format: text, json, yaml")
+	pf.BoolVarP(&g.quiet, "quiet", "q", false, "Suppress non-essential stderr output")
 	pf.StringVar(&g.logLevel, "log-level", "",
 		"Logging verbosity: "+strings.Join(ui.LogLevels, ", ")+" (env: PROTON_LOG_LEVEL)")
-	pf.BoolVar(&g.dryRun, "dry-run", false, "Preview mutations without applying them")
-	pf.BoolVar(&g.yes, "yes", false, "Answer confirmation prompts with yes")
+	pf.BoolVarP(&g.dryRun, "dry-run", "n", false, "Preview mutations without applying them")
+	pf.BoolVarP(&g.yes, "yes", "y", false, "Answer confirmation prompts with yes")
 	pf.BoolVar(&g.fullIDs, "full-ids", false, "Show full IDs in interactive output (default: shortened to 8 chars on TTY)")
 	pf.BoolVar(&g.noColor, "no-color", false, "Disable colored output (env: NO_COLOR)")
 	pf.BoolVar(&g.noInput, "no-input", false, "Never prompt; a missing credential becomes an error (env: PROTON_NO_INPUT)")
+
+	// Pointing the CLI at something other than Proton is a thing to do while
+	// developing this tool and never while using it, so it is hidden rather than
+	// spending a line on each of the 164 help screens. It stays a flag as well as
+	// PROTON_API_URL because a shell that cannot prefix a variable onto one
+	// command still has to be able to do it.
+	pf.StringVar(&g.apiURL, "api-url", "", "API base URL (env: PROTON_API_URL)")
+	if err := pf.MarkHidden("api-url"); err != nil {
+		panic(err)
+	}
 
 	// Parse each level's flags while walking to the target command, so an
 	// unrecognised flag is reported as one.
@@ -104,18 +121,17 @@ func newRoot() *cobra.Command {
 			return err
 		}
 		a, err := app.New(app.Options{
-			Profile:    g.profile,
-			APIURL:     g.apiURL,
-			AppVersion: g.appVersion,
-			Version:    version,
-			Output:     format,
-			LogLevel:   level,
-			Quiet:      g.quiet,
-			DryRun:     g.dryRun,
-			Yes:        g.yes,
-			FullIDs:    g.fullIDs,
-			NoColor:    g.noColor,
-			NoInput:    g.noInput,
+			Profile:  g.profile,
+			APIURL:   g.apiURL,
+			Version:  version,
+			Output:   format,
+			LogLevel: level,
+			Quiet:    g.quiet,
+			DryRun:   g.dryRun,
+			Yes:      g.yes,
+			FullIDs:  g.fullIDs,
+			NoColor:  g.noColor,
+			NoInput:  g.noInput,
 		})
 		if err != nil {
 			return err
@@ -144,6 +160,8 @@ func newRoot() *cobra.Command {
 	add(groupAccount, accountcmd.New(), apicmd.New())
 	add(groupSelf, selfcmd.UpdateCmd(version), selfcmd.UninstallCmd(),
 		selfcmd.VersionCmd(version), completionCmd(root))
+
+	attachExamples(root)
 
 	return root
 }

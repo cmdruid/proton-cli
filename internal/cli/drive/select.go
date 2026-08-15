@@ -60,7 +60,7 @@ const (
 // whatever the filters matched under --scope.
 func selectItems(c *kit.Invocation, dc *drivesvc.Context, f *filters) (kit.Selection[drivesvc.Child], error) {
 	if f.unbounded() {
-		c.Note("--all with no other filter covers your whole drive. Add --scope to narrow it.")
+		c.Warn("--all with no other filter covers your whole drive. Add --scope to narrow it.")
 	}
 	sel := kit.Selector[drivesvc.Child]{
 		Noun:       "items",

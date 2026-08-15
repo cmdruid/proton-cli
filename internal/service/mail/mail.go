@@ -10,7 +10,6 @@ import (
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
 )
@@ -239,7 +238,7 @@ func convSenderAddr(c Conversation) string {
 // it returns is what a dry run shows before it acts; a caller that only wants the
 // ID has no use for the row and no reason to pay for it.
 func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		return r, nil
 	}
 	m, err := s.FindMessage(ctx, r)
@@ -255,7 +254,7 @@ func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
 // a bulk delete costs nothing here, because resolving already had to look the
 // message up.
 func (s *Service) FindMessage(ctx context.Context, r string) (Message, error) {
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		msgs, _, err := s.Search(ctx, SearchOptions{ID: r, Folder: "all", Limit: 1})
 		if err != nil {
 			return Message{}, err
@@ -277,7 +276,7 @@ func (s *Service) FindMessage(ctx context.Context, r string) (Message, error) {
 // ResolveScheduled mirrors Resolve but scopes the keyword search to the
 // Scheduled folder, so a REF can only resolve to an unschedulable message.
 func (s *Service) ResolveScheduled(ctx context.Context, r string) (string, error) {
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		return r, nil
 	}
 	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "scheduled", Limit: 20})
@@ -292,7 +291,7 @@ func (s *Service) ResolveScheduled(ctx context.Context, r string) (string, error
 }
 
 func (s *Service) ResolveConversation(ctx context.Context, r string) (string, error) {
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		return r, nil
 	}
 	c, err := s.FindConversation(ctx, r)
@@ -304,7 +303,7 @@ func (s *Service) ResolveConversation(ctx context.Context, r string) (string, er
 
 // FindConversation resolves a reference to the thread itself.
 func (s *Service) FindConversation(ctx context.Context, r string) (Conversation, error) {
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		convs, _, err := s.ConversationsSearch(ctx, SearchOptions{ID: r, Folder: "all", Limit: 1})
 		if err != nil {
 			return Conversation{}, err

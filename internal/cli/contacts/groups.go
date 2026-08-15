@@ -13,7 +13,7 @@ func groupColumns() []ui.Column[ctsvc.Group] {
 	return []ui.Column[ctsvc.Group]{
 		{Header: "ID", ID: true, Cell: func(g ctsvc.Group) string { return g.ID }},
 		{Header: "NAME", Flex: true, Cell: func(g ctsvc.Group) string { return g.Name }},
-		{Header: "COLOR", Cell: func(g ctsvc.Group) string { return g.Color }},
+		kit.ColorColumn(func(g ctsvc.Group) string { return g.Color }),
 	}
 }
 

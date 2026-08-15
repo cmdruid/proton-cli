@@ -9,7 +9,6 @@ import (
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ref"
 )
@@ -67,7 +66,7 @@ func (s *Service) ResolveAddress(ctx context.Context, r string) (*Address, error
 	if err != nil {
 		return nil, err
 	}
-	if idcache.IsFullID(r) {
+	if ref.Full(r) {
 		for _, a := range addrs {
 			if a.ID == r {
 				return &a, nil

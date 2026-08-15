@@ -89,7 +89,7 @@ func itemsGetCmd() *cobra.Command {
 				{Label: "Type", Value: info.Type},
 				{Label: "MIME Type", Value: info.MIMEType},
 				{Label: "Created By", Value: info.CreatedBy},
-				{Label: "Signature", Value: info.Signature, Always: true},
+				kit.SignatureField(info.Signature),
 				{Label: "Uploaded", Value: units.Time(info.Uploaded)},
 				{Label: "Modified", Value: units.Time(info.Modified)},
 				{Label: "Size", Value: units.Size(info.Size)},
@@ -296,8 +296,11 @@ func uploadTree(c *kit.Invocation, dc *drivesvc.Context, src, dest string, on dr
 				return err
 			}
 		}
-		for _, file := range plan.Files {
-			if err := uploadInto(c, dc, plan, file, srcAbs); err != nil {
+		for i, file := range plan.Files {
+			// Each file draws its own bar, so without saying where it sits in the
+			// tree a five-hundred-file upload is five hundred identical lines and
+			// no sense of how far along it is.
+			if err := uploadInto(c, dc, plan, file, srcAbs, i+1, len(plan.Files)); err != nil {
 				return err
 			}
 		}
@@ -308,7 +311,7 @@ func uploadTree(c *kit.Invocation, dc *drivesvc.Context, src, dest string, on dr
 // uploadInto writes one of a tree's files, reading it from where the tree came
 // from: the plan names it by where it lands, which is the same path with the
 // tree's own folder swapped for the local one.
-func uploadInto(c *kit.Invocation, dc *drivesvc.Context, plan *drivesvc.TreePlan, file drivesvc.TreeFile, srcAbs string) error {
+func uploadInto(c *kit.Invocation, dc *drivesvc.Context, plan *drivesvc.TreePlan, file drivesvc.TreeFile, srcAbs string, index, count int) error {
 	local := filepath.Join(srcAbs, filepath.FromSlash(strings.TrimPrefix(file.Path, plan.Top+"/")))
 	f, err := os.Open(local)
 	if err != nil {
@@ -330,7 +333,9 @@ func uploadInto(c *kit.Invocation, dc *drivesvc.Context, plan *drivesvc.TreePlan
 		return err
 	}
 	return c.App.Drive.Upload(c.Ctx, dc, filePlan, f, drivesvc.UploadOptions{
-		Label: "Uploading " + name, Progress: ui.NewProgress(c.UI()), TotalHint: info.Size(),
+		Label:     "Uploading " + name,
+		Progress:  ui.Batch(ui.NewProgress(c.UI()), index, count),
+		TotalHint: info.Size(),
 	})
 }
 
@@ -391,7 +396,7 @@ func signatureIssue(c *kit.Invocation, name string) func(int, string) {
 			return
 		}
 		reported = true
-		c.Note("%s downloaded, but the signature on block %d is %s, so who wrote it cannot be confirmed.",
+		c.Warn("%s downloaded, but the signature on block %d is %s, so who wrote it cannot be confirmed.",
 			name, index, verdict)
 	}
 }

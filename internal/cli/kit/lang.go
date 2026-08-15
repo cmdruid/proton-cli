@@ -129,6 +129,7 @@ var Placeholders = map[string]string{
 	"VALUE":          "a setting value",
 	"METHOD":         "an HTTP method",
 	"ENDPOINT":       "a Proton API path",
+	"VERSION":        "a proton-cli release, as X.Y.Z",
 	"ATTACHMENT_REF": "an attachment on the addressed message",
 	"REVISION_REF":   "a revision of the addressed file",
 	"CONTACT_REF":    "a contact, when the command already addresses something else",

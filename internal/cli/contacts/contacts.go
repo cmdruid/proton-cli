@@ -86,7 +86,7 @@ func getCmd() *cobra.Command {
 				ui.Field{Label: "Address", Value: ct.Address},
 				ui.Field{Label: "Website", Value: ct.URL},
 				ui.Field{Label: "Note", Value: ct.Note},
-				ui.Field{Label: "Signature", Value: string(ct.Signature), Always: true},
+				kit.SignatureField(string(ct.Signature)),
 				ui.Field{Label: "ID", Value: ct.ID, ID: true},
 			)
 			return kit.Show(c, ui.RecordSpec{Object: ct, Fields: fields})

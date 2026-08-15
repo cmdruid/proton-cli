@@ -29,7 +29,7 @@ Check where you stand at any time:
 $ proton-cli account get
 Email:       you@proton.me
 Name:        Roman
-Storage:     128.4 GB of 500 GB (26%)
+Storage:     ━━━━━───────────────   26%  128.4 GB of 500.0 GB
 Max Upload:  5.0 GB
 Profile:     default
 Session:     valid

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/minio/selfupdate"
+	"github.com/roman-16/proton-cli/internal/progress"
 	"golang.org/x/mod/semver"
 )
 
@@ -100,14 +101,17 @@ func ExpectedChecksum(checksums []byte, filename string) (string, error) {
 // Download fetches the release binary for version (with or without a leading
 // "v") for the current platform, verifies it against the release's
 // checksums.txt, and returns the verified bytes.
-func Download(ctx context.Context, client *http.Client, version string) ([]byte, error) {
+//
+// The binary is tens of megabytes, so the transfer reports through prog the way
+// a Drive transfer does. A nil sink is fine and reports nothing.
+func Download(ctx context.Context, client *http.Client, version string, prog progress.Sink) ([]byte, error) {
 	asset, err := AssetName(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return nil, err
 	}
 	base := releasesURL + "/download/v" + strings.TrimPrefix(version, "v")
 
-	sums, err := get(ctx, client, base+"/checksums.txt")
+	sums, err := get(ctx, client, base+"/checksums.txt", nil)
 	if err != nil {
 		return nil, fmt.Errorf("download checksums.txt: %w", err)
 	}
@@ -116,7 +120,7 @@ func Download(ctx context.Context, client *http.Client, version string) ([]byte,
 		return nil, err
 	}
 
-	bin, err := get(ctx, client, base+"/"+asset)
+	bin, err := get(ctx, client, base+"/"+asset, progress.Of(prog))
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", asset, err)
 	}
@@ -133,7 +137,7 @@ func Apply(bin []byte, exePath string) error {
 	return selfupdate.Apply(bytes.NewReader(bin), selfupdate.Options{TargetPath: exePath})
 }
 
-func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+func get(ctx context.Context, client *http.Client, url string, prog progress.Sink) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -146,5 +150,18 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
-	return io.ReadAll(resp.Body)
+	if prog == nil {
+		return io.ReadAll(resp.Body)
+	}
+	prog.Start(resp.ContentLength, "Downloading")
+	defer prog.Done()
+	return io.ReadAll(io.TeeReader(resp.Body, counter{prog}))
+}
+
+// counter turns bytes read into progress reports.
+type counter struct{ sink progress.Sink }
+
+func (c counter) Write(p []byte) (int, error) {
+	c.sink.Add(int64(len(p)))
+	return len(p), nil
 }

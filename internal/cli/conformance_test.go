@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -115,19 +116,17 @@ func TestGroupsRejectAnUnknownSubcommand(t *testing.T) {
 
 // ── rule 3: one placeholder set ──
 
-// placeholders are the only argument names the CLI uses. A new one means a new
-// idea, which is exactly the thing worth noticing.
-var placeholders = map[string]bool{
-	"REF": true, "PATH": true, "SRC": true, "DEST": true, "EMAIL": true,
-	"NEW_NAME": true, "KEY": true, "VALUE": true, "METHOD": true, "ENDPOINT": true,
-	"ATTACHMENT_REF": true, "REVISION_REF": true, "CONTACT_REF": true, "PHOTO_REF": true,
-}
-
+// The only argument names the CLI uses are the ones kit.Placeholders declares.
+// A new one means a new idea, which is exactly the thing worth noticing.
+//
+// The list is read from kit rather than repeated here: a second copy would make
+// the declaration and the check two things that can disagree, and the one that
+// loses is the file that calls itself the vocabulary.
 func TestUsageUsesOnlyDeclaredPlaceholders(t *testing.T) {
 	leaves, _ := partition(t)
 	for _, c := range leaves {
 		for _, tok := range argTokens(c.Use) {
-			if !placeholders[tok] {
+			if _, ok := kit.Placeholders[tok]; !ok {
 				t.Errorf("%s: undeclared placeholder %q in %q", cmdPath(c), tok, c.Use)
 			}
 		}
@@ -571,7 +570,12 @@ func grepGo(t *testing.T, dirs []string, match func(string) bool) []string {
 // transforms - stays invisible until stated as a rule, and shows up as the same
 // symptom either way: neither half can be tested without the other.
 var layers = map[string][]string{
-	"ui":          {"units", "progress", "errs"},
+	// ui may reach ref for one thing: the notation a reference is written in.
+	// It prints references, so it has to shorten them without taking them apart
+	// wrongly, and the alternative to borrowing that is restating it - which is
+	// precisely what produced listings whose rows the next command rejected.
+	// ref is a leaf over errs, so this is a downward import and not an inversion.
+	"ui":          {"units", "progress", "errs", "ref"},
 	"proton":      {"errs", "crypto/aead", "hv", "hv/hvexit"},
 	"errs":        {},
 	"units":       {},
@@ -632,4 +636,207 @@ func ourImports(t *testing.T, dir, prefix string) []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+// ── rule 9: every command shows how it is used ──
+
+// The grammar is the whole premise of this CLI: one shape, learned once, and
+// then guessed correctly everywhere else. --help is where that learning happens,
+// so a command that shows its flags but never shows itself being used has left
+// the reader to assemble the sentence from parts.
+//
+// The examples are checked rather than decorative. Each one is parsed against
+// the real tree, so an example cannot name a command that does not exist, a flag
+// that was renamed, or a different command from the one it illustrates - the
+// failure modes that turn documentation into a liability as a tree moves.
+func TestEveryLeafShowsHowItIsUsed(t *testing.T) {
+	leaves, _ := partition(t)
+	for _, c := range leaves {
+		if strings.TrimSpace(c.Example) == "" {
+			t.Errorf("%s: no Example; every command has to show itself being used", cmdPath(c))
+		}
+	}
+}
+
+func TestEveryExampleIsTheCommandItIllustrates(t *testing.T) {
+	leaves, _ := partition(t)
+	for _, c := range leaves {
+		for _, line := range exampleLines(c.Example) {
+			args, err := splitExample(line)
+			if err != nil {
+				t.Errorf("%s: example %q: %v", cmdPath(c), line, err)
+				continue
+			}
+			if len(args) == 0 || args[0] != "proton-cli" {
+				t.Errorf("%s: example %q should start with `proton-cli`", cmdPath(c), line)
+				continue
+			}
+			found, rest, err := newRoot().Find(args[1:])
+			if err != nil || found.CommandPath() != c.CommandPath() {
+				t.Errorf("%s: example %q resolves to %q", cmdPath(c), line, found.CommandPath())
+				continue
+			}
+			if err := found.ParseFlags(rest); err != nil {
+				t.Errorf("%s: example %q: %v", cmdPath(c), line, err)
+			}
+		}
+	}
+}
+
+// An entry filed under a path that names nothing is an example nobody will ever
+// read, which is how a renamed command leaves its documentation behind.
+func TestNoExampleIsFiledUnderACommandThatDoesNotExist(t *testing.T) {
+	leaves, groups := partition(t)
+	paths := map[string]bool{}
+	for _, c := range append(leaves, groups...) {
+		paths[c.CommandPath()] = true
+	}
+	for path := range examples {
+		if !paths[path] {
+			t.Errorf("examples has an entry for %q, which is not a command", path)
+		}
+	}
+}
+
+// A group never acts, so an example filed under one would show a command that
+// cannot be run.
+func TestNoGroupHasExamples(t *testing.T) {
+	_, groups := partition(t)
+	for _, c := range groups {
+		if _, ok := examples[c.CommandPath()]; ok {
+			t.Errorf("%s is a group, so it has nothing to show being used", cmdPath(c))
+		}
+	}
+}
+
+// exampleLines returns the runnable lines of an Example block, dropping blank
+// lines and the comments that head a group of them.
+func exampleLines(example string) []string {
+	var out []string
+	for _, line := range strings.Split(example, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// Anything piped or redirected is a shell construct illustrating the
+		// command's place in a pipeline; only the proton-cli side is ours to
+		// check, and it is whichever segment names the binary.
+		for _, seg := range strings.Split(line, "|") {
+			seg = strings.TrimSpace(seg)
+			if strings.HasPrefix(seg, "proton-cli ") {
+				out = append(out, seg)
+			}
+		}
+	}
+	return out
+}
+
+// splitExample splits a command line into arguments, honouring the single and
+// double quotes an example uses to hold a subject or a name together, and
+// stopping at a redirection.
+func splitExample(line string) ([]string, error) {
+	var (
+		args  []string
+		cur   strings.Builder
+		quote rune
+		open  bool
+	)
+	flush := func() {
+		if open || cur.Len() > 0 {
+			args = append(args, cur.String())
+			cur.Reset()
+			open = false
+		}
+	}
+	for _, r := range line {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+				continue
+			}
+			cur.WriteRune(r)
+		case r == '\'' || r == '"':
+			quote, open = r, true
+		case r == '>' || r == '<':
+			flush()
+			return args, nil
+		case unicode.IsSpace(r):
+			flush()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("unbalanced %c quote", quote)
+	}
+	flush()
+	return args, nil
+}
+
+// ── rule 12: shorthands are the root's alone ──
+
+// shorthands is every single-letter flag the CLI answers to, and what it means.
+//
+// A shorthand is a second name for a flag, which is exactly what the rest of
+// this file exists to prevent. They are allowed only where the letter is the one
+// every other tool already uses for the idea, so it is guessed rather than
+// learned, and only on flags typed often enough to be worth a letter.
+//
+// The namespace is small and global on purpose. `-p` is the profile everywhere,
+// which is only safe because no leaf may claim `-p` for `--page`; a shorthand
+// that meant one thing on `messages list` and another on `messages send` would
+// be the worst version of a flag name meaning two things, because the reader
+// cannot even see which one they got.
+var shorthands = map[string]string{
+	"h": "help",
+	"v": "version",
+	"o": "output",
+	"p": "profile",
+	"q": "quiet",
+	"n": "dry-run",
+	"y": "yes",
+}
+
+func TestOnlyTheRootDefinesShorthands(t *testing.T) {
+	leaves, groups := partition(t)
+	for _, c := range append(leaves, groups...) {
+		if c.Name() == "proton-cli" {
+			continue
+		}
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			if f.Shorthand != "" && f.Name != "help" {
+				t.Errorf("%s: --%s takes the shorthand -%s; the letters belong to the root alone",
+					cmdPath(c), f.Name, f.Shorthand)
+			}
+		})
+	}
+}
+
+// Every letter the root hands out is declared above, and every letter declared
+// above is handed out. A shorthand that arrives without being written down is a
+// second name nobody agreed to.
+func TestShorthandsAreDeclared(t *testing.T) {
+	root := newRoot()
+	seen := map[string]bool{}
+	check := func(f *pflag.Flag) {
+		if f.Shorthand == "" {
+			return
+		}
+		seen[f.Shorthand] = true
+		if want, ok := shorthands[f.Shorthand]; !ok {
+			t.Errorf("-%s is not declared", f.Shorthand)
+		} else if want != f.Name {
+			t.Errorf("-%s is --%s, but is declared as --%s", f.Shorthand, f.Name, want)
+		}
+	}
+	root.PersistentFlags().VisitAll(check)
+	root.Flags().VisitAll(check)
+	// cobra supplies these two itself, so they are declared but never visited.
+	seen["h"], seen["v"] = true, true
+	for letter, name := range shorthands {
+		if !seen[letter] {
+			t.Errorf("-%s is declared as --%s but nothing defines it", letter, name)
+		}
+	}
 }

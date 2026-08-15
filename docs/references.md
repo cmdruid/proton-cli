@@ -71,7 +71,22 @@ proton-cli drive photos download 3Ns8pT2v --output-dir ./photos
 
 ## IDs that start with a dash
 
-Proton's IDs are base64, so one occasionally begins with `-` and looks like a flag. proton-cli notices and handles it, but if you hit an odd parse error you can always separate arguments from flags yourself:
+Proton's IDs are base64 and `-` is one of its sixty-four characters, so about one ID in sixty-four begins with a dash and looks like a flag.
+
+proton-cli handles it. Before parsing, it protects a leading-dash reference that the command it was given could not read as flags - and this CLI defines three shorthands in total (`-h`, `-v`, `-o`), so a reference is never mistaken for one. It works for a full ID, for a shortened one, and for the compound `SHARE/ITEM` form the listings print:
+
+```bash
+proton-cli pass items get -x76EpiV/_fb26gvM
+proton-cli drive photos download -Qt-s7R_
+```
+
+An ID passed as a **flag's value** needs nothing at all, because a value is read as a value whatever it starts with:
+
+```bash
+proton-cli drive photos list --album -Qt-s7R_oGCru5u3Kv6Y8Q
+```
+
+If you ever do hit an odd parse error, you can separate arguments from flags yourself:
 
 ```bash
 proton-cli mail messages get -- -bH2mQxKT9wLpN4v…

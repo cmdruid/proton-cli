@@ -115,9 +115,11 @@ func TestMailMessagesSearchEmptyFooter(t *testing.T) {
 	t.Parallel()
 	_, stderr := runOKStderr(t, "mail", "messages", "search",
 		"--keyword", "xyz-no-match-"+testID())
+	// A search that matched nothing says so. "No messages." would read as an
+	// empty mailbox, which is a different and more alarming fact.
 	last := lastNonEmpty(stderr)
-	if last != "No messages." {
-		t.Errorf("expected 'No messages.' on an empty search, got: %q", last)
+	if last != "No messages match." {
+		t.Errorf("expected 'No messages match.' on an empty search, got: %q", last)
 	}
 }
 
@@ -859,10 +861,10 @@ func TestMailConversationsReadSummaryAttachmentTag(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 	convID := findConversationFor(t, msgID)
 	stdout := runOK(t, "mail", "conversations", "get", "--summary", convID)
-	// A row carrying an attachment is marked in the FLAGS column.
+	// A row carrying attachments says how many, in the FLAGS column.
 	assertContains(t, stdout, "FLAGS")
-	if !strings.Contains(stdout, "\U0001F4CE") {
-		t.Errorf("expected a row flagged as carrying an attachment:\n%s", truncateOutput(stdout))
+	if !regexp.MustCompile(`(?m)\s[1-9]\d*$`).MatchString(stdout) {
+		t.Errorf("expected a row flagged with an attachment count:\n%s", truncateOutput(stdout))
 	}
 }
 

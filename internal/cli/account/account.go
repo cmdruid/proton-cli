@@ -7,6 +7,7 @@ package account
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/roman-16/proton-cli/internal/account/session"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
@@ -79,14 +80,26 @@ func getCmd() *cobra.Command {
 	}
 }
 
-// storage renders usage as a person reads it: how much of how much, and the
-// share that represents.
+// storageBar is how many cells the quota bar is drawn in. Narrow enough to sit
+// inside a record's value column without becoming the widest thing on screen.
+const storageBar = 20
+
+// storage renders usage as a person reads it: how much of how much, the share
+// that represents, and a bar for the share - which is the form the question
+// "am I running out?" is actually asked in, and the one Proton's own clients
+// answer it with.
 func storage(used, max int64) string {
 	if max <= 0 {
 		return units.Size(used)
 	}
-	return fmt.Sprintf("%s of %s (%.0f%%)", units.Size(used), units.Size(max),
-		100*float64(used)/float64(max))
+	ratio := float64(used) / float64(max)
+	filled := int(ratio * storageBar)
+	if filled > storageBar {
+		filled = storageBar
+	}
+	bar := strings.Repeat(ui.GlyphBarFilled, filled) +
+		strings.Repeat(ui.GlyphBarPending, storageBar-filled)
+	return fmt.Sprintf("%s  %3.0f%%  %s of %s", bar, ratio*100, units.Size(used), units.Size(max))
 }
 
 func yesNo(b bool) string {
@@ -115,10 +128,6 @@ func loginCmd() *cobra.Command {
 			"terminal. Signing in again as the same account changes nothing, so an\n" +
 			"unattended job can run this ahead of its real work and recover on its own\n" +
 			"from a session that expired or was revoked.",
-		Example: "  proton-cli account login\n" +
-			"  proton-cli account login --profile work\n" +
-			"  printf '%s' \"$PW\" | proton-cli account login --user me@proton.me --password-stdin\n" +
-			"  proton-cli account login --user me@proton.me --password-file /run/secrets/proton",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if err := reauth.Supply(c); err != nil {
