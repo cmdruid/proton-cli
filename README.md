@@ -190,6 +190,8 @@ Everything lives in [`docs/`](docs/README.md):
 | [How it works](docs/how-it-works.md) | Login, keys, what's encrypted with what |
 | [Limitations](docs/limitations.md) | Platform constraints and gaps |
 
+[`CHANGELOG.md`](CHANGELOG.md) records what each version changed.
+
 ## Good to know
 
 - **Search lags a few seconds.** Proton's index is eventually consistent, so act on the ID a command printed rather than searching for the same subject again.

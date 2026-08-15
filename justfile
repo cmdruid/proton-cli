@@ -53,6 +53,11 @@ lint:
 login: build
     go run ./scripts/seed --login
 
+[doc("Print the version and the release notes the current CHANGELOG.md would publish")]
+notes:
+    go run ./scripts/changelog
+    go run ./scripts/changelog --notes
+
 [doc("Regenerate openapi.yaml from the WebClients TypeScript source")]
 openapi:
     cd scripts && bun install --frozen-lockfile && bun run generate-openapi
@@ -110,7 +115,7 @@ test-serial: test-fast
 
 [doc("Unit, golden, conformance and offline tests: no API, no credentials, seconds not minutes")]
 test-fast:
-    go test ./cmd/... ./internal/... ./tests/offline/ -count=1
+    go test ./cmd/... ./internal/... ./scripts/... ./tests/offline/ -count=1
 
 [doc("Run a single test (or a `|`-separated regex of test names)")]
 test-one pattern:

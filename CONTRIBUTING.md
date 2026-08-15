@@ -88,6 +88,7 @@ Unit test files are named after the file they test (`size.go` → `size_test.go`
 | `scripts/` | OpenAPI generator, installers, release helpers, README demo |
 | `assets/` | Logo and the generated README demo images |
 | `docs/` | User documentation |
+| `CHANGELOG.md` | What each version changed for the people using it, and the thing that releases it |
 
 ## Working with Proton's API
 
@@ -111,15 +112,20 @@ A weekly workflow does the same thing and commits when upstream changes. See [`s
 - Run `just lint` and `just test-fast`.
 - Add or adjust integration tests when you touch behaviour that they cover.
 - Update `docs/` and, when it's user-facing, the README.
-- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `build:`, …); the release notes are generated from them.
+- Leave [`CHANGELOG.md`](CHANGELOG.md) alone; its entries are written when a release is cut, from the commits that went into it. Write the commit message so the entry can be written from it.
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `build:`, …). Release notes are not generated from them: what a release says is written by hand in `CHANGELOG.md`, because a commit documents a step in the source and an entry documents a difference someone can feel.
 
 ## Releases
 
-Running the **Release** workflow with a version runs the same checks a pull request faces against the commit being released, builds the CAPTCHA helper on a native runner per platform, and only then tags. The tag is pushed last on purpose: it is fetched by users, resolved by `go install`, and the version GoReleaser derives, so nothing that outlives a failed run happens until everything that can fail has passed. GoReleaser then builds every target, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
+[`CHANGELOG.md`](CHANGELOG.md) is the release button. Add a version section to it in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) form and merge it to `main`; that is the whole of it. The version, the tag and the release notes all come from the one file the change was reviewed in, so shipping is a decision made once, in a diff, rather than a version typed into a form afterwards.
 
-Re-running the workflow with the same version and `skip-tag-check` resumes from the existing tag, and re-checks that tag's own commit rather than whatever `main` has become since.
+The section is written when the release is cut, from the commits since the last tag, so there is no `[Unreleased]` heading accumulating between releases and a merge that is not a release leaves the file untouched. That puts the whole of a release in one reviewable diff, and it puts the burden on commit messages, which is where the reasoning is while it is still fresh.
 
-`just snapshot` runs the same GoReleaser pipeline locally without publishing, so a packaging mistake surfaces before the tag rather than after it. It builds the helper for your platform and stands in placeholders for the other four, since those need native runners: the artifacts in `dist/` prove the packaging, not the helper bytes, and the foreign binaries in there are not runnable.
+The **Release** workflow runs when CI passes on `main`, reads the newest version section, and stops there when a release for it is already published - which is what nearly every merge does, in seconds. Otherwise it builds the CAPTCHA helper on a native runner per platform, tags, and hands the section to GoReleaser as the release notes. The tag is pushed last on purpose: it is fetched by users, resolved by `go install`, and the version GoReleaser derives, so nothing that outlives a failed run happens until everything that can fail has passed. GoReleaser then builds every target, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
+
+Because the file decides and not the run, a release that fails partway through is finished by re-running the workflow: an existing tag is reused and its own commit released rather than whatever `main` has become, and a release already published is left alone. The file is held to its format by `just test-fast`, which is also what keeps the button safe: versions move one step at a time, so after 2.2.3 the file may say 2.2.4, 2.3.0 or 3.0.0 and nothing else, and a `[YANKED]` section is never republished.
+
+`just notes` prints the version and the notes the current file would publish. `just snapshot` runs the same GoReleaser pipeline locally without publishing, so a packaging mistake surfaces before the tag rather than after it. It builds the helper for your platform and stands in placeholders for the other four, since those need native runners: the artifacts in `dist/` prove the packaging, not the helper bytes, and the foreign binaries in there are not runnable.
 
 ## Security
 

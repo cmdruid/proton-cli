@@ -6,11 +6,21 @@ This is an open-source CLI tool used by other people. All changes should conside
 - **Backwards compatibility** - consider impact on existing users when changing command syntax or flags, but don't let it block improvements
 - **Cross-platform** - must work on Linux, macOS, and Windows (amd64 + arm64)
 - **User-facing quality** - README, help text, and error messages should be clear and helpful
-- **Distribution** - binaries are published as GitHub Releases via GoReleaser; users install by downloading a binary or via `go install`
+- **Distribution** - binaries are published as GitHub Releases via GoReleaser; users install by downloading a binary or via `go install`. A release is caused by `CHANGELOG.md`, see below
 
 ## Feature Scope
 
 proton-cli mirrors what the **Proton web clients let a user do**, not every endpoint the API exposes. If an action isn't something a user can do in the official web UI, don't add it to the CLI - even when a backend endpoint for it exists. Web-client parity beats API completeness.
+
+## The changelog is the release button
+
+`CHANGELOG.md` is not documentation about releases, it is what causes them. A version section reaching `main` is a release request: CI passes, the Release workflow reads the newest section, and that version's tag, artifacts and release notes all follow from it. Nearly every merge adds no section and releases nothing.
+
+- **There is no `[Unreleased]` section here, and adding one is not how to record a change.** The file gains a section only when a release is cut, written then from the commits since the last tag. Between releases it is not touched at all.
+- **Never add a version section unless the user asked for a release.** There is nowhere to park an entry: a section is a release.
+- Write the commit message so the entry can be written from it later: what moved on the surface a user touches, and what that means for them. The commit is where the reasoning is still fresh.
+- An entry follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): the six categories in the specification's order, one line per change, written for the person who types the commands. Internal work gets no entry.
+- `scripts/changelog` parses the file and `just test-fast` fails on a malformed one: a category that is not one of the six, a version that skips a step, a section with nothing in it. `just notes` prints what the release page would say.
 
 ## The interface is a language, and it is declared
 

@@ -4,19 +4,13 @@ concurrency:
   cancel-in-progress: true
   group: ${{ github.workflow }}-${{ github.ref }}
 
+# Passing here on main is what lets a release happen: the Release workflow runs
+# on this one succeeding, so these checks gate a publish without being stated
+# twice or run twice.
 on:
   pull_request:
   push:
     branches: [main]
-  # The release calls this, so a release is gated on the same checks a pull
-  # request faces, stated once. `ref` is the commit to check: empty is the
-  # caller's own, which is what a push or a pull request wants.
-  workflow_call:
-    inputs:
-      ref:
-        type: string
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -26,8 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
       - uses: jetify-com/devbox-install-action@v0.15.0
       - run: devbox run just lint
       - run: git diff --exit-code
@@ -41,8 +33,6 @@ jobs:
         os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
       - uses: cachix/install-nix-action@v31
       - run: nix build --print-build-logs
 
@@ -50,7 +40,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
       - uses: jetify-com/devbox-install-action@v0.15.0
       - run: devbox run just test-fast

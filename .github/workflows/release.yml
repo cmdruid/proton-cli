@@ -1,17 +1,21 @@
 name: Release
 
+# CHANGELOG.md is the release button. A version heading in it that has no
+# published release is a release request, and this workflow's only job is to make
+# that true. So every run is a function of the tree rather than of the event that
+# started it: a release that died halfway through finishes by being re-run, and a
+# merge that adds no version is a no-op costing seconds.
+#
+# It follows CI rather than repeating it. The release is the continuation of the
+# checks that just passed on that commit, which is what makes "nothing is
+# published from a commit that failed the checks" structural instead of a job
+# somebody has to remember to keep in front of the build.
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release (e.g. 1.0.0)"
-        required: true
-        type: string
-      skip-tag-check:
-        description: "Skip tag check"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -22,57 +26,100 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-# A tag is the one thing here that outlives a failed run: it is fetched by
-# users, resolved by `go install`, and the version goreleaser derives. So it is
-# pushed last, once everything that can fail has passed, and it names the exact
-# commit those checks ran against.
 jobs:
   resolve:
+    # workflow_run is a privileged trigger: it carries this repository's write
+    # token whatever the run that finished. A fork's pull request can come from a
+    # branch named `main` and would pass the branch filter on its own, so the
+    # release only ever follows a push to this repository's own main.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
-      sha: ${{ steps.target.outputs.sha }}
-      tag: ${{ steps.target.outputs.tag }}
+      release: ${{ steps.decide.outputs.release }}
+      sha: ${{ steps.decide.outputs.sha }}
+      tag: ${{ steps.decide.outputs.tag }}
+      version: ${{ steps.decide.outputs.version }}
     steps:
-      - name: Validate version
-        run: |
-          if ! echo "${{ inputs.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
-            echo "::error::Invalid version format '${{ inputs.version }}'. Expected semver like 1.0.0 or 1.0.0-rc.1"
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Resolve the tag and the commit it will name
-        id: target
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Decide what to release
+        id: decide
         env:
-          TAG: v${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            if [ "${{ inputs.skip-tag-check }}" != "true" ]; then
-              echo "::error::Tag $TAG already exists (pass skip-tag-check=true to resume from it)"
+          nothing() {
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
+
+          version=$(go run ./scripts/changelog)
+          if [ -z "$version" ]; then
+            nothing "CHANGELOG.md names no version to release."
+          fi
+          tag="v$version"
+
+          # A published release is the record of a version having shipped; a draft
+          # or a missing one is a release that still has to happen. Asking GitHub
+          # rather than remembering is what makes a re-run finish the job.
+          state=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)
+          if [ "$state" = "false" ]; then
+            nothing "$tag is already published; CHANGELOG.md asks for nothing new."
+          fi
+
+          # A tag outlives the run that pushed it, so a resumed release is the
+          # tag's own commit - the one the checks and the helpers ran against -
+          # and not whatever main has become since.
+          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            sha=$(git rev-parse "$tag^{commit}")
+            echo "Tag $tag exists; resuming the release from $sha."
+          else
+            sha="$HEAD_SHA"
+          fi
+
+          # Following CI is what proves the commit passed it. A manual run has no
+          # such proof, so it asks for the recorded conclusion instead.
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&status=completed" --jq '.workflow_runs[0].conclusion // ""')
+            if [ "$conclusion" != success ]; then
+              echo "::error::CI has not passed for $sha (${conclusion:-no completed run}); nothing is released from an unverified commit"
               exit 1
             fi
-            # Resuming: the release is the tag's own commit, and the checks below
-            # run against that rather than against whatever main has become.
-            sha=$(git rev-parse "$TAG^{commit}")
-            echo "Tag $TAG exists; resuming the release from $sha."
-          else
-            sha=$GITHUB_SHA
           fi
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-  verify:
-    needs: resolve
-    uses: ./.github/workflows/ci.yml
-    with:
-      ref: ${{ needs.resolve.outputs.sha }}
+          {
+            echo "release=true"
+            echo "sha=$sha"
+            echo "tag=$tag"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Releasing $tag"
+            echo
+            go run ./scripts/changelog --notes
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build-helpers:
-    needs: [resolve, verify]
+    needs: resolve
+    if: needs.resolve.outputs.release == 'true'
     strategy:
       fail-fast: true
       matrix:
@@ -142,31 +189,8 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  tag:
-    needs: [resolve, build-helpers]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Create or reuse the tag
-        env:
-          SHA: ${{ needs.resolve.outputs.sha }}
-          TAG: ${{ needs.resolve.outputs.tag }}
-        run: |
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Reusing existing tag $TAG."
-            exit 0
-          fi
-          git config user.name "Roman"
-          git config user.email "roman@lerchster.dev"
-          git tag --annotate "$TAG" "$SHA" --message "Release $TAG"
-          git push origin "$TAG"
-
   release:
-    needs: [resolve, build-helpers, tag]
+    needs: [resolve, build-helpers]
     runs-on: ubuntu-latest
     outputs:
       goreleaser: ${{ steps.goreleaser.outcome }}
@@ -174,8 +198,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.resolve.outputs.tag }}
           fetch-depth: 0
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -194,6 +218,43 @@ jobs:
           ls -la internal/hv/assets/
           file internal/hv/assets/proton-cli-hv-* || true
 
+      - name: Tag the release
+        # The tag is the one thing here that outlives a failed run: it is fetched
+        # by users, resolved by `go install`, and the version goreleaser derives.
+        # So it is pushed only once everything that can fail has passed, and it
+        # names the exact commit those checks and builds ran against.
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+            echo "Reusing existing tag $TAG."
+            exit 0
+          fi
+          git config user.name "Roman"
+          git config user.email "roman@lerchster.dev"
+          git tag --annotate "$TAG" "$SHA" --message "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Write the release notes
+        # Into the runner's temporary directory, never the checkout: `goreleaser
+        # release` refuses to run against a dirty working tree.
+        #
+        # Which release came before this one is a fact about the repository's
+        # tags, so the compare link is read from git rather than written by hand
+        # into a file that would then have to be kept true.
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          notes="$RUNNER_TEMP/release-notes.md"
+          go run ./scripts/changelog --notes > "$notes"
+          previous=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          if [ -n "$previous" ]; then
+            printf '\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$previous" "$TAG" >> "$notes"
+          fi
+          cat "$notes"
+
       # GoReleaser builds the binaries and publishes to third-party package
       # repositories in one step, and AUR being unreachable must not stop a release
       # that built correctly. So this step is allowed to fail and the verification
@@ -209,7 +270,7 @@ jobs:
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
         env:
           AUR_KEY: ${{ secrets.AUR_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -236,6 +297,20 @@ jobs:
             exit 1
           fi
           echo "GitHub release $TAG has all required assets."
+
+      - name: Verify the release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          # GitHub stores a release body with CRLF line endings; the notes were
+          # written with LF. Nothing else about them may differ.
+          published=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' | tr -d '\r')
+          if [ "$published" != "$(cat "$RUNNER_TEMP/release-notes.md")" ]; then
+            echo "::error::the release page for $TAG does not carry the CHANGELOG.md section it was built from"
+            exit 1
+          fi
+          echo "Release $TAG carries its changelog section."
 
   apt-repo:
     needs: [resolve, release]
@@ -342,7 +417,7 @@ jobs:
 
   report:
     needs: [resolve, release, apt-repo, apt-deploy, npm-publish]
-    if: always()
+    if: always() && needs.resolve.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

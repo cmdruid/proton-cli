@@ -7,6 +7,7 @@ Everything the maintainer or CI runs, in whatever language suits it: shell insta
 | `install.sh`, `install.ps1` | The installers users curl; referenced from the README |
 | `build-hv-helpers.sh` | Builds the CAPTCHA webview helpers that get embedded (`just build`) |
 | `gen-completions.sh` | Emits the shell completions shipped in releases (a goreleaser `before` hook) |
+| `changelog/` | Reads `CHANGELOG.md`: the version to release and the notes to publish (`just notes`) |
 | `gendocs/` | Generates `docs/commands/README.md` from the command tree (`just docs`) |
 | `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source (`just openapi`) |
 | `terminal-demo/` | Records the README panel against the primary account (`just demo`) |
@@ -24,6 +25,18 @@ just docs
 The prose pages beside it are hand-written; only the index is generated. That split is deliberate: generated per-command pages read badly, but an index is exactly the thing that goes stale silently when a command is renamed. CI regenerates it and fails on a diff, so a command that exists is a command that is listed, under its current name.
 
 It shares the tree with `internal/cli/conformance_test.go`, which checks the same commands against the rules the interface is meant to obey. Both call `cli.Root()`.
+
+## Changelog
+
+The release trigger, and the only thing that reads it. `CHANGELOG.md` declares a version by carrying a section for it; this prints that version, or the release notes that go on its GitHub release page.
+
+```bash
+just notes
+```
+
+It validates the whole file before answering either question, against Keep a Changelog 1.1.0 and a little more: categories only from the six and in the specification's order, no empty sections, and versions that move one step at a time so a typed 2.30.0 is a failing test rather than a tag nobody can take back. An `[Unreleased]` section is allowed and never releasable, but this project has none: a section is written when the release is cut. `just test-fast` runs that check over the repository's own changelog, so a file that cannot be released cannot be merged.
+
+Printing nothing is an answer: the file names no version to release, which is the state of every commit that is not a release. A `[YANKED]` section counts as nothing too, since a withdrawn release must never be republished.
 
 ## OpenAPI Generator
 

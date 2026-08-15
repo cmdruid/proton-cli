@@ -161,11 +161,15 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
-changelog:
-  sort: asc
-
+# There is deliberately no `changelog` section: the release notes are the
+# CHANGELOG.md section for the version being released, handed to goreleaser with
+# `--release-notes`. `changelog.disable` would not express that - it overrides
+# the flag and publishes an empty release body.
 release:
   draft: false
+  # A version carrying a pre-release suffix is not what `proton-cli update` and
+  # /releases/latest should hand a user who asked for the current version.
+  prerelease: auto
   # A re-run has to be idempotent: a partial failure (e.g. the AUR being down)
   # leaves the release, its notes and its assets in place. `mode` only governs
   # the notes; without `replace_existing_artifacts` every asset upload fails
