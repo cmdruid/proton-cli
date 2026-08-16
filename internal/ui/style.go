@@ -94,15 +94,18 @@ func NoColor() bool {
 	return false
 }
 
+// IsTerminal reports whether w is a real terminal, which is what separates
+// someone reading the output from a file, a pipe or a scheduler collecting it.
+func IsTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
 // StyleFor returns the styling to use when writing to w. Colour is enabled only
 // for a real terminal; PROTON_CLI_FORCE_TTY deliberately does not apply, so
 // captured output stays plain.
 func StyleFor(w io.Writer) Style {
-	if NoColor() {
-		return Style{}
-	}
-	f, ok := w.(*os.File)
-	if !ok || !term.IsTerminal(int(f.Fd())) {
+	if NoColor() || !IsTerminal(w) {
 		return Style{}
 	}
 	return Style{enabled: true, direct: directColor()}

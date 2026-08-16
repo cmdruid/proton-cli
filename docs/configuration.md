@@ -105,7 +105,7 @@ Try:   proton account logout --profile work
 
 ## Environment variables
 
-Six, and none of them can name an account.
+Seven, and none of them can name an account.
 
 | Variable | Description |
 | --- | --- |
@@ -115,6 +115,7 @@ Six, and none of them can name an account.
 | `COLORTERM` | `truecolor` or `24bit` if your terminal takes 24-bit color and does not advertise it; only affects how exactly a color swatch is drawn ([why](output.md#colour)) |
 | `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
 | `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
+| `PROTON_NO_UPDATE_CHECK` | Set to any value, even empty, to never look for a new release ([what that is](installation.md#the-update-notice)) |
 
 ## Files on disk
 
@@ -122,6 +123,7 @@ Six, and none of them can name an account.
 | --- | --- |
 | `~/.config/proton-cli/sessions/<profile>.json` | Session tokens and the encrypted key password (mode `0600`) |
 | `~/.config/proton-cli/idcache/<profile>.json` | Short-ID lookup table (see [The language](language.md)) |
+| `~/.config/proton-cli/update-check.json` | When proton last looked for a new release ([why](installation.md#the-update-notice)) |
 
 Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton-cli/` and Windows uses `%APPDATA%\proton-cli\`. Nothing else is written; there is no config file to maintain.
 

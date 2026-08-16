@@ -40,7 +40,7 @@ There's also an APT repository for Debian and Ubuntu, `.rpm` and `.apk` packages
 
 The command is `proton`, and `proton-cli` works too - every install puts both names on your `PATH`.
 
-Already installed? `proton update`.
+Already installed? `proton update`, and `proton changelog` for what that brings. An install no package manager owns says so itself, once a day.
 
 ## Get started
 
@@ -181,7 +181,7 @@ Everything lives in [`docs/`](docs/README.md):
 
 | Page | What's in it |
 | --- | --- |
-| [Installation](docs/installation.md) | Every platform, updating, uninstalling |
+| [Installation](docs/installation.md) | Every platform, updating, the update notice, uninstalling |
 | [Configuration](docs/configuration.md) | Credentials, profiles, environment variables |
 | [Getting started](docs/getting-started.md) | Signing in, completion, profiles |
 | [The language](docs/language.md) | The grammar: apps, collections, verbs, filters |
@@ -192,7 +192,7 @@ Everything lives in [`docs/`](docs/README.md):
 | [How it works](docs/how-it-works.md) | Login, keys, what's encrypted with what |
 | [Limitations](docs/limitations.md) | Platform constraints and gaps |
 
-[`CHANGELOG.md`](CHANGELOG.md) records what each version changed.
+[`CHANGELOG.md`](CHANGELOG.md) records what each version changed, and `proton changelog` prints it.
 
 ## Good to know
 

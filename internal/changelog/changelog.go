@@ -1,4 +1,10 @@
-package main
+// Package changelog reads CHANGELOG.md and holds it to Keep a Changelog 1.1.0.
+//
+// The file is the release trigger - a version section reaching main is what
+// publishes that version - and it is also what `proton changelog` prints. Both
+// read it through here, so the rules the release obeys and the notes a reader
+// sees can never come from two different ideas of what the file says.
+package changelog
 
 import (
 	"fmt"
@@ -21,32 +27,89 @@ var (
 	versionPattern = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?$`)
 )
 
-// release is one version's section: what it is called, when it shipped, and the
-// bullets that go onto its release page verbatim.
-type release struct {
-	version string
-	date    string
-	yanked  bool
-	body    string
-	heading int
+// Section is one category of a release and the entries filed under it.
+type Section struct {
+	Category string   `json:"category"`
+	Entries  []string `json:"entries"`
 }
 
-// changelog is a parsed CHANGELOG.md, newest release first.
-type changelog struct {
-	releases []release
+// Release is one version's section: what it is called, when it shipped, the
+// bullets that go onto its release page verbatim, and those same bullets taken
+// apart so a reader can be shown them.
+type Release struct {
+	Version  string    `json:"version"`
+	Date     string    `json:"date"`
+	Yanked   bool      `json:"yanked,omitempty"`
+	Changes  []Section `json:"changes"`
+	Body     string    `json:"-"`
+	headline int
 }
 
-// releasable is the version the file asks for: the newest one, unless it was
+// Changelog is a parsed CHANGELOG.md, newest release first.
+type Changelog struct {
+	Releases []Release
+}
+
+// Version returns one release by version, with or without a leading "v".
+func (c *Changelog) Version(version string) (Release, bool) {
+	want := strings.TrimPrefix(version, "v")
+	for _, r := range c.Releases {
+		if r.Version == want {
+			return r, true
+		}
+	}
+	return Release{}, false
+}
+
+// Between returns the releases newer than since and no newer than until, in the
+// file's own order. An empty bound is unbounded on that side.
+//
+// since is exclusive because it names where a reader already is: the answer to
+// "what have I missed while on 2.3.0" does not include 2.3.0. until is inclusive
+// because it names a release they want to read.
+func (c *Changelog) Between(since, until string) []Release {
+	var out []Release
+	for _, r := range c.Releases {
+		if since != "" && !Newer(r.Version, since) {
+			continue
+		}
+		if until != "" && Newer(r.Version, until) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// Oldest is the earliest release the file carries, which is as far back as it
+// can answer for.
+func (c *Changelog) Oldest() (Release, bool) {
+	if len(c.Releases) == 0 {
+		return Release{}, false
+	}
+	return c.Releases[len(c.Releases)-1], true
+}
+
+// Releasable is the version the file asks for: the newest one, unless it was
 // yanked. A yank withdraws a release, so republishing it is the one thing a rule
 // that converges on the file must never do.
-func (c *changelog) releasable() (release, bool) {
-	if len(c.releases) == 0 || c.releases[0].yanked {
-		return release{}, false
+func (c *Changelog) Releasable() (Release, bool) {
+	if len(c.Releases) == 0 || c.Releases[0].Yanked {
+		return Release{}, false
 	}
-	return c.releases[0], true
+	return c.Releases[0], true
 }
 
-// parse reads a changelog and holds it to Keep a Changelog 1.1.0. It is strict
+// Valid reports whether a version is one this file could name: three numbers and
+// an optional pre-release, with no leading "v".
+func Valid(version string) bool { return versionPattern.MatchString(version) }
+
+// Newer reports whether one version supersedes another.
+func Newer(version, than string) bool {
+	return semver.Compare("v"+version, "v"+than) > 0
+}
+
+// Parse reads a changelog and holds it to Keep a Changelog 1.1.0. It is strict
 // where the specification is only principled - category order, no empty sections,
 // versions that move one step at a time - because this file decides what gets
 // published, and a rule nothing enforces is a rule that drifts.
@@ -54,7 +117,7 @@ func (c *changelog) releasable() (release, bool) {
 // An `[Unreleased]` section is allowed and never releasable, but not required:
 // here a section is written when a release is cut, so between releases the file
 // has nothing to say.
-func parse(path string, source []byte) (*changelog, error) {
+func Parse(path string, source []byte) (*Changelog, error) {
 	p := &parser{path: path, category: -1}
 	lines := strings.Split(strings.ReplaceAll(string(source), "\r\n", "\n"), "\n")
 	if len(lines) == 0 || lines[0] != "# Changelog" {
@@ -70,17 +133,18 @@ func parse(path string, source []byte) (*changelog, error) {
 
 type parser struct {
 	path     string
-	releases []release
+	releases []Release
 	linked   bool
 
 	unreleased bool
 	name       string
 	heading    int
 	body       []string
+	sections   []Section
 	category   int
 	categoryAt int
 	bullets    int
-	current    *release
+	current    *Release
 }
 
 func (p *parser) read(n int, line string) error {
@@ -102,6 +166,7 @@ func (p *parser) read(n int, line string) error {
 		p.body = append(p.body, line)
 	case strings.HasPrefix(line, "  ") && p.bullets > 0:
 		p.body = append(p.body, line)
+		p.continuation(line)
 	default:
 		return p.at(n, "unexpected line in [%s]: %q", p.name, line)
 	}
@@ -140,7 +205,7 @@ func (p *parser) section(n int, line string) error {
 		return p.at(n, "[%s] is dated %s, which is not a day", version, date)
 	}
 	p.name, p.heading = version, n
-	p.current = &release{version: version, date: date, yanked: match[3] != "", heading: n}
+	p.current = &Release{Version: version, Date: date, Yanked: match[3] != "", headline: n}
 	return nil
 }
 
@@ -158,6 +223,7 @@ func (p *parser) begin(n int, name string) error {
 	}
 	p.category, p.categoryAt, p.bullets = next, n, 0
 	p.body = append(p.body, "### "+name)
+	p.sections = append(p.sections, Section{Category: name})
 	return nil
 }
 
@@ -165,12 +231,23 @@ func (p *parser) entry(n int, line string) error {
 	if p.category < 0 {
 		return p.at(n, "entry in [%s] sits outside a category", p.name)
 	}
-	if strings.TrimSpace(strings.TrimPrefix(line, "- ")) == "" {
+	text := strings.TrimSpace(strings.TrimPrefix(line, "- "))
+	if text == "" {
 		return p.at(n, "empty entry in [%s]", p.name)
 	}
 	p.bullets++
 	p.body = append(p.body, line)
+	last := &p.sections[len(p.sections)-1]
+	last.Entries = append(last.Entries, text)
 	return nil
+}
+
+// continuation folds a wrapped entry's later lines back into the entry, so a
+// reader is shown one sentence rather than the author's line breaks.
+func (p *parser) continuation(line string) {
+	last := &p.sections[len(p.sections)-1]
+	i := len(last.Entries) - 1
+	last.Entries[i] += " " + strings.TrimSpace(line)
 }
 
 // close finishes the section being read. An empty [Unreleased] is a section with
@@ -188,29 +265,30 @@ func (p *parser) close() error {
 		if len(body) == 0 {
 			return p.at(p.heading, "[%s] has no entries", p.name)
 		}
-		p.current.body = strings.Join(body, "\n")
+		p.current.Body = strings.Join(body, "\n")
+		p.current.Changes = p.sections
 		p.releases = append(p.releases, *p.current)
 	}
-	p.name, p.body, p.category, p.bullets, p.current = "", nil, -1, 0, nil
+	p.name, p.body, p.sections, p.category, p.bullets, p.current = "", nil, nil, -1, 0, nil
 	return nil
 }
 
-func (p *parser) done() (*changelog, error) {
+func (p *parser) done() (*Changelog, error) {
 	if err := p.close(); err != nil {
 		return nil, err
 	}
 	for i := 1; i < len(p.releases); i++ {
-		newer, older := p.releases[i-1], p.releases[i]
-		if semver.Compare("v"+newer.version, "v"+older.version) <= 0 {
-			return nil, p.at(newer.heading, "[%s] is not newer than [%s]: the latest version comes first",
-				newer.version, older.version)
+		newest, older := p.releases[i-1], p.releases[i]
+		if !Newer(newest.Version, older.Version) {
+			return nil, p.at(newest.headline, "[%s] is not newer than [%s]: the latest version comes first",
+				newest.Version, older.Version)
 		}
-		if !follows(older.version, newer.version) {
-			return nil, p.at(newer.heading, "[%s] does not follow [%s], which is followed by %s",
-				newer.version, older.version, strings.Join(successors(older.version), " or "))
+		if !follows(older.Version, newest.Version) {
+			return nil, p.at(newest.headline, "[%s] does not follow [%s], which is followed by %s",
+				newest.Version, older.Version, strings.Join(successors(older.Version), " or "))
 		}
 	}
-	return &changelog{releases: p.releases}, nil
+	return &Changelog{Releases: p.releases}, nil
 }
 
 func (p *parser) at(n int, format string, args ...any) error {

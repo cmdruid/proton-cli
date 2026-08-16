@@ -1,6 +1,10 @@
-// Package update resolves and applies proton self-updates from GitHub
-// Releases. It backs the `proton update` command and mirrors the curl
-// install script: the same release artifacts, the same SHA-256 verification.
+// Package selfmanage is proton's own side of GitHub: how a copy of the program
+// was installed, which release is the newest, what that release changed, and how
+// to replace or remove the binary in place.
+//
+// It backs `proton update`, `proton uninstall` and `proton changelog`, and it
+// mirrors the curl install script where they overlap: the same release
+// artifacts, the same SHA-256 verification.
 package selfmanage
 
 import (
@@ -26,6 +30,18 @@ const (
 
 // releasesURL is the base of the GitHub Releases download namespace.
 const releasesURL = "https://github.com/" + owner + "/" + repo + "/releases"
+
+// changelogURL is CHANGELOG.md on the default branch.
+//
+// The file on main rather than the copy compiled into this binary, because the
+// question worth asking is what a release the reader does not have yet changed,
+// and no build can carry notes written after it.
+const changelogURL = "https://raw.githubusercontent.com/" + owner + "/" + repo + "/main/CHANGELOG.md"
+
+// Changelog fetches the project's CHANGELOG.md.
+func Changelog(ctx context.Context, client *http.Client) ([]byte, error) {
+	return get(ctx, client, changelogURL, nil)
+}
 
 // AssetName returns the raw release binary name for a platform, matching the
 // goreleaser archive template (e.g. "proton-cli_linux_amd64",

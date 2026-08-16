@@ -38,6 +38,21 @@ func (c *Invocation) Changed(flag string) bool {
 	return c.Cmd != nil && c.Cmd.Flags().Changed(flag)
 }
 
+// preview makes sure a dry run is as true as the change would be.
+//
+// A preview claims what the command would do, and for a mutation that reaches
+// Proton the honest claim includes needing an account: it sends no request, so
+// nothing else would ever discover there is nobody signed in. A command that
+// declares OnThisMachine changes the disk and not the account, and would have
+// succeeded signed out, so its preview says so too.
+func (c *Invocation) preview(spec *ui.ResultSpec) error {
+	spec.DryRun = true
+	if c.Cmd != nil && c.Cmd.Annotations[OnThisMachine] != "" {
+		return nil
+	}
+	return c.App.Authenticate(c.Ctx)
+}
+
 // Step is a requirement satisfied before the body runs. The first failure aborts.
 type Step func(*Invocation) error
 
@@ -119,10 +134,9 @@ func Read(c *Invocation, spec ui.DocumentSpec) error { return ui.Document(c.UI()
 // unannounced.
 func Mutate(c *Invocation, spec ui.ResultSpec, apply func() error) error {
 	if c.App.DryRun {
-		if err := c.App.Authenticate(c.Ctx); err != nil {
+		if err := c.preview(&spec); err != nil {
 			return err
 		}
-		spec.DryRun = true
 		return ui.Result(c.UI(), spec)
 	}
 	if err := confirm(c, spec); err != nil {
@@ -174,14 +188,9 @@ func confirm(c *Invocation, spec ui.ResultSpec) error {
 func Create(c *Invocation, spec ui.ResultSpec, apply func() (string, error)) error {
 	spec.Count = 1
 	if c.App.DryRun {
-		// A preview is a claim about what the command would do, so it has to be as
-		// true as the change: without an account it would not do it. A dry run that
-		// never reached the network would otherwise be the one path that answers as
-		// though it had.
-		if err := c.App.Authenticate(c.Ctx); err != nil {
+		if err := c.preview(&spec); err != nil {
 			return err
 		}
-		spec.DryRun = true
 		return ui.Result(c.UI(), spec)
 	}
 	id, err := apply()

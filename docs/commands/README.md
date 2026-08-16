@@ -220,6 +220,14 @@ Send a raw authenticated request to the Proton API
 
 ## proton itself
 
+### `changelog`
+
+Print what each release changed
+
+| Command | What it does |
+| --- | --- |
+| `changelog [VERSION]` | Print what each release changed |
+
 ### `completion`
 
 Generate a shell completion script

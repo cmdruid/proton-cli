@@ -170,6 +170,33 @@ proton update 1.9.13      # install a specific version
 proton update --reinstall # install again even if already current
 ```
 
+### The update notice
+
+An install that no package manager owns has nothing to tell it a release happened, so proton says so itself:
+
+```console
+$ proton mail messages list
+…
+
+proton 2.4.1 → 2.5.0 available.
+Run `proton update` to install it, or `proton changelog 2.5.0` for what changed.
+```
+
+It looks **once a day**, after the command has finished and printed everything, and it remembers when it last looked in `~/.config/proton-cli/update-check.json`. Every other command that day costs nothing, and the one that does costs a couple of hundred milliseconds after your answer is already on the screen.
+
+It stays quiet when a package manager owns this copy (it would only be telling you to run a command that refuses), when stderr is not a terminal, and under `--quiet`. `PROTON_NO_UPDATE_CHECK=1` ends it for good.
+
+## What a release changed
+
+```bash
+proton changelog                             # every release, newest first
+proton changelog 2.4.1                       # one release
+proton changelog --since 2.3.0               # everything after 2.3.0
+proton changelog --since 2.3.0 --until 2.4.0 # and stopping at 2.4.0
+```
+
+`--since` names the version you are on and is not included; `--until` names where to stop and is. The changelog reads the published `CHANGELOG.md`, so it can answer for a release you have not installed yet - and only back to where the file starts. Older releases are on the [releases page](https://github.com/roman-16/proton-cli/releases).
+
 ## Uninstalling
 
 Package installs go out the way they came in (`apt remove proton-cli`, `brew uninstall --cask proton-cli`, …).

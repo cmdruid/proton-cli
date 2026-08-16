@@ -95,6 +95,7 @@ var Verbs = map[string]string{
 	"options": "list the values a choice offers",
 
 	// The tool itself
+	"changelog":  "print what each release changed",
 	"uninstall":  "remove " + Program,
 	"version":    "report the build",
 	"completion": "emit a shell completion script",
@@ -110,6 +111,22 @@ var Verbs = map[string]string{
 var Irreversible = map[string]bool{
 	"delete": true, "empty": true, "uninstall": true,
 }
+
+// OnThisMachine marks a command that changes this computer rather than the
+// account, and is the third thing declared about a mutation, beside whether it
+// can be taken back and whether it changes state at all.
+//
+// It exists for one rule. A preview has to be as true as the change would be, so
+// a dry run asserts that an account exists - otherwise it is the one path that
+// answers as though it had one, since it sends no request to find out. That is
+// right for every mutation that reaches Proton and wrong for the two that reach
+// only the disk: replacing or deleting this binary needs no account, and asking
+// for one would refuse a preview of work that would have succeeded.
+//
+// It is declared per command because nothing else separates them. `update` is a
+// verb eight collections use, and `Updated` is the action a draft reports too;
+// only the command knows whose thing it is changing.
+const OnThisMachine = "on-this-machine"
 
 // Mutating lists the verbs that change state. Every command whose verb is in
 // here has to honour --dry-run, which kit.Mutate guarantees structurally.

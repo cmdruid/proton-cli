@@ -159,7 +159,7 @@ func newRoot() *cobra.Command {
 	}
 	add(groupApps, mailcmd.New(), drivecmd.New(), calendarcmd.New(), contactscmd.New(), passcmd.New())
 	add(groupAccount, accountcmd.New(), apicmd.New())
-	add(groupSelf, selfcmd.UpdateCmd(version), selfcmd.UninstallCmd(),
+	add(groupSelf, selfcmd.ChangelogCmd(), selfcmd.UpdateCmd(version), selfcmd.UninstallCmd(),
 		selfcmd.VersionCmd(version), completionCmd(root))
 
 	attachExamples(root)
@@ -181,8 +181,9 @@ func Execute() {
 	}
 
 	root := newRoot()
-	err := root.ExecuteContext(ctx)
+	cmd, err := root.ExecuteContextC(ctx)
 	if err == nil {
+		announce(cmd)
 		return
 	}
 	// A signal is the user changing their mind. A deadline is the request running
@@ -198,7 +199,27 @@ func Execute() {
 		os.Exit(exitCode(err))
 	}
 	ui.WriteError(os.Stderr, rewrapFlagError(err, os.Args), errorStyle(root))
+	announce(cmd)
 	os.Exit(exitCode(err))
+}
+
+// announce mentions a new release below whatever the command produced.
+//
+// Below, because it is the least important thing on the screen; and after a
+// failure as much as after a success, because running a version from before the
+// fix is one of the reasons a command fails.
+//
+// The two commands that manage the install are left out - they would be saying
+// it twice - and so is the completion script, which a shell reads at startup
+// where a remark on stderr is noise in a file nobody is watching.
+func announce(cmd *cobra.Command) {
+	switch cmd.Name() {
+	case "update", "uninstall", "completion":
+		return
+	}
+	if a := app.FromOrNil(cmd.Context()); a != nil {
+		selfcmd.Notice(cmd.Context(), a.UI, version)
+	}
 }
 
 // unknownSubcommand reports a group addressed with a word that names none of its
@@ -212,6 +233,14 @@ func Execute() {
 // Find's error is the root-level half of the same complaint, phrased by cobra;
 // discarding it lets one wording answer for the whole tree.
 func unknownSubcommand(root *cobra.Command, args []string) error {
+	// A shell asking what may come next is not a person mistyping a command, and
+	// cobra answers it itself - out of a tree it completes on the way into
+	// Execute, which a tree built to be probed has not been through. Judging that
+	// request against this tree finds a command nobody has added yet and refuses
+	// the completion every installed shell script asks for.
+	if len(args) > 0 && (args[0] == cobra.ShellCompRequestCmd || args[0] == cobra.ShellCompNoDescRequestCmd) {
+		return nil
+	}
 	cmd, rest, _ := root.Find(args)
 	if !cmd.HasSubCommands() {
 		return nil

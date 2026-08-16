@@ -1,7 +1,8 @@
-package main
+package changelog
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -193,7 +194,7 @@ func TestParse(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := parse("CHANGELOG.md", document(test.sections))
+			_, err := Parse("CHANGELOG.md", document(test.sections))
 			switch {
 			case test.refuses == "" && err != nil:
 				t.Fatalf("refused a conformant changelog: %v", err)
@@ -208,7 +209,7 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseRejectsAFileThatIsNotAChangelog(t *testing.T) {
-	if _, err := parse("CHANGELOG.md", []byte("# Release notes\n")); err == nil {
+	if _, err := Parse("CHANGELOG.md", []byte("# Release notes\n")); err == nil {
 		t.Fatal("accepted a file that does not start with # Changelog")
 	}
 }
@@ -231,27 +232,27 @@ func TestReleasable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			document, err := parse("CHANGELOG.md", document(test.sections))
+			document, err := Parse("CHANGELOG.md", document(test.sections))
 			if err != nil {
 				t.Fatal(err)
 			}
-			target, ok := document.releasable()
+			target, ok := document.Releasable()
 			if ok != (test.want != "") {
 				t.Fatalf("releasable = %v, want %v", ok, test.want != "")
 			}
-			if target.version != test.want {
-				t.Fatalf("version = %q, want %q", target.version, test.want)
+			if target.Version != test.want {
+				t.Fatalf("version = %q, want %q", target.Version, test.want)
 			}
 		})
 	}
 }
 
 func TestNotes(t *testing.T) {
-	document, err := parse("CHANGELOG.md", document(shipped))
+	document, err := Parse("CHANGELOG.md", document(shipped))
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, ok := document.releasable()
+	target, ok := document.Releasable()
 	if !ok {
 		t.Fatal("nothing to release")
 	}
@@ -262,8 +263,132 @@ func TestNotes(t *testing.T) {
 ### Fixed
 
 - Something that behaved wrongly.`
-	if target.body != want {
-		t.Fatalf("notes:\n got %q\nwant %q", target.body, want)
+	if target.Body != want {
+		t.Fatalf("notes:\n got %q\nwant %q", target.Body, want)
+	}
+}
+
+func TestChanges(t *testing.T) {
+	document, err := Parse("CHANGELOG.md", document(`## [2.3.0] - 2026-08-15
+
+### Added
+
+- Something that did not exist before, described at a length that the author
+  chose to wrap.
+- Something else.
+
+### Fixed
+
+- Something that behaved wrongly.
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Section{
+		{Category: "Added", Entries: []string{
+			"Something that did not exist before, described at a length that the author chose to wrap.",
+			"Something else.",
+		}},
+		{Category: "Fixed", Entries: []string{"Something that behaved wrongly."}},
+	}
+	if !reflect.DeepEqual(document.Releases[0].Changes, want) {
+		t.Fatalf("changes:\n got %#v\nwant %#v", document.Releases[0].Changes, want)
+	}
+}
+
+const three = `## [2.4.0] - 2026-08-16
+
+### Added
+
+- The newest.
+
+## [2.3.1] - 2026-08-15
+
+### Fixed
+
+- The middle one.
+
+## [2.3.0] - 2026-08-14
+
+### Added
+
+- The oldest.
+`
+
+func TestVersion(t *testing.T) {
+	document, err := Parse("CHANGELOG.md", document(three))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, asked := range []string{"2.3.1", "v2.3.1"} {
+		found, ok := document.Version(asked)
+		if !ok || found.Version != "2.3.1" {
+			t.Fatalf("Version(%q) = %q, %v", asked, found.Version, ok)
+		}
+	}
+	if _, ok := document.Version("1.0.0"); ok {
+		t.Fatal("found a version the file does not carry")
+	}
+}
+
+func TestBetween(t *testing.T) {
+	document, err := Parse("CHANGELOG.md", document(three))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name         string
+		since, until string
+		want         []string
+	}{
+		{name: "unbounded", want: []string{"2.4.0", "2.3.1", "2.3.0"}},
+		{name: "since excludes the version named", since: "2.3.0", want: []string{"2.4.0", "2.3.1"}},
+		{name: "until includes the version named", until: "2.3.1", want: []string{"2.3.1", "2.3.0"}},
+		{name: "both", since: "2.3.0", until: "2.3.1", want: []string{"2.3.1"}},
+		{name: "a window holding nothing", since: "2.4.0", want: nil},
+		{name: "a bound below the file", since: "1.0.0", want: []string{"2.4.0", "2.3.1", "2.3.0"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got []string
+			for _, r := range document.Between(test.since, test.until) {
+				got = append(got, r.Version)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("between(%q, %q) = %v, want %v", test.since, test.until, got, test.want)
+			}
+		})
+	}
+}
+
+func TestOldest(t *testing.T) {
+	document, err := Parse("CHANGELOG.md", document(three))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldest, ok := document.Oldest()
+	if !ok || oldest.Version != "2.3.0" {
+		t.Fatalf("Oldest = %q, %v, want 2.3.0", oldest.Version, ok)
+	}
+	empty, err := Parse("CHANGELOG.md", []byte("# Changelog\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := empty.Oldest(); ok {
+		t.Fatal("an empty changelog reported an oldest release")
+	}
+}
+
+func TestValid(t *testing.T) {
+	for _, version := range []string{"1.0.0", "2.4.1", "2.3.0-rc.1", "0.0.1"} {
+		if !Valid(version) {
+			t.Errorf("%q is a version and was refused", version)
+		}
+	}
+	for _, version := range []string{"", "2.4", "v2.4.1", "latest", "2.4.1.0", "01.0.0"} {
+		if Valid(version) {
+			t.Errorf("%q is not a version and was accepted", version)
+		}
 	}
 }
 
@@ -275,7 +400,7 @@ func TestRepositoryChangelog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := parse(path, source); err != nil {
+	if _, err := Parse(path, source); err != nil {
 		t.Fatal(err)
 	}
 }

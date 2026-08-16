@@ -214,6 +214,15 @@ func (u *UI) Note(msg string) {
 // Notef is Note with formatting.
 func (u *UI) Notef(format string, a ...any) { u.Note(fmt.Sprintf(format, a...)) }
 
+// Break sets a remark apart from whatever the command has already written, for
+// the one line that is not about the work just done.
+func (u *UI) Break() {
+	if u.Quiet {
+		return
+	}
+	_, _ = fmt.Fprintln(u.Err)
+}
+
 // Hint writes a dimmed incidental line to Err.
 func (u *UI) Hint(msg string) {
 	if u.Quiet || msg == "" {

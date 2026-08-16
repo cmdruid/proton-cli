@@ -22,8 +22,9 @@ import (
 func UninstallCmd() *cobra.Command {
 	var purge bool
 	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove a curl/PowerShell-installed " + kit.Program,
+		Use:         "uninstall",
+		Annotations: map[string]string{kit.OnThisMachine: "yes"},
+		Short:       "Remove a curl/PowerShell-installed " + kit.Program,
 		Long: `Remove a proton binary that was installed with the curl or PowerShell
 installer (or downloaded manually).
 

@@ -436,6 +436,35 @@ func TestReauthCommandsAreDeclared(t *testing.T) {
 	}
 }
 
+// ── rule 12b: what a preview has to be true about is declared ──
+
+// A dry run asserts that an account exists, because it sends no request and
+// would otherwise be the one path answering as though it had one. The exceptions
+// are the commands that change this machine instead of the account, and there
+// are exactly two: they would have run signed out, so their previews do too.
+//
+// The set is pinned rather than counted, because the failure this guards against
+// is a third command quietly declaring itself local and skipping a check it
+// needed.
+func TestCommandsThatActOnThisMachineAreDeclared(t *testing.T) {
+	want := []string{
+		"proton uninstall",
+		"proton update",
+	}
+	leaves, groups := partition(t)
+	var got []string
+	for _, c := range append(leaves, groups...) {
+		if c.Annotations[kit.OnThisMachine] != "" {
+			got = append(got, cmdPath(c))
+		}
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("commands declaring they act on this machine are:\n  %s\nwant:\n  %s",
+			strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
 // ── the vocabulary is closed ──
 
 // The vocabulary is read from kit rather than restated here. A test that keeps
@@ -583,6 +612,7 @@ var layers = map[string][]string{
 	"mailtext":    {},
 	"idcache":     {},
 	"ref":         {"errs"},
+	"changelog":   {},
 	"contentline": {},
 	"ical":        {"contentline"},
 	"vcard":       {"contentline"},

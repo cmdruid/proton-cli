@@ -20,9 +20,10 @@ import (
 func UpdateCmd(version string) *cobra.Command {
 	var checkOnly, reinstall bool
 	cmd := &cobra.Command{
-		Use:     "update [VERSION]",
-		Aliases: []string{"upgrade", "self-update"},
-		Short:   "Update proton to the latest release",
+		Use:         "update [VERSION]",
+		Aliases:     []string{"upgrade", "self-update"},
+		Annotations: map[string]string{kit.OnThisMachine: "yes"},
+		Short:       "Update proton to the latest release",
 		Long: `Replace this proton binary in place with the latest GitHub release
 (or a specific version), verifying the download against the published
 SHA-256 checksums.
@@ -74,8 +75,7 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 			return kit.Object(c, updateStatus{Current: version, Latest: latest, UpdateAvailable: newer})
 		}
 		if newer {
-			c.Note("proton %s → %s available.", version, latest)
-			c.Note("Run `proton update` to install it.")
+			Available(u, version, latest)
 		} else {
 			c.Note("proton is up to date (%s).", version)
 		}
@@ -104,10 +104,16 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 		return err
 	}
 
+	// A preview reports the version still running and the one it would bring; the
+	// change itself reports the version now on disk and nothing left to fetch.
+	installed := map[string]any{"current": latest, "latest": latest, "update_available": false}
+	if c.App.DryRun {
+		installed = map[string]any{"current": version, "latest": latest, "update_available": true}
+	}
 	if err := kit.Mutate(c, ui.ResultSpec{
 		Action: ui.Updated, Count: 1, Name: kit.Program,
 		Detail: version + " → " + latest,
-		Extra:  map[string]any{"current": latest, "latest": latest, "update_available": false},
+		Extra:  installed,
 	}, func() error {
 		bin, err := selfmanage.Download(c.Ctx, client, latest, ui.NewProgress(u))
 		if err != nil {

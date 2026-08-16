@@ -472,6 +472,12 @@ var examples = map[string][]string{
 	"proton pass trash empty": {"proton pass trash empty"},
 
 	// ── proton itself ──
+	"proton changelog": {
+		"proton changelog",
+		"proton changelog 2.4.1",
+		"proton changelog --since 2.3.0",
+		"proton changelog --since 2.3.0 --until 2.4.0",
+	},
 	"proton version": {
 		"proton version",
 		"proton version --output json",

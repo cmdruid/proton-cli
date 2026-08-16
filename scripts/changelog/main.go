@@ -15,6 +15,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/roman-16/proton-cli/internal/changelog"
 )
 
 func main() {
@@ -26,18 +28,18 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	document, err := parse(*path, source)
+	document, err := changelog.Parse(*path, source)
 	if err != nil {
 		fail(err)
 	}
-	target, ok := document.releasable()
+	target, ok := document.Releasable()
 	switch {
 	case *notes && !ok:
 		fail(fmt.Errorf("%s declares no version to release", *path))
 	case *notes:
-		fmt.Println(target.body)
+		fmt.Println(target.Body)
 	case ok:
-		fmt.Println(target.version)
+		fmt.Println(target.Version)
 	}
 }
 
