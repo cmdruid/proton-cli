@@ -3,7 +3,6 @@ package drive
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -109,7 +108,7 @@ func (s *Service) PlanUpload(ctx context.Context, dc *Context, destPath, name st
 		// A folder in the way is not something a new revision can be written to,
 		// and trashing it would be a deletion this command never announced.
 		if target.IsFolder {
-			return nil, &errs.Exists{Kind: "folder", Name: name, Where: destPath}
+			return nil, &errs.Exists{Kind: TypeFolder, Name: name, Where: destPath}
 		}
 		if target.Link.FileProperties == nil {
 			return nil, fmt.Errorf("%s: no file properties", name)
@@ -161,21 +160,25 @@ type TreeFile struct {
 // found part way through, because neither can become the other and an upload is
 // not a command that removes things.
 func (s *Service) PlanTree(ctx context.Context, dc *Context, top string, items []TreeItem, on OnConflict) (*TreePlan, error) {
-	there, err := s.ResolvePath(ctx, dc, top)
-	var missing *errs.NotFound
-	if errors.As(err, &missing) {
-		return freshTree(top, top, items), nil
-	}
+	st, err := s.resolveTo(ctx, dc, top)
 	if err != nil {
 		return nil, err
 	}
-	if !there.IsFolder {
-		return nil, &errs.Exists{Kind: "file", Name: baseOf(top), Where: dirOf(top)}
+	if !st.at.IsFolder {
+		return nil, &errs.Exists{Kind: TypeFile, Name: st.at.Name, Where: dirOf(st.path)}
+	}
+	// A tree makes its own folders, but not the one it was told to land in: a
+	// destination that is not there is a mistyped destination.
+	if len(st.missing) > 1 {
+		return nil, fmt.Errorf("target folder not found: %w", &errs.NotFound{Kind: "path", Ref: st.missing[0]})
+	}
+	if len(st.missing) == 1 {
+		return freshTree(top, top, items), nil
 	}
 
 	switch on {
 	case ConflictRefuse:
-		return nil, &errs.Exists{Kind: "folder", Name: baseOf(top), Where: dirOf(top)}
+		return nil, &errs.Exists{Kind: TypeFolder, Name: baseOf(top), Where: dirOf(top)}
 	case ConflictSkip:
 		return &TreePlan{Top: top, Nothing: true}, nil
 	case ConflictRename:
@@ -204,24 +207,19 @@ func (s *Service) PlanTree(ctx context.Context, dc *Context, top string, items [
 		switch {
 		case it.IsDir && !taken:
 			plan.Folders = append(plan.Folders, it.Path)
-		case it.IsDir && kind == folderKind:
+		case it.IsDir && kind == TypeFolder:
 		case it.IsDir:
-			return nil, &errs.Exists{Kind: "file", Name: baseOf(it.Path), Where: dirOf(it.Path)}
+			return nil, &errs.Exists{Kind: TypeFile, Name: baseOf(it.Path), Where: dirOf(it.Path)}
 		case !taken:
 			plan.Files = append(plan.Files, TreeFile{Path: it.Path})
-		case kind == fileKind:
+		case kind == TypeFile:
 			plan.Files = append(plan.Files, TreeFile{Path: it.Path, Replaces: true})
 		default:
-			return nil, &errs.Exists{Kind: "folder", Name: baseOf(it.Path), Where: dirOf(it.Path)}
+			return nil, &errs.Exists{Kind: TypeFolder, Name: baseOf(it.Path), Where: dirOf(it.Path)}
 		}
 	}
 	return plan, nil
 }
-
-const (
-	fileKind   = "file"
-	folderKind = "folder"
-)
 
 // freshTree is the plan for a tree that lands somewhere nothing is in the way,
 // which is every path under a folder that did not exist or has just been given a
@@ -262,7 +260,7 @@ func (s *Service) holdings(ctx context.Context, dc *Context, top string, items [
 		for _, child := range children {
 			path := join(queue[0], child.Name)
 			holds[path] = child.Type
-			if child.Type == folderKind && wanted[path] {
+			if child.Type == TypeFolder && wanted[path] {
 				queue = append(queue, path)
 			}
 		}
@@ -433,7 +431,7 @@ func (s *Service) startRevision(ctx context.Context, dc *Context, plan *UploadPl
 		// Proton is the one that knows the name is taken when nobody asked it to
 		// look, so this is where that answer gets its words.
 		if proton.AlreadyExists(err) {
-			return "", "", nil, nil, &errs.Exists{Kind: "file", Name: plan.Name, Where: plan.Dest}
+			return "", "", nil, nil, &errs.Exists{Kind: TypeFile, Name: plan.Name, Where: plan.Dest}
 		}
 		return "", "", nil, nil, err
 	}

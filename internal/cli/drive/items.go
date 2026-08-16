@@ -291,10 +291,8 @@ func uploadTree(c *kit.Invocation, dc *drivesvc.Context, src, dest string, on dr
 		spec.Detail = fmt.Sprintf("- %s already has %s", path.Dir(plan.Top), path.Base(plan.Top))
 	}
 	return sayHowToGoAhead(kit.Mutate(c, spec, func() error {
-		for _, folder := range plan.Folders {
-			if err := c.App.Drive.CreateFolder(c.Ctx, dc, folder); err != nil {
-				return err
-			}
+		if err := c.App.Drive.CreateFolders(c.Ctx, dc, plan.Folders); err != nil {
+			return err
 		}
 		for i, file := range plan.Files {
 			// Each file draws its own bar, so without saying where it sits in the
@@ -695,10 +693,22 @@ func foldersCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Created, Kind: "folders", Count: 1, Name: c.Args[0],
-			}, func() error {
-				return c.App.Drive.CreateFolder(c.Ctx, dc, c.Args[0])
+			// What the folders above it are is worked out before any of them is
+			// made, so the count is the answer to what happened rather than a
+			// claim, and a dry run promises the same number.
+			paths, err := c.App.Drive.PlanFolders(c.Ctx, dc, c.Args[0])
+			if err != nil {
+				return err
+			}
+			spec := ui.ResultSpec{
+				Action: ui.Created, Kind: "folders", Count: len(paths), Name: c.Args[0],
+				Extra: map[string]any{"paths": paths},
+			}
+			if len(paths) > 1 {
+				spec.Detail = "down to " + c.Args[0]
+			}
+			return kit.Mutate(c, spec, func() error {
+				return c.App.Drive.CreateFolders(c.Ctx, dc, paths)
 			})
 		}),
 	})

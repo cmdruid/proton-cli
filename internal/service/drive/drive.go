@@ -210,63 +210,95 @@ type Resolved struct {
 }
 
 func (s *Service) ResolvePath(ctx context.Context, dc *Context, path string) (*Resolved, error) {
-	path = strings.Trim(path, "/")
-	rootLink := dc.rootLink
-	rootKR, err := unlockNode(rootLink, dc.ShareKR, dc.AddrKR)
+	st, err := s.resolveTo(ctx, dc, path)
+	if err != nil {
+		return nil, err
+	}
+	if len(st.missing) == 0 {
+		return st.at, nil
+	}
+	if !st.at.IsFolder {
+		return nil, fmt.Errorf("%s is not a folder", st.at.Name)
+	}
+	return nil, &errs.NotFound{Kind: "path", Ref: st.missing[0]}
+}
+
+// stopped is where a path ran out: the deepest link that is there, the path it
+// sits at, and the components below it that are not.
+type stopped struct {
+	at      *Resolved
+	path    string
+	missing []string
+}
+
+// resolveTo walks a path as far as it goes.
+//
+// Where the walk stopped is what makes a folder creatable together with the
+// folders above it, and what lets an upload tell a destination that is not there
+// from a tree that is not there yet. Asking one ancestor at a time until one
+// answers would be the same walk, repeated.
+func (s *Service) resolveTo(ctx context.Context, dc *Context, path string) (*stopped, error) {
+	rootKR, err := unlockNode(dc.rootLink, dc.ShareKR, dc.AddrKR)
 	if err != nil {
 		return nil, fmt.Errorf("unlock root: %w", err)
 	}
-	if path == "" || path == "." {
-		return &Resolved{
+	st := &stopped{
+		at: &Resolved{
 			ShareID: dc.ShareID, LinkID: dc.RootLinkID, ParentKR: dc.ShareKR,
-			NodeKR: rootKR, IsFolder: true, Link: rootLink,
-		}, nil
+			NodeKR: rootKR, IsFolder: true, Link: dc.rootLink,
+		},
+		path: "/",
 	}
-	parts := strings.Split(path, "/")
-	currentID := dc.RootLinkID
-	parentKR := dc.ShareKR
-	currentKR := rootKR
+	parts := components(path)
 	for i, part := range parts {
-		isLast := i == len(parts)-1
-		children, err := s.listRawChildren(ctx, dc.ShareID, currentID)
+		if !st.at.IsFolder {
+			st.missing = parts[i:]
+			return st, nil
+		}
+		child, err := s.childNamed(ctx, dc, st.at, part)
 		if err != nil {
 			return nil, err
 		}
-		found := false
-		for _, ch := range children {
-			name, err := decryptName(ch.Name, currentKR)
-			if err != nil {
-				continue
-			}
-			if name == part {
-				found = true
-				prevKR := currentKR
-				childKR, err := unlockNode(&ch, currentKR, dc.AddrKR)
-				if err != nil {
-					return nil, fmt.Errorf("unlock %s: %w", name, err)
-				}
-				if isLast {
-					return &Resolved{
-						ShareID: dc.ShareID, LinkID: ch.LinkID,
-						ParentKR: prevKR, NodeKR: childKR, Name: name,
-						IsFolder: ch.Type == 1, Link: &ch,
-					}, nil
-				}
-				if ch.Type != 1 {
-					return nil, fmt.Errorf("%s is not a folder", name)
-				}
-				parentKR = currentKR
-				currentKR = childKR
-				currentID = ch.LinkID
-				break
-			}
+		if child == nil {
+			st.missing = parts[i:]
+			return st, nil
 		}
-		if !found {
-			return nil, &errs.NotFound{Kind: "path", Ref: part}
-		}
+		st.at, st.path = child, join(st.path, part)
 	}
-	_ = parentKR
-	return nil, fmt.Errorf("path resolution failed")
+	return st, nil
+}
+
+// childNamed finds one named child of a folder, or nothing when the folder has
+// no such child. A name that will not decrypt is not the name being looked for.
+func (s *Service) childNamed(ctx context.Context, dc *Context, parent *Resolved, name string) (*Resolved, error) {
+	children, err := s.listRawChildren(ctx, parent.ShareID, parent.LinkID)
+	if err != nil {
+		return nil, err
+	}
+	for _, child := range children {
+		if decrypted, err := decryptName(child.Name, parent.NodeKR); err != nil || decrypted != name {
+			continue
+		}
+		childKR, err := unlockNode(&child, parent.NodeKR, dc.AddrKR)
+		if err != nil {
+			return nil, fmt.Errorf("unlock %s: %w", name, err)
+		}
+		return &Resolved{
+			ShareID: parent.ShareID, LinkID: child.LinkID,
+			ParentKR: parent.NodeKR, NodeKR: childKR, Name: name,
+			IsFolder: child.Type == protonFolder, Link: &child,
+		}, nil
+	}
+	return nil, nil
+}
+
+// components splits a path into the names along it. The root is no name at all.
+func components(path string) []string {
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" || trimmed == "." {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
 }
 
 func (s *Service) getLink(ctx context.Context, shareID, linkID string) (*Link, error) {

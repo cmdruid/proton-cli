@@ -906,6 +906,36 @@ func TestDriveFoldersCreate(t *testing.T) {
 	}
 }
 
+// A path names every folder along it, so naming one that is three deep makes
+// three, and says so rather than reporting the one that was typed.
+func TestDriveFoldersCreateMakesTheFoldersAboveIt(t *testing.T) {
+	t.Parallel()
+	top := "/" + testID() + "-nested"
+	deep := top + "/season/episode"
+	_, stderr := runOKStderr(t, "drive", "folders", "create", deep)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete %s", top),
+		"drive", "items", "delete", top)
+
+	assertContains(t, stderr, "Created 3 folders down to "+deep)
+	assertContains(t, runOK(t, "drive", "items", "list", top+"/season"), "episode")
+}
+
+// The folder asked for is the one thing the command does not make twice: it is
+// what was named, and a name Drive already holds is a conflict, not a no-op.
+func TestDriveFoldersCreateRefusesANameAlreadyThere(t *testing.T) {
+	t.Parallel()
+	folder := "/" + testID() + "-taken"
+	runOK(t, "drive", "folders", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete %s", folder),
+		"drive", "items", "delete", folder)
+
+	_, stderr, code := run(t, "drive", "folders", "create", folder)
+	if code != 4 {
+		t.Fatalf("want exit 4 for a name already taken, got %d (stderr: %s)", code, stderr)
+	}
+	assertContains(t, stderr, "already has a folder")
+}
+
 func TestDriveItemsCopy(t *testing.T) {
 	t.Parallel()
 	base := "/" + testID() + "-copy-src"

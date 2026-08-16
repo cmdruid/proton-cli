@@ -326,15 +326,22 @@ func decryptXAttr(armored string, nodeKR *pgp.KeyRing) (*xAttr, error) {
 	return &x, nil
 }
 
-func genNodeHashKey(nodeKR, signingKR *pgp.KeyRing) (string, error) {
+// genNodeHashKey makes the key a folder's children are named under, returning
+// it both ways: as itself, for hashing the names of children written in the
+// same breath, and sealed to the folder, which is how Proton is told about it.
+func genNodeHashKey(nodeKR, signingKR *pgp.KeyRing) ([]byte, string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		return "", err
+		return nil, "", err
 	}
-	s := base64.StdEncoding.EncodeToString(raw)
-	enc, err := nodeKR.Encrypt(pgp.NewPlainMessageFromString(s), signingKR)
+	hashKey := base64.StdEncoding.EncodeToString(raw)
+	enc, err := nodeKR.Encrypt(pgp.NewPlainMessageFromString(hashKey), signingKR)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	return enc.GetArmored()
+	armored, err := enc.GetArmored()
+	if err != nil {
+		return nil, "", err
+	}
+	return []byte(hashKey), armored, nil
 }

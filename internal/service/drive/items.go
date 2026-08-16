@@ -102,54 +102,125 @@ func (s *Service) walk(ctx context.Context, shareID, linkID string, parentKR *pg
 	return out, nil
 }
 
-// CreateFolder requires the parent path to already exist.
-func (s *Service) CreateFolder(ctx context.Context, dc *Context, fullPath string) error {
-	parent := dirOf(fullPath)
-	name := baseOf(fullPath)
+// PlanFolders lists the folders that making a path exist would create, the
+// outermost first, so a command can say how many it is about to make and a dry
+// run can promise the same number.
+//
+// Only the folders above it are looked up, which is the same walk creating one
+// folder needs anyway. Whether the last name is free is Proton's answer to the
+// request that takes it, so a path whose plan is longer than one folder is one
+// whose last folder cannot already be there.
+func (s *Service) PlanFolders(ctx context.Context, dc *Context, fullPath string) ([]string, error) {
+	st, err := s.resolveTo(ctx, dc, dirOf(fullPath))
+	if err != nil {
+		return nil, err
+	}
+	if !st.at.IsFolder {
+		return nil, &errs.Exists{Kind: TypeFile, Name: st.at.Name, Where: dirOf(st.path)}
+	}
+	paths := make([]string, 0, len(st.missing)+1)
+	at := st.path
+	for _, name := range st.missing {
+		at = join(at, name)
+		paths = append(paths, at)
+	}
+	return append(paths, join(at, baseOf(fullPath))), nil
+}
 
-	p, err := s.ResolvePath(ctx, dc, parent)
-	if err != nil {
-		return fmt.Errorf("parent not found: %w", err)
+// CreateFolders makes each path in turn.
+//
+// A folder made here is the parent the next one goes under, and its keys are the
+// ones just generated, so a chain of folders costs one lookup and one request
+// per folder rather than a walk from the root for each.
+func (s *Service) CreateFolders(ctx context.Context, dc *Context, paths []string) error {
+	made := map[string]*folder{}
+	for _, path := range paths {
+		parent, ok := made[dirOf(path)]
+		if !ok {
+			res, err := s.ResolvePath(ctx, dc, dirOf(path))
+			if err != nil {
+				return err
+			}
+			if parent, err = folderOf(res, dirOf(path)); err != nil {
+				return err
+			}
+		}
+		child, err := s.createFolder(ctx, dc, parent, baseOf(path))
+		if err != nil {
+			return err
+		}
+		made[path] = child
 	}
-	hashKey, err := hashKeyOf(p.Link, p.NodeKR)
+	return nil
+}
+
+// folder is a folder to make things in: what a request names it by, and the two
+// keys a child of it needs - the one its name and passphrase are encrypted to,
+// and the one its name is hashed under.
+type folder struct {
+	shareID string
+	linkID  string
+	path    string
+	nodeKR  *pgp.KeyRing
+	hashKey []byte
+}
+
+func folderOf(res *Resolved, path string) (*folder, error) {
+	hashKey, err := hashKeyOf(res.Link, res.NodeKR)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	hash, err := lookupHash(strings.ToLower(name), hashKey)
+	return &folder{
+		shareID: res.ShareID, linkID: res.LinkID, path: path,
+		nodeKR: res.NodeKR, hashKey: hashKey,
+	}, nil
+}
+
+func (s *Service) createFolder(ctx context.Context, dc *Context, parent *folder, name string) (*folder, error) {
+	hash, err := lookupHash(strings.ToLower(name), parent.hashKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	encName, err := encryptName(name, p.NodeKR, dc.AddrKR)
+	encName, err := encryptName(name, parent.nodeKR, dc.AddrKR)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	nodeKey, nodePass, nodePassSig, nodePriv, err := genNodeKeys(p.NodeKR, dc.AddrKR)
+	nodeKey, nodePass, nodePassSig, nodePriv, err := genNodeKeys(parent.nodeKR, dc.AddrKR)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	nodeKR, err := pgp.NewKeyRing(nodePriv)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	hashKeyEnc, err := genNodeHashKey(nodeKR, nodeKR)
+	hashKey, hashKeyEnc, err := genNodeHashKey(nodeKR, nodeKR)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	body := map[string]any{
-		"Name":                    encName,
-		"Hash":                    hash,
-		"ParentLinkID":            p.LinkID,
-		"NodePassphrase":          nodePass,
-		"NodePassphraseSignature": nodePassSig,
-		"SignatureAddress":        dc.AddrEmail,
-		"NodeKey":                 nodeKey,
-		"NodeHashKey":             hashKeyEnc,
-	}
-	err = s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/drive/shares/" + p.ShareID + "/folders", Body: body}, nil)
+	var r struct{ Folder struct{ ID string } }
+	err = s.C.Decode(ctx, proton.Request{
+		Method: "POST", Path: "/drive/shares/" + parent.shareID + "/folders",
+		Body: map[string]any{
+			"Name":                    encName,
+			"Hash":                    hash,
+			"ParentLinkID":            parent.linkID,
+			"NodePassphrase":          nodePass,
+			"NodePassphraseSignature": nodePassSig,
+			"SignatureAddress":        dc.AddrEmail,
+			"NodeKey":                 nodeKey,
+			"NodeHashKey":             hashKeyEnc,
+		},
+	}, &r)
 	if proton.AlreadyExists(err) {
-		return &errs.Exists{Kind: "folder", Name: name, Where: parent}
+		return nil, &errs.Exists{Kind: TypeFolder, Name: name, Where: parent.path}
 	}
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return &folder{
+		shareID: parent.shareID, linkID: r.Folder.ID, path: join(parent.path, name),
+		nodeKR: nodeKR, hashKey: hashKey,
+	}, nil
 }
 
 func (s *Service) Rename(ctx context.Context, dc *Context, path, newName string) error {

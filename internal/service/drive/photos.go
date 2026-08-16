@@ -295,7 +295,7 @@ func (s *Service) AlbumCreate(ctx context.Context, dc *Context, name string) err
 	if err != nil {
 		return err
 	}
-	nodeHashKey, err := genNodeHashKey(nodeKR, nodeKR)
+	_, nodeHashKey, err := genNodeHashKey(nodeKR, nodeKR)
 	if err != nil {
 		return err
 	}

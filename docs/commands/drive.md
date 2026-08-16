@@ -97,7 +97,10 @@ The version the file is at now is the one thing neither command touches: restori
 
 ```bash
 proton drive folders create /Documents/Invoices
+proton drive folders create /Documents/2026/Q1/receipts  # makes 2026 and Q1 on the way
 ```
+
+A path names every folder along it, so the ones above the last are made too, and the result says how many: `Created 3 folders down to /Documents/2026/Q1/receipts`. The folder asked for is the exception - a name Drive already holds is refused, as is a path running through a file.
 
 ## Sharing
 
