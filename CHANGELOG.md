@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Adding a version section here is what publishes a release, so this file is the one place a version is decided: see [Releases](CONTRIBUTING.md#releases). Versions that shipped before this file existed are on the [releases page](https://github.com/roman-16/proton-cli/releases).
 
+## [2.4.0] - 2026-08-16
+
+### Changed
+
+- The command is `proton`. `--help`, the examples and the error hints all speak it, and every install channel puts `proton-cli` on your `PATH` beside it, so anything already written keeps working. The packages are still called `proton-cli`, and upgrading does not sign you out.
+- **Breaking.** `go install github.com/roman-16/proton-cli@latest` is now `go install github.com/roman-16/proton-cli/cmd/proton@latest`, since Go names a binary after its package directory. Every other way of installing is unchanged.
+- Colours are asked for by name rather than by value, so output takes its shades from your terminal's theme instead of overruling it, and a light terminal is no longer treated as a dark one. A label, folder, calendar or group swatch keeps its exact colour, since there the colour is the value being reported.
+
 ## [2.3.0] - 2026-08-15
 
 ### Added
