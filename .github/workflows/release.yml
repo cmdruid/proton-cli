@@ -152,7 +152,9 @@ jobs:
           name="llvm-mingw-$LLVM_MINGW-ucrt-$host"
           curl --location --fail --silent --show-error --output /c/llvm-mingw.zip \
             "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW/$name.zip"
-          tar --extract --file=/c/llvm-mingw.zip --directory=/c
+          # 7-Zip, because the shell here is Git Bash and its tar is GNU tar,
+          # which reads no zip.
+          7z x -y -bso0 /c/llvm-mingw.zip -oC:/
           printf 'C:\\%s\\bin\n' "$name" >> "$GITHUB_PATH"
 
       - name: Build helper
