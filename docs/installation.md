@@ -120,6 +120,7 @@ Every release ships raw binaries and archives on the [releases page](https://git
 | macOS Apple Silicon | `proton-cli_darwin_arm64` |
 | macOS Intel | `proton-cli_darwin_amd64` |
 | Windows x86_64 | `proton-cli_windows_amd64.exe` |
+| Windows ARM64 | `proton-cli_windows_arm64.exe` |
 
 ```bash
 curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64

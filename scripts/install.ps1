@@ -26,7 +26,10 @@ $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
 $repo = 'roman-16/proton-cli'
-$asset = 'proton-cli_windows_amd64.exe'   # runs natively on x64 and under emulation on ARM64
+# The OS architecture, not the process one: an x64 PowerShell emulated on an
+# ARM64 machine should still be handed the ARM64 binary.
+$arch = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [Runtime.InteropServices.Architecture]::Arm64) { 'arm64' } else { 'amd64' }
+$asset = "proton-cli_windows_$arch.exe"
 
 $base = if ($Version) {
     "https://github.com/$repo/releases/download/v$($Version.TrimStart('v'))"

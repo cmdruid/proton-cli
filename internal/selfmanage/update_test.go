@@ -13,7 +13,7 @@ func TestAssetName(t *testing.T) {
 		{"darwin", "amd64", "proton-cli_darwin_amd64", false},
 		{"darwin", "arm64", "proton-cli_darwin_arm64", false},
 		{"windows", "amd64", "proton-cli_windows_amd64.exe", false},
-		{"windows", "arm64", "", true},
+		{"windows", "arm64", "proton-cli_windows_arm64.exe", false},
 		{"freebsd", "amd64", "", true},
 		{"linux", "386", "", true},
 	}

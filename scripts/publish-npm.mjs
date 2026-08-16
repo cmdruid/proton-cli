@@ -50,6 +50,7 @@ const PLATFORMS = {
   "darwin-x64": { asset: `${NAME}_darwin_amd64`, bin: BIN },
   "darwin-arm64": { asset: `${NAME}_darwin_arm64`, bin: BIN },
   "win32-x64": { asset: `${NAME}_windows_amd64.exe`, bin: `${BIN}.exe` },
+  "win32-arm64": { asset: `${NAME}_windows_arm64.exe`, bin: `${BIN}.exe` },
 };
 
 const shim = `#!/usr/bin/env node
@@ -61,6 +62,7 @@ const PKGS = {
   "darwin-x64": "@${SCOPE}/${NAME}-darwin-x64",
   "darwin-arm64": "@${SCOPE}/${NAME}-darwin-arm64",
   "win32-x64": "@${SCOPE}/${NAME}-win32-x64",
+  "win32-arm64": "@${SCOPE}/${NAME}-win32-arm64",
 };
 const key = process.platform + "-" + process.arch;
 const pkg = PKGS[key];

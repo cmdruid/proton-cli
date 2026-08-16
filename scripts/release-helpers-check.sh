@@ -18,6 +18,7 @@ expected=(
     proton-hv-darwin-amd64
     proton-hv-darwin-arm64
     proton-hv-windows-amd64.exe
+    proton-hv-windows-arm64.exe
 )
 
 missing=()

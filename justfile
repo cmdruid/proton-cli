@@ -91,7 +91,7 @@ snapshot: build
     trap 'rm --force ${placeholders[@]+"${placeholders[@]}"}' EXIT
     for helper in proton-hv-linux-amd64 proton-hv-linux-arm64 \
         proton-hv-darwin-amd64 proton-hv-darwin-arm64 \
-        proton-hv-windows-amd64.exe; do
+        proton-hv-windows-amd64.exe proton-hv-windows-arm64.exe; do
         if [ ! -s "internal/hv/assets/$helper" ]; then
             printf 'placeholder\n' > "internal/hv/assets/$helper"
             placeholders+=("internal/hv/assets/$helper")

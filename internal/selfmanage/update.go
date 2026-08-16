@@ -48,14 +48,12 @@ func Changelog(ctx context.Context, client *http.Client) ([]byte, error) {
 // "proton-cli_windows_amd64.exe"). It errors for platforms with no prebuilt
 // binary.
 func AssetName(goos, goarch string) (string, error) {
-	switch goos {
-	case "linux", "darwin":
-		if goarch == "amd64" || goarch == "arm64" {
+	if goarch == "amd64" || goarch == "arm64" {
+		switch goos {
+		case "linux", "darwin":
 			return fmt.Sprintf("%s_%s_%s", repo, goos, goarch), nil
-		}
-	case "windows":
-		if goarch == "amd64" {
-			return repo + "_windows_amd64.exe", nil
+		case "windows":
+			return fmt.Sprintf("%s_windows_%s.exe", repo, goarch), nil
 		}
 	}
 	return "", fmt.Errorf("no prebuilt binary for %s/%s", goos, goarch)

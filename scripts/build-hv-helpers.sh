@@ -4,11 +4,13 @@
 # main build (which uses `-tags embed_hv`).
 #
 # In CI: invoked once per (OS, arch) matrix entry on a NATIVE runner
-# for that platform (Linux→ubuntu-*, macOS→macos-*, Windows→windows-*).
-# Cross-compiling CGO+webview reliably across all 5 targets isn't
-# realistic from a single runner - webkit2gtk pkg-config layouts,
-# osxcross signing, and Windows mingw all bring their own pain. Native
-# runners avoid all of it.
+# for that platform (Linux→ubuntu-*, macOS→macos-*, Windows→windows-*,
+# windows/arm64→windows-11-arm). Cross-compiling CGO+webview reliably
+# across all 6 targets isn't realistic from a single runner -
+# webkit2gtk pkg-config layouts, osxcross signing, and a Windows
+# header that only resolves on a case-insensitive filesystem all bring
+# their own pain. Native runners avoid all of it, and a helper that
+# runs on the runner that built it can be smoke tested there.
 #
 # Locally: defaults to the current GOOS/GOARCH and produces a single
 # helper for "release-shaped" testing in `devbox shell`.
@@ -44,8 +46,11 @@
 #
 # macOS build deps: none (Cocoa + WebKit ship with the OS).
 #
-# Windows build deps: none beyond mingw-gcc (webview_go vendors the
-# WebView2 SDK headers in libs/mswebview2/).
+# Windows build deps: llvm-mingw on PATH (https://github.com/mstorsjo/llvm-mingw).
+# It is one toolchain for every Windows architecture, and the only one
+# that targets aarch64: mingw-w64's GCC does not, and cgo cannot use
+# MSVC. Everything else is vendored - webview_go carries the WebView2
+# SDK headers in libs/mswebview2/.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -85,6 +90,25 @@ build_one() {
         fi
     fi
 
+    if [[ "$goos" == "windows" ]]; then
+        local triple
+        case "$goarch" in
+            amd64) triple=x86_64-w64-mingw32 ;;
+            arm64) triple=aarch64-w64-mingw32 ;;
+            *)
+                echo "ERROR: no Windows toolchain for $goarch" >&2
+                return 1
+                ;;
+        esac
+        if ! command -v "$triple-clang" >/dev/null 2>&1; then
+            echo "ERROR: $triple-clang not found on PATH" >&2
+            echo "       Install llvm-mingw: https://github.com/mstorsjo/llvm-mingw/releases" >&2
+            return 1
+        fi
+        export CC="$triple-clang"
+        export CXX="$triple-clang++"
+    fi
+
     # darwin/amd64 cross-compile from arm64: GitHub's macos-latest
     # runners are Apple Silicon now (Intel macos-13 runners are
     # deprecated and routinely queue for hours). macOS ships a
@@ -121,6 +145,7 @@ case "${HV_TARGETS:-}" in
         build_one darwin amd64
         build_one darwin arm64
         build_one windows amd64
+        build_one windows arm64
         ;;
     *)
         build_one "${GOOS:-$GOOS_DEFAULT}" "${GOARCH:-$GOARCH_DEFAULT}"

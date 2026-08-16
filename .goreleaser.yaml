@@ -31,15 +31,13 @@ builds:
       - -tags=embed_hv
     ldflags:
       - -s -w -X github.com/roman-16/proton-cli/internal/cli.version={{.Version}}
-  # windows/arm64 is absent because we don't ship a helper for it
-  # (limited webview_go support; can be added later by extending the
-  # workflow matrix and adding internal/hv/embed_windows_arm64.go).
   - <<: *build
     id: windows
     goos:
       - windows
     goarch:
       - amd64
+      - arm64
   - id: windows-alias
     binary: proton-cli
     main: ./cmd/proton-cli
@@ -49,6 +47,7 @@ builds:
       - windows
     goarch:
       - amd64
+      - arm64
     ldflags:
       - -s -w
 

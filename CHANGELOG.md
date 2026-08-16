@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Adding a version section here is what publishes a release, so this file is the one place a version is decided: see [Releases](CONTRIBUTING.md#releases). Versions that shipped before this file existed are on the [releases page](https://github.com/roman-16/proton-cli/releases).
 
+## [2.5.0] - 2026-08-17
+
+### Added
+
+- An install no package manager owns says when a release lands: once a day, under the command's own output. `PROTON_NO_UPDATE_CHECK=1` ends it, and a package-managed copy, a pipe and `--quiet` never see it.
+- `proton changelog` says what a release changed, including one you have not installed. `--since` and `--until` cover the ground between two.
+- Windows on ARM64 has its own build. winget, npm, the PowerShell installer and `proton update` hand an ARM64 machine a native binary; npm had none for it at all.
+
+### Changed
+
+- `update --dry-run` and `uninstall --dry-run` no longer ask you to sign in: they change this machine, not your account.
+
+### Fixed
+
+- Tab completion answers again - every shell's completion script was being refused as a mistyped command.
+
 ## [2.4.1] - 2026-08-16
 
 ### Changed

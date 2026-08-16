@@ -116,6 +116,7 @@ jobs:
           - { os: macos-latest,       goos: darwin,  goarch: amd64 }
           - { os: macos-latest,       goos: darwin,  goarch: arm64 }
           - { os: windows-latest,     goos: windows, goarch: amd64 }
+          - { os: windows-11-arm,     goos: windows, goarch: arm64 }
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -133,6 +134,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config build-essential
+
+      - name: Install Windows deps
+        # Both Windows images ship an x86_64 mingw GCC, which cannot target
+        # aarch64, and cgo cannot use MSVC. llvm-mingw targets every Windows
+        # architecture, so one pinned compiler builds both helpers.
+        if: matrix.goos == 'windows'
+        shell: bash
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          LLVM_MINGW: "20260616"
+        run: |
+          case "$GOARCH" in
+            arm64) host=aarch64 ;;
+            *)     host=x86_64 ;;
+          esac
+          name="llvm-mingw-$LLVM_MINGW-ucrt-$host"
+          curl --location --fail --silent --show-error --output /c/llvm-mingw.zip \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW/$name.zip"
+          tar --extract --file=/c/llvm-mingw.zip --directory=/c
+          printf 'C:\\%s\\bin\n' "$name" >> "$GITHUB_PATH"
 
       - name: Build helper
         env:
@@ -274,7 +295,7 @@ jobs:
           for a in checksums.txt \
                    proton-cli_linux_amd64 proton-cli_linux_arm64 \
                    proton-cli_darwin_amd64 proton-cli_darwin_arm64 \
-                   proton-cli_windows_amd64.exe; do
+                   proton-cli_windows_amd64.exe proton-cli_windows_arm64.exe; do
             grep -qxF "$a" <<<"$assets" || missing+=("$a")
           done
           grep -q '_linux_amd64\.deb$' <<<"$assets" || missing+=("*_linux_amd64.deb")
@@ -393,6 +414,7 @@ jobs:
             --pattern 'proton-cli_darwin_amd64' \
             --pattern 'proton-cli_darwin_arm64' \
             --pattern 'proton-cli_windows_amd64.exe' \
+            --pattern 'proton-cli_windows_arm64.exe' \
             --dir npm-bin
           ls -la npm-bin/
 
