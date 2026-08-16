@@ -152,7 +152,7 @@ func TestMailExportImportRoundTrip(t *testing.T) {
 	subject := testID() + "-roundtrip"
 	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create",
 		"--eml", dest, "--to", selfEmail(), "--subject", subject))
-	cleanupRun(t, "Delete round-trip draft: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete round-trip draft: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
 	// The flags win over the file, and the file supplies the rest.
@@ -176,7 +176,7 @@ func TestMailSendFromEMLFile(t *testing.T) {
 	}
 
 	id := strings.TrimSpace(runOK(t, "mail", "messages", "send", "--eml", path))
-	cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete sent mail: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
 	read := runOK(t, "mail", "messages", "get", "--", id)
@@ -184,7 +184,7 @@ func TestMailSendFromEMLFile(t *testing.T) {
 	assertContains(t, read, "Body straight from a file.")
 
 	if inbox := findMessage(t, "inbox", subject); inbox != "" && inbox != id {
-		cleanupRun(t, "Delete inbox copy: proton-cli mail messages delete "+inbox,
+		cleanupRun(t, "Delete inbox copy: proton mail messages delete "+inbox,
 			"mail", "messages", "delete", "--", inbox)
 	}
 }

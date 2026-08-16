@@ -127,7 +127,7 @@ func (s *Service) ResolveFolderTarget(ctx context.Context, ref string) (Mailbox,
 	if !m.Folder {
 		return m, errs.Problemf("%q is a label, not a folder - moving needs a folder.", ref).
 			Hint("to attach the label instead, use `label --label "+ref+"`.",
-				"To see the folders, run `proton-cli mail settings folders list`.").Exit(3)
+				"To see the folders, run `proton mail settings folders list`.").Exit(3)
 	}
 	return m, nil
 }
@@ -142,7 +142,7 @@ func (s *Service) ResolveLabelTarget(ctx context.Context, ref string) (Mailbox, 
 	if m.Folder {
 		return m, errs.Problemf("%q is a folder, not a label.", ref).
 			Hint("to move there instead, use `move --into "+ref+"`.",
-				"To see the labels, run `proton-cli mail settings labels list`.").Exit(3)
+				"To see the labels, run `proton mail settings labels list`.").Exit(3)
 	}
 	return m, nil
 }

@@ -1,4 +1,4 @@
-// Package mail is the `proton-cli mail` tree.
+// Package mail is the `proton mail` tree.
 //
 // The mailbox is `messages`, `conversations`, `drafts` and their attachments;
 // everything you configure lives under `settings`, one subcommand per page of
@@ -46,5 +46,5 @@ func wrongTable(err error, verb string) error {
 		return err
 	}
 	return kit.Fail("That ID is a %s, not a %s.", wte.Kind, mailsvc.OppositeKind(wte.Kind)).
-		Hint("proton-cli " + tree + " " + verb + " " + wte.ID).Exit(3)
+		Hint("proton " + tree + " " + verb + " " + wte.ID).Exit(3)
 }

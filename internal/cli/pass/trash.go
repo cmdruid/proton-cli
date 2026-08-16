@@ -117,7 +117,7 @@ func trashTargets(c *kit.Invocation, all bool) ([]passsvc.Item, error) {
 	if len(c.Args) == 0 {
 		return nil, kit.Fail("Nothing selected.").
 			Hint("pass a REF, or --all to restore everything in the trash.",
-				"proton-cli pass trash list")
+				"proton pass trash list")
 	}
 	out := make([]passsvc.Item, 0, len(c.Args))
 	for _, ref := range c.Args {

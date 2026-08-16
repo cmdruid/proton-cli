@@ -101,7 +101,7 @@ func (c *Credentials) User() (string, error) {
 	if v == "" {
 		var err error
 		v, err = c.ask(labelEmail, false, errs.Problemf("An account email is required.").
-			Hint("proton-cli account login"))
+			Hint("proton account login"))
 		if err != nil {
 			return "", err
 		}

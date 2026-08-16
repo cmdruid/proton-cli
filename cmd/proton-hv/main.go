@@ -1,8 +1,8 @@
 //go:build webview
 
-// proton-cli-hv is the human-verification helper binary for proton-cli.
+// proton-hv is the human-verification helper binary for proton.
 //
-// The main proton-cli binary is CGO-free and statically linked. When a
+// The main proton binary is CGO-free and statically linked. When a
 // command hits Proton's CAPTCHA-only HV state (API code 9001), the main
 // binary extracts this helper from an embedded resource, exec's it with
 // the challenge token, and reads the captured solution from stdout.
@@ -13,7 +13,7 @@
 //
 // Contract:
 //
-//	proton-cli-hv <captcha-page-url>
+//	proton-hv <captcha-page-url>
 //
 //	Exit codes
 //	  0   success; stdout = the solved token, verbatim
@@ -130,7 +130,7 @@ func main() {
 	}
 	defer w.Destroy()
 
-	w.SetTitle("proton-cli - Human Verification")
+	w.SetTitle("proton - Human Verification")
 	w.SetSize(540, 720, webview.HintNone)
 
 	var (

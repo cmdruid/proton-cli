@@ -1,6 +1,8 @@
 # Installation
 
-proton-cli is a single self-contained binary. Pick whichever line matches your system.
+proton is a single self-contained binary. Pick whichever line matches your system.
+
+The command is `proton`. Every install also puts `proton-cli` beside it as a second name, so a line written either way runs.
 
 ## Linux
 
@@ -48,7 +50,7 @@ To track the latest release instead of your nixpkgs channel, use the flake:
 
 ```nix
 inputs = {
-  proton-cli = {
+  proton = {
     url = "github:roman-16/proton-cli";
     inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -56,7 +58,7 @@ inputs = {
 
 # in a NixOS module
 environment.systemPackages = [
-  proton-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
+  proton.packages.${pkgs.stdenv.hostPlatform.system}.default
 ];
 ```
 
@@ -101,7 +103,7 @@ npm install -g @roman-16/proton-cli
 **Go** - builds from source:
 
 ```bash
-go install github.com/roman-16/proton-cli@latest
+go install github.com/roman-16/proton-cli/cmd/proton@latest
 ```
 
 > [!NOTE]
@@ -122,12 +124,13 @@ Every release ships raw binaries and archives on the [releases page](https://git
 ```bash
 curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64
 chmod +x proton-cli_linux_amd64
-sudo mv proton-cli_linux_amd64 /usr/local/bin/proton-cli
+sudo mv proton-cli_linux_amd64 /usr/local/bin/proton
+sudo ln -s proton /usr/local/bin/proton-cli    # the second name, if you want it
 ```
 
-On Windows, download the `.exe` and put its folder on your `PATH`.
+On Windows, download the `.exe`, rename it to `proton.exe`, and put its folder on your `PATH`.
 
-The `proton-cli_<version>_<os>_<arch>.tar.gz` / `.zip` archives bundle the binary, the licence, and shell completions for bash, zsh, and fish.
+The `proton-cli_<version>_<os>_<arch>.tar.gz` / `.zip` archives bundle the binary, the licence, and shell completions for bash, zsh, and fish. The `.zip` also carries `proton-cli.exe`, a small launcher for `proton.exe`: an archive cannot hold a link, so on Windows the second name travels as a file of its own.
 
 ### Verifying a download
 
@@ -143,22 +146,28 @@ sha256sum --check --ignore-missing checksums.txt
 Package installs (APT, AUR, Homebrew, RPM, APK) wire completions up for you. For a manual install, generate them yourself:
 
 ```bash
-proton-cli completion bash > /etc/bash_completion.d/proton-cli
-proton-cli completion zsh  > "${fpath[1]}/_proton-cli"
-proton-cli completion fish > ~/.config/fish/completions/proton-cli.fish
+proton completion bash > /etc/bash_completion.d/proton
+proton completion zsh  > "${fpath[1]}/_proton"
+proton completion fish > ~/.config/fish/completions/proton.fish
+```
+
+One script covers both names. Fish is the exception: it looks for a file named after the command being typed, so the second name needs one of its own.
+
+```bash
+echo 'complete -c proton-cli -w proton' > ~/.config/fish/completions/proton-cli.fish
 ```
 
 ## Updating
 
 If you used a package manager, update with it (`apt upgrade`, `brew upgrade`, `winget upgrade`, `yay -Syu`, …).
 
-If you used the install script or a manual download, proton-cli updates itself:
+If you used the install script or a manual download, proton updates itself:
 
 ```bash
-proton-cli update             # install the latest release
-proton-cli update --check     # only report whether an update exists
-proton-cli update 1.9.13      # install a specific version
-proton-cli update --reinstall # install again even if already current
+proton update             # install the latest release
+proton update --check     # only report whether an update exists
+proton update 1.9.13      # install a specific version
+proton update --reinstall # install again even if already current
 ```
 
 ## Uninstalling
@@ -168,10 +177,10 @@ Package installs go out the way they came in (`apt remove proton-cli`, `brew uni
 Script and manual installs can remove themselves:
 
 ```bash
-proton-cli uninstall --dry-run       # show what would be removed
-proton-cli uninstall                 # ask, then remove the binary
-proton-cli uninstall --yes           # remove it without asking
-proton-cli uninstall --yes --purge   # also delete saved sessions and the ID cache
+proton uninstall --dry-run       # show what would be removed
+proton uninstall                 # ask, then remove the binary
+proton uninstall --yes           # remove it without asking
+proton uninstall --yes --purge   # also delete saved sessions and the ID cache
 ```
 
 Uninstalling cannot be undone from here, so it asks first, like every other removal ([why](language.md#when-it-asks-first)). `--yes` is the answer given in advance.
@@ -182,7 +191,7 @@ Needs Go 1.26 or newer:
 
 ```bash
 git clone https://github.com/roman-16/proton-cli.git
-cd proton-cli
+cd proton
 go build .
 ```
 

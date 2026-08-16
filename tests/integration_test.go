@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	workDir = dir
-	// Build the per-platform proton-cli-hv helper into
+	// Build the per-platform proton-hv helper into
 	// internal/hv/assets/ so the main build's //go:embed picks it up.
 	helpers := exec.Command("bash", "../scripts/build-hv-helpers.sh")
 	helpers.Stderr = os.Stderr
@@ -44,8 +44,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	binaryPath = filepath.Join(dir, "proton-cli")
-	cmd := exec.Command("go", "build", "-tags=embed_hv", "-o", binaryPath, "..")
+	binaryPath = filepath.Join(dir, "proton")
+	cmd := exec.Command("go", "build", "-tags=embed_hv", "-o", binaryPath, "../cmd/proton")
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		_ = os.RemoveAll(dir)
@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 // for that and nothing else. Most tests act as `primary`; the handful that need
 // two Proton users bring in `secondary`.
 //
-// These are the harness's own variables, not the CLI's: proton-cli takes an
+// These are the harness's own variables, not the CLI's: proton takes an
 // account from a signed-in profile, which signIn establishes below. The
 // PROTON_CLI_TEST_ prefix keeps them clear of anything the binary reads.
 const (
@@ -720,11 +720,11 @@ func sendTestMail(t *testing.T, subject string) string {
 		t.Fatal(err)
 	}
 	if sentID != "" {
-		cleanupRun(t, "Delete sent mail: proton-cli mail messages delete -- "+sentID,
+		cleanupRun(t, "Delete sent mail: proton mail messages delete -- "+sentID,
 			"mail", "messages", "delete", "--", sentID)
 	}
 	if inboxID != "" {
-		cleanupRun(t, "Delete inbox mail: proton-cli mail messages delete -- "+inboxID,
+		cleanupRun(t, "Delete inbox mail: proton mail messages delete -- "+inboxID,
 			"mail", "messages", "delete", "--", inboxID)
 		return inboxID
 	}

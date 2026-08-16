@@ -131,7 +131,7 @@ func TestQuietSilencesOnlyStderr(t *testing.T) {
 	}
 }
 
-// Raw is the pass-through for `proton-cli api`. Integers have to survive it,
+// Raw is the pass-through for `proton api`. Integers have to survive it,
 // because YAML would otherwise turn 1000 into 1000.0 and break every consumer.
 func TestRawKeepsIntegers(t *testing.T) {
 	for _, format := range []Format{FormatJSON, FormatYAML} {

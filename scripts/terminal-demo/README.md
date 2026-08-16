@@ -1,6 +1,6 @@
 # Terminal demo
 
-The panel in the README is a recording of a real session, not a mock-up. `record.sh` runs proton-cli against the primary account inside a pty, and [freeze](https://github.com/charmbracelet/freeze) renders the captured ANSI into `assets/demo-dark.svg` and `assets/demo-light.svg`.
+The panel in the README is a recording of a real session, not a mock-up. `record.sh` runs proton against the primary account inside a pty, and [freeze](https://github.com/charmbracelet/freeze) renders the captured ANSI into `assets/demo-dark.svg` and `assets/demo-light.svg`.
 
 It records as `primary`, the same account the integration suite runs on, so it needs no credentials of its own:
 
@@ -27,7 +27,7 @@ just demo        # seed, record, render
 - **The profile comes from the environment**, not a `--profile` flag, so the recorded commands stay free of demo plumbing.
 - **Fixed window.** `record.sh` sets the pty to 84 columns, so column widths don't depend on the machine that records.
 - **Login happens before recording.** `account login` runs first, so the transcript opens on a command rather than an authentication notice. It also unlocks the key hierarchy, so no recorded panel pauses to do that halfway through.
-- **The panel is photographed in a Proton-themed terminal.** proton-cli names colors and leaves the shade to the terminal, so a recording carries names rather than colors and something has to play the terminal's part before freeze can draw it - freeze has a palette of its own and no faint at all. `theme.sh` resolves those names against Proton's own tokens, carbon for the dark panel and snow for the light one, which is also the only reason the two panels can differ: the binary has no idea which one it is running in. Only the `$` prompt marker is added by the script, and it names its color the same way.
+- **The panel is photographed in a Proton-themed terminal.** proton names colors and leaves the shade to the terminal, so a recording carries names rather than colors and something has to play the terminal's part before freeze can draw it - freeze has a palette of its own and no faint at all. `theme.sh` resolves those names against Proton's own tokens, carbon for the dark panel and snow for the light one, which is also the only reason the two panels can differ: the binary has no idea which one it is running in. Only the `$` prompt marker is added by the script, and it names its color the same way.
 - **Only the last frame of each line survives.** A pty redraws the progress bar with carriage returns, so `just demo` strips them and keeps what stood on each line when it finished, which makes the recording read like the finished screen.
 - **freeze is handed its input with stdin closed.** freeze reads stdin whenever stdin is a pipe and ignores the file it was given, so `just demo` redirects it from `/dev/null`; without that, recording from anything that pipes renders nothing and fails with `Language Unknown`.
 - **Each panel states its own default text color.** Text that carries no ANSI color takes its color from freeze's syntax theme, and a theme that defines none leaves an invalid `fill` in the SVG that every renderer resolves differently. `just demo` therefore rewrites that one attribute to Proton's text token per panel, rather than depending on a theme (which would also override `background`).

@@ -163,7 +163,7 @@ jobs:
           set +e  # we WANT a non-zero exit here
           suffix=""
           [[ "$GOOS" == "windows" ]] && suffix=".exe"
-          bin="internal/hv/assets/proton-cli-hv-${GOOS}-${GOARCH}${suffix}"
+          bin="internal/hv/assets/proton-hv-${GOOS}-${GOARCH}${suffix}"
           ls -la "$bin"
 
           out=$("$bin" 2>&1)
@@ -185,7 +185,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: hv-helper-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: internal/hv/assets/proton-cli-hv-*
+          path: internal/hv/assets/proton-hv-*
           if-no-files-found: error
           retention-days: 1
 
@@ -216,7 +216,7 @@ jobs:
       - name: Show downloaded helpers
         run: |
           ls -la internal/hv/assets/
-          file internal/hv/assets/proton-cli-hv-* || true
+          file internal/hv/assets/proton-hv-* || true
 
       - name: Tag the release
         # The tag is the one thing here that outlives a failed run: it is fetched

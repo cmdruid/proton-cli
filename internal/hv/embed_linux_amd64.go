@@ -4,5 +4,5 @@ package hv
 
 import _ "embed"
 
-//go:embed assets/proton-cli-hv-linux-amd64
+//go:embed assets/proton-hv-linux-amd64
 var helperBinary []byte

@@ -218,7 +218,7 @@ Send a raw authenticated request to the Proton API
 | --- | --- |
 | `api METHOD ENDPOINT` | Send a raw authenticated request to the Proton API |
 
-## proton-cli itself
+## proton itself
 
 ### `completion`
 
@@ -230,19 +230,19 @@ Generate a shell completion script
 
 ### `uninstall`
 
-Remove a curl/PowerShell-installed proton-cli
+Remove a curl/PowerShell-installed proton
 
 | Command | What it does |
 | --- | --- |
-| `uninstall` | Remove a curl/PowerShell-installed proton-cli |
+| `uninstall` | Remove a curl/PowerShell-installed proton |
 
 ### `update`
 
-Update proton-cli to the latest release
+Update proton to the latest release
 
 | Command | What it does |
 | --- | --- |
-| `update [VERSION]` | Update proton-cli to the latest release |
+| `update [VERSION]` | Update proton to the latest release |
 
 ### `version`
 

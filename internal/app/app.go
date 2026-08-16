@@ -232,10 +232,10 @@ func (a *App) Authenticate(context.Context) error {
 	}
 	if a.Profile.IsDefault() {
 		return errs.Problemf("You are not signed in.").
-			Hint("proton-cli account login").Exit(2)
+			Hint("proton account login").Exit(2)
 	}
 	return errs.Problemf("Profile %q is not signed in.", a.Profile).
-		Hint(fmt.Sprintf("proton-cli account login --profile %s", a.Profile)).Exit(2)
+		Hint(fmt.Sprintf("proton account login --profile %s", a.Profile)).Exit(2)
 }
 
 // Login attaches an account to this profile and saves the session.
@@ -292,7 +292,7 @@ func (a *App) refuseRepoint(wanted string) error {
 		return nil
 	}
 	return errs.Problemf("Profile %q is signed in as %s.", a.Profile, a.email).
-		Hint(fmt.Sprintf("proton-cli account logout --profile %s", a.Profile)).Exit(4)
+		Hint(fmt.Sprintf("proton account logout --profile %s", a.Profile)).Exit(4)
 }
 
 // resume reports whether the saved session still works, unlocking it so the

@@ -169,7 +169,7 @@ func confirm(c *Invocation, spec ui.ResultSpec) error {
 // Create makes one thing and reports its new ID.
 //
 // It is separate from Mutate because a creation's identity does not exist until
-// the work is done, and because that ID goes to stdout: `ID=$(proton-cli ...
+// the work is done, and because that ID goes to stdout: `ID=$(proton ...
 // create ...)` is the whole reason the split between the streams matters.
 func Create(c *Invocation, spec ui.ResultSpec, apply func() (string, error)) error {
 	spec.Count = 1

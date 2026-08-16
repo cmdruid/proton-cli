@@ -103,7 +103,7 @@ func TestUIDDoesNotRepeat(t *testing.T) {
 		}
 		seen[uid] = true
 		if !strings.HasPrefix(uid, "proton-cli-") {
-			t.Errorf("UID = %q, want the proton-cli prefix", uid)
+			t.Errorf("UID = %q, want the proton prefix", uid)
 		}
 	}
 }

@@ -18,7 +18,7 @@ _Unofficial, community-built, not affiliated with Proton AG._
 </div>
 <br />
 
-Read your mail, move files in and out of Drive, manage calendars, passwords, and contacts, all without opening a browser. proton-cli logs in the way the Proton apps do and does the encryption on your machine, so your keys stay yours.
+Read your mail, move files in and out of Drive, manage calendars, passwords, and contacts, all without opening a browser. proton logs in the way the Proton apps do and does the encryption on your machine, so your keys stay yours.
 
 - **Real end-to-end encryption.** SRP login and the full PGP key hierarchy, handled locally with Proton's own [go-srp](https://github.com/ProtonMail/go-srp) and [gopenpgp](https://github.com/ProtonMail/gopenpgp). No bridge, no proxy, no browser in the middle.
 - **Five apps, one binary.** Mail, Drive, Calendar, Pass, and Contacts, in a single static executable on Linux, macOS, and Windows.
@@ -38,12 +38,14 @@ Read your mail, move files in and out of Drive, manage calendars, passwords, and
 
 There's also an APT repository for Debian and Ubuntu, `.rpm` and `.apk` packages, plain binaries with checksums, and `go install`. See [Installation](docs/installation.md).
 
-Already installed? `proton-cli update`.
+The command is `proton`, and `proton-cli` works too - every install puts both names on your `PATH`.
+
+Already installed? `proton update`.
 
 ## Get started
 
 ```console
-$ proton-cli account login
+$ proton account login
 Email:            you@proton.me
 Password:
 Two-factor code:  123456
@@ -54,29 +56,29 @@ Two-factor code:  123456
 That's the whole setup. Signing in saves the session **and** unlocks your keys, so your password is needed once on this machine and not again. Every command documents itself with `--help`:
 
 ```bash
-proton-cli mail messages list
-proton-cli mail messages send --help
+proton mail messages list
+proton mail messages send --help
 ```
 
-Scripting it? `proton-cli account login --user you@proton.me --password-file /run/secrets/proton` needs no terminal. Juggling a personal and a work account? `proton-cli account login --profile work`. More in [Getting started](docs/getting-started.md).
+Scripting it? `proton account login --user you@proton.me --password-file /run/secrets/proton` needs no terminal. Juggling a personal and a work account? `proton account login --profile work`. More in [Getting started](docs/getting-started.md).
 
 ## What you can do
 
-Every command reads the same way - `proton-cli <app> <collection> <verb>` - and anywhere one wants an ID, a subject, name, or URL works too. Lists shorten IDs to 8 characters you can paste straight back. See [The language](docs/language.md).
+Every command reads the same way - `proton <app> <collection> <verb>` - and anywhere one wants an ID, a subject, name, or URL works too. Lists shorten IDs to 8 characters you can paste straight back. See [The language](docs/language.md).
 
 ### Mail
 
 ```bash
-proton-cli mail messages list --unread
-proton-cli mail messages search --from billing@example.com --after 2026-01-01
-proton-cli mail messages get "Invoice #2291"
-proton-cli mail messages send --to alice@proton.me --subject Report --body "See attached." --attach ./report.pdf
-proton-cli mail messages reply "Invoice #2291" --body "Thanks, paid today."
-proton-cli mail messages forward "Invoice #2291" --to alice@proton.me
-proton-cli mail drafts create --to team@example.com --subject Standup --body "Notes to follow."
-proton-cli mail messages label "Invoice #2291" --label Accounting
-proton-cli mail messages export --folder archive --older-than 1y --output-dir ./backup
-proton-cli mail messages trash --unread --older-than 30d
+proton mail messages list --unread
+proton mail messages search --from billing@example.com --after 2026-01-01
+proton mail messages get "Invoice #2291"
+proton mail messages send --to alice@proton.me --subject Report --body "See attached." --attach ./report.pdf
+proton mail messages reply "Invoice #2291" --body "Thanks, paid today."
+proton mail messages forward "Invoice #2291" --to alice@proton.me
+proton mail drafts create --to team@example.com --subject Standup --body "Notes to follow."
+proton mail messages label "Invoice #2291" --label Accounting
+proton mail messages export --folder archive --older-than 1y --output-dir ./backup
+proton mail messages trash --unread --older-than 30d
 ```
 
 Threads, attachments, filters, and auto-reply. → [Mail](docs/commands/mail.md)
@@ -84,13 +86,13 @@ Threads, attachments, filters, and auto-reply. → [Mail](docs/commands/mail.md)
 ### Drive
 
 ```bash
-proton-cli drive items list /Documents
-proton-cli drive items upload --recursive ./project /Backup
-proton-cli drive items upload --if-exists replace ./report.pdf /Documents
-proton-cli drive items download /Documents/report.pdf --output-dir .
-proton-cli drive items move /Documents/report.pdf --into /Archive
-proton-cli drive share link /Documents/report.pdf --expires 7d --password hunter2
-proton-cli drive items trash --pattern "*.tmp" --scope /Build --recursive
+proton drive items list /Documents
+proton drive items upload --recursive ./project /Backup
+proton drive items upload --if-exists replace ./report.pdf /Documents
+proton drive items download /Documents/report.pdf --output-dir .
+proton drive items move /Documents/report.pdf --into /Archive
+proton drive share link /Documents/report.pdf --expires 7d --password hunter2
+proton drive items trash --pattern "*.tmp" --scope /Build --recursive
 ```
 
 Revisions, sharing with people, and photo albums. → [Drive](docs/commands/drive.md)
@@ -98,12 +100,12 @@ Revisions, sharing with people, and photo albums. → [Drive](docs/commands/driv
 ### Calendar
 
 ```bash
-proton-cli calendar events list --start 2026-04-15 --end 2026-04-30
-proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
-proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m
-proton-cli calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30
-proton-cli calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
-proton-cli calendar events respond "Team sync" --status accept
+proton calendar events list --start 2026-04-15 --end 2026-04-30
+proton calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
+proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m
+proton calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30
+proton calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
+proton calendar events respond "Team sync" --status accept
 ```
 
 Recurring events occurrence by occurrence, your own calendars, all-day events, and attendees. → [Calendar](docs/commands/calendar.md)
@@ -111,10 +113,10 @@ Recurring events occurrence by occurrence, your own calendars, all-day events, a
 ### Pass
 
 ```bash
-proton-cli pass items list --vault Work
-proton-cli pass items get github.com
-proton-cli pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com
-proton-cli pass aliases create --prefix shop --mailbox me@proton.me
+proton pass items list --vault Work
+proton pass items get github.com
+proton pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com
+proton pass aliases create --prefix shop --mailbox me@proton.me
 ```
 
 Notes, cards, SSH keys, and identities. → [Pass](docs/commands/pass.md)
@@ -122,10 +124,10 @@ Notes, cards, SSH keys, and identities. → [Pass](docs/commands/pass.md)
 ### Contacts
 
 ```bash
-proton-cli contacts list
-proton-cli contacts create --name "Jane Roe" --email jane@example.com
-proton-cli contacts keys pin jane --key jane-pubkey.asc
-proton-cli contacts groups add GROUP_ID jane
+proton contacts list
+proton contacts create --name "Jane Roe" --email jane@example.com
+proton contacts keys pin jane --key jane-pubkey.asc
+proton contacts groups add GROUP_ID jane
 ```
 
 Multiple addresses, organizations, and birthdays. → [Contacts](docs/commands/contacts.md)
@@ -133,34 +135,34 @@ Multiple addresses, organizations, and birthdays. → [Contacts](docs/commands/c
 ### Account
 
 ```bash
-proton-cli account get
-proton-cli account sessions list
-proton-cli account settings set locale de_AT
-proton-cli account logout --revoke
+proton account get
+proton account sessions list
+proton account settings set locale de_AT
+proton account logout --revoke
 ```
 
 Profiles and per-app settings. → [Account](docs/commands/account.md)
 
-[`proton-cli api`](docs/commands/api.md) reaches any endpoint the commands don't.
+[`proton api`](docs/commands/api.md) reaches any endpoint the commands don't.
 
 ## Automate it
 
 ```bash
 # creating something prints its new ID to stdout
-ID=$(proton-cli mail settings labels create --name Work --color purple)
+ID=$(proton mail settings labels create --name Work --color purple)
 
 # every list is an envelope keyed by its plural name, always with a count
-proton-cli mail messages list --unread --output json | jq -r '.messages[].subject'
-proton-cli drive items list /Backup --output json | jq '[.items[].size] | add'
+proton mail messages list --unread --output json | jq -r '.messages[].subject'
+proton drive items list /Backup --output json | jq '[.items[].size] | add'
 
 # stream through, no temporary files
-pg_dump mydb | gzip | proton-cli drive items upload - /Backups/db.sql.gz
+pg_dump mydb | gzip | proton drive items upload - /Backups/db.sql.gz
 
 # archive a folder to disk as ordinary .eml files
-proton-cli mail messages export --folder archive --all --output-dir ./mail-backup
+proton mail messages export --folder archive --all --output-dir ./mail-backup
 
 # check what a bulk change would touch before it happens
-proton-cli mail messages trash --from newsletter@example.com --older-than 90d --dry-run
+proton mail messages trash --from newsletter@example.com --older-than 90d --dry-run
 ```
 
 Data goes to stdout and progress to stderr, so redirects stay clean. Exit codes tell user error, auth failure, not-found, ambiguity, and network trouble apart, so scripts can react to each. → [Scripting](docs/scripting.md)
@@ -171,7 +173,7 @@ Anything that removes permanently, or that removes what a filter picked out rath
 
 Your password never reaches Proton: login is SRP, and the key password it derives stays local and unlocks your PGP keys in memory. Mail, files, events, contacts, and Pass items are decrypted after they arrive and encrypted before they leave, with the same key hierarchy the web clients use. Signatures on incoming mail are checked and reported.
 
-The saved session keeps your key password encrypted with a key held server-side, so revoking the session from any Proton app makes a leaked copy of the file useless. proton-cli is unaudited, and the whole storage model is written down in [Security](SECURITY.md). The mechanics are in [How it works](docs/how-it-works.md).
+The saved session keeps your key password encrypted with a key held server-side, so revoking the session from any Proton app makes a leaked copy of the file useless. proton is unaudited, and the whole storage model is written down in [Security](SECURITY.md). The mechanics are in [How it works](docs/how-it-works.md).
 
 ## Documentation
 
@@ -196,7 +198,7 @@ Everything lives in [`docs/`](docs/README.md):
 
 - **Search lags a few seconds.** Proton's index is eventually consistent, so act on the ID a command printed rather than searching for the same subject again.
 - **CAPTCHAs need a desktop.** Proton occasionally asks for human verification at login, which opens a small window. On a headless machine, log in elsewhere and copy the session. See [Human verification](docs/human-verification.md).
-- **Label colors are Proton's; the interface's colors are yours.** Labels, folders, calendars, and groups accept only the 20 accent colors, by name (`--color purple`) or hex (`--color "#8080FF"`); an invalid `--color` prints the whole palette, and lists show the swatch and the name rather than a hex code. Everything proton-cli colors on its own account it asks for by name, so the shades come from your terminal theme rather than from here.
+- **Label colors are Proton's; the interface's colors are yours.** Labels, folders, calendars, and groups accept only the 20 accent colors, by name (`--color purple`) or hex (`--color "#8080FF"`); an invalid `--color` prints the whole palette, and lists show the swatch and the name rather than a hex code. Everything proton colors on its own account it asks for by name, so the shades come from your terminal theme rather than from here.
 - **Folders and labels are different.** A message lives in one folder and carries any number of labels, so `move --into` and `label --label` are separate verbs.
 
 ## Contributing
@@ -205,7 +207,7 @@ Bug reports, ideas, and pull requests are all welcome. [`CONTRIBUTING.md`](CONTR
 
 ## Disclaimer
 
-proton-cli is an independent, community-built project. It is not endorsed by, affiliated with, or supported by Proton AG. Proton is a trademark of Proton AG. Use it at your own risk, and mind Proton's terms of service.
+proton is an independent, community-built project. It is not endorsed by, affiliated with, or supported by Proton AG. Proton is a trademark of Proton AG. Use it at your own risk, and mind Proton's terms of service.
 
 ## License
 

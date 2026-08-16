@@ -8,6 +8,18 @@
 // conformance test says so.
 package kit
 
+// Program is the command, and Alias is its second name: the same binary under
+// the project's name, so a line written either way runs.
+//
+// Every screen speaks Program, whichever name was typed to get there. A help
+// screen that renamed itself to match the invocation would teach two languages
+// and pin nothing - the examples, the generated reference and the golden files
+// all rest on the program being nameable.
+const (
+	Program = "proton"
+	Alias   = "proton-cli"
+)
+
 // Verbs is every word that may end a command path.
 //
 // Each entry is the one word for its idea. Where two words competed, the winner
@@ -83,7 +95,7 @@ var Verbs = map[string]string{
 	"options": "list the values a choice offers",
 
 	// The tool itself
-	"uninstall":  "remove proton-cli",
+	"uninstall":  "remove " + Program,
 	"version":    "report the build",
 	"completion": "emit a shell completion script",
 	"api":        "send a raw authenticated request",
@@ -94,7 +106,7 @@ var Verbs = map[string]string{
 // which kit.Mutate guarantees structurally from the action it reports.
 //
 // `uninstall` belongs beside the two removals because it is the strictest case
-// of the same thing: afterwards there is no proton-cli left to undo it with.
+// of the same thing: afterwards there is no proton left to undo it with.
 var Irreversible = map[string]bool{
 	"delete": true, "empty": true, "uninstall": true,
 }
@@ -129,7 +141,7 @@ var Placeholders = map[string]string{
 	"VALUE":          "a setting value",
 	"METHOD":         "an HTTP method",
 	"ENDPOINT":       "a Proton API path",
-	"VERSION":        "a proton-cli release, as X.Y.Z",
+	"VERSION":        "a " + Program + " release, as X.Y.Z",
 	"ATTACHMENT_REF": "an attachment on the addressed message",
 	"REVISION_REF":   "a revision of the addressed file",
 	"CONTACT_REF":    "a contact, when the command already addresses something else",

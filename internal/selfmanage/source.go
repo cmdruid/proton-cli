@@ -2,7 +2,7 @@ package selfmanage
 
 import "strings"
 
-// Kind classifies how a proton-cli binary was installed, which decides whether
+// Kind classifies how a proton binary was installed, which decides whether
 // it may replace itself in place.
 type Kind int
 
@@ -20,7 +20,7 @@ const (
 	KindWinget
 )
 
-// Classify reports how proton-cli was installed, given the resolved path of the
+// Classify reports how proton was installed, given the resolved path of the
 // running executable (symlinks already evaluated).
 //
 // It positively identifies only the package managers that install into a

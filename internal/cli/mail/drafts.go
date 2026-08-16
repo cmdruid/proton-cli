@@ -171,7 +171,7 @@ func draftsSendCmd() *cobra.Command {
 			}
 			if !draft.Content.HasRecipients() {
 				return kit.Fail("That draft has no recipients.").
-					Hint("proton-cli mail drafts update " + c.Args[0] + " --to someone@example.com")
+					Hint("proton mail drafts update " + c.Args[0] + " --to someone@example.com")
 			}
 			action, detail := ui.Sent, ""
 			if !at.IsZero() {

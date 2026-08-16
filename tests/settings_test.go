@@ -32,7 +32,7 @@ func TestMailSettingsSetByName(t *testing.T) {
 	if orig == 1 {
 		origName, targetName, targetValue = "messages", "conversations", 0
 	}
-	cleanup(t, fmt.Sprintf("Restore mail view mode: proton-cli mail settings set view-mode %s", origName),
+	cleanup(t, fmt.Sprintf("Restore mail view mode: proton mail settings set view-mode %s", origName),
 		func() error {
 			if _, _, code := run(t, "mail", "settings", "set", "view-mode", origName); code != 0 {
 				return fmt.Errorf("restore exit %d", code)

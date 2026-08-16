@@ -23,15 +23,15 @@ Without devbox you need Go 1.26 or newer, plus `actionlint`, `charm-freeze`, `go
 `just --list` is the full set. The ones you'll reach for:
 
 ```bash
-go build .        # quick build (no CAPTCHA helper)
-just build        # release-shaped binary, embeds the webview helper
+go build ./cmd/proton  # quick build (no CAPTCHA helper)
+just build             # release-shaped binary, embeds the webview helper
 just run -- mail messages list
-just lint         # format, regenerate, and check everything; run before every commit
-just test-fast    # unit, golden and conformance tests
-just flake        # build the nix package, after a dependency bump
-just snapshot     # every release artifact, without publishing
-just demo         # regenerate the README demo images
-just update       # move every dependency and tool to the latest version
+just lint              # format, regenerate, and check everything; run before every commit
+just test-fast         # unit, golden and conformance tests
+just flake             # build the nix package, after a dependency bump
+just snapshot          # every release artifact, without publishing
+just demo              # regenerate the README demo images
+just update            # move every dependency and tool to the latest version
 ```
 
 `just lint` has to pass with no findings, and has to leave the tree clean. It formats Go and Nix, regenerates the command reference, and checks the workflows, the release configuration, the shell scripts and the Go, so a stale generated file fails the same way a lint finding does. CI runs the same recipe.
@@ -76,14 +76,14 @@ Unit test files are named after the file they test (`size.go` → `size_test.go`
 
 | Path | Contents |
 | --- | --- |
-| `main.go` | Entry point |
+| `cmd/proton/` | Entry point |
 | `internal/cli/` | Cobra command tree, flags, exit codes |
 | `internal/service/` | Per-product logic (mail, drive, calendar, contacts, pass) |
 | `internal/proton/` | API client, request plumbing, error types |
 | `internal/crypto/`, `internal/account/` | Key handling, SRP login, sessions |
 | `internal/render/`, `internal/view/` | Output formatting: tables, JSON, YAML, progress |
 | `internal/hv/` | Human-verification webview helper |
-| `cmd/proton-cli-hv/` | The webview helper binary |
+| `cmd/proton-hv/` | The webview helper binary |
 | `tests/` | Live-API integration tests |
 | `scripts/` | OpenAPI generator, installers, release helpers, README demo |
 | `assets/` | Logo and the generated README demo images |

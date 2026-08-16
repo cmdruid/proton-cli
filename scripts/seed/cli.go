@@ -28,13 +28,13 @@ func writePasswordFiles(work string) error {
 	return nil
 }
 
-// binary is the proton-cli to drive. `just` builds it first; PROTON_CLI points
+// binary is the proton to drive. `just` builds it first; PROTON_CLI points
 // somewhere else when the integration suite runs its own build.
 func binary() string {
 	if v := os.Getenv("PROTON_CLI"); v != "" {
 		return v
 	}
-	return "./proton-cli"
+	return "./proton"
 }
 
 // command builds a CLI invocation as one profile.

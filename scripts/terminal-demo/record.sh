@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Records the README demo by running proton-cli for real and writing the
+# Records the README demo by running proton for real and writing the
 # session, ANSI and all, to stdout. `just demo` pipes that into freeze.
 #
 #   just demo
@@ -15,7 +15,7 @@ cd "$(dirname "$0")/../.."
 # `just demo` has already signed in and staged. The profile is exported rather
 # than passed as a flag, so the recorded commands stay free of demo plumbing.
 export PROTON_PROFILE=primary
-bin=${PROTON_CLI:-./proton-cli}
+bin=${PROTON_CLI:-./proton}
 
 # A fixed window keeps the rendered image identical across machines.
 stty columns 84 rows 40 2>/dev/null || true
@@ -31,19 +31,19 @@ printf 'The north trail is open again.\n' >"$work/trail-map.txt"
 # does, so the panel's theme decides its shade along with everything else.
 prompt() { printf '\033[35m$\033[39m %s\n' "$*"; }
 
-prompt "proton-cli mail messages list --unread --page-size 3"
+prompt "proton mail messages list --unread --page-size 3"
 "$bin" mail messages list --unread --page-size 3 || true
 printf '\n'
 
-prompt "proton-cli drive items upload trail-map.txt /Documents"
+prompt "proton drive items upload trail-map.txt /Documents"
 "$bin" drive items upload "$work/trail-map.txt" /Documents || true
 printf '\n'
 
-prompt "proton-cli calendar events get Dentist"
+prompt "proton calendar events get Dentist"
 "$bin" calendar events get Dentist || true
 printf '\n'
 
-prompt "proton-cli pass items list --vault Personal"
+prompt "proton pass items list --vault Personal"
 "$bin" pass items list --vault Personal || true
 
 # --yes because a permanent removal asks first, and there is nobody here to

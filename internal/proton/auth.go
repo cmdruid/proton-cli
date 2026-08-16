@@ -99,11 +99,11 @@ func (c *Client) Login(ctx context.Context, username string, password []byte, to
 		// A security key needs a browser to talk WebAuthn, which a terminal has no
 		// way to do. Saying so is better than the stream of 401s that would follow
 		// a silently half-finished sign-in.
-		return errs.Problemf("This account signs in with a security key, which proton-cli cannot use.").
+		return errs.Problemf("This account signs in with a security key, which proton cannot use.").
 			Hint("add a TOTP authenticator app at https://account.proton.me/mail/account-password,",
-				"then sign in with --totp or let proton-cli ask for the code.").Exit(2)
+				"then sign in with --totp or let proton ask for the code.").Exit(2)
 	case auth.TwoFA.Enabled != 0:
-		return errs.Problemf("This account uses a two-factor method proton-cli does not support (0x%x).",
+		return errs.Problemf("This account uses a two-factor method proton does not support (0x%x).",
 			auth.TwoFA.Enabled).Exit(2)
 	}
 	return nil

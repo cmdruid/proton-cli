@@ -1,4 +1,4 @@
-// Package account is the `proton-cli account` tree: the account itself, its
+// Package account is the `proton account` tree: the account itself, its
 // settings, and the session this machine holds.
 //
 // It is a first-class app, the way Proton treats it: account settings live at

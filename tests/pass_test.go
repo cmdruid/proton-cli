@@ -51,7 +51,7 @@ func TestPassVaultsCRUD(t *testing.T) {
 	if !looksLikeID(shareID) {
 		t.Fatalf("expected bare share ID on stdout, got %q", shareID)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete -- %s", shareID),
+	cleanupRun(t, fmt.Sprintf("Delete vault: proton pass vaults delete -- %s", shareID),
 		"pass", "vaults", "delete", "--", shareID)
 
 	list := runOK(t, "pass", "vaults", "list")
@@ -75,7 +75,7 @@ func TestPassItemsCRUDLogin(t *testing.T) {
 	if !looksLikePairRef(itemID) {
 		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete item: proton-cli pass items delete %s", name),
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", name),
 		"pass", "items", "delete", name)
 
 	// Get by URL REF
@@ -103,7 +103,7 @@ func TestPassItemsCreateNote(t *testing.T) {
 	if !looksLikePairRef(id) {
 		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete note: proton-cli pass items delete %s", name),
+	cleanupRun(t, fmt.Sprintf("Delete note: proton pass items delete %s", name),
 		"pass", "items", "delete", name)
 
 	got := runOK(t, "pass", "items", "get", name)
@@ -128,7 +128,7 @@ func TestPassItemsCreateCardShowsPIN(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete card: proton-cli pass items delete %s", name),
+	cleanupRun(t, fmt.Sprintf("Delete card: proton pass items delete %s", name),
 		"pass", "items", "delete", name)
 
 	got := runOK(t, "pass", "items", "get", name)
@@ -148,7 +148,7 @@ func TestPassCreditCardTypeConsistent(t *testing.T) {
 	name := testID() + "-cc"
 	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "credit-card",
 		"--name", name, "--holder", "Roman", "--number", "4111111111111111", "--expiry", "2030-01"))
-	cleanupRun(t, fmt.Sprintf("Delete card: proton-cli pass items delete %s", name),
+	cleanupRun(t, fmt.Sprintf("Delete card: proton pass items delete %s", name),
 		"pass", "items", "delete", name)
 
 	// Display/JSON type uses the same kebab spelling as the create flag.
@@ -179,7 +179,7 @@ func TestPassItemsTrashRestoreDelete(t *testing.T) {
 	// verb takes - and the only way to reach a trashed item, since searching by
 	// name does not find one.
 	ref := strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete item: proton-cli pass items delete -- %s", ref),
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete -- %s", ref),
 		"pass", "items", "delete", "--", ref)
 
 	runOK(t, "pass", "items", "trash", name)
@@ -224,7 +224,7 @@ func TestPassAliasesCreate(t *testing.T) {
 	prefix := fmt.Sprintf("pcli-%d", time.Now().UnixNano()%1_000_000_000)
 	stdout, stderr := runOKStderr(t, "pass", "aliases", "create", "--prefix", prefix, "--name", name)
 	ref := strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete alias: proton-cli pass items delete %s", name),
+	cleanupRun(t, fmt.Sprintf("Delete alias: proton pass items delete %s", name),
 		"pass", "items", "delete", name)
 	if !looksLikePairRef(ref) {
 		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", ref)
@@ -324,7 +324,7 @@ func makeAlias(t *testing.T) (ref, address string) {
 	prefix := fmt.Sprintf("pcli-%d", time.Now().UnixNano()%1_000_000_000)
 	stdout, stderr := runOKStderr(t, "pass", "aliases", "create", "--prefix", prefix, "--name", name)
 	ref = strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete alias: proton-cli pass items delete %s", name),
+	cleanupRun(t, fmt.Sprintf("Delete alias: proton pass items delete %s", name),
 		"pass", "items", "delete", name)
 	return ref, addressIn(t, stderr)
 }
@@ -380,7 +380,7 @@ func TestPassItemTypesAndFields(t *testing.T) {
 	idRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "identity",
 		"--name", idName, "--full-name", "Jane Roe", "--email", "jane@example.com",
 		"--organization", "Acme", "--field", "Note=hello-field", "--hidden", "PIN=4321"))
-	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", idRef),
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton pass items delete %s", idRef),
 		"pass", "items", "delete", "--", idRef)
 	gotID := runOK(t, "pass", "items", "get", "--", idRef)
 	assertContains(t, gotID, "Jane Roe")
@@ -390,14 +390,14 @@ func TestPassItemTypesAndFields(t *testing.T) {
 	// Wi-Fi.
 	wifiRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "wifi",
 		"--name", testID()+"-wifi", "--ssid", "MyTestNet", "--password", "pw", "--security", "WPA2"))
-	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", wifiRef),
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton pass items delete %s", wifiRef),
 		"pass", "items", "delete", "--", wifiRef)
 	assertContains(t, runOK(t, "pass", "items", "get", "--", wifiRef), "MyTestNet")
 
 	// SSH key.
 	sshRef := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "ssh-key",
 		"--name", testID()+"-ssh", "--public-key", "ssh-ed25519 AAAATESTKEY", "--private-key", "PRIVATE-TEST"))
-	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", sshRef),
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton pass items delete %s", sshRef),
 		"pass", "items", "delete", "--", sshRef)
 	assertContains(t, runOK(t, "pass", "items", "get", "--", sshRef), "ssh-ed25519 AAAATESTKEY")
 }
@@ -407,7 +407,7 @@ func TestPassVaultRename(t *testing.T) {
 	lease(t, vaultSlot)
 	name := testID() + "-vault"
 	sid := createVault(t, name)
-	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete %s", sid),
+	cleanupRun(t, fmt.Sprintf("Delete vault: proton pass vaults delete %s", sid),
 		"pass", "vaults", "delete", "--", sid)
 
 	newName := name + "-renamed"
@@ -422,7 +422,7 @@ func TestPassLoginTOTPRoundTrips(t *testing.T) {
 	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "login",
 		"--name", name, "--username", "me@example.com",
 		"--totp-uri", "otpauth://totp/Example:me?secret="+secret+"&issuer=Example"))
-	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", ref),
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton pass items delete %s", ref),
 		"pass", "items", "delete", "--", ref)
 
 	assertContains(t, runOK(t, "pass", "items", "get", "--", ref), secret)

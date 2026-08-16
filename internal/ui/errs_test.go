@@ -27,7 +27,7 @@ func TestWriteErrorShapes(t *testing.T) {
 	}, {
 		"a redirect to the right command",
 		errs.Problemf("That ID is a conversation, not a message.").
-			Hint("proton-cli mail conversations get 5bH2mQxK").Exit(3),
+			Hint("proton mail conversations get 5bH2mQxK").Exit(3),
 		"errs_wrong_table",
 	}, {
 		"not found",

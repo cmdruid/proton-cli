@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/roman-16/proton-cli/internal/cli"
+	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/spf13/cobra"
 )
 
@@ -67,7 +68,7 @@ func writeLeaves(b *strings.Builder, c *cobra.Command) {
 // usage is the full invocation, with the binary name dropped so the table stays
 // readable.
 func usage(c *cobra.Command) string {
-	path := strings.TrimPrefix(c.CommandPath(), "proton-cli ")
+	path := strings.TrimPrefix(c.CommandPath(), kit.Program+" ")
 	if args := strings.Fields(c.Use); len(args) > 1 {
 		path += " " + strings.Join(args[1:], " ")
 	}

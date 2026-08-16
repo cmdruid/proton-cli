@@ -1,4 +1,4 @@
-// Package pass is the `proton-cli pass` tree: vaults, the items in them, aliases,
+// Package pass is the `proton pass` tree: vaults, the items in them, aliases,
 // and the trash.
 //
 // An item lives inside a share, so it takes two IDs to address. They are written

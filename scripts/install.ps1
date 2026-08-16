@@ -4,8 +4,9 @@
 
 .DESCRIPTION
   Downloads the latest proton-cli release from GitHub Releases, verifies its
-  SHA-256 checksum, and installs it into a user directory. No package manager
-  required. (winget remains the recommended Windows channel:
+  SHA-256 checksum, and installs it into a user directory as `proton`, with
+  `proton-cli` beside it as a second name. No package manager required.
+  (winget remains the recommended Windows channel:
   `winget install Roman-16.ProtonCLI`.)
 
 .EXAMPLE
@@ -61,13 +62,20 @@ try {
     Write-Success 'Checksum verified'
 
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    $dest = Join-Path $InstallDir 'proton-cli.exe'
+    $dest = Join-Path $InstallDir 'proton.exe'
     Move-Item -Path "$tmp\$asset" -Destination $dest -Force
 
-    # `--version` prints "proton-cli version X.Y.Z"; the bare number reads better
-    # in a sentence that already names the program.
+    # `--version` prints "proton version X.Y.Z"; the bare number reads better in
+    # a sentence that already names the program.
     $installed = ((& $dest --version 2>$null) -split '\s+')[-1]
-    Write-Success "Installed proton-cli $installed → $dest"
+    Write-Success "Installed proton $installed → $dest"
+
+    # An install answers to both names. Windows has no symlink an ordinary user
+    # may create, so the second name is a shim that resolves the program
+    # relative to its own directory and passes the exit code back out.
+    $shim = Join-Path $InstallDir 'proton-cli.cmd'
+    Set-Content -Path $shim -Value "@echo off`r`n`"%~dp0proton.exe`" %*" -NoNewline -Encoding ASCII
+    Write-Success 'proton-cli → proton'
 }
 finally {
     Remove-Item -Path $tmp -Recurse -Force -ErrorAction SilentlyContinue
@@ -77,7 +85,7 @@ $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if (($userPath -split ';') -notcontains $InstallDir) {
     Write-Warning "$InstallDir is not on your PATH. To add it permanently, run:"
     Write-Host "  [Environment]::SetEnvironmentVariable('Path', `"`$([Environment]::GetEnvironmentVariable('Path','User'));$InstallDir`", 'User')"
-    # Make proton-cli usable in the current session without persisting anything.
+    # Make proton usable in the current session without persisting anything.
     $env:Path = "$env:Path;$InstallDir"
 }
 
@@ -85,8 +93,8 @@ if (($userPath -split ';') -notcontains $InstallDir) {
 # install command is looking for the first command, not the last one.
 Write-Host ''
 Write-Info 'Next:'
-Write-Step 'proton-cli account login' 'sign in'
-Write-Step 'proton-cli --help' 'what it can do'
-Write-Step 'proton-cli completion powershell' 'tab completion'
+Write-Step 'proton account login' 'sign in'
+Write-Step 'proton --help' 'what it can do'
+Write-Step 'proton completion powershell' 'tab completion'
 Write-Host ''
-Write-Info 'Remove it again any time with: proton-cli uninstall'
+Write-Info 'Remove it again any time with: proton uninstall'

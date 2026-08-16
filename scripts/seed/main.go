@@ -31,7 +31,7 @@ import (
 )
 
 // The accounts. These variables are this program's own, not the CLI's:
-// proton-cli takes an account from a signed-in profile, which signIn establishes.
+// proton takes an account from a signed-in profile, which signIn establishes.
 var accounts = []struct{ profile, userVar, passwordVar string }{
 	{"primary", "PROTON_CLI_TEST_PRIMARY_USER", "PROTON_CLI_TEST_PRIMARY_PASSWORD"},
 	{"secondary", "PROTON_CLI_TEST_SECONDARY_USER", "PROTON_CLI_TEST_SECONDARY_PASSWORD"},

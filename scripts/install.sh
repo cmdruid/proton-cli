@@ -2,8 +2,9 @@
 # proton-cli installer.
 #
 # Downloads the latest proton-cli release for your OS/architecture from GitHub
-# Releases, verifies its SHA-256 checksum, and installs the binary. No Go
-# toolchain and no package manager required.
+# Releases, verifies its SHA-256 checksum, and installs it as `proton`, with
+# `proton-cli` linked beside it. No Go toolchain and no package manager
+# required.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
@@ -22,7 +23,10 @@
 set -eu
 
 REPO="roman-16/proton-cli"
-BIN="proton-cli"
+# The project is proton-cli, which is what names the release asset; the program
+# it installs is `proton`, and ALIAS is the second name it also answers to.
+BIN="proton"
+ALIAS="proton-cli"
 VERSION="${PROTON_CLI_VERSION:-}"
 INSTALL_DIR="${PROTON_CLI_INSTALL_DIR:-$HOME/.local/bin}"
 
@@ -33,7 +37,7 @@ main() {
 
 	os="$(detect_os)"
 	arch="$(detect_arch)"
-	asset="${BIN}_${os}_${arch}"
+	asset="${ALIAS}_${os}_${arch}"
 
 	if [ -n "$VERSION" ]; then
 		base="https://github.com/$REPO/releases/download/v${VERSION#v}"
@@ -57,10 +61,16 @@ main() {
 	install -m 0755 "$tmp/$asset" "$INSTALL_DIR/$BIN" 2>/dev/null ||
 		die "could not install to $INSTALL_DIR (set --install-dir to a writable directory)"
 
-	# `--version` prints "proton-cli version X.Y.Z"; the bare number reads better
-	# in a sentence that already names the program.
+	# `--version` prints "proton version X.Y.Z"; the bare number reads better in a
+	# sentence that already names the program.
 	installed="$("$INSTALL_DIR/$BIN" --version 2>/dev/null | awk '{print $NF}')"
 	success "Installed ${BIN}${installed:+ $installed} → $(tilde "$INSTALL_DIR/$BIN")"
+
+	# An install answers to both names, so the second one is part of installing
+	# rather than an extra somebody has to know to ask for.
+	if ln -sf "$BIN" "$INSTALL_DIR/$ALIAS" 2>/dev/null; then
+		success "${ALIAS} → ${BIN}"
+	fi
 
 	check_path
 	next_steps
@@ -71,11 +81,11 @@ main() {
 next_steps() {
 	printf '\n' >&2
 	heading 'Next:'
-	step 'proton-cli account login' 'sign in'
-	step 'proton-cli --help' 'what it can do'
-	step "proton-cli completion $(current_shell)" 'tab completion'
+	step "$BIN account login" 'sign in'
+	step "$BIN --help" 'what it can do'
+	step "$BIN completion $(current_shell)" 'tab completion'
 	printf '\n' >&2
-	info "Remove it again any time with: proton-cli uninstall"
+	info "Remove it again any time with: $BIN uninstall"
 }
 
 # current_shell names the shell to generate completions for, so the line can be
@@ -118,8 +128,11 @@ parse_args() {
 	done
 }
 
+# usage prints the header comment, which is the same text a reader opening this
+# file sees first. It stops at the first line that is not a comment, so the help
+# cannot drift out of step with the block it comes from.
 usage() {
-	sed -n '2,26p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true
+	awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
 }
 
 detect_os() {

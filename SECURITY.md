@@ -9,13 +9,13 @@
 Instead, use one of these private channels:
 
 1. **Preferred** - Open a [private security advisory](https://github.com/roman-16/proton-cli/security/advisories/new) on GitHub. This is encrypted, scoped to the maintainer, and lets us collaborate on a fix in a private fork.
-2. **Alternative** - Email <roman@lerchster.dev> with the details. Use `[proton-cli security]` in the subject line.
+2. **Alternative** - Email <roman@lerchster.dev> with the details. Use `[proton security]` in the subject line.
 
 Please include:
 
 - A clear description of the vulnerability and its impact.
 - Steps to reproduce, ideally with a minimal example.
-- The affected version(s) of `proton-cli` (output of `proton-cli --version`).
+- The affected version(s) of `proton` (output of `proton --version`).
 - Your operating system and Go toolchain version, if relevant.
 - Whether you've disclosed this to anyone else, and any disclosure timeline you have in mind.
 
@@ -29,7 +29,7 @@ If you don't get a response within 7 days, please follow up - your message may h
 
 ## Supported versions
 
-Only the **latest released version** of `proton-cli` receives security fixes. There is no long-term-support branch.
+Only the **latest released version** of `proton` receives security fixes. There is no long-term-support branch.
 
 Always upgrade to the latest release before reporting an issue you suspect is fixed in newer code.
 
@@ -37,21 +37,21 @@ Always upgrade to the latest release before reporting an issue you suspect is fi
 
 ### In scope
 
-- Vulnerabilities in `proton-cli`'s own code, including:
+- Vulnerabilities in `proton`'s own code, including:
   - Authentication flow (SRP login, two-factor handling).
   - Local credential and key storage.
   - PGP key handling and message decryption logic.
   - Command-line argument parsing and shell injection risks.
   - File I/O (path traversal, symlink races, insecure temp files).
-- Misuse of upstream cryptographic libraries ([`gopenpgp`](https://github.com/ProtonMail/gopenpgp), [`go-srp`](https://github.com/ProtonMail/go-srp)) inside `proton-cli`.
-- Build / supply-chain issues in the release pipeline that could lead to a malicious binary being distributed under the `proton-cli` name.
+- Misuse of upstream cryptographic libraries ([`gopenpgp`](https://github.com/ProtonMail/gopenpgp), [`go-srp`](https://github.com/ProtonMail/go-srp)) inside `proton`.
+- Build / supply-chain issues in the release pipeline that could lead to a malicious binary being distributed under the `proton` name.
 
 ### Out of scope
 
 - Vulnerabilities in **Proton's services or infrastructure**. Report those to Proton's [Bug Bounty Programme](https://proton.me/security/bug-bounty) directly (or email <security@proton.me>).
 - Vulnerabilities in **upstream Go dependencies**. Report those to the respective projects. We will track upstream advisories and update dependencies in a timely manner.
-- Issues that only manifest in **modified, forked, or unofficially redistributed builds** of `proton-cli`.
-- Account-safety issues caused by **violating Proton's Terms of Service** (e.g., using `proton-cli` against accounts where automated access is prohibited). Such use is at your own risk.
+- Issues that only manifest in **modified, forked, or unofficially redistributed builds** of `proton`.
+- Account-safety issues caused by **violating Proton's Terms of Service** (e.g., using `proton` against accounts where automated access is prohibited). Such use is at your own risk.
 - Theoretical issues without a demonstrated impact.
 
 ## Disclosure policy
@@ -65,7 +65,7 @@ We follow [coordinated disclosure](https://en.wikipedia.org/wiki/Coordinated_vul
 
 ## How credentials are stored at rest
 
-`proton-cli` saves a per-profile session file at `~/.config/proton-cli/sessions/<profile>.json` (mode `0600`) so you don't re-authenticate on every command. It contains:
+`proton` saves a per-profile session file at `~/.config/proton-cli/sessions/<profile>.json` (mode `0600`) so you don't re-authenticate on every command. It contains:
 
 - the session **auth tokens** (UID, access, refresh), and
 - the **salted key password** that unlocks your PGP keys, stored **encrypted** with a random 256-bit AES-GCM *client key*.
@@ -79,9 +79,9 @@ Caveat: the file still contains the session refresh token, so it is **not** safe
 
 ## Hardening recommendations for users
 
-`proton-cli` is unaudited. To reduce risk while using it:
+`proton` is unaudited. To reduce risk while using it:
 
 - Treat the binary as you would any third-party CLI handling secrets - run it as your normal user, not as root.
-- Keep `proton-cli` and its dependencies (Go runtime, OS) up to date.
+- Keep `proton` and its dependencies (Go runtime, OS) up to date.
 - Verify release artifact checksums against the [GitHub Releases page](https://github.com/roman-16/proton-cli/releases) before installing.
-- Be aware that running `proton-cli` against a Proton account may, depending on your usage pattern, trigger Proton's automated abuse detection. This is an account-safety consideration, not a vulnerability in `proton-cli`.
+- Be aware that running `proton` against a Proton account may, depending on your usage pattern, trigger Proton's automated abuse detection. This is an account-safety consideration, not a vulnerability in `proton`.

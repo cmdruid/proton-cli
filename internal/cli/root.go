@@ -18,6 +18,7 @@ import (
 	calendarcmd "github.com/roman-16/proton-cli/internal/cli/calendar"
 	contactscmd "github.com/roman-16/proton-cli/internal/cli/contacts"
 	drivecmd "github.com/roman-16/proton-cli/internal/cli/drive"
+	"github.com/roman-16/proton-cli/internal/cli/kit"
 	mailcmd "github.com/roman-16/proton-cli/internal/cli/mail"
 	passcmd "github.com/roman-16/proton-cli/internal/cli/pass"
 	selfcmd "github.com/roman-16/proton-cli/internal/cli/self"
@@ -60,7 +61,7 @@ func newRoot() *cobra.Command {
 	var g globalFlags
 
 	root := &cobra.Command{
-		Use:   "proton-cli",
+		Use:   kit.Program,
 		Short: "Unofficial CLI for Proton Mail, Drive, Calendar, Pass and Contacts",
 		Long: "Proton, in your terminal.\n\n" +
 			"Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.",
@@ -105,7 +106,7 @@ func newRoot() *cobra.Command {
 	// unrecognised flag is reported as one.
 	//
 	// Without this, cobra fails to route and blames the subcommand instead:
-	// `proton-cli --bogus account get` answers `Unknown command "get"`, which
+	// `proton --bogus account get` answers `Unknown command "get"`, which
 	// points a reader at the wrong thing entirely.
 	root.TraverseChildren = true
 
@@ -147,7 +148,7 @@ func newRoot() *cobra.Command {
 	root.AddGroup(
 		&cobra.Group{ID: groupApps, Title: "Apps:"},
 		&cobra.Group{ID: groupAccount, Title: "Account:"},
-		&cobra.Group{ID: groupSelf, Title: "proton-cli itself:"},
+		&cobra.Group{ID: groupSelf, Title: kit.Program + " itself:"},
 	)
 
 	add := func(group string, cmds ...*cobra.Command) {
@@ -206,7 +207,7 @@ func Execute() {
 // Cobra makes that check only at the root: its default argument validator
 // returns early for any command that has a parent, and ValidateArgs is skipped
 // entirely for a command that is not Runnable, which every group is. Left to
-// cobra, `proton-cli mail mesages list` writes help to stdout and exits 0.
+// cobra, `proton mail mesages list` writes help to stdout and exits 0.
 //
 // Find's error is the root-level half of the same complaint, phrased by cobra;
 // discarding it lets one wording answer for the whole tree.
@@ -251,7 +252,7 @@ func printHVFinalError(w *os.File, hv *proton.HumanVerificationError, a *app.App
 	println := func(s string) { _, _ = fmt.Fprintln(w, s) }
 	printf := func(format string, args ...any) { _, _ = fmt.Fprintf(w, format, args...) }
 
-	println("Error: Proton requires CAPTCHA verification, but proton-cli cannot run a")
+	println("Error: Proton requires CAPTCHA verification, but proton cannot run a")
 	println("webview in this environment.")
 	if a != nil && a.HVUnavailableDetail != "" {
 		printf("\n  %s\n", a.HVUnavailableDetail)

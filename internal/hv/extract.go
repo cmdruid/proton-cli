@@ -13,7 +13,7 @@ import (
 // extractHelper writes the embedded helper bytes to the user's cache
 // directory if not already there, and returns the absolute path to
 // the executable. The cached file is content-addressed by sha256 so
-// upgrading proton-cli automatically replaces stale helpers.
+// upgrading proton automatically replaces stale helpers.
 //
 // Returns ErrHelperMissing if no helper was embedded for this OS/arch
 // (i.e. the binary was built without -tags embed_hv).
@@ -76,7 +76,7 @@ func extractHelper() (string, error) {
 // helperFilename builds the on-disk filename for the cached helper,
 // including a content hash and the .exe suffix on Windows.
 func helperFilename(hash string) string {
-	base := "proton-cli-hv-" + hash
+	base := "proton-hv-" + hash
 	if runtime.GOOS == "windows" {
 		base += ".exe"
 	}

@@ -12,7 +12,7 @@ import (
 )
 
 // cliHVResolver returns the HVResolver installed on the client. On a captcha
-// challenge it extracts and runs the embedded proton-cli-hv webview helper;
+// challenge it extracts and runs the embedded proton-hv webview helper;
 // other methods are not yet implemented and map to proton.ErrHVUnavailable so
 // the original 9001 surfaces with an honest message.
 func cliHVResolver(_ context.Context, a *app.App) proton.HVResolver {
@@ -51,7 +51,7 @@ func cliHVResolver(_ context.Context, a *app.App) proton.HVResolver {
 				return "", "", fmt.Errorf("captcha cancelled: %s", cancelled.Detail)
 			case errors.Is(err, hv.ErrHelperMissing):
 				if a != nil {
-					a.HVUnavailableDetail = "this build of proton-cli has no embedded captcha helper " +
+					a.HVUnavailableDetail = "this build of proton has no embedded captcha helper " +
 						"(produced by `go install` or a non-release build); install via the official " +
 						"release tarball"
 				}

@@ -26,7 +26,8 @@ proton-cli mirrors what the **Proton web clients let a user do**, not every endp
 
 proton-cli has one grammar, one verb per idea, and one shape per response. All of it is declared in code and checked by `internal/cli/conformance_test.go`, which walks the whole command tree. **Read `internal/cli/kit/lang.go` before adding a command.**
 
-- `proton-cli <app> <collection> <verb> [TARGET…] [--flags]`. A group never acts.
+- `proton <app> <collection> <verb> [TARGET…] [--flags]`. A group never acts.
+- The program is `kit.Program`, `proton`, and every screen speaks it whichever name was typed. `kit.Alias`, `proton-cli`, is the second name each install channel links beside it; it names the project too, which is why the repo, the module, the packages, the release assets and `~/.config/proton-cli` all keep it. Never write either name as a literal.
 - Verbs come from `kit.Verbs`. A word not in there is a word being invented.
 - Argument names come from `kit.Placeholders`. `REF` is a full ID, a short ID, or a human handle; Drive uses `PATH` for things that exist in the tree.
 - A flag name means exactly one thing CLI-wide. New shared flags go in `flagMeanings` in the conformance test, which fails if two commands disagree.

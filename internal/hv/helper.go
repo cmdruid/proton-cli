@@ -1,7 +1,7 @@
 // Package hv handles Proton's Human Verification (HV) flow from the
 // CLI side. It exposes a single entry point - Resolve - that:
 //
-//  1. Extracts the embedded proton-cli-hv helper binary to the user
+//  1. Extracts the embedded proton-hv helper binary to the user
 //     cache directory (once, then reuses it).
 //  2. Exec's the helper with the CAPTCHA page URL as argv[1].
 //  3. Translates the helper's exit code + stderr into typed errors.
@@ -11,7 +11,7 @@
 // exec failure on minimal Linux systems is reported back as a clean
 // *UnavailableError that the cli layer can format for the user.
 //
-// Contract with cmd/proton-cli-hv (helper exit codes):
+// Contract with cmd/proton-hv (helper exit codes):
 //
 //	0   success; stdout = the solved token, verbatim
 //	2   bad usage

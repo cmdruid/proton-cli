@@ -1,4 +1,4 @@
-// Package drive is the `proton-cli drive` tree.
+// Package drive is the `proton drive` tree.
 //
 // Drive addresses things two ways, and both are real. A file or folder that
 // exists in the tree is named by its PATH, because that is how a person thinks

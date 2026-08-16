@@ -52,8 +52,8 @@ func TestConfirmWithoutAPreviewIsOneLine(t *testing.T) {
 		"Would empty 12 items from the trash. This cannot be undone. Continue? [y/N] ",
 	}, {
 		"uninstalling names the binary",
-		ResultSpec{Action: Uninstalled, Count: 1, Name: "/usr/local/bin/proton-cli"},
-		"Would uninstall /usr/local/bin/proton-cli. This cannot be undone. Continue? [y/N] ",
+		ResultSpec{Action: Uninstalled, Count: 1, Name: "/usr/local/bin/proton"},
+		"Would uninstall /usr/local/bin/proton. This cannot be undone. Continue? [y/N] ",
 	}, {
 		"a reversible removal does not claim otherwise",
 		ResultSpec{Action: Trashed, Kind: "messages", Count: 3, Detail: "to trash"},

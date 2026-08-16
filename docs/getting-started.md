@@ -3,7 +3,7 @@
 ## Sign in
 
 ```console
-$ proton-cli account login
+$ proton account login
 Email:            you@proton.me
 Password:
 Two-factor code:  123456
@@ -16,17 +16,17 @@ That is the whole setup. Signing in saves the session **and** unlocks your keys,
 No terminal to answer the prompts? Name the account and point at the password:
 
 ```bash
-proton-cli account login --user you@proton.me --password-file /run/secrets/proton
+proton account login --user you@proton.me --password-file /run/secrets/proton
 ```
 
 A password is never a flag value, because argv is readable by every user on the machine through `ps`. Use `--password-file`, or pipe it in with `--password-stdin`.
 
-Two-factor codes rotate every thirty seconds, so `--totp` is only useful at the moment you sign in - otherwise let proton-cli ask.
+Two-factor codes rotate every thirty seconds, so `--totp` is only useful at the moment you sign in - otherwise let proton ask.
 
 Check where you stand at any time:
 
 ```console
-$ proton-cli account get
+$ proton account get
 Email:       you@proton.me
 Name:        Roman
 Storage:     ━━━━━───────────────   26%  128.4 GB of 500.0 GB
@@ -40,12 +40,12 @@ ID:          Kd91mQxT…
 ## Do something
 
 ```bash
-proton-cli mail messages list --unread
-proton-cli mail messages get "Invoice #2291"
-proton-cli drive items list /Documents
-proton-cli calendar events list
-proton-cli pass items get github.com
-proton-cli contacts list
+proton mail messages list --unread
+proton mail messages get "Invoice #2291"
+proton drive items list /Documents
+proton calendar events list
+proton pass items get github.com
+proton contacts list
 ```
 
 Every command documents itself, and the grammar is the same throughout - see [The language](language.md).
@@ -56,13 +56,13 @@ Completion covers every command and flag, and offers real values as you type: yo
 
 ```bash
 # zsh
-proton-cli completion zsh > "${fpath[1]}/_proton-cli"
+proton completion zsh > "${fpath[1]}/_proton"
 
 # bash
-proton-cli completion bash | sudo tee /etc/bash_completion.d/proton-cli
+proton completion bash | sudo tee /etc/bash_completion.d/proton
 
 # fish
-proton-cli completion fish > ~/.config/fish/completions/proton-cli.fish
+proton completion fish > ~/.config/fish/completions/proton.fish
 ```
 
 ## More than one account
@@ -70,18 +70,18 @@ proton-cli completion fish > ~/.config/fish/completions/proton-cli.fish
 Each profile keeps its own session, so a personal and a work account never mix:
 
 ```console
-$ proton-cli --profile work account login
+$ proton --profile work account login
 Email:     you@company.com
 Password:
 ✓ Signed in as you@company.com (profile "work").
 
-$ proton-cli --profile work mail messages list
+$ proton --profile work mail messages list
 ```
 
 See what is signed in on this machine:
 
 ```console
-$ proton-cli account profiles list
+$ proton account profiles list
 PROFILE   EMAIL             UNLOCKED  SAVED             ACTIVE
 ────────  ────────────────  ────────  ────────────────  ──────
 default   you@proton.me     yes       2026-04-15 14:31  ✓
@@ -93,9 +93,9 @@ Make one the default for a shell with `export PROTON_PROFILE=work`. More in [Con
 ## Sign out
 
 ```bash
-proton-cli account logout             # forget the session on this machine
-proton-cli account logout --revoke    # and invalidate it at Proton
-proton-cli account logout --all       # every profile
+proton account logout             # forget the session on this machine
+proton account logout --revoke    # and invalidate it at Proton
+proton account logout --all       # every profile
 ```
 
 Revoking also makes the credentials saved on this machine useless, even to someone who already copied them. See [Security](../SECURITY.md).
@@ -105,16 +105,16 @@ Revoking also makes the credentials saved on this machine useless, even to someo
 Errors say what happened and what to try:
 
 ```console
-$ proton-cli mail messages move 5bH2mQxK --into Work
+$ proton mail messages move 5bH2mQxK --into Work
 Error: "Work" is a label, not a folder - moving needs a folder.
 Try:   to attach the label instead, use `label --label Work`.
-       To see the folders, run `proton-cli mail settings folders list`.
+       To see the folders, run `proton mail settings folders list`.
 ```
 
 Before changing anything in bulk, ask what would happen:
 
 ```bash
-proton-cli mail messages trash --from newsletter@example.com --older-than 90d --dry-run
+proton mail messages trash --from newsletter@example.com --older-than 90d --dry-run
 ```
 
 ## Where next

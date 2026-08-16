@@ -34,8 +34,8 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	binaryPath = filepath.Join(dir, "proton-cli")
-	build := exec.Command("go", "build", "-o", binaryPath, "../..")
+	binaryPath = filepath.Join(dir, "proton")
+	build := exec.Command("go", "build", "-o", binaryPath, "../../cmd/proton")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		_ = os.RemoveAll(dir)

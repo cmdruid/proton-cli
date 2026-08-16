@@ -1,5 +1,5 @@
 // Package hvexit defines the process-exit-code contract shared between the
-// proton-cli-hv helper binary (which produces these codes) and the internal/hv
+// proton-hv helper binary (which produces these codes) and the internal/hv
 // package (which interprets them). Both sides reference these constants, so the
 // contract can never silently drift.
 package hvexit

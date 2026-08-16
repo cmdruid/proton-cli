@@ -19,7 +19,7 @@ import (
 // Windows locks a mapped image against deletion, but renaming it on the same
 // volume is allowed, so the install location is freed immediately.
 func removeBinary(path string) error {
-	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("proton-cli-uninstall-%d.exe", os.Getpid()))
+	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("proton-uninstall-%d.exe", os.Getpid()))
 	_ = os.Remove(tmp)
 	if err := os.Rename(path, tmp); err != nil {
 		return err

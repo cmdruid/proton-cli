@@ -1,11 +1,11 @@
 [doc("Build the release-shaped binary, with the CAPTCHA webview helper embedded")]
 build:
     bash scripts/build-hv-helpers.sh
-    go build -tags=embed_hv -o proton-cli .
+    go build -tags=embed_hv -o proton ./cmd/proton
 
 [doc("Remove everything generated: the binary, the helpers, the completions, the release output")]
 clean:
-    rm --recursive --force completions dist internal/hv/assets proton-cli
+    rm --recursive --force completions dist internal/hv/assets proton
 
 [doc("Re-record the README panels by running a real session, then render them")]
 demo: build
@@ -75,7 +75,7 @@ proto:
 
 [doc("Build and run")]
 run *args:
-    go run . {{ args }}
+    go run ./cmd/proton {{ args }}
 
 [doc("Fill the test accounts with the data the suite expects (the suite runs this too)")]
 seed *args: build
@@ -89,9 +89,9 @@ snapshot: build
     export TAP_WINGET_TOKEN="${TAP_WINGET_TOKEN:-unused}"
     placeholders=()
     trap 'rm --force ${placeholders[@]+"${placeholders[@]}"}' EXIT
-    for helper in proton-cli-hv-linux-amd64 proton-cli-hv-linux-arm64 \
-        proton-cli-hv-darwin-amd64 proton-cli-hv-darwin-arm64 \
-        proton-cli-hv-windows-amd64.exe; do
+    for helper in proton-hv-linux-amd64 proton-hv-linux-arm64 \
+        proton-hv-darwin-amd64 proton-hv-darwin-arm64 \
+        proton-hv-windows-amd64.exe; do
         if [ ! -s "internal/hv/assets/$helper" ]; then
             printf 'placeholder\n' > "internal/hv/assets/$helper"
             placeholders+=("internal/hv/assets/$helper")

@@ -1,4 +1,4 @@
-// Package self holds the commands that act on proton-cli itself rather than on a
+// Package self holds the commands that act on proton itself rather than on a
 // Proton account.
 package self
 

@@ -256,7 +256,7 @@ func TestEventUIDDoesNotRepeat(t *testing.T) {
 		}
 		seen[uid] = true
 		if !strings.HasSuffix(uid, "@proton-cli") {
-			t.Errorf("EventUID = %q, want the proton-cli suffix", uid)
+			t.Errorf("EventUID = %q, want the proton suffix", uid)
 		}
 	}
 }

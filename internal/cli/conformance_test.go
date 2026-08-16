@@ -81,7 +81,7 @@ func TestEveryLeafHasAShortInTheHouseStyle(t *testing.T) {
 func TestEveryGroupHasAShort(t *testing.T) {
 	_, groups := partition(t)
 	for _, c := range groups {
-		if c.Short == "" && c.Name() != "proton-cli" {
+		if c.Short == "" && c.Name() != kit.Program {
 			t.Errorf("%s: no Short", cmdPath(c))
 		}
 	}
@@ -418,9 +418,9 @@ func TestStandardInputHasOneOwner(t *testing.T) {
 // rather than a reflex, and the integration harness keeps the same list.
 func TestReauthCommandsAreDeclared(t *testing.T) {
 	want := []string{
-		"proton-cli account login",
-		"proton-cli calendar settings calendars delete",
-		"proton-cli mail settings autoreply set",
+		"proton account login",
+		"proton calendar settings calendars delete",
+		"proton mail settings autoreply set",
 	}
 	leaves, _ := partition(t)
 	var got []string
@@ -445,7 +445,7 @@ func TestReauthCommandsAreDeclared(t *testing.T) {
 func TestEveryVerbIsInTheVocabulary(t *testing.T) {
 	leaves, _ := partition(t)
 	for _, c := range leaves {
-		if c.Name() == "proton-cli" {
+		if c.Name() == kit.Program {
 			continue
 		}
 		if _, ok := kit.Verbs[c.Name()]; !ok {
@@ -667,8 +667,8 @@ func TestEveryExampleIsTheCommandItIllustrates(t *testing.T) {
 				t.Errorf("%s: example %q: %v", cmdPath(c), line, err)
 				continue
 			}
-			if len(args) == 0 || args[0] != "proton-cli" {
-				t.Errorf("%s: example %q should start with `proton-cli`", cmdPath(c), line)
+			if len(args) == 0 || args[0] != kit.Program {
+				t.Errorf("%s: example %q should start with `%s`", cmdPath(c), line, kit.Program)
 				continue
 			}
 			found, rest, err := newRoot().Find(args[1:])
@@ -719,11 +719,11 @@ func exampleLines(example string) []string {
 			continue
 		}
 		// Anything piped or redirected is a shell construct illustrating the
-		// command's place in a pipeline; only the proton-cli side is ours to
+		// command's place in a pipeline; only the proton side is ours to
 		// check, and it is whichever segment names the binary.
 		for _, seg := range strings.Split(line, "|") {
 			seg = strings.TrimSpace(seg)
-			if strings.HasPrefix(seg, "proton-cli ") {
+			if strings.HasPrefix(seg, kit.Program+" ") {
 				out = append(out, seg)
 			}
 		}
@@ -801,7 +801,7 @@ var shorthands = map[string]string{
 func TestOnlyTheRootDefinesShorthands(t *testing.T) {
 	leaves, groups := partition(t)
 	for _, c := range append(leaves, groups...) {
-		if c.Name() == "proton-cli" {
+		if c.Name() == kit.Program {
 			continue
 		}
 		c.LocalFlags().VisitAll(func(f *pflag.Flag) {

@@ -134,7 +134,7 @@ func rewrapFlagError(err error, argv []string) error {
 				return fmt.Errorf(
 					"that argument looks like a flag because it starts with '-'.\n"+
 						"       If it is an ID, insert -- before it:\n"+
-						"         proton-cli ... -- %s", token)
+						"         proton ... -- %s", token)
 			}
 		}
 	}
@@ -148,7 +148,7 @@ func rewrapFlagError(err error, argv []string) error {
 						"Hint: %q starts with '-' so it is auto-protected with -- before it.\n"+
 						"      Any flags after the ID then become positional arguments. Put flags\n"+
 						"      before the ID, or insert -- before it explicitly:\n"+
-						"        proton-cli ... --flag value -- %s",
+						"        proton ... --flag value -- %s",
 					err, a, a)
 			}
 		}

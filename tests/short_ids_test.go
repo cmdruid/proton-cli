@@ -213,7 +213,7 @@ func TestShortIDRoundTripContacts(t *testing.T) {
 	stdout := runOK(t, "contacts", "create",
 		"--name", name, "--email", "t+"+name+"@x.invalid")
 	id := strings.TrimSpace(stdout)
-	cleanupRun(t, "Delete contact: proton-cli contacts delete -- "+id,
+	cleanupRun(t, "Delete contact: proton contacts delete -- "+id,
 		"contacts", "delete", "--", id)
 
 	// Populate cache.
@@ -238,7 +238,7 @@ func TestShortIDRoundTripPass(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected SHARE_ID/ITEM_ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, "Delete pass item: proton-cli pass items delete "+name,
+	cleanupRun(t, "Delete pass item: proton pass items delete "+name,
 		"pass", "items", "delete", name)
 
 	// Populate cache.

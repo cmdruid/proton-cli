@@ -5,51 +5,78 @@ before:
     - bash scripts/release-helpers-check.sh
     - bash scripts/gen-completions.sh
 
+# The program is `proton`; the project, and so every artifact name, is
+# proton-cli. An install answers to both names: `proton` is the file,
+# `proton-cli` is a link beside it that each channel below creates.
+#
+# Unix and Windows build separately only so their archives can differ.
+# An archive cannot carry a link, and winget shims exactly the
+# executables the release declares, so the Windows zip carries the
+# second name as a small launcher instead. Nothing on Unix needs it:
+# every channel there installs by running something that can link.
 builds:
-  - id: proton-cli
-    binary: proton-cli
-    main: .
+  - &build
+    id: unix
+    binary: proton
+    main: ./cmd/proton
     env:
       - CGO_ENABLED=0
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
-    ignore:
-      # Drop windows/arm64 - we don't ship a helper for it (limited
-      # webview_go support; can be added later by extending the
-      # workflow matrix and adding internal/hv/embed_windows_arm64.go).
-      - goos: windows
-        goarch: arm64
     flags:
       - -tags=embed_hv
     ldflags:
       - -s -w -X github.com/roman-16/proton-cli/internal/cli.version={{.Version}}
+  # windows/arm64 is absent because we don't ship a helper for it
+  # (limited webview_go support; can be added later by extending the
+  # workflow matrix and adding internal/hv/embed_windows_arm64.go).
+  - <<: *build
+    id: windows
+    goos:
+      - windows
+    goarch:
+      - amd64
+  - id: windows-alias
+    binary: proton-cli
+    main: ./cmd/proton-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+    ldflags:
+      - -s -w
 
 archives:
   - id: binary
+    ids: [unix, windows]
     formats: [binary]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-  # Per-platform archives (tar.gz for linux/darwin, zip for windows)
-  # bundling the binary, license, and completions. Consumed by the AUR,
-  # Homebrew, and winget packages, and offered as a direct download
-  # next to the raw binaries above.
+  # Per-platform archives bundling the binary, license, and completions.
+  # Consumed by the AUR, Homebrew, and winget packages, and offered as a
+  # direct download next to the raw binaries above.
   - id: archive
-    ids: [proton-cli]
+    ids: [unix]
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
       - completions/*
-    format_overrides:
-      - goos: windows
-        formats: [zip]
+  - id: archive-windows
+    ids: [windows, windows-alias]
+    formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - completions/*
 
 nfpms:
-  - ids: [proton-cli]
+  - ids: [unix]
     package_name: proton-cli
     formats: [apk, deb, rpm]
     maintainer: "Roman <roman@lerchster.dev>"
@@ -58,12 +85,22 @@ nfpms:
     license: MIT
     bindir: /usr/bin
     contents:
-      - src: ./completions/proton-cli.bash
+      - src: /usr/bin/proton
+        dst: /usr/bin/proton-cli
+        type: symlink
+      # bash and fish autoload by the name being typed, so the alias
+      # needs its own file. The zsh script names both in its #compdef
+      # header, which is what compinit reads, so one file covers it.
+      - src: ./completions/proton.bash
+        dst: /usr/share/bash-completion/completions/proton
+      - src: ./completions/proton.bash
         dst: /usr/share/bash-completion/completions/proton-cli
+      - src: ./completions/proton.fish
+        dst: /usr/share/fish/vendor_completions.d/proton.fish
       - src: ./completions/proton-cli.fish
         dst: /usr/share/fish/vendor_completions.d/proton-cli.fish
-      - src: ./completions/proton-cli.zsh
-        dst: /usr/share/zsh/site-functions/_proton-cli
+      - src: ./completions/proton.zsh
+        dst: /usr/share/zsh/site-functions/_proton
       - src: ./LICENSE
         dst: /usr/share/doc/proton-cli/copyright
         packager: deb
@@ -101,11 +138,14 @@ aurs:
       - "gtk3: CAPTCHA/human-verification webview"
       - "webkit2gtk-4.1: CAPTCHA/human-verification webview"
     package: |-
-      install -Dm755 "./proton-cli" "${pkgdir}/usr/bin/proton-cli"
+      install -Dm755 "./proton" "${pkgdir}/usr/bin/proton"
+      ln -s proton "${pkgdir}/usr/bin/proton-cli"
       install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/proton-cli-bin/LICENSE"
-      install -Dm644 "./completions/proton-cli.bash" "${pkgdir}/usr/share/bash-completion/completions/proton-cli"
+      install -Dm644 "./completions/proton.bash" "${pkgdir}/usr/share/bash-completion/completions/proton"
+      install -Dm644 "./completions/proton.bash" "${pkgdir}/usr/share/bash-completion/completions/proton-cli"
+      install -Dm644 "./completions/proton.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/proton.fish"
       install -Dm644 "./completions/proton-cli.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/proton-cli.fish"
-      install -Dm644 "./completions/proton-cli.zsh"  "${pkgdir}/usr/share/zsh/site-functions/_proton-cli"
+      install -Dm644 "./completions/proton.zsh"  "${pkgdir}/usr/share/zsh/site-functions/_proton"
 
 homebrew_casks:
   - name: proton-cli
@@ -121,11 +161,15 @@ homebrew_casks:
     description: "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts."
     license: MIT
     binaries:
-      - proton-cli
+      - proton
     completions:
-      bash: completions/proton-cli.bash
-      fish: completions/proton-cli.fish
-      zsh: completions/proton-cli.zsh
+      bash: completions/proton.bash
+      fish: completions/proton.fish
+      zsh: completions/proton.zsh
+    # The second name, and the fish script that autoloads under it.
+    custom_block: |
+      binary "proton", target: "proton-cli"
+      fish_completion "completions/proton-cli.fish"
 
 winget:
   - name: proton-cli
@@ -135,7 +179,7 @@ winget:
     commit_author:
       name: Roman
       email: roman@lerchster.dev
-    ids: [archive]
+    ids: [archive-windows]
     homepage: "https://github.com/roman-16/proton-cli"
     short_description: "Unofficial CLI for Proton Mail, Drive, Calendar, Pass and Contacts"
     description: "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts."
@@ -167,7 +211,7 @@ checksum:
 # the flag and publishes an empty release body.
 release:
   draft: false
-  # A version carrying a pre-release suffix is not what `proton-cli update` and
+  # A version carrying a pre-release suffix is not what `proton update` and
   # /releases/latest should hand a user who asked for the current version.
   prerelease: auto
   # A re-run has to be idempotent: a partial failure (e.g. the AUR being down)

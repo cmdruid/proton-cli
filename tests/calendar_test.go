@@ -47,7 +47,7 @@ func TestCalendarCalendarsCreateAndDelete(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton calendar settings calendars delete -- %s", id),
 		"calendar", "settings", "calendars", "delete", "--", id)
 
 	assertContains(t, runOK(t, "calendar", "settings", "calendars", "list"), name)
@@ -82,7 +82,7 @@ func TestCalendarEventsCRUDByIDs(t *testing.T) {
 	if !looksLikePairRef(eventID) {
 		t.Fatalf("expected CALENDAR_ID/EVENT_ID on stdout, got %q", idOut)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", eventID),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", eventID),
 		"calendar", "events", "delete", "--", eventID)
 
 	// Get by IDs
@@ -109,7 +109,7 @@ func TestCalendarEventsGetByTitleRef(t *testing.T) {
 		"--start", start,
 		"--duration", "30m")
 	eventID := strings.TrimSpace(idOut)
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", eventID),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", eventID),
 		"calendar", "events", "delete", "--", eventID)
 
 	// REF = title substring
@@ -211,7 +211,7 @@ func TestCalendarEventRecurrenceAndDescription(t *testing.T) {
 		"--calendar", calID, "--title", title,
 		"--description", "quarterly sync", "--start", "2026-08-16T14:00", "--duration", "1h",
 		"--rrule", "FREQ=WEEKLY;COUNT=5", "--remind", "15m"))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
 		"calendar", "events", "delete", eventID)
 
 	got := runOK(t, "calendar", "events", "get", eventID)
@@ -227,7 +227,7 @@ func TestCalendarEventReminderNotification(t *testing.T) {
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", calID, "--title", title,
 		"--start", "2026-09-01T09:00", "--duration", "30m", "--remind", "15m"))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
 		"calendar", "events", "delete", eventID)
 
 	data := runJSON(t, "api", "GET", eventPath(t, eventID))
@@ -255,7 +255,7 @@ func TestCalendarEventWithProtonAttendee(t *testing.T) {
 		"--calendar", calID, "--title", title,
 		"--start", "2026-08-17T10:00", "--duration", "30m",
 		"--attendee", selfEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
 		"calendar", "events", "delete", eventID)
 
 	if !looksLikeID(eventID) {
@@ -270,7 +270,7 @@ func TestCalendarCalendarsRename(t *testing.T) {
 	lease(t, calendarSlot)
 	name := testID() + "-cal"
 	calID := strings.TrimSpace(runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete %s", calID),
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton calendar settings calendars delete %s", calID),
 		"calendar", "settings", "calendars", "delete", calID)
 
 	newName := name + "-renamed"
@@ -285,7 +285,7 @@ func TestCalendarCreateUsable(t *testing.T) {
 	lease(t, calendarSlot)
 	name := testID() + "-usable"
 	calID := strings.TrimSpace(runOK(t, "calendar", "settings", "calendars", "create", "--name", name, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete %s", calID),
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton calendar settings calendars delete %s", calID),
 		"calendar", "settings", "calendars", "delete", calID)
 
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
@@ -312,7 +312,7 @@ func TestCalendarEventsRespondDryRun(t *testing.T) {
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", calID, "--title", title, "--start", start, "--duration", "30m",
 		"--attendee", selfEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
 		"calendar", "events", "delete", eventID)
 
 	_, stderr := runOKStderr(t, "--dry-run", "calendar", "events", "respond",
@@ -331,7 +331,7 @@ func TestCalendarEventsRespondRejectsOrganizer(t *testing.T) {
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", calID, "--title", title, "--start", start, "--duration", "30m",
 		"--attendee", selfEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete %s", eventID),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
 		"calendar", "events", "delete", eventID)
 
 	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "accept", eventID)
@@ -386,7 +386,7 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 	secondaryEventID := strings.TrimSpace(runOKSecondary(t, "calendar", "events", "create",
 		"--calendar", secondaryCal, "--title", title, "--start", start, "--duration", "30m",
 		"--attendee", selfEmail()))
-	cleanupRunSecondary(t, fmt.Sprintf("Delete the secondary account's event: proton-cli --profile secondary calendar events delete %s", secondaryEventID),
+	cleanupRunSecondary(t, fmt.Sprintf("Delete the secondary account's event: proton --profile secondary calendar events delete %s", secondaryEventID),
 		"calendar", "events", "delete", secondaryEventID)
 
 	uid, _ := eventField(runJSONSecondary(t, "api", "GET", eventPath(t, secondaryEventID)), "UID").(string)
@@ -423,7 +423,7 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 	// `events list` reports the two halves separately, so this one has to be
 	// joined into the single reference every event verb takes.
 	primaryRef := primaryCal + "/" + primaryEventID
-	cleanupRun(t, fmt.Sprintf("Delete primary event copy: proton-cli calendar events delete %s", primaryRef),
+	cleanupRun(t, fmt.Sprintf("Delete primary event copy: proton calendar events delete %s", primaryRef),
 		"calendar", "events", "delete", primaryRef)
 
 	runOK(t, "calendar", "events", "respond", "--status", "accept", primaryRef)
@@ -443,7 +443,7 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 	if replyID == "" {
 		t.Error("the organizer did not receive the RSVP reply email")
 	} else {
-		cleanupRunSecondary(t, "Delete reply mail (secondary): proton-cli --profile secondary mail messages delete "+replyID,
+		cleanupRunSecondary(t, "Delete reply mail (secondary): proton --profile secondary mail messages delete "+replyID,
 			"mail", "messages", "delete", replyID)
 	}
 }
@@ -506,7 +506,7 @@ func createSeries(t *testing.T, title, start, rule string, extra ...string) stri
 	if !looksLikePairRef(ref) {
 		t.Fatalf("expected CALENDAR_ID/EVENT_ID on stdout, got %q", ref)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete series: proton-cli calendar events delete -- %s", ref),
+	cleanupRun(t, fmt.Sprintf("Delete series: proton calendar events delete -- %s", ref),
 		"calendar", "events", "delete", "--", ref)
 	return ref
 }
@@ -553,7 +553,7 @@ func TestCalendarAllDayEventAppearsInAList(t *testing.T) {
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
 		"--start", "2027-05-04", "--all-day"))
-	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton-cli calendar events delete -- %s", ref),
+	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton calendar events delete -- %s", ref),
 		"calendar", "events", "delete", "--", ref)
 
 	rows := occurrencesOf(t, title, "2027-05-04", "2027-05-04")
@@ -577,7 +577,7 @@ func TestCalendarAllDayEventLastsAWholeDay(t *testing.T) {
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
 		"--start", "2027-05-11", "--all-day"))
-	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton-cli calendar events delete -- %s", ref),
+	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton calendar events delete -- %s", ref),
 		"calendar", "events", "delete", "--", ref)
 
 	rows := occurrencesOf(t, title, "2027-05-11", "2027-05-11")
@@ -613,14 +613,14 @@ func TestCalendarListStopsAtTheLastDayNamed(t *testing.T) {
 	seriesRef := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", series,
 		"--start", "2027-05-18", "--all-day", "--rrule", "FREQ=DAILY;COUNT=5"))
-	cleanupRun(t, fmt.Sprintf("Delete all-day series: proton-cli calendar events delete -- %s", seriesRef),
+	cleanupRun(t, fmt.Sprintf("Delete all-day series: proton calendar events delete -- %s", seriesRef),
 		"calendar", "events", "delete", "--", seriesRef)
 
 	oneOff := testID() + "-leak-oneoff"
 	oneOffRef := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", oneOff,
 		"--start", "2027-05-19", "--all-day"))
-	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton-cli calendar events delete -- %s", oneOffRef),
+	cleanupRun(t, fmt.Sprintf("Delete all-day event: proton calendar events delete -- %s", oneOffRef),
 		"calendar", "events", "delete", "--", oneOffRef)
 
 	rows := occurrencesOf(t, series, "2027-05-18", "2027-05-18")
@@ -639,7 +639,7 @@ func TestCalendarListIncludesTheLastDayNamed(t *testing.T) {
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
 		"--start", "2027-06-10T23:30", "--duration", "15m"))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", ref),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", ref),
 		"calendar", "events", "delete", "--", ref)
 
 	if rows := occurrencesOf(t, title, "2027-06-10", "2027-06-10"); len(rows) != 1 {
@@ -656,7 +656,7 @@ func TestCalendarUpdatingAnEventKeepsItsReminders(t *testing.T) {
 	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", "Default", "--title", title,
 		"--start", "2027-07-01T09:00", "--duration", "30m", "--remind", "42m"))
-	cleanupRun(t, fmt.Sprintf("Delete event: proton-cli calendar events delete -- %s", ref),
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", ref),
 		"calendar", "events", "delete", "--", ref)
 
 	if got := triggersOf(t, ref); !contains(got, "-PT42M") {
@@ -867,7 +867,7 @@ func TestCalendarFutureUpdateSplitsTheSeries(t *testing.T) {
 		if got, _ := row["title"].(string); strings.Contains(got, "-later") {
 			cal, _ := row["calendar_id"].(string)
 			id, _ := row["id"].(string)
-			cleanupRun(t, fmt.Sprintf("Delete split remainder: proton-cli calendar events delete -- %s/%s", cal, id),
+			cleanupRun(t, fmt.Sprintf("Delete split remainder: proton calendar events delete -- %s/%s", cal, id),
 				"calendar", "events", "delete", "--yes", "--", cal+"/"+id)
 			break
 		}

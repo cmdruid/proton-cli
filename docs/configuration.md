@@ -2,10 +2,10 @@
 
 ## Signing in
 
-An account reaches proton-cli one way:
+An account reaches proton one way:
 
 ```bash
-proton-cli account login
+proton account login
 ```
 
 It asks for your email, password and two-factor code, attaches the account to a profile, and saves the session. Every later command acts as whichever profile it names.
@@ -18,16 +18,16 @@ A password is read from a pipe or a file, never from a flag value: argv is reada
 
 ```bash
 # a pipe
-printf '%s' "$PW" | proton-cli account login --user alice@proton.me --password-stdin
+printf '%s' "$PW" | proton account login --user alice@proton.me --password-stdin
 
 # a file
-proton-cli account login --user alice@proton.me --password-file /run/secrets/proton
+proton account login --user alice@proton.me --password-file /run/secrets/proton
 ```
 
 `account login` performs the exchange that attaches an account to a profile. The others reach an endpoint Proton guards behind an elevated session, which it grants only for another one - today `calendar settings calendars delete` and `mail settings autoreply set`:
 
 ```bash
-printf '%s' "$PW" | proton-cli calendar settings calendars delete Work --password-stdin
+printf '%s' "$PW" | proton calendar settings calendars delete Work --password-stdin
 ```
 
 `--password-file` is usually the one to reach for on a machine, since systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all hand you a path already.
@@ -35,7 +35,7 @@ printf '%s' "$PW" | proton-cli calendar settings calendars delete Work --passwor
 `--password-stdin` takes standard input for the password and nothing else, so it cannot be combined with a `-` argument that wants the same stream:
 
 ```console
-$ printf '%s' "$PW" | proton-cli --password-stdin mail messages send --body - ...
+$ printf '%s' "$PW" | proton --password-stdin mail messages send --body - ...
 Error: --password-stdin and --body - both read standard input, which can only be read once.
 Try:   pass the password with --password-file instead
 ```
@@ -43,8 +43,8 @@ Try:   pass the password with --password-file instead
 Signing in again as the same account changes nothing, so an unattended job can run it ahead of its real work and recover on its own from a session that expired or was revoked:
 
 ```bash
-proton-cli account login --user "$ACCOUNT" --password-file "$CRED"
-proton-cli drive items upload backup.zst /backups
+proton account login --user "$ACCOUNT" --password-file "$CRED"
+proton drive items upload backup.zst /backups
 ```
 
 ## Sessions
@@ -59,8 +59,8 @@ Two exceptions:
 - A session revoked or expired elsewhere means signing in again.
 
 ```bash
-proton-cli account logout             # forget the session here
-proton-cli account logout --revoke    # and invalidate it at Proton
+proton account logout             # forget the session here
+proton account logout --revoke    # and invalidate it at Proton
 ```
 
 Revoking is what makes a leaked copy of the file worthless: the sealed key password cannot be opened without the session. See [Security](../SECURITY.md).
@@ -70,37 +70,37 @@ Revoking is what makes a leaked copy of the file worthless: the sealed key passw
 A profile is a name with an account behind it. Each keeps its own session file, so a personal and a work account never mix.
 
 ```bash
-proton-cli account login --profile work
-proton-cli --profile work mail messages list
+proton account login --profile work
+proton --profile work mail messages list
 ```
 
 To see what is signed in here - answered from disk, with no API call:
 
 ```bash
-proton-cli account profiles list
+proton account profiles list
 ```
 
 Or make a profile the default for the shell:
 
 ```bash
 export PROTON_PROFILE=work
-proton-cli mail messages list
+proton mail messages list
 ```
 
 A profile nobody signed in acts as nobody, and says so before it reaches the network:
 
 ```console
-$ proton-cli --profile work mail messages list
+$ proton --profile work mail messages list
 Error: Profile "work" is not signed in.
-Try:   proton-cli account login --profile work
+Try:   proton account login --profile work
 ```
 
 Pointing a profile at a different account is a fine thing to want; it just has to be said out loud, since the name means that account everywhere else:
 
 ```console
-$ proton-cli account login --profile work --user someone@else.com
+$ proton account login --profile work --user someone@else.com
 Error: Profile "work" is signed in as alice@company.com.
-Try:   proton-cli account logout --profile work
+Try:   proton account logout --profile work
 ```
 
 ## Environment variables
@@ -141,4 +141,4 @@ Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton
 
 Five flags have a single-letter form, and they are the five you type most: `-p`, `-o`, `-n`, `-q`, `-y`. They cluster, so `-qn` is a quiet dry run. The letters are global and no subcommand may take one, so `-p` is the profile everywhere and never something else.
 
-`--api-url URL` points the CLI at a different API host. It works but is hidden from `--help`, because it is for developing proton-cli rather than for using it.
+`--api-url URL` points the CLI at a different API host. It works but is hidden from `--help`, because it is for developing proton rather than for using it.

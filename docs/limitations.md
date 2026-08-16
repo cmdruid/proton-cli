@@ -1,6 +1,6 @@
 # Limitations
 
-proton-cli aims for parity with what the Proton web clients let you do. Some things it will never do, because Proton's platform doesn't allow it; others aren't built yet.
+proton aims for parity with what the Proton web clients let you do. Some things it will never do, because Proton's platform doesn't allow it; others aren't built yet.
 
 ## Platform constraints
 
@@ -20,7 +20,7 @@ Proton asks for your password again before some operations, even though you are 
 
 ### Signing in needs an authenticator app, not a security key
 
-FIDO2 sign-in speaks WebAuthn, which needs a browser. An account whose only second factor is a security key cannot be used from proton-cli; adding a TOTP authenticator makes it work.
+FIDO2 sign-in speaks WebAuthn, which needs a browser. An account whose only second factor is a security key cannot be used from proton; adding a TOTP authenticator makes it work.
 
 ### CAPTCHAs need a display
 
@@ -32,11 +32,11 @@ Proton exposes no endpoint, to any client, that ingests a message file into an e
 
 ### An answer to an invitation covers the whole series
 
-Proton lets you answer one occurrence of a recurring invitation differently from the rest, by storing a personal copy of that occurrence. proton-cli does not: `calendar events respond` refuses a reference that names an occurrence and tells you to answer the series.
+Proton lets you answer one occurrence of a recurring invitation differently from the rest, by storing a personal copy of that occurrence. proton does not: `calendar events respond` refuses a reference that names an occurrence and tells you to answer the series.
 
 ### A recurring event needs a zone that can be named
 
-An event is anchored to an IANA time zone so that a series keeps its wall-clock time when the clocks change. proton-cli reads that zone from `TZ`, from `/etc/localtime` or from `/etc/timezone`, and falls back to the zone your Proton calendar settings are drawn in. On a host where none of those answers - a Windows machine with no `TZ` set and no calendar setting - a new event is stored as a plain UTC instant instead, and a recurring one will drift by an hour across a daylight-saving change. Pass `--zone Europe/Vienna` to be explicit.
+An event is anchored to an IANA time zone so that a series keeps its wall-clock time when the clocks change. proton reads that zone from `TZ`, from `/etc/localtime` or from `/etc/timezone`, and falls back to the zone your Proton calendar settings are drawn in. On a host where none of those answers - a Windows machine with no `TZ` set and no calendar setting - a new event is stored as a plain UTC instant instead, and a recurring one will drift by an hour across a daylight-saving change. Pass `--zone Europe/Vienna` to be explicit.
 
 ### An update is not signed by a key you can verify offline
 
@@ -48,6 +48,6 @@ Export decrypts, so the files it writes are readable by anything. The original `
 
 ## Out of scope
 
-proton-cli mirrors the Proton web clients for Mail, Drive, Calendar, Pass, and Contacts. Other Proton products (VPN, Wallet, Docs, Meet, Lumo, Authenticator) are not covered, and neither are endpoints that exist in the API but have no equivalent action in a web client.
+proton mirrors the Proton web clients for Mail, Drive, Calendar, Pass, and Contacts. Other Proton products (VPN, Wallet, Docs, Meet, Lumo, Authenticator) are not covered, and neither are endpoints that exist in the API but have no equivalent action in a web client.
 
-For anything the commands don't reach, [`proton-cli api`](commands/api.md) sends raw authenticated requests to any endpoint.
+For anything the commands don't reach, [`proton api`](commands/api.md) sends raw authenticated requests to any endpoint.

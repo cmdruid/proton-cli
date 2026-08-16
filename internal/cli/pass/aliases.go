@@ -97,7 +97,7 @@ func aliasesCreateCmd() *cobra.Command {
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if prefix == "" {
 				return kit.Fail("An alias needs a prefix.").
-					Hint("--prefix shop", "proton-cli pass aliases options")
+					Hint("--prefix shop", "proton pass aliases options")
 			}
 			shareID, err := resolveVault(c, vault)
 			if err != nil {

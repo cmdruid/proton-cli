@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Resolves the colour names proton-cli emits into the shades a Proton-themed
+# Resolves the colour names proton emits into the shades a Proton-themed
 # terminal would draw them in, so the README panels are photographed in Proton's
 # colours rather than in somebody else's.
 #
 #   bash record.sh | bash theme.sh carbon > dark.ansi
 #
-# proton-cli names colours and leaves the shade to the terminal, which is what
+# proton names colours and leaves the shade to the terminal, which is what
 # lets it sit inside whatever theme the reader already uses. A recording
 # therefore carries names, not colours, and something has to play the part of
 # the terminal before freeze can draw it: freeze has a palette of its own, a

@@ -1,6 +1,6 @@
 # How it works
 
-proton-cli talks to the same API as the Proton web apps, with the same authentication and the same encryption. Nothing proxies your data, and no server other than Proton's sees it.
+proton talks to the same API as the Proton web apps, with the same authentication and the same encryption. Nothing proxies your data, and no server other than Proton's sees it.
 
 ## Logging in
 
@@ -14,7 +14,7 @@ Proton may occasionally require human verification during step 2. See [Human ver
 
 ## The key hierarchy
 
-Proton's encryption is a tree, and proton-cli walks the same one as the web client, using [gopenpgp](https://github.com/ProtonMail/gopenpgp):
+Proton's encryption is a tree, and proton walks the same one as the web client, using [gopenpgp](https://github.com/ProtonMail/gopenpgp):
 
 ```
 key password
@@ -58,7 +58,7 @@ The endpoint shapes are generated from Proton's own open-source [web client](htt
 
 Proton guards its most destructive endpoints behind an elevated session scope. A request that needs one and hasn't got it comes back refused, and the client is expected to prove a human is present: re-run SRP against a scope-granting endpoint, retry the request, then drop the scope again.
 
-proton-cli handles that in the transport layer, the way the web clients do, rather than in each command. So no command has to know which operations are guarded - it runs, the server asks, your password is requested once, the request is retried, and the elevation is dropped immediately afterwards.
+proton handles that in the transport layer, the way the web clients do, rather than in each command. So no command has to know which operations are guarded - it runs, the server asks, your password is requested once, the request is retried, and the elevation is dropped immediately afterwards.
 
 Both halves of SRP are verified, on the initial sign-in and on every elevation: the server has to prove it knows your verifier just as you prove you know your password.
 
@@ -66,4 +66,4 @@ Both halves of SRP are verified, on the initial sign-in and on every elevation: 
 
 A TOTP code is asked for only when the account actually has one enabled, so a code is never wasted on a guess.
 
-Security keys (FIDO2/WebAuthn) need a browser, so proton-cli cannot sign in with one.
+Security keys (FIDO2/WebAuthn) need a browser, so proton cannot sign in with one.

@@ -26,7 +26,7 @@
           src = self;
           vendorHash = "sha256-VjLuSaHW7C1Ar84vusMRjBWVikgVCdLBwd+OFT7ufiQ=";
 
-          subPackages = [ "." ];
+          subPackages = [ "cmd/proton" ];
           tags = [ "embed_hv" ];
 
           ldflags = [
@@ -55,18 +55,26 @@
             preBuild = null;
           };
 
+          # The program is `proton`, with `proton-cli` beside it as a second
+          # name. Fish autoloads a completion file named after the command
+          # being typed, so the alias gets one that borrows the real one;
+          # bash and zsh are told about both names by the script itself.
           postInstall = ''
+            ln -s proton $out/bin/proton-cli
+            installShellCompletion --cmd proton \
+              --bash <($out/bin/proton completion bash) \
+              --fish <($out/bin/proton completion fish) \
+              --zsh  <($out/bin/proton completion zsh)
             installShellCompletion --cmd proton-cli \
-              --bash <($out/bin/proton-cli completion bash) \
-              --fish <($out/bin/proton-cli completion fish) \
-              --zsh  <($out/bin/proton-cli completion zsh)
+              --bash <($out/bin/proton completion bash) \
+              --fish <(echo 'complete -c proton-cli -w proton')
           '';
 
           meta = {
             description = "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts";
             homepage = "https://github.com/roman-16/proton-cli";
             license = pkgs.lib.licenses.mit;
-            mainProgram = "proton-cli";
+            mainProgram = "proton";
             platforms = pkgs.lib.platforms.linux ++ pkgs.lib.platforms.darwin;
           };
         };
@@ -75,7 +83,7 @@
       apps = forAllSystems (pkgs: {
         default = {
           type = "app";
-          program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/proton-cli";
+          program = "${self.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/proton";
           meta.description = "Unofficial CLI for Proton Mail, Drive, Calendar, Pass and Contacts";
         };
       });

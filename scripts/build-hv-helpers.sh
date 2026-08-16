@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the proton-cli-hv helper binary for ONE target platform and
+# Builds the proton-hv helper binary for ONE target platform and
 # places it in internal/hv/assets/, ready for `//go:embed` by the
 # main build (which uses `-tags embed_hv`).
 #
@@ -37,7 +37,7 @@
 #   HV_OUT_DIR    = optional; default = internal/hv/assets
 #
 # Outputs:
-#   internal/hv/assets/proton-cli-hv-<goos>-<goarch>[.exe]
+#   internal/hv/assets/proton-hv-<goos>-<goarch>[.exe]
 #
 # Linux build deps (each Linux runner installs separately):
 #   libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config build-essential
@@ -63,7 +63,7 @@ build_one() {
     if [[ "$goos" == "windows" ]]; then
         suffix=".exe"
     fi
-    local out="$OUT_DIR/proton-cli-hv-${goos}-${goarch}${suffix}"
+    local out="$OUT_DIR/proton-hv-${goos}-${goarch}${suffix}"
     echo "==> building helper $goos/$goarch -> $out"
 
     # Reset any cross-arch CC/CGO flags from a previous iteration so
@@ -107,7 +107,7 @@ build_one() {
             -trimpath \
             -ldflags '-s -w' \
             -o "$out" \
-            ./cmd/proton-cli-hv/
+            ./cmd/proton-hv/
     ls -la "$out"
 }
 
@@ -129,4 +129,4 @@ esac
 
 echo ""
 echo "Helper assets in $OUT_DIR:"
-ls -la "$OUT_DIR"/proton-cli-hv-*
+ls -la "$OUT_DIR"/proton-hv-*

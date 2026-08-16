@@ -4,6 +4,9 @@
 // matching @roman-16/proton-cli-<platform> package's native binary. There
 // is no postinstall, so it also works under `npm install --ignore-scripts`.
 //
+// The package is the project, proton-cli. The command it puts on PATH is
+// `proton`, with `proton-cli` as a second bin entry onto the same shim.
+//
 // Env:
 //   VERSION  release tag/version, a leading "v" is stripped   (required)
 //   BIN_DIR  directory holding the release binaries           (default: npm-bin)
@@ -15,6 +18,7 @@ import { join } from "node:path";
 
 const SCOPE = "roman-16";
 const NAME = "proton-cli";
+const BIN = "proton";
 const REPO = "https://github.com/roman-16/proton-cli";
 const DESCRIPTION =
   "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.";
@@ -41,11 +45,11 @@ const prerelease = version.includes("-");
 
 // npm platform key -> { release asset, binary name inside the package }
 const PLATFORMS = {
-  "linux-x64": { asset: "proton-cli_linux_amd64", bin: "proton-cli" },
-  "linux-arm64": { asset: "proton-cli_linux_arm64", bin: "proton-cli" },
-  "darwin-x64": { asset: "proton-cli_darwin_amd64", bin: "proton-cli" },
-  "darwin-arm64": { asset: "proton-cli_darwin_arm64", bin: "proton-cli" },
-  "win32-x64": { asset: "proton-cli_windows_amd64.exe", bin: "proton-cli.exe" },
+  "linux-x64": { asset: `${NAME}_linux_amd64`, bin: BIN },
+  "linux-arm64": { asset: `${NAME}_linux_arm64`, bin: BIN },
+  "darwin-x64": { asset: `${NAME}_darwin_amd64`, bin: BIN },
+  "darwin-arm64": { asset: `${NAME}_darwin_arm64`, bin: BIN },
+  "win32-x64": { asset: `${NAME}_windows_amd64.exe`, bin: `${BIN}.exe` },
 };
 
 const shim = `#!/usr/bin/env node
@@ -61,15 +65,15 @@ const PKGS = {
 const key = process.platform + "-" + process.arch;
 const pkg = PKGS[key];
 if (!pkg) {
-  console.error("${NAME}: no prebuilt binary for " + key + ". See ${REPO}");
+  console.error("${BIN}: no prebuilt binary for " + key + ". See ${REPO}");
   process.exit(1);
 }
-const exe = process.platform === "win32" ? "${NAME}.exe" : "${NAME}";
+const exe = process.platform === "win32" ? "${BIN}.exe" : "${BIN}";
 let binPath;
 try {
   binPath = require.resolve(pkg + "/bin/" + exe);
 } catch {
-  console.error("${NAME}: platform package " + pkg + " is not installed. See ${REPO}");
+  console.error("${BIN}: platform package " + pkg + " is not installed. See ${REPO}");
   process.exit(1);
 }
 const res = spawnSync(binPath, process.argv.slice(2), { stdio: "inherit" });
@@ -119,8 +123,8 @@ for (const [key, { asset, bin }] of Object.entries(PLATFORMS)) {
 
 const rootDir = join(work, "root");
 mkdirSync(join(rootDir, "bin"), { recursive: true });
-writeFileSync(join(rootDir, "bin", `${NAME}.js`), shim);
-chmodSync(join(rootDir, "bin", `${NAME}.js`), 0o755);
+writeFileSync(join(rootDir, "bin", `${BIN}.js`), shim);
+chmodSync(join(rootDir, "bin", `${BIN}.js`), 0o755);
 writeFileSync(join(rootDir, "README.md"), npmReadme);
 cpSync("LICENSE", join(rootDir, "LICENSE"));
 writeJSON(join(rootDir, "package.json"), {
@@ -130,7 +134,7 @@ writeJSON(join(rootDir, "package.json"), {
   license: "MIT",
   homepage: REPO,
   repository: { type: "git", url: `git+${REPO}.git` },
-  bin: { [NAME]: `bin/${NAME}.js` },
+  bin: { [BIN]: `bin/${BIN}.js`, [NAME]: `bin/${BIN}.js` },
   files: ["bin"],
   optionalDependencies,
 });

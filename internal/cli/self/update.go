@@ -22,13 +22,13 @@ func UpdateCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "update [VERSION]",
 		Aliases: []string{"upgrade", "self-update"},
-		Short:   "Update proton-cli to the latest release",
-		Long: `Replace this proton-cli binary in place with the latest GitHub release
+		Short:   "Update proton to the latest release",
+		Long: `Replace this proton binary in place with the latest GitHub release
 (or a specific version), verifying the download against the published
 SHA-256 checksums.
 
 Only a curl-script install or a manually downloaded binary can update
-itself. If proton-cli was installed with a package manager (apt, dnf,
+itself. If proton was installed with a package manager (apt, dnf,
 apk, Homebrew, winget, npm, Nix), update it with that package manager.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
@@ -62,7 +62,7 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 		v, err := selfmanage.LatestVersion(c.Ctx, client)
 		if err != nil {
 			return kit.Fail("Could not reach GitHub to find the latest release: %v", err).
-				Hint("check your connection, or name a version: proton-cli update 1.9.11").
+				Hint("check your connection, or name a version: proton update 1.9.11").
 				Exit(5)
 		}
 		latest = v
@@ -74,17 +74,17 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 			return kit.Object(c, updateStatus{Current: version, Latest: latest, UpdateAvailable: newer})
 		}
 		if newer {
-			c.Note("proton-cli %s → %s available.", version, latest)
-			c.Note("Run `proton-cli update` to install it.")
+			c.Note("proton %s → %s available.", version, latest)
+			c.Note("Run `proton update` to install it.")
 		} else {
-			c.Note("proton-cli is up to date (%s).", version)
+			c.Note("proton is up to date (%s).", version)
 		}
 		return nil
 	}
 
 	if version == "dev" && target == "" && !reinstall {
 		return kit.Fail("This is a development build, so there is no version to compare against.").
-			Hint("proton-cli update 1.9.11",
+			Hint("proton update 1.9.11",
 				"curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh")
 	}
 
@@ -92,7 +92,7 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 		if u.Format.Machine() {
 			return kit.Object(c, updateStatus{Current: version, Latest: latest, UpdateAvailable: false})
 		}
-		c.Note("proton-cli is already up to date (%s).", version)
+		c.Note("proton is already up to date (%s).", version)
 		return nil
 	}
 
@@ -105,7 +105,7 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 	}
 
 	if err := kit.Mutate(c, ui.ResultSpec{
-		Action: ui.Updated, Count: 1, Name: "proton-cli",
+		Action: ui.Updated, Count: 1, Name: kit.Program,
 		Detail: version + " → " + latest,
 		Extra:  map[string]any{"current": latest, "latest": latest, "update_available": false},
 	}, func() error {
@@ -117,6 +117,9 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 		if err := selfmanage.Apply(bin, exe); err != nil {
 			return selfManageError(err, exe, actionUpdate)
 		}
+		// An install answers to both names, so writing a release into one is
+		// only half of it until the other is there beside it.
+		linkAlias(c, exe)
 		return nil
 	}); err != nil {
 		return err

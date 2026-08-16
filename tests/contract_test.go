@@ -115,7 +115,7 @@ func TestOutputJSONParsesEverywhere(t *testing.T) {
 // ── from stdout_id_test.go ──
 // The stdout=ID convention: every create command writes just the new ID on
 // stdout (one line, no JSON) and a "✓ …" message on stderr. This lets scripts
-// do ID=$(proton-cli foo create ...).
+// do ID=$(proton foo create ...).
 
 func assertBareID(t *testing.T, stdout, where string) string {
 	t.Helper()
@@ -138,7 +138,7 @@ func TestStdoutIDMailLabelCreate(t *testing.T) {
 	stdout, stderr := runOKStderr(t, "mail", "settings", "labels", "create",
 		"--name", name, "--color", "#8080FF")
 	id := assertBareID(t, stdout, "labels create")
-	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete label: proton mail settings labels delete -- %s", id),
 		"mail", "settings", "labels", "delete", "--", id)
 	if !strings.Contains(stderr, "✓") {
 		t.Errorf("expected ✓ on stderr, got: %q", stderr)
@@ -153,7 +153,7 @@ func TestStdoutIDMailFilterCreate(t *testing.T) {
 		"--name", name,
 		"--sieve", `require ["fileinto"]; if header :contains "Subject" "nope-`+testID()+`" { fileinto "Archive"; }`)
 	id := assertBareID(t, stdout, "filters create")
-	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail settings filters delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete -- %s", id),
 		"mail", "settings", "filters", "delete", "--", id)
 }
 
@@ -164,7 +164,7 @@ func TestStdoutIDCalendarCreate(t *testing.T) {
 	stdout, _ := runOKStderr(t, "calendar", "settings", "calendars", "create",
 		"--name", name, "--color", "#8080FF")
 	id := assertBareID(t, stdout, "calendars create")
-	cleanupRun(t, fmt.Sprintf("Delete calendar: proton-cli calendar settings calendars delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete calendar: proton calendar settings calendars delete -- %s", id),
 		"calendar", "settings", "calendars", "delete", "--", id)
 }
 
@@ -174,7 +174,7 @@ func TestStdoutIDContactCreate(t *testing.T) {
 	stdout, _ := runOKStderr(t, "contacts", "create",
 		"--name", name, "--email", "t@x.invalid")
 	id := assertBareID(t, stdout, "contacts create")
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete -- %s", id),
 		"contacts", "delete", "--", id)
 }
 
@@ -184,7 +184,7 @@ func TestStdoutIDVaultCreate(t *testing.T) {
 	name := testID() + "-stid-vault"
 	id := createVault(t, name)
 	assertBareID(t, id, "vaults create")
-	cleanupRun(t, fmt.Sprintf("Delete vault: proton-cli pass vaults delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete vault: proton pass vaults delete -- %s", id),
 		"pass", "vaults", "delete", "--", id)
 }
 
@@ -195,7 +195,7 @@ func TestStdoutIDPassItemCreate(t *testing.T) {
 		"--type", "note", "--name", name, "--note", "x")
 	id := assertBareID(t, stdout, "pass items create")
 	_ = id
-	cleanupRun(t, fmt.Sprintf("Delete pass item: proton-cli pass items delete %s", name),
+	cleanupRun(t, fmt.Sprintf("Delete pass item: proton pass items delete %s", name),
 		"pass", "items", "delete", name)
 }
 
@@ -209,7 +209,7 @@ func TestStdoutIDCalendarEventCreate(t *testing.T) {
 		"--start", start,
 		"--duration", "30m")
 	_ = assertBareID(t, stdout, "events create")
-	cleanupRun(t, fmt.Sprintf("Delete event by title: proton-cli calendar events delete %q", title),
+	cleanupRun(t, fmt.Sprintf("Delete event by title: proton calendar events delete %q", title),
 		"calendar", "events", "delete", title)
 }
 
@@ -352,7 +352,7 @@ func TestDeleteWithoutConsentRefusesAndChangesNothing(t *testing.T) {
 	lease(t, labelSlot)
 	name := testID() + "-consent"
 	runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF")
-	cleanupRun(t, "Delete: proton-cli mail settings labels delete "+name,
+	cleanupRun(t, "Delete: proton mail settings labels delete "+name,
 		"mail", "settings", "labels", "delete", name)
 
 	_, stderr, code := run(t, "mail", "settings", "labels", "delete", name)
@@ -376,7 +376,7 @@ func TestTrashOfANamedReferenceNeedsNoConsent(t *testing.T) {
 	lease(t, driveTrash)
 	path := "/" + testID() + "-consent-trash"
 	runOK(t, "drive", "folders", "create", path)
-	cleanupRun(t, "Delete: proton-cli drive items delete "+path,
+	cleanupRun(t, "Delete: proton drive items delete "+path,
 		"drive", "items", "delete", path)
 	// Taken before the trash, because a trashed item has no path any more - and
 	// its name arrives encrypted, so the ID is the only way back to this exact

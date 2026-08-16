@@ -4,7 +4,7 @@ Proton's anti-abuse system sometimes asks for a CAPTCHA at login, usually on a f
 
 ## What happens
 
-proton-cli opens a small window with Proton's CAPTCHA in it. Solve it, and the command you ran retries automatically. There is nothing extra to install.
+proton opens a small window with Proton's CAPTCHA in it. Solve it, and the command you ran retries automatically. There is nothing extra to install.
 
 ## Requirements
 

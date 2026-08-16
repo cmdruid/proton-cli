@@ -4,5 +4,4 @@ completions/
 dist/
 internal/hv/assets/
 .env
-proton-cli
-result
+/proton

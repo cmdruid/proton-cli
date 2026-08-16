@@ -17,7 +17,7 @@ const tryLabel = "Try:   "
 // the problem, then an indented "Try:" block when the error knows a remedy.
 //
 //	Error: That ID is a conversation, not a message.
-//	Try:   proton-cli mail conversations get 5bH2mQxK
+//	Try:   proton mail conversations get 5bH2mQxK
 //
 // Wrapped context ("upload x: open y: no such file") is left intact - it is the
 // chain of what was being attempted, which is exactly what a reader needs.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-All tests are **integration tests** that run the real `proton-cli` binary against the live Proton API. There are no mocks - every test creates real data, verifies it, and cleans up.
+All tests are **integration tests** that run the real `proton` binary against the live Proton API. There are no mocks - every test creates real data, verifies it, and cleans up.
 
 Unit tests live alongside the code they test (e.g. `internal/mailtext/html_test.go`).
 
@@ -32,7 +32,7 @@ The suite requires all four of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_
 
 The suite creates, mutates and deletes real data, so it runs on two accounts kept for that and nothing else. Most tests act as **`primary`**; the handful that genuinely need two Proton users bring in **`secondary`**.
 
-These are the harness's own variables, not the CLI's: proton-cli takes an account from a signed-in profile, which `TestMain` establishes. The `PROTON_CLI_TEST_` prefix keeps them clear of anything the binary reads.
+These are the harness's own variables, not the CLI's: proton takes an account from a signed-in profile, which `TestMain` establishes. The `PROTON_CLI_TEST_` prefix keeps them clear of anything the binary reads.
 
 `TestMain` signs both profiles in before any test runs, over stdin, and writes each password to a `0600` file for the rest of the run. The file is needed because a session cannot carry elevation: Proton re-authenticates over SRP for its guarded operations, `calendar settings calendars delete` among them, and that needs the password itself - the key blob sealed at login is a one-way derivation of it. `account login` is idempotent, so a run that reuses an existing session pays nothing.
 
@@ -148,7 +148,7 @@ func TestDriveItemsFoo(t *testing.T) {
     // Arrange
     folder := "/" + testID() + "-foo"
     runOK(t, "drive", "folders", "create", folder)
-    cleanupRun(t, fmt.Sprintf("Delete: proton-cli drive items delete %s", folder),
+    cleanupRun(t, fmt.Sprintf("Delete: proton drive items delete %s", folder),
         "drive", "items", "delete", folder)
 
     // Act
@@ -171,7 +171,7 @@ func TestDriveItemsFoo(t *testing.T) {
   ╔══════════════════════════════════════════════════════════════╗
   ║  ⚠️  CLEANUP FAILED - MANUAL ACTION REQUIRED                 ║
   ╠══════════════════════════════════════════════════════════════╣
-  ║  Delete folder: proton-cli drive items delete /test-xxx      ║
+  ║  Delete folder: proton drive items delete /test-xxx      ║
   ║  Error: exit 1: ...                                          ║
   ╚══════════════════════════════════════════════════════════════╝
   ```
@@ -257,7 +257,7 @@ id := strings.TrimSpace(stdout)
 // id is a bare 88-char Proton ID; stderr carried the human message.
 ```
 
-This makes shell capture work: `ID=$(proton-cli ... create ...)`.
+This makes shell capture work: `ID=$(proton ... create ...)`.
 
 ### Exit codes
 

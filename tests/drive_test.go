@@ -25,7 +25,7 @@ func TestDriveItemsList(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-list"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete %s", folder),
 		"drive", "items", "delete", folder)
 
 	stdout := runOK(t, "drive", "items", "list")
@@ -57,7 +57,7 @@ func TestDriveItemsInfo(t *testing.T) {
 	_ = os.WriteFile(src, []byte("info-payload-12345"), 0644)
 
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 	runOK(t, "drive", "items", "upload", src, folder)
 
@@ -88,7 +88,7 @@ func TestDriveItemsInfoFolder(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-infodir"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	info := runJSON(t, "drive", "items", "get", folder)
@@ -108,7 +108,7 @@ func TestDriveItemsUploadDownload(t *testing.T) {
 	_ = os.WriteFile(src, []byte(want), 0644)
 
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	runOK(t, "drive", "items", "upload", src, folder)
@@ -127,7 +127,7 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-stdin"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	payload := []byte("piped payload\n")
@@ -159,7 +159,7 @@ func TestDriveItemsUploadFromStdinNamed(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-stdin-named"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	dest := folder + "/piped.txt"
@@ -217,7 +217,7 @@ func TestDriveItemsDownloadBehaviors(t *testing.T) {
 		t.Fatal(err)
 	}
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 	runOK(t, "drive", "items", "upload", aSrc, folder)
 	runOK(t, "drive", "items", "upload", pSrc, folder)
@@ -272,7 +272,7 @@ func TestDriveItemsUploadRecursive(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(tree, "sub2", "deep", "d.txt"), []byte("D"), 0644)
 
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	runOK(t, "drive", "items", "upload", "--recursive", tree, folder)
@@ -306,7 +306,7 @@ func TestDriveItemsUploadMultiBlock(t *testing.T) {
 	hWant := sha256.Sum256(big)
 
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	runOK(t, "drive", "items", "upload", src, folder)
@@ -340,7 +340,7 @@ func TestDriveItemsUploadManyBlocks(t *testing.T) {
 	hWant := sha256.Sum256(big)
 
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	runOK(t, "drive", "items", "upload", src, folder)
@@ -365,7 +365,7 @@ func TestDriveItemsRename(t *testing.T) {
 	tmp := t.TempDir()
 	_ = os.WriteFile(filepath.Join(tmp, "orig.txt"), []byte("renameme"), 0644)
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 	runOK(t, "drive", "items", "upload", filepath.Join(tmp, "orig.txt"), folder)
 
@@ -399,9 +399,9 @@ func TestDriveItemsMove(t *testing.T) {
 
 	runOK(t, "drive", "folders", "create", src)
 	runOK(t, "drive", "folders", "create", dst)
-	cleanupRun(t, fmt.Sprintf("Delete src: proton-cli drive items delete --permanent %s", src),
+	cleanupRun(t, fmt.Sprintf("Delete src: proton drive items delete --permanent %s", src),
 		"drive", "items", "delete", src)
-	cleanupRun(t, fmt.Sprintf("Delete dst: proton-cli drive items delete --permanent %s", dst),
+	cleanupRun(t, fmt.Sprintf("Delete dst: proton drive items delete --permanent %s", dst),
 		"drive", "items", "delete", dst)
 	runOK(t, "drive", "items", "upload", filepath.Join(tmp, "f.txt"), src)
 
@@ -433,7 +433,7 @@ func TestDriveItemsDeleteAndTrashRestore(t *testing.T) {
 	lease(t, driveTrash)
 	folder := "/" + testID() + "-trash"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Final delete: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Final delete: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	// Noted before the trash: a trashed item has no path any more, and its name
@@ -667,7 +667,7 @@ func uploadedTwice(t *testing.T, content string) (folder, src string) {
 	t.Helper()
 	folder = "/" + testID() + "-conflict"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	src = filepath.Join(t.TempDir(), "note.txt")
@@ -746,7 +746,7 @@ func TestDriveItemsUploadTreeRefusesAFileWhereAFolderGoes(t *testing.T) {
 	t.Parallel()
 	dest := "/" + testID() + "-mismatch"
 	runOK(t, "drive", "folders", "create", dest)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", dest),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", dest),
 		"drive", "items", "delete", dest)
 	runOK(t, "drive", "folders", "create", dest+"/project")
 
@@ -772,7 +772,7 @@ func uploadedTree(t *testing.T) (dest, local string) {
 	t.Helper()
 	dest = "/" + testID() + "-tree"
 	runOK(t, "drive", "folders", "create", dest)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", dest),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", dest),
 		"drive", "items", "delete", dest)
 	local = treeOnDisk(t)
 	runOK(t, "drive", "items", "upload", "--recursive", local, dest)
@@ -851,7 +851,7 @@ func TestDriveBatchDeletePatternDryRun(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(tmp, n), []byte("x"), 0644)
 	}
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 	for _, n := range []string{"a.log", "b.log", "keep.txt"} {
 		runOK(t, "drive", "items", "upload", filepath.Join(tmp, n), folder)
@@ -890,7 +890,7 @@ func TestDriveFoldersCreate(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-folder"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	top := runJSONArray(t, "drive", "items", "list")
@@ -911,10 +911,10 @@ func TestDriveItemsCopy(t *testing.T) {
 	base := "/" + testID() + "-copy-src"
 	dest := "/" + testID() + "-copy-dst"
 	runOK(t, "drive", "folders", "create", base)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", base),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", base),
 		"drive", "items", "delete", base)
 	runOK(t, "drive", "folders", "create", dest)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", dest),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", dest),
 		"drive", "items", "delete", dest)
 
 	dir := t.TempDir()
@@ -942,7 +942,7 @@ func TestDriveItemsRevisions(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-rev"
 	runOK(t, "drive", "folders", "create", folder)
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli drive items delete --permanent %s", folder),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	dir := t.TempDir()
@@ -1010,7 +1010,7 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 	if photoID == "" {
 		t.Fatal("uploaded photo did not appear in the listing")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete photo: proton-cli drive photos delete %s", photoID),
+	cleanupRun(t, fmt.Sprintf("Delete photo: proton drive photos delete %s", photoID),
 		"drive", "photos", "delete", "--", photoID)
 
 	// Download round-trip via the unified model: explicit file, then output-dir.
@@ -1047,7 +1047,7 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 	if albumNameSeen != albumName {
 		t.Errorf("album name: got %q want %q", albumNameSeen, albumName)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete album: proton-cli drive photos albums delete %s", albumID),
+	cleanupRun(t, fmt.Sprintf("Delete album: proton drive photos albums delete %s", albumID),
 		"drive", "photos", "albums", "delete", "--", albumID)
 
 	// Add the photo to the album (node-passphrase re-wrap), verify, remove.
@@ -1126,7 +1126,7 @@ func TestDrivePhotosTrash(t *testing.T) {
 	if photoID == "" {
 		t.Fatal("uploaded photo did not appear in the listing")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete photo: proton-cli drive photos delete %s", photoID),
+	cleanupRun(t, fmt.Sprintf("Delete photo: proton drive photos delete %s", photoID),
 		"drive", "photos", "delete", "--", photoID)
 
 	runOK(t, "drive", "photos", "trash", "--", photoID)
@@ -1165,7 +1165,7 @@ func TestDrivePhotosFavoriteRoundTrip(t *testing.T) {
 	if photoID == "" {
 		t.Fatal("uploaded photo did not appear in the listing")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete photo: proton-cli drive photos delete %s", photoID),
+	cleanupRun(t, fmt.Sprintf("Delete photo: proton drive photos delete %s", photoID),
 		"drive", "photos", "delete", "--", photoID)
 
 	// --dry-run must not favorite.

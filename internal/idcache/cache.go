@@ -111,7 +111,7 @@ func (c *Cache) Resolve(prefix string) (string, error) {
 }
 
 // Clear removes the cache file. Used by tests; surfaced for a future
-// `proton-cli cache clear` command.
+// `proton cache clear` command.
 func (c *Cache) Clear() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

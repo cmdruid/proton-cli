@@ -266,7 +266,7 @@ func (u *UI) encode(v any) error {
 }
 
 // Raw writes pre-formatted JSON bytes through, re-encoding for YAML. It exists
-// for `proton-cli api`, the one command whose contract is Proton's own shape.
+// for `proton api`, the one command whose contract is Proton's own shape.
 //
 // Numbers are decoded via json.Number so YAML keeps integer fields integral
 // rather than rendering 1000 as 1000.0.

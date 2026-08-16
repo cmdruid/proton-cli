@@ -65,7 +65,7 @@ func autoreplySetCmd() *cobra.Command {
 			"  monthly    1:09:00            a day of the month and time\n" +
 			"  permanent  -                  no bounds\n\n" +
 			"Proton sends every auto-reply with the subject \"Auto\" and offers no way to\n" +
-			"change it, so neither does proton-cli. Auto-reply is a paid feature.",
+			"change it, so neither does proton. Auto-reply is a paid feature.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if err := reauth.Supply(c); err != nil {

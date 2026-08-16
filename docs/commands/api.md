@@ -1,14 +1,14 @@
 # Raw API
 
-`proton-cli api` sends an authenticated request to any Proton endpoint, using the session you already have. It's the escape hatch for anything the high-level commands don't cover.
+`proton api` sends an authenticated request to any Proton endpoint, using the session you already have. It's the escape hatch for anything the high-level commands don't cover.
 
 ```bash
-proton-cli api GET /drive/volumes
-proton-cli api GET /calendar/v1
-proton-cli api GET /mail/v4/messages --query Page=0 --query PageSize=10
-proton-cli api POST /calendar/v1 --body '{"Name":"Work","Color":"#7272a7","Display":1,"AddressID":"..."}'
-proton-cli api PUT /mail/v4/settings/viewmode --body '{"ViewMode":1}'
-proton-cli api DELETE /mail/v4/labels/LABEL_ID
+proton api GET /drive/volumes
+proton api GET /calendar/v1
+proton api GET /mail/v4/messages --query Page=0 --query PageSize=10
+proton api POST /calendar/v1 --body '{"Name":"Work","Color":"#7272a7","Display":1,"AddressID":"..."}'
+proton api PUT /mail/v4/settings/viewmode --body '{"ViewMode":1}'
+proton api DELETE /mail/v4/labels/LABEL_ID
 ```
 
 | Flag | Purpose |
@@ -19,7 +19,7 @@ proton-cli api DELETE /mail/v4/labels/LABEL_ID
 Combine it with `jq` like any other command:
 
 ```bash
-proton-cli api GET /calendar/v1 --output json | jq -r '.Calendars[].ID'
+proton api GET /calendar/v1 --output json | jq -r '.Calendars[].ID'
 ```
 
 ## Caveats

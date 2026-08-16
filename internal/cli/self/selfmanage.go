@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/selfmanage"
+	"github.com/roman-16/proton-cli/internal/ui"
 )
 
 // selfAction is the operation a self-management command performs on the running
@@ -33,6 +35,46 @@ func resolveExe() (string, error) {
 	return exe, nil
 }
 
+// aliasesBeside returns every file the install's other name may occupy next to
+// exe, the one to create first, or nil when exe is named neither of them and so
+// is not an install this tool made.
+func aliasesBeside(exe string) []string {
+	dir, base := filepath.Split(exe)
+	var other string
+	switch strings.TrimSuffix(base, filepath.Ext(base)) {
+	case kit.Program:
+		other = kit.Alias
+	case kit.Alias:
+		other = kit.Program
+	default:
+		return nil
+	}
+	var paths []string
+	for _, name := range selfmanage.AliasFiles(other) {
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	return paths
+}
+
+// linkAlias puts the install's other name beside exe, and says so when that
+// name was not there before, which is the one moment it is worth a line.
+func linkAlias(c *kit.Invocation, exe string) {
+	paths := aliasesBeside(exe)
+	if len(paths) == 0 {
+		return
+	}
+	alias := paths[0]
+	_, err := os.Lstat(alias)
+	fresh := err != nil
+	if err := selfmanage.LinkAlias(exe, alias); err != nil {
+		c.Warn("Could not put %s beside %s: %v", filepath.Base(alias), filepath.Base(exe), err)
+		return
+	}
+	if fresh {
+		c.Note("%s %s → %s", ui.GlyphSuccess, filepath.Base(alias), filepath.Base(exe))
+	}
+}
+
 // guardManaged refuses to modify a package-managed install, naming the right
 // command for the requested action instead.
 //
@@ -45,9 +87,9 @@ func guardManaged(exe string, action selfAction) error {
 		return nil
 	}
 	via, remedy := managedHint(kind, action)
-	problem := kit.Fail("proton-cli was installed with %s, which owns this copy.", via)
+	problem := kit.Fail("proton was installed with %s, which owns this copy.", via)
 	if kind == selfmanage.KindNix {
-		problem = kit.Fail("proton-cli was installed with %s, which owns %s.", via, exe)
+		problem = kit.Fail("proton was installed with %s, which owns %s.", via, exe)
 	}
 	return problem.Hint(remedy)
 }

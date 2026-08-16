@@ -7,7 +7,7 @@
 //
 // Distribution: this stub is NEVER shipped. Goreleaser builds the
 // real binary with `-tags webview` for each platform and embeds it
-// into the main `proton-cli` binary via `internal/hv/assets/`.
+// into the main `proton` binary via `internal/hv/assets/`.
 package main
 
 import (

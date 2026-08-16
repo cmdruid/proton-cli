@@ -23,15 +23,16 @@ func UninstallCmd() *cobra.Command {
 	var purge bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Remove a curl/PowerShell-installed proton-cli",
-		Long: `Remove a proton-cli binary that was installed with the curl or PowerShell
+		Short: "Remove a curl/PowerShell-installed " + kit.Program,
+		Long: `Remove a proton binary that was installed with the curl or PowerShell
 installer (or downloaded manually).
 
 It refuses to touch a package-managed install (apt, dnf, apk, AUR,
 Homebrew, winget, npm, Nix) and tells you the right command instead.
 
-Only the binary is removed by default. Pass --purge to also delete local
-data (saved sessions and the ID cache) under your config directory.`,
+Only the command is removed by default - both names it answers to. Pass
+--purge to also delete local data (saved sessions and the ID cache)
+under your config directory.`,
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			return runUninstall(c, purge)
@@ -67,7 +68,7 @@ func runUninstall(c *kit.Invocation, purge bool) error {
 		Action: ui.Uninstalled, Count: 1, Name: exe, Detail: detail,
 		Extra: map[string]any{"binary": exe, "data": dataDir},
 	}, func() error {
-		if err := selfmanage.Remove(exe, dedicatedDir(exe)); err != nil {
+		if err := selfmanage.Remove(exe, aliasesBeside(exe), dedicatedDir(exe)); err != nil {
 			return selfManageError(err, exe, actionUninstall)
 		}
 		if dataDir != "" {
@@ -100,15 +101,18 @@ func runUninstall(c *kit.Invocation, purge bool) error {
 	return nil
 }
 
-// dedicatedDir returns the install directory when it belongs solely to
-// proton-cli (the Windows installer's ...\Programs\proton-cli), so uninstall
-// can remove it once empty. Shared bin directories (e.g. ~/.local/bin) yield "".
+// dedicatedDir returns the install directory when it belongs solely to this
+// install, so uninstall can remove it once empty. Shared bin directories (e.g.
+// ~/.local/bin) yield "".
+//
+// Only Windows has one: the PowerShell installer makes a folder of its own,
+// named after the project, and puts the program in it.
 func dedicatedDir(exe string) string {
 	if runtime.GOOS != "windows" {
 		return ""
 	}
 	dir := filepath.Dir(exe)
-	if filepath.Base(dir) == "proton-cli" {
+	if filepath.Base(dir) == kit.Alias {
 		return dir
 	}
 	return ""

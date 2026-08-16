@@ -19,40 +19,40 @@ const (
 
 func TestPreprocessArgs(t *testing.T) {
 	t.Run("plain ID untouched", func(t *testing.T) {
-		in := []string{"proton-cli", "mail", "messages", "read", plainID}
+		in := []string{"proton", "mail", "messages", "read", plainID}
 		if got := preprocessArgs(in); len(got) != len(in) {
 			t.Fatalf("preprocessArgs grew args: %v -> %v", in, got)
 		}
 	})
 	t.Run("dashed ID gets -- inserted", func(t *testing.T) {
-		in := []string{"proton-cli", "mail", "messages", "read", dashedID}
-		want := []string{"proton-cli", "mail", "messages", "read", "--", dashedID}
+		in := []string{"proton", "mail", "messages", "read", dashedID}
+		want := []string{"proton", "mail", "messages", "read", "--", dashedID}
 		if got := preprocessArgs(in); !equalSlice(got, want) {
 			t.Errorf("got %v, want %v", got, want)
 		}
 	})
 	t.Run("dashed ID after flag value", func(t *testing.T) {
-		in := []string{"proton-cli", "mail", "messages", "read", "--format", "raw", dashedID}
-		want := []string{"proton-cli", "mail", "messages", "read", "--format", "raw", "--", dashedID}
+		in := []string{"proton", "mail", "messages", "read", "--format", "raw", dashedID}
+		want := []string{"proton", "mail", "messages", "read", "--format", "raw", "--", dashedID}
 		if got := preprocessArgs(in); !equalSlice(got, want) {
 			t.Errorf("got %v, want %v", got, want)
 		}
 	})
 	t.Run("only first dashed ID gets --, rest protected by terminator", func(t *testing.T) {
-		in := []string{"proton-cli", "mail", "messages", "trash", dashedID, dashedID}
-		want := []string{"proton-cli", "mail", "messages", "trash", "--", dashedID, dashedID}
+		in := []string{"proton", "mail", "messages", "trash", dashedID, dashedID}
+		want := []string{"proton", "mail", "messages", "trash", "--", dashedID, dashedID}
 		if got := preprocessArgs(in); !equalSlice(got, want) {
 			t.Errorf("got %v, want %v", got, want)
 		}
 	})
 	t.Run("user already inserted -- leaves args alone", func(t *testing.T) {
-		in := []string{"proton-cli", "mail", "messages", "read", "--", dashedID}
+		in := []string{"proton", "mail", "messages", "read", "--", dashedID}
 		if got := preprocessArgs(in); !equalSlice(got, in) {
 			t.Errorf("preprocessArgs altered args after user --: got %v, want %v", got, in)
 		}
 	})
 	t.Run("real flag never matches", func(t *testing.T) {
-		in := []string{"proton-cli", "--verbose", "mail", "messages", "list"}
+		in := []string{"proton", "--verbose", "mail", "messages", "list"}
 		if got := preprocessArgs(in); !equalSlice(got, in) {
 			t.Errorf("preprocessArgs altered args with real flag: got %v, want %v", got, in)
 		}
@@ -62,12 +62,12 @@ func TestPreprocessArgs(t *testing.T) {
 func TestRewrapFlagError(t *testing.T) {
 	t.Run("non-pflag error passes through", func(t *testing.T) {
 		err := errors.New("some other error")
-		if got := rewrapFlagError(err, []string{"proton-cli"}); got != err {
+		if got := rewrapFlagError(err, []string{"proton"}); got != err {
 			t.Errorf("rewrapFlagError altered non-pflag error: got %v", got)
 		}
 	})
 	t.Run("nil passes through", func(t *testing.T) {
-		if rewrapFlagError(nil, []string{"proton-cli"}) != nil {
+		if rewrapFlagError(nil, []string{"proton"}) != nil {
 			t.Error("rewrapFlagError(nil) != nil")
 		}
 	})
@@ -78,7 +78,7 @@ func TestRewrapFlagError(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected pflag parse error")
 		}
-		gotMsg := rewrapFlagError(err, []string{"proton-cli"}).Error()
+		gotMsg := rewrapFlagError(err, []string{"proton"}).Error()
 		if !strings.Contains(gotMsg, "looks like a flag") || !strings.Contains(gotMsg, "insert -- before it") || !strings.Contains(gotMsg, dashedID) {
 			t.Errorf("unexpected rewrapped message: %s", gotMsg)
 		}
@@ -90,13 +90,13 @@ func TestRewrapFlagError(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected pflag parse error")
 		}
-		if strings.Contains(rewrapFlagError(err, []string{"proton-cli"}).Error(), "looks like a flag because") {
+		if strings.Contains(rewrapFlagError(err, []string{"proton"}).Error(), "looks like a flag because") {
 			t.Error("rewrap fired on non-ID token")
 		}
 	})
 	t.Run("cobra accepts-N-args error with dashed ID rewraps", func(t *testing.T) {
 		err := errors.New("accepts 1 arg(s), received 3")
-		argv := []string{"proton-cli", "mail", "messages", "read", dashedID, "--format", "raw"}
+		argv := []string{"proton", "mail", "messages", "read", dashedID, "--format", "raw"}
 		gotMsg := rewrapFlagError(err, argv).Error()
 		if !strings.Contains(gotMsg, "insert -- before it") || !strings.Contains(gotMsg, "Put flags") || !strings.Contains(gotMsg, dashedID) {
 			t.Errorf("unexpected message: %s", gotMsg)
@@ -104,7 +104,7 @@ func TestRewrapFlagError(t *testing.T) {
 	})
 	t.Run("cobra accepts-N-args error without dashed ID passes through", func(t *testing.T) {
 		err := errors.New("accepts 1 arg(s), received 3")
-		argv := []string{"proton-cli", "mail", "messages", "read", plainID, "--format", "raw"}
+		argv := []string{"proton", "mail", "messages", "read", plainID, "--format", "raw"}
 		if strings.Contains(rewrapFlagError(err, argv).Error(), "insert -- before it") {
 			t.Error("rewrap fired without dashed ID")
 		}
@@ -182,7 +182,7 @@ func TestEveryReferenceTheCLIPrintsCanBeTypedBackIn(t *testing.T) {
 		{"an event occurrence", "calendar events get", ui.Short(realVault+"/"+realItem+"@2026-04-22T09:00", true)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			argv := append([]string{"proton-cli"}, strings.Fields(tc.command)...)
+			argv := append([]string{"proton"}, strings.Fields(tc.command)...)
 			argv = append(argv, tc.reference)
 
 			cmd, rest, err := newRoot().Find(preprocessArgs(argv)[1:])
@@ -204,7 +204,7 @@ func TestEveryReferenceTheCLIPrintsCanBeTypedBackIn(t *testing.T) {
 // breaks it, handing "--" to the flag and stranding the reference.
 func TestADashedReferenceReachesTheFlagItWasGivenTo(t *testing.T) {
 	argv := preprocessArgs([]string{
-		"proton-cli", "drive", "photos", "list", "--album", realDriveLink,
+		"proton", "drive", "photos", "list", "--album", realDriveLink,
 	})
 	cmd, rest, err := newRoot().Find(argv[1:])
 	if err != nil {
@@ -221,8 +221,8 @@ func TestADashedReferenceReachesTheFlagItWasGivenTo(t *testing.T) {
 // After a boolean flag, a reference really is positional and really does need
 // protecting.
 func TestPreprocessArgsStillProtectsAPositionalAfterABoolFlag(t *testing.T) {
-	in := []string{"proton-cli", "mail", "messages", "trash", "--unread", realDriveLink}
-	want := []string{"proton-cli", "mail", "messages", "trash", "--unread", "--", realDriveLink}
+	in := []string{"proton", "mail", "messages", "trash", "--unread", realDriveLink}
+	want := []string{"proton", "mail", "messages", "trash", "--unread", "--", realDriveLink}
 	if got := preprocessArgs(in); !equalSlice(got, want) {
 		t.Errorf("preprocessArgs left a positional unprotected:\n got %v\nwant %v", got, want)
 	}
@@ -233,7 +233,7 @@ func TestPreprocessArgsStillProtectsAPositionalAfterABoolFlag(t *testing.T) {
 // thing the length heuristics could never get right.
 func TestPreprocessArgsLeavesRealShorthandFlagsAlone(t *testing.T) {
 	for _, token := range []string{"-o", "-ojson", "-h", "-v"} {
-		in := []string{"proton-cli", "mail", "messages", "list", token}
+		in := []string{"proton", "mail", "messages", "list", token}
 		if got := preprocessArgs(in); !equalSlice(got, in) {
 			t.Errorf("preprocessArgs rewrote the flags %q: %v", token, got)
 		}

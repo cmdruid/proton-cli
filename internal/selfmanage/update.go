@@ -1,5 +1,5 @@
-// Package update resolves and applies proton-cli self-updates from GitHub
-// Releases. It backs the `proton-cli update` command and mirrors the curl
+// Package update resolves and applies proton self-updates from GitHub
+// Releases. It backs the `proton update` command and mirrors the curl
 // install script: the same release artifacts, the same SHA-256 verification.
 package selfmanage
 

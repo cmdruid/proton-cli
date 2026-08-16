@@ -225,12 +225,12 @@ func settingsSetCmd(scope string, specs map[string]Setting) *cobra.Command {
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 2 {
 				return Fail("set takes a KEY and a VALUE.").
-					Hint(fmt.Sprintf("proton-cli %s settings list", scope))
+					Hint(fmt.Sprintf("proton %s settings list", scope))
 			}
 			spec, ok := specs[args[0]]
 			if !ok {
 				return Fail("There is no %s setting called %q.", scope, args[0]).
-					Hint(fmt.Sprintf("proton-cli %s settings list", scope)).Exit(3)
+					Hint(fmt.Sprintf("proton %s settings list", scope)).Exit(3)
 			}
 			_, err := spec.Parse(args[0], args[1])
 			return err

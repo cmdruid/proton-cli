@@ -27,7 +27,7 @@ func TestMailDraftsLifecycle(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("drafts create should print a bare ID, got %q", stdout)
 	}
-	cleanupRun(t, "Delete draft: proton-cli mail drafts delete "+id,
+	cleanupRun(t, "Delete draft: proton mail drafts delete "+id,
 		"mail", "messages", "delete", "--", id)
 
 	// It shows up as a draft, listed by the dedicated command.
@@ -61,7 +61,7 @@ func TestMailDraftsLifecycle(t *testing.T) {
 	if inboxID == "" {
 		t.Fatal("the sent draft never arrived")
 	}
-	cleanupRun(t, "Delete inbox copy: proton-cli mail messages delete "+inboxID,
+	cleanupRun(t, "Delete inbox copy: proton mail messages delete "+inboxID,
 		"mail", "messages", "delete", "--", inboxID)
 	assertContains(t, runOK(t, "mail", "messages", "get", "--", inboxID), "second version")
 }
@@ -88,7 +88,7 @@ func TestMailDraftsAttachAndDetach(t *testing.T) {
 
 	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create",
 		"--to", selfEmail(), "--subject", subject, "--body", "see attached", "--attach", path))
-	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete draft: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
 	assertContains(t, runOK(t, "mail", "messages", "attachments", "list", id), "note.txt")
@@ -116,7 +116,7 @@ func TestMailDraftsSendRequiresARecipient(t *testing.T) {
 	t.Parallel()
 	subject := testID() + "-draft-norecipient"
 	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create", "--subject", subject, "--body", "x"))
-	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete draft: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
 	_, stderr, code := run(t, "mail", "drafts", "send", "--", id)
@@ -138,7 +138,7 @@ func TestMailMessagesReply(t *testing.T) {
 	if !looksLikeID(replyID) {
 		t.Fatalf("reply should print a bare ID, got %q", stdout)
 	}
-	cleanupRun(t, "Delete reply: proton-cli mail messages delete "+replyID,
+	cleanupRun(t, "Delete reply: proton mail messages delete "+replyID,
 		"mail", "messages", "delete", "--", replyID)
 
 	body := runOK(t, "mail", "messages", "get", "--", replyID)
@@ -161,7 +161,7 @@ func TestMailMessagesReply(t *testing.T) {
 
 	// The inbox copy needs cleaning up too.
 	if inbox := findMessage(t, "inbox", "Re: "+subject); inbox != "" && inbox != replyID {
-		cleanupRun(t, "Delete reply inbox copy: proton-cli mail messages delete "+inbox,
+		cleanupRun(t, "Delete reply inbox copy: proton mail messages delete "+inbox,
 			"mail", "messages", "delete", "--", inbox)
 	}
 }
@@ -171,7 +171,7 @@ func TestMailMessagesReplyNoQuote(t *testing.T) {
 	msgID, _, _ := plainMail(t)
 	id := strings.TrimSpace(runOK(t, "mail", "messages", "reply",
 		"--body", "Terse.", "--no-quote", "--", msgID))
-	cleanupRun(t, "Delete reply: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete reply: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
 	body := runOK(t, "mail", "messages", "get", "--", id)
@@ -188,7 +188,7 @@ func TestMailMessagesReplyAsDraft(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("--draft should print the draft ID, got %q", stdout)
 	}
-	cleanupRun(t, "Delete reply draft: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete reply draft: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 	assertContains(t, stderr, "draft")
 
@@ -220,7 +220,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 
 	fwdID := strings.TrimSpace(runOK(t, "mail", "messages", "forward",
 		"--to", secondaryEmail(), "--body", marker, "--", msgID))
-	cleanupRun(t, "Delete forward: proton-cli mail messages delete "+fwdID,
+	cleanupRun(t, "Delete forward: proton mail messages delete "+fwdID,
 		"mail", "messages", "delete", "--", fwdID)
 
 	// The sent copy carries the forwarded headers and the original's attachment.
@@ -238,7 +238,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 	if recvID == "" {
 		t.Fatal("the second account never received the forward")
 	}
-	cleanupRunSecondary(t, "Delete received forward (secondary): proton-cli --profile secondary mail messages delete "+recvID,
+	cleanupRunSecondary(t, "Delete received forward (secondary): proton --profile secondary mail messages delete "+recvID,
 		"mail", "messages", "delete", recvID)
 
 	atts := runOKSecondary(t, "mail", "messages", "attachments", "list", recvID)
@@ -264,7 +264,7 @@ func TestMailMessagesForwardWithoutAttachments(t *testing.T) {
 
 	id := strings.TrimSpace(runOK(t, "mail", "messages", "forward",
 		"--to", selfEmail(), "--body", subject, "--no-attachments", "--", msgID))
-	cleanupRun(t, "Delete forward: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete forward: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 
 	for _, row := range runJSONArray(t, "mail", "messages", "attachments", "list", id) {
@@ -334,13 +334,13 @@ func TestMailSignatureIsAppliedAndSuppressible(t *testing.T) {
 	subject := testID() + "-sig-send"
 	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create",
 		"--to", selfEmail(), "--subject", subject, "--body", "Body text."))
-	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete draft: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 	assertContains(t, runOK(t, "mail", "messages", "get", "--", id), marker)
 
 	bare := strings.TrimSpace(runOK(t, "mail", "drafts", "create",
 		"--to", selfEmail(), "--subject", subject+"-bare", "--body", "Body text.", "--no-signature"))
-	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+bare,
+	cleanupRun(t, "Delete draft: proton mail messages delete "+bare,
 		"mail", "messages", "delete", "--", bare)
 	assertNotContains(t, runOK(t, "mail", "messages", "get", "--", bare), marker)
 }

@@ -2,14 +2,22 @@ package selfmanage
 
 import "os"
 
-// Remove deletes the proton-cli binary at exePath. On Unix the running file is
-// unlinked directly (a process keeps running from the open inode); on Windows
-// it is renamed aside and a detached helper deletes it once this process exits.
+// Remove deletes an install: every name in aliases, the program at exePath, and
+// dedicatedDir when it became empty.
 //
-// When dedicatedDir is non-empty it is removed too, but only if it became empty
-// - it names a directory that belongs solely to this install (the Windows
-// installer's own folder), never a shared bin directory.
-func Remove(exePath, dedicatedDir string) error {
+// On Unix the running file is unlinked directly (a process keeps running from
+// the open inode); on Windows it is renamed aside and a detached helper deletes
+// it once this process exits.
+//
+// dedicatedDir names a directory that belongs solely to this install (the
+// Windows installer's own folder), never a shared bin directory, and is removed
+// only if nothing else is left in it.
+func Remove(exePath string, aliases []string, dedicatedDir string) error {
+	for _, alias := range aliases {
+		if err := os.Remove(alias); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
 	if err := removeBinary(exePath); err != nil {
 		return err
 	}

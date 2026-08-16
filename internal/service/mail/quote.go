@@ -14,7 +14,7 @@ import (
 //
 // The markers below are the ones the web client writes and the ones
 // mailtext.StripHTMLQuotes / mailtext.StripPlaintextQuotes look for, so a quote
-// proton-cli produces is one proton-cli's own --strip-quotes removes.
+// proton produces is one proton's own --strip-quotes removes.
 
 const (
 	rePrefix = "Re:"

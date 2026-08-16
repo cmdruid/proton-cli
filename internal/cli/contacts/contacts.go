@@ -1,4 +1,4 @@
-// Package contacts is the `proton-cli contacts` tree.
+// Package contacts is the `proton contacts` tree.
 //
 // The app hosts its primary collection's verbs directly - `contacts list`, not
 // `contacts contacts list` - under a rule that applies to exactly one app: an

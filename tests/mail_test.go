@@ -467,7 +467,7 @@ func TestMailMessagesReadConvIDRedirects(t *testing.T) {
 		t.Errorf("expected exit 3, got %d (stderr: %s)", code, stderr)
 	}
 	assertContains(t, stderr, "is a conversation, not a message")
-	assertContains(t, stderr, "proton-cli mail conversations get")
+	assertContains(t, stderr, "proton mail conversations get")
 	assertContains(t, stderr, convID)
 }
 
@@ -480,7 +480,7 @@ func TestMailConversationsReadMsgIDRedirects(t *testing.T) {
 		t.Errorf("expected exit 3, got %d (stderr: %s)", code, stderr)
 	}
 	assertContains(t, stderr, "is a message, not a conversation")
-	assertContains(t, stderr, "proton-cli mail messages get")
+	assertContains(t, stderr, "proton mail messages get")
 	assertContains(t, stderr, msgID)
 }
 
@@ -552,7 +552,7 @@ func TestMailConversationsDeleteTakesTheWholeThread(t *testing.T) {
 	subject := testID() + "-conv-delete"
 	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create",
 		"--to", selfEmail(), "--subject", subject, "--body", "a thread of one"))
-	cleanupRun(t, "Delete draft: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete draft: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 	convID := findConversationFor(t, id)
 
@@ -1161,7 +1161,7 @@ func TestMailLabelsList(t *testing.T) {
 	lease(t, labelSlot)
 	name := testID() + "-list"
 	id := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete label: proton mail settings labels delete %s", id),
 		"mail", "settings", "labels", "delete", "--", id)
 
 	stdout := runOK(t, "mail", "settings", "labels", "list")
@@ -1180,7 +1180,7 @@ func TestMailLabelsCreateDeleteLabel(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete label: proton mail settings labels delete -- %s", id),
 		"mail", "settings", "labels", "delete", "--", id)
 
 	list := runOK(t, "mail", "settings", "labels", "list")
@@ -1197,7 +1197,7 @@ func TestMailFoldersCreateDelete(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete folder: proton-cli mail settings folders delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton mail settings folders delete %s", id),
 		"mail", "settings", "folders", "delete", "--", id)
 
 	list := runOK(t, "mail", "settings", "folders", "list")
@@ -1219,7 +1219,7 @@ func TestMailFiltersCRUD(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail settings filters delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete -- %s", id),
 		"mail", "settings", "filters", "delete", "--", id)
 
 	assertContains(t, runOK(t, "mail", "settings", "filters", "list"), name)
@@ -1315,10 +1315,10 @@ func TestMailSendWithInlineImage(t *testing.T) {
 	id := strings.TrimSpace(runOK(t, "mail", "messages", "send",
 		"--to", selfEmail(), "--subject", subject, "--html", "--body", "<p>see below</p>",
 		"--attach", note, "--attach-inline", img))
-	cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete sent mail: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 	if inbox := findMessage(t, "inbox", subject); inbox != "" {
-		cleanupRun(t, "Delete inbox mail: proton-cli mail messages delete "+inbox,
+		cleanupRun(t, "Delete inbox mail: proton mail messages delete "+inbox,
 			"mail", "messages", "delete", "--", inbox)
 	}
 
@@ -1357,14 +1357,14 @@ func TestMailSendWithAttachment(t *testing.T) {
 		"--body", "see attached", "--attach", path)
 
 	if sentID := findMessage(t, "sent", subject); sentID != "" {
-		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton-cli mail messages delete %s", sentID),
+		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton mail messages delete %s", sentID),
 			"mail", "messages", "delete", "--", sentID)
 	}
 	inboxID := findMessage(t, "inbox", subject)
 	if inboxID == "" {
 		t.Fatal("attachment mail did not arrive in inbox")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton-cli mail messages delete %s", inboxID),
+	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton mail messages delete %s", inboxID),
 		"mail", "messages", "delete", "--", inboxID)
 
 	// The attachment must be listed and decrypt back to the original bytes.
@@ -1390,7 +1390,7 @@ func TestMailLabelsUpdate(t *testing.T) {
 	lease(t, labelSlot)
 	name := testID() + "-label"
 	id := strings.TrimSpace(runOK(t, "mail", "settings", "labels", "create", "--name", name, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete label: proton-cli mail settings labels delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete label: proton mail settings labels delete %s", id),
 		"mail", "settings", "labels", "delete", "--", id)
 
 	newName := name + "-renamed"
@@ -1430,7 +1430,7 @@ func TestMailFiltersUpdate(t *testing.T) {
 	name := testID() + "-filter"
 	sieve := `require ["fileinto"]; if header :contains "Subject" "` + name + `" { fileinto "Archive"; }`
 	id := strings.TrimSpace(runOK(t, "mail", "settings", "filters", "create", "--name", name, "--sieve", sieve))
-	cleanupRun(t, fmt.Sprintf("Delete filter: proton-cli mail settings filters delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete %s", id),
 		"mail", "settings", "filters", "delete", "--", id)
 
 	newName := name + "-renamed"
@@ -1446,14 +1446,14 @@ func TestMailSendHTMLSetsHTMLMimeType(t *testing.T) {
 		"--body", "<p>Hello <b>world</b></p>", "--html")
 
 	if sentID := findMessage(t, "sent", subject); sentID != "" {
-		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton-cli mail messages delete %s", sentID),
+		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton mail messages delete %s", sentID),
 			"mail", "messages", "delete", "--", sentID)
 	}
 	inboxID := findMessage(t, "inbox", subject)
 	if inboxID == "" {
 		t.Fatal("HTML mail did not arrive in inbox")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton-cli mail messages delete %s", inboxID),
+	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton mail messages delete %s", inboxID),
 		"mail", "messages", "delete", "--", inboxID)
 
 	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+inboxID)
@@ -1475,14 +1475,14 @@ func TestMailSendPrintsMessageID(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("send stdout should be a bare message ID, got %q", stdout)
 	}
-	cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete sent mail: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 	assertContains(t, stderr, "Sent")
 	// The returned ID resolves via read.
 	assertContains(t, runOK(t, "mail", "messages", "get", "--", id), subject)
 	// Clean the inbox copy too (distinct ID).
 	if inbox := findMessage(t, "inbox", subject); inbox != "" && inbox != id {
-		cleanupRun(t, "Delete inbox mail: proton-cli mail messages delete "+inbox,
+		cleanupRun(t, "Delete inbox mail: proton mail messages delete "+inbox,
 			"mail", "messages", "delete", "--", inbox)
 	}
 }
@@ -1506,7 +1506,7 @@ func TestMailMessagesScheduledSendAndUnschedule(t *testing.T) {
 		t.Fatalf("a scheduled send should print a bare message ID, got %q", stdout)
 	}
 	// cancel_send keeps the same message ID, so this covers it in either state.
-	cleanupRun(t, "Delete scheduled mail: proton-cli mail messages delete "+id,
+	cleanupRun(t, "Delete scheduled mail: proton mail messages delete "+id,
 		"mail", "messages", "delete", "--", id)
 	assertContains(t, stderr, "Scheduled")
 
@@ -1579,14 +1579,14 @@ func TestMailSendExpiringHasExpirationTime(t *testing.T) {
 		"--body", "self-destructs via --expires", "--expires", "1d")
 
 	if sentID := findMessage(t, "sent", subject); sentID != "" {
-		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton-cli mail messages delete %s", sentID),
+		cleanupRun(t, fmt.Sprintf("Delete sent mail: proton mail messages delete %s", sentID),
 			"mail", "messages", "delete", "--", sentID)
 	}
 	inboxID := findMessage(t, "inbox", subject)
 	if inboxID == "" {
 		t.Fatal("expiring message not delivered")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton-cli mail messages delete %s", inboxID),
+	cleanupRun(t, fmt.Sprintf("Delete inbox mail: proton mail messages delete %s", inboxID),
 		"mail", "messages", "delete", "--", inboxID)
 
 	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+inboxID)
@@ -1623,7 +1623,7 @@ func TestMailSendEncryptedForOutside(t *testing.T) {
 	if sentID == "" {
 		t.Fatal("EO message did not appear in Sent")
 	}
-	cleanupRun(t, fmt.Sprintf("Delete sent EO mail: proton-cli mail messages delete %s", sentID),
+	cleanupRun(t, fmt.Sprintf("Delete sent EO mail: proton mail messages delete %s", sentID),
 		"mail", "messages", "delete", "--", sentID)
 
 	// EO always attaches an expiration (defaults to 28 days).
@@ -1640,12 +1640,12 @@ func TestMailFoldersNestedReportsParent(t *testing.T) {
 	lease(t, folderSlot)
 	parentName := testID() + "-parent"
 	parentID := strings.TrimSpace(runOK(t, "mail", "settings", "folders", "create", "--name", parentName, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton-cli mail settings folders delete %s", parentID),
+	cleanupRun(t, fmt.Sprintf("Delete parent folder: proton mail settings folders delete %s", parentID),
 		"mail", "settings", "folders", "delete", "--", parentID)
 
 	childName := testID() + "-child"
 	childID := strings.TrimSpace(runOK(t, "mail", "settings", "folders", "create", "--name", childName, "--parent", parentID, "--color", "#8080FF"))
-	cleanupRun(t, fmt.Sprintf("Delete child folder: proton-cli mail settings folders delete %s", childID),
+	cleanupRun(t, fmt.Sprintf("Delete child folder: proton mail settings folders delete %s", childID),
 		"mail", "settings", "folders", "delete", "--", childID)
 
 	data := runJSON(t, "api", "GET", "/core/v4/labels", "--query", "Type=3")
@@ -1694,7 +1694,7 @@ func TestMailCrossAccountDelivery(t *testing.T) {
 	runOK(t, "mail", "messages", "send", "--to", secondaryEmail(), "--subject", subject, "--body", body)
 
 	if sentID := findMessage(t, "sent", subject); sentID != "" {
-		cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+sentID,
+		cleanupRun(t, "Delete sent mail: proton mail messages delete "+sentID,
 			"mail", "messages", "delete", sentID)
 	}
 
@@ -1708,7 +1708,7 @@ func TestMailCrossAccountDelivery(t *testing.T) {
 	if recvID == "" {
 		t.Fatal("the second account did not receive the cross-account mail")
 	}
-	cleanupRunSecondary(t, "Delete received mail (secondary): proton-cli --profile secondary mail messages delete "+recvID,
+	cleanupRunSecondary(t, "Delete received mail (secondary): proton --profile secondary mail messages delete "+recvID,
 		"mail", "messages", "delete", recvID)
 
 	read := runOKSecondary(t, "mail", "messages", "get", recvID)

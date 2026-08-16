@@ -51,7 +51,7 @@ func TestContactsPinUnpinKey(t *testing.T) {
 	t.Parallel()
 	email := "pin-" + testID() + "@example.invalid"
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-pin", "--email", email))
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete %s", id),
 		"contacts", "delete", "--", id)
 
 	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", email, id)
@@ -69,7 +69,7 @@ func TestContactsUpdatePreservesPinnedKey(t *testing.T) {
 	t.Parallel()
 	email := "pin-" + testID() + "@example.invalid"
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-pin", "--email", email))
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete %s", id),
 		"contacts", "delete", "--", id)
 
 	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", email, id)
@@ -102,7 +102,7 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 	}
 
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-altpin", "--email", secondaryEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete %s", id),
 		"contacts", "delete", "--", id)
 	runOK(t, "contacts", "keys", "pin", "--key", keyPath, "--email", secondaryEmail(), id)
 
@@ -110,7 +110,7 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 	body := "pinned-key body for " + subject
 	runOK(t, "mail", "messages", "send", "--to", secondaryEmail(), "--subject", subject, "--body", body)
 	if sentID := findMessage(t, "sent", subject); sentID != "" {
-		cleanupRun(t, "Delete sent mail: proton-cli mail messages delete "+sentID,
+		cleanupRun(t, "Delete sent mail: proton mail messages delete "+sentID,
 			"mail", "messages", "delete", sentID)
 	}
 
@@ -122,7 +122,7 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 	if recvID == "" {
 		t.Fatal("the second account did not receive the pinned-key mail")
 	}
-	cleanupRunSecondary(t, "Delete received mail (secondary): proton-cli --profile secondary mail messages delete "+recvID,
+	cleanupRunSecondary(t, "Delete received mail (secondary): proton --profile secondary mail messages delete "+recvID,
 		"mail", "messages", "delete", recvID)
 
 	read := runOKSecondary(t, "mail", "messages", "get", recvID)
@@ -138,7 +138,7 @@ func TestMailSendToPinnedContactStillDelivers(t *testing.T) {
 func TestMailSendPinnedMismatchRefused(t *testing.T) {
 	t.Parallel()
 	id := strings.TrimSpace(runOK(t, "contacts", "create", "--name", testID()+"-mismatch", "--email", secondaryEmail()))
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete %s", id),
 		"contacts", "delete", "--", id)
 	// A freshly generated key is a valid PGP key but not the second account's.
 	runOK(t, "contacts", "keys", "pin", "--key", writeGeneratedPubKey(t), "--email", secondaryEmail(), id)
@@ -154,7 +154,7 @@ func TestMailSendPinnedMismatchRefused(t *testing.T) {
 
 	// The aborted send must not leave its draft behind.
 	if leaked := messageIDInFolder("drafts", subject); leaked != "" {
-		cleanupRun(t, "Delete leaked draft: proton-cli mail messages delete "+leaked,
+		cleanupRun(t, "Delete leaked draft: proton mail messages delete "+leaked,
 			"mail", "messages", "delete", leaked)
 		t.Errorf("aborted send leaked a draft into Drafts: %s", leaked)
 	}
@@ -179,7 +179,7 @@ func TestContactsCRUD(t *testing.T) {
 	if !looksLikeID(id) {
 		t.Fatalf("expected bare ID on stdout, got %q", stdout)
 	}
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete -- %s", id),
 		"contacts", "delete", "--", id)
 
 	// Get by explicit ID
@@ -203,7 +203,7 @@ func TestContactsGetByNameRef(t *testing.T) {
 	name := testID() + "-refname"
 	stdout := runOK(t, "contacts", "create", "--name", name, "--email", "t@x.invalid")
 	id := strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete -- %s", id),
 		"contacts", "delete", "--", id)
 
 	got := runOK(t, "contacts", "get", name)
@@ -216,7 +216,7 @@ func TestContactsGetByEmailRef(t *testing.T) {
 	email := "t+" + name + "@x.invalid"
 	stdout := runOK(t, "contacts", "create", "--name", name, "--email", email)
 	id := strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete -- %s", id),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete -- %s", id),
 		"contacts", "delete", "--", id)
 
 	got := runOK(t, "contacts", "get", email)
@@ -251,7 +251,7 @@ func TestContactsAmbiguous(t *testing.T) {
 			"--name", fmt.Sprintf("%s-%d", prefix, i),
 			"--email", fmt.Sprintf("a%d@x.invalid", i))
 		id := strings.TrimSpace(stdout)
-		cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete -- %s", id),
+		cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete -- %s", id),
 			"contacts", "delete", "--", id)
 	}
 	_, _, code := run(t, "contacts", "get", prefix)
@@ -268,7 +268,7 @@ func TestContactsMultiValue(t *testing.T) {
 	cid := strings.TrimSpace(runOK(t, "contacts", "create", "--name", name,
 		"--email", e1, "--email", e2, "--phone", "+1234567890",
 		"--job-title", "CTO", "--birthday", "1990-01-31", "--address", "Vienna", "--website", "https://x.example"))
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", cid),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete %s", cid),
 		"contacts", "delete", "--", cid)
 
 	got := runOK(t, "contacts", "get", "--", cid)
@@ -292,12 +292,12 @@ func TestContactsGroups(t *testing.T) {
 		t.Fatalf("groups create failed (exit %d): %s", code, truncateOutput(stderr))
 	}
 	gid := strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete group: proton-cli contacts groups delete %s", gid),
+	cleanupRun(t, fmt.Sprintf("Delete group: proton contacts groups delete %s", gid),
 		"contacts", "groups", "delete", "--", gid)
 
 	cname := testID() + "-gc"
 	cid := strings.TrimSpace(runOK(t, "contacts", "create", "--name", cname, "--email", testID()+"@example.com"))
-	cleanupRun(t, fmt.Sprintf("Delete contact: proton-cli contacts delete %s", cid),
+	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete %s", cid),
 		"contacts", "delete", "--", cid)
 
 	runOK(t, "contacts", "groups", "add", gid, cid)

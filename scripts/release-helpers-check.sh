@@ -13,11 +13,11 @@ cd "$(dirname "$0")/.."
 
 ASSETS=internal/hv/assets
 expected=(
-    proton-cli-hv-linux-amd64
-    proton-cli-hv-linux-arm64
-    proton-cli-hv-darwin-amd64
-    proton-cli-hv-darwin-arm64
-    proton-cli-hv-windows-amd64.exe
+    proton-hv-linux-amd64
+    proton-hv-linux-arm64
+    proton-hv-darwin-amd64
+    proton-hv-darwin-arm64
+    proton-hv-windows-amd64.exe
 )
 
 missing=()
@@ -38,4 +38,4 @@ if [[ ${#missing[@]} -gt 0 ]]; then
 fi
 
 echo "All ${#expected[@]} helper binaries present:"
-ls -la "$ASSETS"/proton-cli-hv-*
+ls -la "$ASSETS"/proton-hv-*

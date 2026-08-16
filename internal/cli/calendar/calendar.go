@@ -1,4 +1,4 @@
-// Package calendar is the `proton-cli calendar` tree.
+// Package calendar is the `proton calendar` tree.
 //
 // Events live under the app; the calendars they go in live under `settings`,
 // matching where Proton puts them - "Calendars" is a page of Calendar's settings,

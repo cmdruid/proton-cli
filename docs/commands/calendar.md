@@ -2,17 +2,17 @@
 
 Calendars and events, encrypted with your calendar key and signed with your address key.
 
-`proton-cli calendar` is the calendar itself; the calendars you keep events in are managed under [`calendar settings`](#settings), matching where Proton puts them.
+`proton calendar` is the calendar itself; the calendars you keep events in are managed under [`calendar settings`](#settings), matching where Proton puts them.
 
 ## Events
 
 ### List and read
 
 ```bash
-proton-cli calendar events list
-proton-cli calendar events list --calendar Work --start 2026-04-15 --end 2026-04-30
-proton-cli calendar events get CALENDAR_ID/EVENT_ID
-proton-cli calendar events get "Team sync"           # by title
+proton calendar events list
+proton calendar events list --calendar Work --start 2026-04-15 --end 2026-04-30
+proton calendar events get CALENDAR_ID/EVENT_ID
+proton calendar events get "Team sync"           # by title
 ```
 
 Every calendar is included unless `--calendar` narrows it to one, by name or ID. `--start` and `--end` are the first and last **whole** days to include, read in your own time zone, and nothing outside them is listed. Without them the next 30 days are listed.
@@ -22,7 +22,7 @@ An event is on a day when it touches any part of it, so a query for one day insi
 A recurring event is listed on each day it happens, with a reference that names that occurrence:
 
 ```console
-$ proton-cli calendar events list --start 2026-04-20 --end 2026-04-27
+$ proton calendar events list --start 2026-04-20 --end 2026-04-27
 ID                         DATE        TIME     DURATION  TITLE           LOCATION
 ─────────────────────────  ──────────  ───────  ────────  ──────────────  ────────
 4f2a1b9c@2026-04-20T09:00  2026-04-20  09:00    15m       Standup         Meet
@@ -34,15 +34,15 @@ ID                         DATE        TIME     DURATION  TITLE           LOCATI
 ### Create
 
 ```bash
-proton-cli calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
-proton-cli calendar events create --title Conference --start 2026-04-20 --all-day --duration 3d
-proton-cli calendar events create --calendar Work --title "Quarterly sync" --start 2026-04-16T14:00 --duration 90m --location "Vienna HQ" --description "Numbers and roadmap"
+proton calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
+proton calendar events create --title Conference --start 2026-04-20 --all-day --duration 3d
+proton calendar events create --calendar Work --title "Quarterly sync" --start 2026-04-16T14:00 --duration 90m --location "Vienna HQ" --description "Numbers and roadmap"
 ```
 
 Recurrence and reminders:
 
 ```bash
-proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h
+proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h
 ```
 
 `--rrule` takes an iCal recurrence rule; `--remind` is repeatable.
@@ -52,14 +52,14 @@ proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --dur
 `--zone` anchors the event to an IANA time zone, defaulting to your system zone. It matters for a recurring event: a series anchored to `Europe/Vienna` stays at 09:00 when the clocks change, where one stored as a plain UTC instant would slide to 08:00.
 
 ```bash
-proton-cli calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m \
+proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m \
   --rrule "FREQ=WEEKLY" --zone Europe/Vienna
 ```
 
 Attendees:
 
 ```bash
-proton-cli calendar events create --title Review --start 2026-04-16T14:00 --attendee alice@proton.me --attendee bob@example.com
+proton calendar events create --title Review --start 2026-04-16T14:00 --attendee alice@proton.me --attendee bob@example.com
 ```
 
 Proton users are added directly; external addresses get an emailed invitation.
@@ -67,15 +67,15 @@ Proton users are added directly; external addresses get an emailed invitation.
 ### Update, respond, delete
 
 ```bash
-proton-cli calendar events update CALENDAR_ID/EVENT_ID --title "New title"
-proton-cli calendar events update CALENDAR_ID/EVENT_ID --start 2026-04-17T10:00 --duration 2h
-proton-cli calendar events update CALENDAR_ID/EVENT_ID --rrule "FREQ=WEEKLY;BYDAY=MO,TH"
-proton-cli calendar events update CALENDAR_ID/EVENT_ID --remind 30m --remind 1h
-proton-cli calendar events update CALENDAR_ID/EVENT_ID --no-remind
-proton-cli calendar events respond CALENDAR_ID/EVENT_ID --status accept
-proton-cli calendar events respond "Team sync" --status decline    # emails the organizer
-proton-cli calendar events delete CALENDAR_ID/EVENT_ID
-proton-cli calendar events delete "Dentist"
+proton calendar events update CALENDAR_ID/EVENT_ID --title "New title"
+proton calendar events update CALENDAR_ID/EVENT_ID --start 2026-04-17T10:00 --duration 2h
+proton calendar events update CALENDAR_ID/EVENT_ID --rrule "FREQ=WEEKLY;BYDAY=MO,TH"
+proton calendar events update CALENDAR_ID/EVENT_ID --remind 30m --remind 1h
+proton calendar events update CALENDAR_ID/EVENT_ID --no-remind
+proton calendar events respond CALENDAR_ID/EVENT_ID --status accept
+proton calendar events respond "Team sync" --status decline    # emails the organizer
+proton calendar events delete CALENDAR_ID/EVENT_ID
+proton calendar events delete "Dentist"
 ```
 
 Anything you do not mention is left alone, including the reminders, the recurrence and the occurrences you have cancelled.
@@ -97,22 +97,22 @@ The reference says which occurrences a change reaches, and `--future` widens one
 
 ```bash
 # move one standup, leaving the series alone
-proton-cli calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30 --duration 30m
+proton calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30 --duration 30m
 
 # cancel one standup
-proton-cli calendar events delete 4f2a1b9c@2026-04-22T09:00
+proton calendar events delete 4f2a1b9c@2026-04-22T09:00
 
 # from May the 4th on, it moves half an hour later
-proton-cli calendar events update 4f2a1b9c@2026-05-04T09:00 --start 2026-05-04T09:30 --future
+proton calendar events update 4f2a1b9c@2026-05-04T09:00 --start 2026-05-04T09:30 --future
 
 # end the series there
-proton-cli calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
+proton calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
 ```
 
 Deleting a series removes every occurrence, so it says how many and shows them first:
 
 ```console
-$ proton-cli calendar events delete 4f2a1b9c --dry-run
+$ proton calendar events delete 4f2a1b9c --dry-run
 Dry run - would delete 12 events:
 
 ID                         DATE        TIME   DURATION  TITLE    LOCATION
@@ -139,15 +139,15 @@ ID                         DATE        TIME   DURATION  TITLE    LOCATION
 One subcommand per page of Proton's calendar settings.
 
 ```bash
-proton-cli calendar settings          # time zones, layout, invitations
-proton-cli calendar settings set      # the writable keys
+proton calendar settings          # time zones, layout, invitations
+proton calendar settings set      # the writable keys
 ```
 
 ```bash
-proton-cli calendar settings set view week
-proton-cli calendar settings set primary-timezone Europe/Vienna
-proton-cli calendar settings set week-numbers on
-proton-cli calendar settings set auto-import-invite on
+proton calendar settings set view week
+proton calendar settings set primary-timezone Europe/Vienna
+proton calendar settings set week-numbers on
+proton calendar settings set auto-import-invite on
 ```
 
 | Key | Values |
@@ -165,10 +165,10 @@ proton-cli calendar settings set auto-import-invite on
 ### Calendars
 
 ```bash
-proton-cli calendar settings calendars list
-proton-cli calendar settings calendars create --name Work --color "#8080FF"
-proton-cli calendar settings calendars update CALENDAR_ID --name Personal --color "#DB60D6"
-proton-cli calendar settings calendars delete Work        # by name, or by calendar ID
+proton calendar settings calendars list
+proton calendar settings calendars create --name Work --color "#8080FF"
+proton calendar settings calendars update CALENDAR_ID --name Personal --color "#DB60D6"
+proton calendar settings calendars delete Work        # by name, or by calendar ID
 ```
 
 Colors have to be Proton accent colors; an invalid value prints the allowed list. Deleting a calendar is a password-scoped operation, so it asks for your password even when a session already exists. With no terminal to ask, it takes `--password-file` or `--password-stdin`.
