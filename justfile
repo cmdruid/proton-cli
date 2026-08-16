@@ -15,12 +15,16 @@ demo: build
     go run ./scripts/seed --profile primary --stage
     script --quiet --command "bash scripts/terminal-demo/record.sh" --return /dev/null \
         | sed --expression 's/\r$//' --expression 's/.*\r//' > "$ansi"
+    # The recording carries colour names, since that is all the CLI emits; each
+    # panel resolves them against one of Proton's own themes before freeze draws it.
     render() {
-        freeze "$ansi" --config "scripts/terminal-demo/$1.json" --output "assets/demo-$1.svg" < /dev/null
-        sed --in-place "s|\(<g font-family=[^>]*\)fill=\"[^\"]*\"|\1fill=\"$2\"|" "assets/demo-$1.svg"
+        themed=/tmp/proton-cli-demo-$1.ansi
+        bash scripts/terminal-demo/theme.sh "$2" < "$ansi" > "$themed"
+        freeze "$themed" --config "scripts/terminal-demo/$1.json" --output "assets/demo-$1.svg" < /dev/null
+        sed --in-place "s|\(<g font-family=[^>]*\)fill=\"[^\"]*\"|\1fill=\"$3\"|" "assets/demo-$1.svg"
     }
-    render dark "#FFFFFF"
-    render light "#0C0C14"
+    render dark carbon "#FFFFFF"
+    render light snow "#0C0C14"
 
 [doc("Regenerate the command reference from the command tree")]
 docs:

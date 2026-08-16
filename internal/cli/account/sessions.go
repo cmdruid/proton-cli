@@ -37,7 +37,7 @@ func sessionsListCmd() *cobra.Command {
 					{Header: "CREATED", Cell: func(s proton.Session) string { return units.Time(s.CreateTime) }},
 					{
 						Header: "CURRENT",
-						Tone:   func(proton.Session) ui.Tone { return ui.ToneGood },
+						Role:   func(proton.Session) ui.Role { return ui.Success },
 						Cell: func(s proton.Session) string {
 							if s.Current {
 								return ui.GlyphSuccess

@@ -27,8 +27,9 @@ printf 'The north trail is open again.\n' >"$work/trail-map.txt"
 # Signing in unlocked the key hierarchy, so the transcript opens on a command
 # rather than on an authentication notice and no panel pauses halfway through.
 
-# Only the prompt marker is colored; the rest is whatever proton-cli prints.
-prompt() { printf '\033[38;2;138;110;255m$\033[0m %s\n' "$*"; }
+# Only the prompt marker is colored, and it names its colour the way the CLI
+# does, so the panel's theme decides its shade along with everything else.
+prompt() { printf '\033[35m$\033[39m %s\n' "$*"; }
 
 prompt "proton-cli mail messages list --unread --page-size 3"
 "$bin" mail messages list --unread --page-size 3 || true

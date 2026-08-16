@@ -1,8 +1,8 @@
 == stdout ==
-[38;2;109;105;125mID                                                    FROM              SUBJECT                        DATE              FLAGS[0m
-[38;2;74;70;88m────────────────────────────────────────────────────  ────────────────  ─────────────────────────────  ────────────────  ─────[0m
-[38;2;150;125;255m5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv==[0m  Fastmail Billing  Invoice #2291 is ready         2026-04-15 14:32  [38;2;138;110;255m●[0m[38;2;255;153;0m★[0m[38;2;109;105;125m3[0m
-[38;2;150;125;255m9xL4pQrTz2mKd8vBn6cXs1wYf5hJ3gAe7bUi0oQm4nWr2tYv==  [0m  Trailhead Weekly  The north trail is open again  2026-04-15 09:02  [38;2;138;110;255m●[0m
-[38;2;150;125;255m2mNp7RsVx8kLd4vZn1cQs6wYf9hJ5gAe3bUi0oQm7nWr4tYv==  [0m  Jane Roe          Re: Quarterly numbers          2026-04-14 17:48
+[2mID                                                    FROM              SUBJECT                        DATE              FLAGS[22m
+[2m────────────────────────────────────────────────────  ────────────────  ─────────────────────────────  ────────────────  ─────[22m
+[35m5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv==[39m  Fastmail Billing  Invoice #2291 is ready         2026-04-15 14:32  [35m●[39m[33m★[39m[2m3[22m
+[35m9xL4pQrTz2mKd8vBn6cXs1wYf5hJ3gAe7bUi0oQm4nWr2tYv==  [39m  Trailhead Weekly  The north trail is open again  2026-04-15 09:02  [35m●[39m
+[35m2mNp7RsVx8kLd4vZn1cQs6wYf9hJ5gAe3bUi0oQm7nWr4tYv==  [39m  Jane Roe          Re: Quarterly numbers          2026-04-14 17:48
 == stderr ==
-[38;2;109;105;125m3 messages.[0m
+[2m3 messages.[22m

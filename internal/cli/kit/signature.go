@@ -15,32 +15,32 @@ import (
 // word is invisible; a reader scanning a message header has no reason to stop on
 // it.
 //
-// So the verdict is toned. The word is unchanged and carries the meaning on its
-// own, which is what keeps a pipe, --no-color and a colour-blind reader equally
-// well served - the colour only decides whether the eye stops there.
+// So the verdict is painted. The word is unchanged and carries the meaning on
+// its own, which is what keeps a pipe, --no-color and a colour-blind reader
+// equally well served - the colour only decides whether the eye stops there.
 func SignatureField(verdict string) ui.Field {
 	return ui.Field{
 		Label:  "Signature",
 		Value:  verdict,
 		Always: true,
-		Tone:   signatureTone(verdict),
+		Role:   signatureRole(verdict),
 	}
 }
 
-// signatureTone maps gopenpgp's four verdicts onto the three the reader needs.
+// signatureRole maps gopenpgp's four verdicts onto the three the reader needs.
 //
 // Only Invalid is bad. Unverified is the common and benign case - the signer's
 // key is simply not available here - so treating it as an alarm would teach
 // people to ignore the one verdict that is one. Unsigned is a fact about the
-// sender, not about this message, and is left neutral.
-func signatureTone(verdict string) ui.Tone {
+// sender, not about this message, and is left plain.
+func signatureRole(verdict string) ui.Role {
 	switch pgp.VerifyResult(verdict) {
 	case pgp.Verified:
-		return ui.ToneGood
+		return ui.Success
 	case pgp.Unverified:
-		return ui.ToneCaution
+		return ui.Caution
 	case pgp.Invalid:
-		return ui.ToneBad
+		return ui.Danger
 	}
-	return ui.ToneNeutral
+	return ui.Plain
 }

@@ -27,7 +27,7 @@ var update = flag.Bool("update", false, "rewrite the golden files")
 func fixture(t *testing.T, opts Options) (*UI, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	// NO_COLOR would otherwise leak in from the developer's environment and make
-	// ThemeFor's decision depend on where the test runs.
+	// StyleFor's decision depend on where the test runs.
 	t.Setenv("NO_COLOR", "1")
 	var out, errb bytes.Buffer
 	opts.Out, opts.Err = &out, &errb
@@ -217,12 +217,12 @@ func TestParseLogLevelRejectsABadEnvironmentValue(t *testing.T) {
 // attributed ends up reading as an all-clear.
 func TestSeverities(t *testing.T) {
 	u, out, errb := fixture(t, Options{})
-	u.errTheme = Theme{enabled: true, wide: true}
+	u.errStyle = Style{enabled: true, direct: true}
 
 	u.Note("Downloading report.pdf.")
 	u.Warn("report.pdf downloaded, but the signature on block 3 is unverified,\nso who wrote it cannot be confirmed.")
 	u.Hint("3 messages.")
-	WriteError(u.Err, errs.Problemf("No message matching %q.", "Invoice #9999"), u.errTheme)
+	WriteError(u.Err, errs.Problemf("No message matching %q.", "Invoice #9999"), u.errStyle)
 
 	check(t, "severities", out, errb)
 }

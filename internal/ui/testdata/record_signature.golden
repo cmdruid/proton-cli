@@ -1,10 +1,10 @@
 == stdout ==
-[38;2;109;105;125mSubject:  [0m  Invoice #2291 is ready
-[38;2;109;105;125mSignature:[0m  [38;2;30;168;133mverified[0m
-[38;2;109;105;125mSubject:  [0m  Invoice #2291 is ready
-[38;2;109;105;125mSignature:[0m  unsigned
-[38;2;109;105;125mSubject:  [0m  Invoice #2291 is ready
-[38;2;109;105;125mSignature:[0m  [38;2;255;153;0munverified[0m
-[38;2;109;105;125mSubject:  [0m  Invoice #2291 is ready
-[38;2;109;105;125mSignature:[0m  [38;2;220;50;81minvalid[0m
+[2mSubject:  [22m  Invoice #2291 is ready
+[2mSignature:[22m  [32mverified[39m
+[2mSubject:  [22m  Invoice #2291 is ready
+[2mSignature:[22m  unsigned
+[2mSubject:  [22m  Invoice #2291 is ready
+[2mSignature:[22m  [33munverified[39m
+[2mSubject:  [22m  Invoice #2291 is ready
+[2mSignature:[22m  [31minvalid[39m
 == stderr ==

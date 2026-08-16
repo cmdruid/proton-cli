@@ -105,13 +105,14 @@ Try:   proton-cli account logout --profile work
 
 ## Environment variables
 
-Five, and none of them can name an account.
+Six, and none of them can name an account.
 
 | Variable | Description |
 | --- | --- |
 | `PROTON_PROFILE` | Active profile (default: `default`) |
 | `PROTON_API_URL` | API base URL (default: `https://mail.proton.me/api`) |
 | `NO_COLOR` | Set to any value, even empty, to turn colored output off ([no-color.org](https://no-color.org)) |
+| `COLORTERM` | `truecolor` or `24bit` if your terminal takes 24-bit color and does not advertise it; only affects how exactly a color swatch is drawn ([why](output.md#colour)) |
 | `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
 | `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
 

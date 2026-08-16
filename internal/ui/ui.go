@@ -107,11 +107,11 @@ type UI struct {
 	// terminal.
 	Width int
 
-	// theme styles Out, errTheme styles Err. Both are disabled unless that
+	// style paints Out, errStyle paints Err. Both are disabled unless that
 	// stream is a terminal and the format is text, so piped bytes never carry
 	// escape sequences.
-	theme    Theme
-	errTheme Theme
+	style    Style
+	errStyle Style
 }
 
 // Options configures a UI. Out, Err and In default to the process streams.
@@ -139,9 +139,9 @@ func New(opts Options) *UI {
 	if in == nil {
 		in = os.Stdin
 	}
-	var theme, errTheme Theme
+	var style, errStyle Style
 	if opts.Format == FormatText && !opts.NoColor {
-		theme, errTheme = ThemeFor(out), ThemeFor(errw)
+		style, errStyle = StyleFor(out), StyleFor(errw)
 	}
 	return &UI{
 		Format:   opts.Format,
@@ -153,16 +153,16 @@ func New(opts Options) *UI {
 		NoInput:  opts.NoInput || NoInput(),
 		FullIDs:  opts.FullIDs,
 		Width:    opts.Width,
-		theme:    theme,
-		errTheme: errTheme,
+		style:    style,
+		errStyle: errStyle,
 	}
 }
 
-// Theme returns the palette for Out.
-func (u *UI) Theme() Theme { return u.theme }
+// Style returns the styling for Out.
+func (u *UI) Style() Style { return u.style }
 
-// ErrTheme returns the palette for Err.
-func (u *UI) ErrTheme() Theme { return u.errTheme }
+// ErrStyle returns the styling for Err.
+func (u *UI) ErrStyle() Style { return u.errStyle }
 
 // IsTTY reports whether the answer is going to a terminal, which is what
 // decides ID shortening: a pipe wants full IDs even when the user's stderr is
@@ -190,7 +190,7 @@ func (u *UI) ShortIDs() bool { return u.IsTTY() && !u.FullIDs }
 func (u *UI) preview() *UI {
 	p := *u
 	p.Out = u.Err
-	p.theme = u.errTheme
+	p.style = u.errStyle
 	p.Quiet = true
 	return &p
 }
@@ -219,7 +219,7 @@ func (u *UI) Hint(msg string) {
 	if u.Quiet || msg == "" {
 		return
 	}
-	_, _ = fmt.Fprintln(u.Err, u.errTheme.Hint(msg))
+	_, _ = fmt.Fprintln(u.Err, u.errStyle.Paint(Muted, msg))
 }
 
 // Warn reports something that is true, is not a failure, and is worth noticing:
@@ -239,7 +239,7 @@ func (u *UI) Warn(msg string) {
 		return
 	}
 	lines := strings.Split(msg, "\n")
-	_, _ = fmt.Fprintf(u.Err, "%s %s\n", u.errTheme.Caution(GlyphCaution), lines[0])
+	_, _ = fmt.Fprintf(u.Err, "%s %s\n", u.errStyle.Paint(Caution, GlyphCaution), lines[0])
 	for _, cont := range lines[1:] {
 		_, _ = fmt.Fprintf(u.Err, "  %s\n", cont)
 	}

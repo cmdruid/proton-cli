@@ -173,17 +173,21 @@ The one exception is [`proton-cli api`](commands/api.md), which passes Proton's 
 
 Colour is used for one thing: making the parts that carry a verdict, or a colour of their own, worth stopping on. Everything else stays plain, so what is coloured means something.
 
+**The shades are your terminal's, not proton-cli's.** The CLI asks for a colour by name - the same eight names ANSI has had since 1976 - and your terminal decides what each one looks like. So Proton's purple comes out as whatever purple your theme uses, and the CLI stays legible on a light background without ever having to guess you are on one.
+
 | What | Colour |
 | --- | --- |
 | Headers, footers, field labels | Dimmed |
-| IDs | Proton purple |
+| IDs | Magenta - Proton's purple |
 | `✓` a change that succeeded | Green |
-| `!` a caveat worth knowing | Orange |
+| `!` a caveat worth knowing | Yellow |
 | `Error:` | Red |
-| `●` unread | Proton purple |
-| `★` starred | Orange, as in Proton Mail |
-| `Signature:` | Green verified, orange unverified, red invalid |
-| `■` beside a label, folder, calendar or group | The colour Proton stores for it |
+| `●` unread | Magenta |
+| `★` starred | Yellow, standing in for the orange Proton Mail uses |
+| `Signature:` | Green verified, yellow unverified, red invalid |
+| `■` beside a label, folder, calendar or group | The exact colour Proton stores for it |
+
+The swatch is the one exception, and it is not the CLI picking a colour: the hex is the value you gave that label, folder, calendar or group, so redrawing it from your theme would misreport a field rather than respect a preference. It is the only place proton-cli writes an exact colour, and how faithfully it lands depends on whether your terminal takes 24-bit colour - set `COLORTERM=truecolor` if it does and does not say so.
 
 Colour is off whenever output is piped or redirected, whenever `--output json` or `yaml` is used, and when you say so:
 

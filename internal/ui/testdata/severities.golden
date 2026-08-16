@@ -1,7 +1,7 @@
 == stdout ==
 == stderr ==
 Downloading report.pdf.
-[38;2;255;153;0m![0m report.pdf downloaded, but the signature on block 3 is unverified,
+[33m![39m report.pdf downloaded, but the signature on block 3 is unverified,
   so who wrote it cannot be confirmed.
-[38;2;109;105;125m3 messages.[0m
-[38;2;220;50;81mError:[0m No message matching "Invoice #9999".
+[2m3 messages.[22m
+[31mError:[39m No message matching "Invoice #9999".

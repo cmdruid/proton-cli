@@ -175,7 +175,7 @@ func Execute() {
 	// Probed on a tree of its own, because Find and ParseFlags leave state
 	// behind and the tree that answers the command has to start clean.
 	if err := unknownSubcommand(newRoot(), os.Args[1:]); err != nil {
-		ui.WriteError(os.Stderr, err, ui.ThemeFor(os.Stderr))
+		ui.WriteError(os.Stderr, err, ui.StyleFor(os.Stderr))
 		os.Exit(exitCode(err))
 	}
 
@@ -196,7 +196,7 @@ func Execute() {
 		printHVFinalError(os.Stderr, hvErr, app.FromOrNil(root.Context()))
 		os.Exit(exitCode(err))
 	}
-	ui.WriteError(os.Stderr, rewrapFlagError(err, os.Args), errorTheme(root))
+	ui.WriteError(os.Stderr, rewrapFlagError(err, os.Args), errorStyle(root))
 	os.Exit(exitCode(err))
 }
 
@@ -235,14 +235,14 @@ func unknownSubcommand(root *cobra.Command, args []string) error {
 	return problem.Hint(cmd.CommandPath() + " --help")
 }
 
-// errorTheme is the palette for the final error. The app owns one, but a failure
+// errorStyle is how the final error is painted. The app owns one, but a failure
 // during flag parsing happens before there is an app, so fall back to asking the
 // stream directly.
-func errorTheme(root *cobra.Command) ui.Theme {
+func errorStyle(root *cobra.Command) ui.Style {
 	if a := app.FromOrNil(root.Context()); a != nil {
-		return a.UI.ErrTheme()
+		return a.UI.ErrStyle()
 	}
-	return ui.ThemeFor(os.Stderr)
+	return ui.StyleFor(os.Stderr)
 }
 
 // printHVFinalError formats the user-facing message when a 9001 reaches the

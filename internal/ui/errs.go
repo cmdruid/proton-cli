@@ -21,11 +21,11 @@ const tryLabel = "Try:   "
 //
 // Wrapped context ("upload x: open y: no such file") is left intact - it is the
 // chain of what was being attempted, which is exactly what a reader needs.
-func WriteError(w io.Writer, err error, theme Theme) {
+func WriteError(w io.Writer, err error, style Style) {
 	if err == nil {
 		return
 	}
-	_, _ = fmt.Fprintf(w, "%s %s\n", theme.Danger("Error:"), errs.Sentence(err.Error()))
+	_, _ = fmt.Fprintf(w, "%s %s\n", style.Paint(Danger, "Error:"), errs.Sentence(err.Error()))
 
 	var hinter errs.Hinter
 	if !errors.As(err, &hinter) {
@@ -39,7 +39,7 @@ func WriteError(w io.Writer, err error, theme Theme) {
 	for i, h := range hints {
 		prefix := indent
 		if i == 0 {
-			prefix = theme.Hint(tryLabel)
+			prefix = style.Paint(Muted, tryLabel)
 		}
 		_, _ = fmt.Fprintf(w, "%s%s\n", prefix, h)
 	}
@@ -47,4 +47,4 @@ func WriteError(w io.Writer, err error, theme Theme) {
 
 // Fail writes an error to the UI's stderr. It is the single exit path for a
 // failed command, so no handler formats an error itself.
-func (u *UI) Fail(err error) { WriteError(u.Err, err, u.errTheme) }
+func (u *UI) Fail(err error) { WriteError(u.Err, err, u.errStyle) }

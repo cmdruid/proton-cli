@@ -28,13 +28,13 @@ func messageColumns() []Column[message] {
 		{Header: "FLAGS", Marks: func(m message) Marks {
 			var mk Marks
 			if m.unread {
-				mk = append(mk, Mark{GlyphUnread, ToneAccent})
+				mk = append(mk, Mark{GlyphUnread, Accent})
 			}
 			if m.starred {
-				mk = append(mk, Mark{GlyphStarred, ToneCaution})
+				mk = append(mk, Mark{GlyphStarred, Caution})
 			}
 			if m.attachments > 0 {
-				mk = append(mk, Mark{strconv.Itoa(m.attachments), ToneMuted})
+				mk = append(mk, Mark{strconv.Itoa(m.attachments), Muted})
 			}
 			return mk
 		}},
@@ -223,7 +223,7 @@ func TestTableMachineOutputIgnoresTTY(t *testing.T) {
 func TestTableColourDoesNotAffectLayout(t *testing.T) {
 	plain, _, _ := fixture(t, Options{})
 	u, out, _ := fixture(t, Options{})
-	u.theme = Theme{enabled: true, wide: true}
+	u.style = Style{enabled: true, direct: true}
 	spec := TableSpec[message]{Noun: "messages", Columns: messageColumns(), Total: Unknown, Page: Unpaged}
 	if err := Table(u, spec, messages()); err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestTableColourDoesNotAffectLayout(t *testing.T) {
 // file where changing a colour shows up as a change.
 func TestTableColoured(t *testing.T) {
 	u, out, errb := fixture(t, Options{})
-	u.theme, u.errTheme = Theme{enabled: true, wide: true}, Theme{enabled: true, wide: true}
+	u.style, u.errStyle = Style{enabled: true, direct: true}, Style{enabled: true, direct: true}
 	err := Table(u, TableSpec[message]{
 		Noun: "messages", Columns: messageColumns(), Total: Unknown, Page: Unpaged,
 	}, messages())
@@ -303,11 +303,11 @@ func TestTableSwatch(t *testing.T) {
 
 	t.Run("the dot is painted, the name is not", func(t *testing.T) {
 		u, out, _ := fixture(t, Options{})
-		u.theme = Theme{enabled: true, wide: true}
+		u.style = Style{enabled: true, direct: true}
 		if err := Table(u, TableSpec[label]{Noun: "labels", Columns: cols, Total: Unknown, Page: Unpaged}, labels); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(out.String(), "\x1b[38;2;128;128;255m"+GlyphSwatch+"\x1b[0m") {
+		if !strings.Contains(out.String(), "\x1b[38;2;128;128;255m"+GlyphSwatch+"\x1b[39m") {
 			t.Errorf("the swatch should be painted in the colour it names:\n%s", out.String())
 		}
 		if strings.Contains(out.String(), "\x1b[38;2;128;128;255mWork") {

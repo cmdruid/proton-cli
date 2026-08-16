@@ -62,7 +62,7 @@ func (u *UI) Confirm(question string) (bool, error) {
 	if !u.CanPrompt() {
 		return false, ErrNoInput
 	}
-	_, _ = fmt.Fprintf(u.Err, "%s %s ", question, u.errTheme.Hint("[y/N]"))
+	_, _ = fmt.Fprintf(u.Err, "%s %s ", question, u.errStyle.Paint(Muted, "[y/N]"))
 	line, err := bufio.NewReader(u.In).ReadString('\n')
 	if err != nil && line == "" {
 		return false, nil
@@ -147,5 +147,5 @@ func (p *Prompter) Secret(label string) (string, error) {
 // The two spaces after the label are the gap a record block puts between a
 // label and its value, so a sign-in and a record read as the same shape.
 func (p *Prompter) write(label string) {
-	_, _ = fmt.Fprintf(p.u.Err, "%s  ", p.u.errTheme.Hint(padCells(label+":", p.width, false)))
+	_, _ = fmt.Fprintf(p.u.Err, "%s  ", p.u.errStyle.Paint(Muted, padCells(label+":", p.width, false)))
 }

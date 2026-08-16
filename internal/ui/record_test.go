@@ -138,19 +138,19 @@ func TestRecordShortensIDsOnTerminal(t *testing.T) {
 // four reads differently; only "invalid" is an alarm.
 func TestRecordSignatureVerdicts(t *testing.T) {
 	u, out, errb := fixture(t, Options{})
-	u.theme = Theme{enabled: true, wide: true}
+	u.style = Style{enabled: true, direct: true}
 	for _, verdict := range []struct {
 		value string
-		tone  Tone
+		role  Role
 	}{
-		{"verified", ToneGood},
-		{"unsigned", ToneNeutral},
-		{"unverified", ToneCaution},
-		{"invalid", ToneBad},
+		{"verified", Success},
+		{"unsigned", Plain},
+		{"unverified", Caution},
+		{"invalid", Danger},
 	} {
 		if err := Record(u, RecordSpec{Fields: []Field{
 			{Label: "Subject", Value: "Invoice #2291 is ready"},
-			{Label: "Signature", Value: verdict.value, Tone: verdict.tone, Always: true},
+			{Label: "Signature", Value: verdict.value, Role: verdict.role, Always: true},
 		}}); err != nil {
 			t.Fatal(err)
 		}
@@ -159,9 +159,9 @@ func TestRecordSignatureVerdicts(t *testing.T) {
 }
 
 // A colour on a record must not change what a pipe receives.
-func TestRecordToneLeavesTheTextAlone(t *testing.T) {
+func TestRecordColourLeavesTheTextAlone(t *testing.T) {
 	spec := RecordSpec{Fields: []Field{
-		{Label: "Signature", Value: "invalid", Tone: ToneBad, Always: true},
+		{Label: "Signature", Value: "invalid", Role: Danger, Always: true},
 		{Label: "Color", Value: "purple", Swatch: "#8080FF"},
 	}}
 
@@ -170,7 +170,7 @@ func TestRecordToneLeavesTheTextAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	coloured, colOut, _ := fixture(t, Options{})
-	coloured.theme = Theme{enabled: true, wide: true}
+	coloured.style = Style{enabled: true, direct: true}
 	if err := Record(coloured, spec); err != nil {
 		t.Fatal(err)
 	}

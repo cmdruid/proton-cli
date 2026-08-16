@@ -159,7 +159,7 @@ func Result(u *UI, spec ResultSpec) error {
 		_, _ = fmt.Fprintln(u.Out, spec.IDs[0])
 	}
 	if !u.Quiet {
-		_, _ = fmt.Fprintf(u.Err, "%s %s\n", u.errTheme.Success(GlyphSuccess), spec.message())
+		_, _ = fmt.Fprintf(u.Err, "%s %s\n", u.errStyle.Paint(Success, GlyphSuccess), spec.message())
 	}
 	return nil
 }

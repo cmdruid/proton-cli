@@ -60,7 +60,7 @@ func Document(u *UI, spec DocumentSpec) error {
 		if !spec.BodyOnly {
 			if p.Divider != "" {
 				_, _ = fmt.Fprintf(u.Out, "%s\n",
-					u.theme.Rule(strings.Repeat(GlyphRule, 3)+" "+p.Divider+" "+
+					u.style.Paint(Muted, strings.Repeat(GlyphRule, 3)+" "+p.Divider+" "+
 						strings.Repeat(GlyphRule, dividerWidth)))
 			}
 			if len(p.Header) > 0 {
@@ -74,7 +74,7 @@ func Document(u *UI, spec DocumentSpec) error {
 		if !spec.BodyOnly && p.Trailer != nil {
 			_, _ = fmt.Fprintln(u.Out)
 			if p.TrailerTitle != "" {
-				_, _ = fmt.Fprintln(u.Out, u.theme.Hint(p.TrailerTitle))
+				_, _ = fmt.Fprintln(u.Out, u.style.Paint(Muted, p.TrailerTitle))
 			}
 			if err := p.Trailer(u.silent()); err != nil {
 				return err

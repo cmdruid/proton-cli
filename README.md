@@ -196,7 +196,7 @@ Everything lives in [`docs/`](docs/README.md):
 
 - **Search lags a few seconds.** Proton's index is eventually consistent, so act on the ID a command printed rather than searching for the same subject again.
 - **CAPTCHAs need a desktop.** Proton occasionally asks for human verification at login, which opens a small window. On a headless machine, log in elsewhere and copy the session. See [Human verification](docs/human-verification.md).
-- **Colors are Proton's.** Labels, folders, calendars, and groups accept only the 20 accent colors, by name (`--color purple`) or hex (`--color "#8080FF"`); an invalid `--color` prints the whole palette. Lists show the swatch and the name rather than a hex code.
+- **Label colors are Proton's; the interface's colors are yours.** Labels, folders, calendars, and groups accept only the 20 accent colors, by name (`--color purple`) or hex (`--color "#8080FF"`); an invalid `--color` prints the whole palette, and lists show the swatch and the name rather than a hex code. Everything proton-cli colors on its own account it asks for by name, so the shades come from your terminal theme rather than from here.
 - **Folders and labels are different.** A message lives in one folder and carries any number of labels, so `move --into` and `label --label` are separate verbs.
 
 ## Contributing

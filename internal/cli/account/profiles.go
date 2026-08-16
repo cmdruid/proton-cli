@@ -43,7 +43,7 @@ func profilesListCmd() *cobra.Command {
 					{Header: "SAVED", Cell: func(p session.Profile) string { return units.Time(p.PersistedAt) }},
 					{
 						Header: "ACTIVE",
-						Tone:   func(session.Profile) ui.Tone { return ui.ToneGood },
+						Role:   func(session.Profile) ui.Role { return ui.Success },
 						Cell: func(p session.Profile) string {
 							if p.Name == active {
 								return ui.GlyphSuccess

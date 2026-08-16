@@ -17,11 +17,11 @@ type Field struct {
 	// Always keeps the field even when Value is empty, for facts whose absence
 	// is itself information ("Signature: (none)").
 	Always bool
-	// ID styles the value as a Proton reference and shortens it on a terminal.
+	// ID paints the value as a Proton reference and shortens it on a terminal.
 	ID bool
-	// Tone says what the value means, for the fields that carry a verdict rather
+	// Role says what the value means, for the fields that carry a verdict rather
 	// than plain data.
-	Tone Tone
+	Role Role
 	// Swatch is the hex the value names, drawn as a dot in front of it.
 	Swatch string
 }
@@ -70,20 +70,20 @@ func writeFields(u *UI, fields []Field, indent string) {
 	width++ // the colon
 
 	short := u.ShortIDs()
-	theme := u.theme
+	style := u.style
 	for _, f := range visible {
 		label := pad(f.Label+":", width, false)
 		value := f.Value
 		switch {
 		case f.ID:
-			value = theme.ID(Short(value, short))
+			value = style.Paint(Accent, Short(value, short))
 		case f.Swatch != "":
-			value = theme.Paint(f.Swatch, GlyphSwatch) + " " + value
+			value = style.Swatch(f.Swatch, GlyphSwatch) + " " + value
 		default:
-			value = theme.tone(f.Tone, value)
+			value = style.Paint(f.Role, value)
 		}
 		lines := strings.Split(value, "\n")
-		_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, theme.Hint(label), lines[0])
+		_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, style.Paint(Muted, label), lines[0])
 		for _, cont := range lines[1:] {
 			_, _ = fmt.Fprintf(u.Out, "%s%s  %s\n", indent, spaces(width), cont)
 		}

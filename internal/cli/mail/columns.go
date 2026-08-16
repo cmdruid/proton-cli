@@ -26,15 +26,15 @@ import (
 func flags(unread, starred bool, attachments int) ui.Marks {
 	var m ui.Marks
 	if unread {
-		m = append(m, ui.Mark{Glyph: ui.GlyphUnread, Tone: ui.ToneAccent})
+		m = append(m, ui.Mark{Glyph: ui.GlyphUnread, Role: ui.Accent})
 	}
 	if starred {
 		// Proton draws the star in its warning orange (favorite-icon-color),
 		// which is the same token a caveat uses. Both mean "look here".
-		m = append(m, ui.Mark{Glyph: ui.GlyphStarred, Tone: ui.ToneCaution})
+		m = append(m, ui.Mark{Glyph: ui.GlyphStarred, Role: ui.Caution})
 	}
 	if attachments > 0 {
-		m = append(m, ui.Mark{Glyph: strconv.Itoa(attachments), Tone: ui.ToneMuted})
+		m = append(m, ui.Mark{Glyph: strconv.Itoa(attachments), Role: ui.Muted})
 	}
 	return m
 }

@@ -18,13 +18,13 @@ type Column[T any] struct {
 	// see Marks for the exception.
 	Cell func(T) string
 	// ID marks the cell as a Proton reference: shortened on a terminal unless
-	// full IDs were asked for, and coloured as an ID.
+	// full IDs were asked for, and painted as one.
 	ID bool
-	// Tone says what the cell's value means, for the columns that carry a verdict
-	// or a marker rather than plain data. Nil is ToneNeutral throughout.
-	Tone func(T) Tone
+	// Role says what the cell's value means, for the columns that carry a verdict
+	// or a marker rather than plain data. Nil is Plain throughout.
+	Role func(T) Role
 	// Marks replaces Cell for a status column, whose glyphs each mean something
-	// different and are therefore toned one by one.
+	// different and are therefore painted one by one.
 	Marks func(T) Marks
 	// Swatch returns the hex colour the cell's value names, drawn as a dot in
 	// front of it. It is how a label, folder, calendar or group shows the colour
@@ -37,12 +37,12 @@ type Column[T any] struct {
 	Right bool
 }
 
-// tone is the cell's tone, or ToneNeutral when the column declares none.
-func (c Column[T]) tone(row T) Tone {
-	if c.Tone == nil {
-		return ToneNeutral
+// role is the cell's meaning, or Plain when the column declares none.
+func (c Column[T]) role(row T) Role {
+	if c.Role == nil {
+		return Plain
 	}
-	return c.Tone(row)
+	return c.Role(row)
 }
 
 // TableSpec describes a collection: the columns to draw, and the facts the
@@ -134,37 +134,37 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 	short := u.ShortIDs()
 
 	rows := make([][]string, 0, len(items))
-	styles := make([][]cellStyle, 0, len(items))
+	paints := make([][]cellPaint, 0, len(items))
 	for _, it := range items {
 		row := make([]string, len(cols))
-		style := make([]cellStyle, len(cols))
+		paint := make([]cellPaint, len(cols))
 		for i, c := range cols {
 			var v string
 			switch {
 			case c.Marks != nil:
-				style[i].marks = c.Marks(it)
-				v = style[i].marks.String()
+				paint[i].marks = c.Marks(it)
+				v = paint[i].marks.String()
 			case c.ID:
 				v = Short(c.Cell(it), short)
-				style[i].id = true
+				paint[i].role = Accent
 			default:
 				v = c.Cell(it)
 				if c.Swatch != nil && v != "" {
 					// The dot is part of the cell's text, so it is measured and
 					// truncated with it rather than smuggled in at draw time.
-					style[i].swatch = c.Swatch(it)
+					paint[i].swatch = c.Swatch(it)
 					v = GlyphSwatch + " " + v
 				}
+				paint[i].role = c.role(it)
 			}
-			style[i].tone = c.tone(it)
 			row[i] = v
 		}
 		rows = append(rows, row)
-		styles = append(styles, style)
+		paints = append(paints, paint)
 	}
 
 	widths := layout(cols, rows, u.width())
-	theme := u.theme
+	style := u.style
 
 	heads := make([]string, len(cols))
 	rules := make([]string, len(cols))
@@ -172,8 +172,8 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 		heads[i] = pad(c.Header, widths[i], c.Right)
 		rules[i] = strings.Repeat(GlyphRule, widths[i])
 	}
-	_, _ = fmt.Fprintln(u.Out, theme.Hint(strings.TrimRight(strings.Join(heads, "  "), " ")))
-	_, _ = fmt.Fprintln(u.Out, theme.Rule(strings.Join(rules, "  ")))
+	_, _ = fmt.Fprintln(u.Out, style.Paint(Muted, strings.TrimRight(strings.Join(heads, "  "), " ")))
+	_, _ = fmt.Fprintln(u.Out, style.Paint(Muted, strings.Join(rules, "  ")))
 
 	for r, row := range rows {
 		// Cells are assembled first so trailing empty ones can be dropped whole.
@@ -187,7 +187,7 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 				continue
 			}
 			last = i
-			cells[i] = theme.cell(pad(truncate(row[i], widths[i]), widths[i], c.Right), styles[r][i])
+			cells[i] = style.cell(pad(truncate(row[i], widths[i]), widths[i], c.Right), paints[r][i])
 		}
 		if last < 0 {
 			_, _ = fmt.Fprintln(u.Out)
@@ -196,21 +196,20 @@ func writeTable[T any](u *UI, spec TableSpec[T], items []T) {
 		// The rightmost populated cell needs no padding after it.
 		if !cols[last].Right {
 			bare := strings.TrimRight(truncate(row[last], widths[last]), " ")
-			cells[last] = theme.cell(bare, styles[r][last])
+			cells[last] = style.cell(bare, paints[r][last])
 		}
 		_, _ = fmt.Fprintln(u.Out, strings.Join(cells[:last+1], "  "))
 	}
 }
 
-// cellStyle is how one cell is painted, decided while the row is built so the
+// cellPaint is how one cell is painted, decided while the row is built so the
 // drawing loop has nothing left to work out.
-type cellStyle struct {
+type cellPaint struct {
 	// swatch is the hex whose dot opens the cell, when the column names a colour.
 	swatch string
-	// marks are the individually toned glyphs of a status cell.
+	// marks are the individually painted glyphs of a status cell.
 	marks Marks
-	id    bool
-	tone  Tone
+	role  Role
 }
 
 // cell paints one finished cell.
@@ -221,19 +220,17 @@ type cellStyle struct {
 //
 // Both forms keep whatever padding follows outside the escapes, and both fall
 // back to a plain cell if truncation has eaten the prefix they describe.
-func (t Theme) cell(s string, st cellStyle) string {
+func (s Style) cell(text string, p cellPaint) string {
 	switch {
-	case st.swatch != "" && strings.HasPrefix(s, GlyphSwatch):
-		return t.Paint(st.swatch, GlyphSwatch) + s[len(GlyphSwatch):]
-	case len(st.marks) > 0:
-		if plain := st.marks.String(); strings.HasPrefix(s, plain) {
-			return t.paintMarks(st.marks) + s[len(plain):]
+	case p.swatch != "" && strings.HasPrefix(text, GlyphSwatch):
+		return s.Swatch(p.swatch, GlyphSwatch) + text[len(GlyphSwatch):]
+	case len(p.marks) > 0:
+		if plain := p.marks.String(); strings.HasPrefix(text, plain) {
+			return s.paintMarks(p.marks) + text[len(plain):]
 		}
-		return s
-	case st.id:
-		return t.ID(s)
+		return text
 	}
-	return t.tone(st.tone, s)
+	return s.Paint(p.role, text)
 }
 
 // layout sizes every column to its content, then, while the table is wider than

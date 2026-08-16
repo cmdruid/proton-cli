@@ -48,7 +48,7 @@ const (
 // ASCII widget.
 type Progress struct {
 	w     io.Writer
-	theme Theme
+	style Style
 	width func() int
 	// interval throttles redraws. Zero draws every time, which is what a test
 	// wants and what makes the frames deterministic.
@@ -85,7 +85,7 @@ func NewProgress(u *UI) progress.Sink {
 	if !ok || !term.IsTerminal(int(f.Fd())) {
 		return progress.Nop{}
 	}
-	return &Progress{w: u.Err, theme: u.errTheme, active: true, interval: redrawEvery, width: func() int {
+	return &Progress{w: u.Err, style: u.errStyle, active: true, interval: redrawEvery, width: func() int {
 		cols, _, err := term.GetSize(int(f.Fd()))
 		if err != nil || cols <= 0 {
 			return defaultWidth
@@ -247,8 +247,8 @@ func (p *Progress) bar(width int, ratio float64) string {
 	if filled > width {
 		filled = width
 	}
-	return p.theme.Accent(strings.Repeat(GlyphBarFilled, filled)) +
-		p.theme.Rule(strings.Repeat(GlyphBarPending, width-filled))
+	return p.style.Paint(Accent, strings.Repeat(GlyphBarFilled, filled)) +
+		p.style.Paint(Muted, strings.Repeat(GlyphBarPending, width-filled))
 }
 
 func withoutEmpty(parts []string) []string {
