@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/hex"
 	"io"
 	"os"
 	"strconv"
@@ -168,15 +169,11 @@ type color struct{ r, g, b uint8 }
 // colour as. Anything else reports false, so an unrecognised value is printed
 // plainly rather than painted from nonsense.
 func parseHex(s string) (color, bool) {
-	s = strings.TrimPrefix(strings.TrimSpace(s), "#")
-	if len(s) != 6 {
+	rgb, err := hex.DecodeString(strings.TrimPrefix(strings.TrimSpace(s), "#"))
+	if err != nil || len(rgb) != 3 {
 		return color{}, false
 	}
-	v, err := strconv.ParseUint(s, 16, 32)
-	if err != nil {
-		return color{}, false
-	}
-	return color{uint8(v >> 16), uint8(v >> 8), uint8(v)}, true
+	return color{rgb[0], rgb[1], rgb[2]}, true
 }
 
 // x256 is the nearest index in the xterm-256 palette, computed from the 6×6×6

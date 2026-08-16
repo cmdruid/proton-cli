@@ -15,7 +15,6 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -33,13 +32,11 @@ jobs:
     # branch named `main` and would pass the branch filter on its own, so the
     # release only ever follows a push to this repository's own main.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      actions: read
       contents: read
     outputs:
       release: ${{ steps.decide.outputs.release }}
@@ -51,7 +48,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -62,7 +59,7 @@ jobs:
         id: decide
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           nothing() {
             echo "release=false" >> "$GITHUB_OUTPUT"
@@ -92,16 +89,6 @@ jobs:
             echo "Tag $tag exists; resuming the release from $sha."
           else
             sha="$HEAD_SHA"
-          fi
-
-          # Following CI is what proves the commit passed it. A manual run has no
-          # such proof, so it asks for the recorded conclusion instead.
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&status=completed" --jq '.workflow_runs[0].conclusion // ""')
-            if [ "$conclusion" != success ]; then
-              echo "::error::CI has not passed for $sha (${conclusion:-no completed run}); nothing is released from an unverified commit"
-              exit 1
-            fi
           fi
 
           {
