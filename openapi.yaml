@@ -336,10 +336,11 @@ components:
   # TelemetryBringYourOwnEmailEvents: claim_proton_address=claim_proton_address
   # TelemetryCalendarEvents: change_temporary_time_zone=change_temporary_time_zone, answer_invite=answer_invite
   # TelemetryCalendarVideoConferencing: video_conference_widget=video_conference_widget, video_conference_settings_toggle=video_conference_settings_toggle, video_conference_zoom_integration=video_conference_zoom_integration, video_conference_proton_meet_integration=video_conference_proton_meet_integration, video_conference_proton_meet_settings_toggle=video_conference_proton_meet_settings_toggle
-  # TelemetryCategoriesOnboardingEvents: onboarding_reply=onboarding_reply, category_nav=category_nav, recategorize_email=recategorize_email, settings_toggle_category_view=settings_toggle_category_view, settings_toggle_category=settings_toggle_category, settings_toggle_notification=settings_toggle_notification
+  # TelemetryCategoriesOnboardingEvents: onboarding_reply=onboarding_reply, category_nav=category_nav, recategorize_email=recategorize_email, settings_toggle_category_view=settings_toggle_category_view, settings_toggle_category=settings_toggle_category, settings_toggle_notification=settings_toggle_notification, report_unread_count=report_unread_count
   # TelemetryChangelog: opened=opened
   # TelemetryCollapsibleLeftSidebarEvents: toggle_left_sidebar=toggleLeftSidebar
   # TelemetryDesktopEvents: client_first_launch=client_first_launch
+  # TelemetryDocsEditorEvents: table_of_contents.available=table_of_contents_available, table_of_contents.opened=table_of_contents_opened, table_of_contents.heading_clicked=table_of_contents_heading_clicked
   # TelemetryDocsEvents: suggestion.created=suggestion_created, suggestion.resolved=suggestion_resolved, suggestion.comment=suggestion_commented
   # TelemetryDocsHomepageEvents: document.opened=document_opened, document.opened_in_trash=document_opened_in_trash, document.created=document_created, document.shared=document_shared, document.trashed=document_trashed, document.restored=document_restored, document.permanently_deleted=document_permanently_deleted, document.renamed=document_renamed, document.moved=document_moved, document.source.opened=document_source_opened, sorting.changed.to_name=sorting_changed_to_name, sorting.changed.to_time=sorting_changed_to_time, sorting.changed.to_owner=sorting_changed_to_owner, sorting.changed.to_location=sorting_changed_to_location, invite.accepted=invite_accepted, invite.rejected=invite_rejected, drive.opened=drive_opened
   # TelemetryDriveWebFeature: drive_web_feature_performance_unauth=performance, drive_web_actions_unauth=actions
@@ -361,12 +362,12 @@ components:
   # TelemetryMailPagingControlsEvents: move_to_previous_page=move_to_previous_page, move_to_next_page=move_to_next_page, clicked_load_more_search_results=clicked_load_more_search_results, move_to_custom_page=move_to_custom_page
   # TelemetryMailSelectAllEvents: button_move_to_archive=button_move_to_archive, button_move_to_trash=button_move_to_trash, banner_move_to=banner_move_to, banner_label_as=banner_label_as, banner_mark_as_read=banner_mark_as_read, banner_mark_as_unread=banner_mark_as_unread, banner_permanent_delete=banner_permanent_delete
   # TelemetryMailTrial2024UpsellModal: no_thanks=noThanks, close_modal=closeModal, upsell=upsell
-  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.safety_review_ctr=accountSafetyReviewCtr, account.web.safety_review_score_diff=accountSafetyReviewScoreDiff, account.web.recovery_settings=accountRecoverySettings, account.web.password_reminder=accountPasswordReminder, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, account.web.upgrade_page=accountUpgradePage, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, meet.web.meet_funnel_telemetry=meetFunnelTelemetry, account.web.cancellation=accountCancellation, account.web.cancellation_feedback_first=accountCancellationFeedbackFirst, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.expand_blockquotes=mailExpandBlockquotes, mail.any.categories_view=categoriesView, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, account.web.explore_apps=accountExploreApps, any.web.prevent_wasm_loading=preventWasmLoading, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage, vpn.any.tv_signin=vpnTv, vpn.web.always_on_policy=vpnAlwaysOnPolicy, vpn.web.b2b_user_activity=vpnB2bUserActivity
+  # TelemetryMeasurementGroups: account.any.signup=accountSignup, account.web.org_logo_upload=accountOrgLogoUpload, account.web.security_checkup=accountSecurityCheckup, account.web.safety_review_ctr=accountSafetyReviewCtr, account.web.safety_review_score_diff=accountSafetyReviewScoreDiff, account.web.recovery_settings=accountRecoverySettings, account.web.password_reminder=accountPasswordReminder, account.web.reset_password=accountResetPassword, account.web.unauth_lost_2fa=accountUnauthLost2FA, account.web.dashboard=accountDashboard, account.web.upgrade_page=accountUpgradePage, any.web.referral_discover=referralDiscover, any.web.always_on_upsell=alwaysOnUpsell, calendar.web.encrypted_search=calendarEncryptedSearch, calendar.web.ics_surgery=calendarIcsSurgery, calendar.web.timezone_selector=calendarTimeZoneSelector, calendar.web.video_conferencing=calendarVideoConferencing, meet.web.meet_funnel_telemetry=meetFunnelTelemetry, account.web.cancellation=accountCancellation, account.web.cancellation_feedback_first=accountCancellationFeedbackFirst, any.web.settings_heart_beat=settingsHeartBeat, any.web.calendar_settings_heart_beat=calendarSettingsHeartBeat, any.web.calendar_invite=calendarInvite, any.changelog_opened=changelogOpened, any.web.key_transparency=keyTransparency, any.web.subscription_modal=subscriptionModal, mail.web.onboarding=mailOnboarding, any.web.paid_users_nudge=paidUsersNudge, mail.web.privacy_dropdown=mailPrivacyDropdown, mail.web.select_all=mailSelectAll, mail.web.snooze=mailSnooze, mail.web.signup=mailSignup, mail.web.composer_assistant=mailComposerAssistant, mail.web.proton_tips=mailProtonTips, any.web.post_subscription_tour_events=postSubscriptionTourEvents, mail.desktop.default_mailto=mailDesktopDefaultMailto, mail.desktop.daily_stats=mailDesktopDailyStats, mail.web.clicks_mail_actions=mailActions, mail.web.list_settings=mailListSettings, mail.web.post_signup_one_dollar=mailPostSignupOneDollar, mail.web.paging_controls=mailPagingControls, mail.web.expand_blockquotes=mailExpandBlockquotes, mail.any.categories_view=categoriesView, mail.web.pass_nudge=passNudge, mail.web.newsletter_subscriptions=mailNewsletterSubscriptions, any.web.unlimited_offer_2025=unlimitedOffer2025, any.web.unlimited_to_duo_offer=unlimitedToDuoOffer, mail.es_migration_tool=esMigrationTool, any.web.security_center=securityCenter, any.web.vpn_drawer=vpnDrawer, payments.flow=paymentsFlow, drive.web.feature_performance_unauth=driveWebFeaturePerformance, drive.web.actions_unauth=driveWebActions, drive.web.post_signup_one_dollar=drivePostSignupOneDollar, mail.web.unlimited_offer_2025=driveUnlimitedOffer2025, any.web.collapsible_left_sidebar=collapsibleLeftSidebar, any.web.smart_banner=smartBanner, common.any.client_installs=clientInstalls, any.web.client_search=clientSearch, any.web.b2b_onboarding=b2bOnboarding, any.web.bring_your_own_email=bringYourOwnEmail, any.web.app_switcher=appSwitcher, account.web.explore_apps=accountExploreApps, any.web.prevent_wasm_loading=preventWasmLoading, common.web.suggestions=docsSuggestions, drive.docs.homepage=docsHomepage, drive.docs.editor=docsEditor, vpn.any.tv_signin=vpnTv, vpn.web.always_on_policy=vpnAlwaysOnPolicy, vpn.web.b2b_user_activity=vpnB2bUserActivity
   # TelemetryMeetFunnelTelemetry: spotlight_displayed=spotlight_displayed, explore_meet_clicked=explore_meet_clicked, meeting_created=meeting_created, meet_opened=meet_opened
   # TelemetryPaidUsersNudge: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, close_offer=closeOffer, user_subscribed=userSubscribed, click_hide_offer=clickHideOffer
   # TelemetryPassExtensionEvents: fe.pass_extension_installed=pass_extension_installed
   # TelemetryPassNudgeEvents: banner_display=banner_display, banner_interaction=banner_interaction, pass_cta_click=pass_cta_click
-  # TelemetryPasswordReminderEvents: banner_display=banner_display, open=open, success=success, wrong_password=wrong_password, api_error=api_error, close=close, dismiss=dismiss, forgot_password_exit=forgot_password_exit, enable=enable, disable=disable
+  # TelemetryPasswordReminderEvents: banner_display=banner_display, open=open, success=success, wrong_password=wrong_password, api_error=api_error, close=close, dismiss=dismiss, forgot_password_exit=forgot_password_exit, enable=enable, disable=disable, enforcement_enable=enforcement_enable, enforcement_disable=enforcement_disable
   # TelemetryPaymentsEvents: load_payment=load_payment, payment_attempt=payment_attempt, payment_success=payment_success, payment_failure=payment_failure
   # TelemetryPostSubscriptionTourEvents: post_subscription_action=post_subscription_action, start_feature_tour=start_feature_tour, quit_feature_tour=quit_feature_tour, finish_feature_tour=finish_feature_tour, replaced_default_short_domain_address=replaced_default_short_domain_address
   # TelemetryPreventWasmLoading: wasm_unsupported=wasm_unsupported, wasm_loading=wasm_loading, wasm_failed=wasm_failed
@@ -384,7 +385,7 @@ components:
   # TelemetryUnlimitedToDuoOffer: click_upsell_button=clickUpsellButton, click_top_navbar=clickTopNavbar, user_subscribed=userSubscribed, close_offer=closeOffer, click_hide_offer=clickHideOffer
   # TelemetryUpgradePageEvents: page_load=page_load, cta_click=cta_click, subscription_success=subscription_success
   # TelemetryVpnAlwaysOnPolicyEvents: configure_opened=configureOpened, generate_start=generateStart, generate_success=generateSuccess, generate_failure=generateFailure, instructions_viewed=instructionsViewed, learn_more_clicked=learnMoreClicked, remove_modal_opened=removeModalOpened, download_latest_clicked=downloadLatestClicked, client_download_clicked=clientDownloadClicked
-  # TelemetryVpnB2bUserActivityEvents: upsell_shown=upsell_shown, upsell_learn_more_clicked=upsell_learn_more_clicked, upsell_upgrade_started=upsell_upgrade_started, upsell_upgrade_success=upsell_upgrade_success, upsell_dismissed=upsell_dismissed, enable_clicked=enable_clicked
+  # TelemetryVpnB2bUserActivityEvents: upsell_shown=upsell_shown, upsell_learn_more_clicked=upsell_learn_more_clicked, upsell_upgrade_started=upsell_upgrade_started, upsell_upgrade_success=upsell_upgrade_success, enable_clicked=enable_clicked
   # TelemetryVPNDrawerEvents: tooltip_displayed=tooltip_displayed, tooltip_clicked=tooltip_clicked, tooltip_dismissed=tooltip_dismissed, drawer_displayed=drawer_displayed, download_clicked=download_clicked, status_changed=status_changed
   # TelemetryVpnTvEvents: tv_auth_initiated=tvAuthInitiated
   # ThemeFeatureSetting: 0=DEFAULT, 1=SCROLLBARS_OFF, 2=ANIMATIONS_OFF
@@ -6751,6 +6752,8 @@ paths:
                   type: string
                 SSOBackupPasswordDisabled:
                   type: string
+                PasswordReminderEnforced:
+                  type: string
                 AllowedProducts:
                   type: string
                 PasswordPolicies:
@@ -6828,6 +6831,8 @@ paths:
                 - ParentOrgToken
                 - ParentOrgSignature
                 - PrivateKey
+                - OrganizationIdentitySignature
+                - OrganizationIdentityAddressID
               properties:
                 Name:
                   type: string
@@ -6838,6 +6843,10 @@ paths:
                 ParentOrgSignature:
                   type: string
                 PrivateKey:
+                  type: string
+                OrganizationIdentitySignature:
+                  type: string
+                OrganizationIdentityAddressID:
                   type: string
       responses:
         "200":
@@ -9079,6 +9088,29 @@ paths:
       tags: [Core]
       summary: Validate Phone
       operationId: validatePhone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /core/v4/verification/captcha/{token}:
+    post:
+      tags: [Core]
+      summary: Submit External Captcha
+      operationId: submitExternalCaptcha
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
