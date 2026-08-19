@@ -36,7 +36,16 @@ Read your mail, move files in and out of Drive, manage calendars, passwords, and
 | **Nix** | `pkgs.proton-cli` |
 | **npm** | `npm install -g @roman-16/proton-cli` |
 
-There's also an APT repository for Debian and Ubuntu, `.rpm` and `.apk` packages, plain binaries with checksums, and `go install`. See [Installation](docs/installation.md).
+**Debian, Ubuntu, Linux Mint** - the APT repository, so it updates with the rest of your system:
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://roman-16.github.io/proton-cli/gpg.key | sudo tee /etc/apt/keyrings/proton-cli.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/proton-cli.asc] https://roman-16.github.io/proton-cli stable main" | sudo tee /etc/apt/sources.list.d/proton-cli.list
+sudo apt update && sudo apt install proton-cli
+```
+
+There are also `.rpm` and `.apk` packages, plain binaries with checksums, and `go install`. See [Installation](docs/installation.md).
 
 The command is `proton`, and `proton-cli` works too - every install puts both names on your `PATH`.
 
