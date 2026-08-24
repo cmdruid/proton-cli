@@ -46,6 +46,7 @@ components:
   # ADDRESS_TYPE: 1=TYPE_ORIGINAL, 2=TYPE_ALIAS, 3=TYPE_CUSTOM_DOMAIN, 4=TYPE_PREMIUM, 5=TYPE_EXTERNAL, 6=TYPE_GROUP
   # AddressActiveStatus: 0=INACTIVE, 1=ACTIVE
   # AddressConfirmationState: 0=CONFIRMATION_NOT_CONFIRMED, 1=CONFIRMATION_CONFIRMED, 2=CONFIRMATION_INVALID
+  # AgentType: 1=ClosedCaptions
   # AI_ASSISTANT_ACCESS: 0=UNSET, 1=OFF, 2=SERVER_ONLY, 3=CLIENT_ONLY
   # ALMOST_ALL_MAIL: 0=DISABLED, 1=ENABLED
   # API_CODES: 1001=GLOBAL_SUCCESS, 1000=SINGLE_SUCCESS, 2011=NOT_ALLOWED_ERROR, 2000=INVALID_REQUIREMENT_ERROR, 2001=INVALID_LINK_TYPE_ERROR, 2500=ALREADY_EXISTS_ERROR, 2501=NOT_FOUND_ERROR, 2061=INVALID_ID_ERROR
@@ -126,7 +127,7 @@ components:
   # DocsApiErrorCode: 250000=CommitIdOutOfSync, 250004=NeedsReadonlyMode, 2011=InsufficientPermissions, 2061=InvalidID, 0=Unknown
   # DOMAIN_STATE: 0=DOMAIN_STATE_DEFAULT, 1=DOMAIN_STATE_VERIFIED, 2=DOMAIN_STATE_WARN
   # DRAFT_TYPE: text/html=NORMAL, text/plain=PLAIN_TEXT
-  # DRAWER_EVENTS: close=CLOSE, show=SHOW, switch=SWITCH, ready=READY, session=SESSION, api-request=API_REQUEST, api-response=API_RESPONSE, api-request-abort=ABORT_REQUEST, child-url-update=CHILD_URL_UPDATE, outside-call-event-manager=CALL_EVENT_MANAGER_FROM_OUTSIDE, outside-update-theme=UPDATE_THEME, outside-calendar-open-event=CALENDAR_OPEN_EVENT, outside-call-calendar-event-manager=CALL_CALENDAR_EVENT_MANAGER, outside-set-widget-event=SET_WIDGET_EVENT, outside-unset-widget-event=UNSET_WIDGET_EVENT, outside-request-open-events=REQUEST_OPEN_EVENTS, outside-refresh-widget=REFRESH_WIDGET, open-contact-modal=OPEN_CONTACT_MODAL
+  # DRAWER_EVENTS: close=CLOSE, show=SHOW, switch=SWITCH, ready=READY, session=SESSION, api-request=API_REQUEST, api-response=API_RESPONSE, api-request-abort=ABORT_REQUEST, child-url-update=CHILD_URL_UPDATE, outside-call-event-manager=CALL_EVENT_MANAGER_FROM_OUTSIDE, outside-update-theme=UPDATE_THEME, outside-calendar-open-event=CALENDAR_OPEN_EVENT, outside-call-calendar-event-manager=CALL_CALENDAR_EVENT_MANAGER, outside-set-widget-event=SET_WIDGET_EVENT, outside-unset-widget-event=UNSET_WIDGET_EVENT, outside-request-open-events=REQUEST_OPEN_EVENTS, outside-refresh-widget=REFRESH_WIDGET, open-contact-modal=OPEN_CONTACT_MODAL, open-bug-modal=OPEN_BUG_MODAL
   # DRAWER_NATIVE_APPS: quick-settings=QUICK_SETTINGS, contacts=CONTACTS, security-center=SECURITY_CENTER, vpn=VPN, referral=REFERRAL, lumo=LUMO
   # DRAWER_VISIBILITY: 0=SHOW, 1=HIDE
   # DRIVE_PERMISSIONS: 4=READ, 2=WRITE, 16=ADMIN
@@ -154,7 +155,7 @@ components:
   # FILTER_STATUS: 1=ENABLED, 0=DISABLED
   # FlagAction: 0=MARK_OBSOLETE, 1=MARK_NOT_OBSOLETE, 2=MARK_COMPROMISED, 3=MARK_NOT_COMPROMISED, 4=DISABLE_ENCRYPTION, 5=ENABLE_ENCRYPTION, 6=DISABLE_EXPECT_SIGNED, 7=ENABLE_EXPECT_SIGNED
   # FOLDER_COLOR: 0=DISABLED, 1=ENABLED
-  # ForkSearchParameters: app=App, state=State, sk=Base64Key, v=Version, u=LocalID, t=ForkType, p=Persistent, tr=Trusted, prompt=Prompt, independent=Independent, pt=PayloadType, source=Source, selector=Selector, pv=PayloadVersion, promptType=PromptType, promptBypass=PromptBypass, plan=Plan, partnerId=PartnerId, uru=UnauthenticatedReturnUrl, token=Token
+  # ForkSearchParameters: app=App, state=State, sk=Base64Key, v=Version, u=LocalID, t=ForkType, p=Persistent, tr=Trusted, prompt=Prompt, independent=Independent, pt=PayloadType, source=Source, selector=Selector, pv=PayloadVersion, promptType=PromptType, promptBypass=PromptBypass, plan=Plan, partnerId=PartnerId, uru=UnauthenticatedReturnUrl, token=Token, forkChallenge=ForkChallenge
   # ForkType: 1=SWITCH, 2=SIGNUP, 3=LOGIN
   # ForwardingState: 0=Pending, 1=Active, 2=Outdated, 3=Paused, 4=Rejected
   # ForwardingType: 0=InternalUnencrypted, 1=InternalEncrypted, 2=ExternalUnencrypted, 3=ExternalEncrypted
@@ -163,7 +164,7 @@ components:
   # GENERATION_TYPE: WRITE_FULL_EMAIL=WRITE_FULL_EMAIL, SHORTEN=SHORTEN, PROOFREAD=PROOFREAD, EXPAND=EXPAND, FORMALIZE=FORMALIZE, FRIENDLY=FRIENDLY, CUSTOM_REFINE=CUSTOM_REFINE
   # GetActiveSessionType: 0=Switch, 1=AutoPick
   # GROUP_MEMBER_PERMISSIONS: 0=NONE, 1=SEND, 2=LEAVE, 4=OWNER, 8=OWNER_WITH_KEYS
-  # GROUP_MEMBER_STATE: 0=PENDING, 1=ACTIVE, 2=OUTDATED, 3=PAUSED, 4=REJECTED, 5=PENDING_ADMIN_APPROVAL
+  # GROUP_MEMBER_STATE: 0=PENDING, 1=ACTIVE, 2=OUTDATED, 3=PAUSED, 4=REJECTED, 5=PENDING_KEYS
   # GROUP_MEMBER_TYPE: 0=INTERNAL, 1=EXTERNAL, 2=INTERNAL_TYPE_EXTERNAL
   # GROUP_MEMBERSHIP_STATUS: active=ACTIVE, unanswered=UNANSWERED
   # GroupFlags: 0=None, 1=System, 2=Drive, 4=Scim
@@ -283,7 +284,7 @@ components:
   # SEND_MESSAGE_DIRECT_ACTION: 0=REPLY, 1=REPLY_ALL, 2=FORWARD, 3=AUTO_RESPONSE, 4=READ_RECEIPT
   # SentryCalendarInitiatives: rsvp-note=RSVP_NOTE, bookings=BOOKINGS
   # SentryCommonInitiatives: post-subscription=POST_SUBSCRIPTION, encrypted-search=ENCRYPTED_SEARCH, contact-import=CONTACT_IMPORT
-  # SentryMailInitiatives: assistant=ASSISTANT, attachment-encryption-error=ATTACHMENT_ENCRYPTION_ERROR, attachment-upload-error=ATTACHMENT_UPLOAD_ERROR, composer=COMPOSER, drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, mail-onboarding=MAIL_ONBOARDING, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL, move-actions=MOVE_ACTIONS, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS, mailbox-redirect=MAILBOX_REDIRECT, categories-view=CATEGORIES_VIEW
+  # SentryMailInitiatives: assistant=ASSISTANT, attachment-encryption-error=ATTACHMENT_ENCRYPTION_ERROR, attachment-upload-error=ATTACHMENT_UPLOAD_ERROR, composer=COMPOSER, drawer-security-center=DRAWER_SECURITY_CENTER, drawer-vpn=DRAWER_VPN, list-actions-telemetry=LIST_ACTIONS_TELEMETRY, mail-onboarding=MAIL_ONBOARDING, mail-redux-errors=MAIL_REDUX_ERRORS, migration-tool=MIGRATION_TOOL, move-actions=MOVE_ACTIONS, remove-email-trackers=REMOVE_EMAIL_TRACKERS, upsell-modals=UPSELL_MODALS, mailbox-redirect=MAILBOX_REDIRECT, categories-view=CATEGORIES_VIEW, mail-logger=LOGGER
   # SentryMailPerformanceInitiatives: apply-location-performance=APPLY_LOCATION_PERFORMANCE
   # SentryRealtimeInitiatives: realtime-sdk-switch=SDK_SWITCH
   # SERVER_FEATURES: 1=SECURE_CORE, 2=TOR, 4=P2P, 8=XOR, 16=IPV6, 32=RESTRICTED, 64=PARTNER, 128=DOUBLE_RESTRICTION
@@ -325,7 +326,7 @@ components:
   # SWIPE_ACTION: -1=None, 0=Trash, 1=Spam, 2=Star, 3=Archive, 4=MarkAsRead, 5=LabelAs, 6=MoveTo
   # TelemetryAccountCancellationEvents: start_cancellation=startCancellation, cancel_page=cancelPage, cancel_modal=cancelModal, feedback_modal=feedbackModal, resubscribe_modal=resubscribeModal, dashboard_reactivate=dashboardReactivate, upsell_modal=upsellModal
   # TelemetryAccountCancellationFlowFeedbackEvents: start_cancellation=startCancellation, feedback_step=feedbackStep, second_step=secondStep, confirm_cancellation=confirmCancellation, managed_externally=managedExternally
-  # TelemetryAccountDashboardEvents: page_load=pageLoad, cross_product_click=crossProductClick, feature_card_click=featureCardClick, upgrade_button_click=upgradeButtonClick, upsell_cta_click=upsellCtaClick
+  # TelemetryAccountDashboardEvents: page_load=pageLoad, cross_product_click=crossProductClick, feature_card_click=featureCardClick, upgrade_button_click=upgradeButtonClick, upsell_cta_click=upsellCtaClick, download_cta_click=downloadCtaClick
   # TelemetryAccountOrganizationLogoUploadEvents: process_start=processStart, process_success=processSuccess, process_failure=processFailure
   # TelemetryAccountSecurityCheckupEvents: page_load=pageLoad, cohort_change.complete_recovery_multiple=completeRecoveryMultiple, cohort_change.complete_recovery_single=completeRecoverySingle, cohort_change.account_recovery_enabled=accountRecoveryEnabled
   # TelemetryAccountSignupBasicEvents: flow_started=flow_started, account_created=account_created
@@ -1292,6 +1293,8 @@ paths:
                   type: string
                 Independent:
                   type: integer
+                ForkChallenge:
+                  type: string
                 Selector:
                   type: string
                 UserCode:
@@ -5708,6 +5711,8 @@ paths:
                 maxAI:
                   type: string
                 maxLumo:
+                  type: string
+                maxVPN:
                   type: string
       responses:
         "200":
@@ -16592,6 +16597,33 @@ paths:
                 Timezone:
                   type: string
                 RRule:
+                  type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /meet/v1/user-settings:
+    put:
+      tags: [Meet]
+      summary: Update Meet User Settings Call
+      operationId: updateMeetUserSettingsCall
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - MeetingID
+                - AddressID
+              properties:
+                MeetingID:
+                  type: string
+                AddressID:
+                  type: string
+                CaptionLanguage:
                   type: string
       responses:
         "200":
