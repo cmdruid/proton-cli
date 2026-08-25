@@ -91,7 +91,7 @@ func (s *Service) ResolveDraft(ctx context.Context, r string) (string, error) {
 	if ref.Full(r) {
 		return r, nil
 	}
-	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "drafts", Limit: 20})
+	msgs, _, err := s.List(ctx, ListOptions{Keyword: r, Folder: "drafts", PageSize: 20})
 	if err != nil {
 		return "", err
 	}

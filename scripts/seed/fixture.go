@@ -129,7 +129,7 @@ func mailbox(work string) []collection {
 		pins: []pin{{
 			id:     "Documents",
 			fields: map[string]string{"type": "folder"},
-			create: []string{"drive", "folders", "create", "/Documents"},
+			create: []string{"drive", "items", "create", "/Documents"},
 		}},
 	}, {
 		what:   "drive",
@@ -141,7 +141,7 @@ func mailbox(work string) []collection {
 		pins: []pin{{
 			id:     "Trips",
 			fields: map[string]string{"type": "folder"},
-			create: []string{"drive", "folders", "create", "/Documents/Trips"},
+			create: []string{"drive", "items", "create", "/Documents/Trips"},
 		}, {
 			id:     "packing-list.txt",
 			fields: map[string]string{"type": "file"},
@@ -214,8 +214,8 @@ func (r *report) mail(profile, address, work string) {
 // deliver sends one message unless the inbox already holds it.
 func (r *report) deliver(profile, address, work string, m fixture.Mail) {
 	what := "mail: " + m.Subject
-	found, err := rows(profile, append([]string{"mail", "messages", "search",
-		"--subject", m.Subject, "--limit", "1"}, inbox()...)...)
+	found, err := rows(profile, append([]string{"mail", "messages", "list",
+		"--subject", m.Subject, "--page-size", "1"}, inbox()...)...)
 	if err != nil {
 		r.fail(what, err)
 		return
@@ -372,8 +372,8 @@ func (r *report) await(profile string) {
 	deadline := time.Now().Add(2 * time.Minute)
 	for _, m := range panelMail {
 		for {
-			found, err := rows(profile, append([]string{"mail", "messages", "search",
-				"--subject", m.subject, "--limit", "1"}, inbox()...)...)
+			found, err := rows(profile, append([]string{"mail", "messages", "list",
+				"--subject", m.subject, "--page-size", "1"}, inbox()...)...)
 			if err == nil && len(found) > 0 {
 				break
 			}

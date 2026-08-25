@@ -30,6 +30,10 @@ type EventPatch struct {
 	Zone        *string
 	RRule       *string
 	Reminders   *[]string
+	// Status is whether the event is going ahead: CONFIRMED, TENTATIVE or
+	// CANCELLED. Cancelling this way keeps the event and its history, which is
+	// what the web client does and what `delete` does not.
+	Status *string
 }
 
 // touchesTimes reports whether the patch moves the event, which is what decides
@@ -51,6 +55,9 @@ func (p EventPatch) apply(v ical.VEvent, anchor string) ical.VEvent {
 	}
 	if p.Location != nil {
 		v.Location = *p.Location
+	}
+	if p.Status != nil {
+		v.Status = *p.Status
 	}
 	if p.Description != nil {
 		v.Description = *p.Description

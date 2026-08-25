@@ -215,6 +215,12 @@ func idCachePath(name profile.Name) string {
 }
 
 // SignedIn reports whether this profile holds a session.
+// UserID is the account this profile is signed in as, as Proton names it.
+//
+// A Pass export records it, because an alias belongs to the account that made
+// it and a reader has to be able to tell whether it is looking at its own.
+func (a *App) UserID() string { return a.userID }
+
 func (a *App) SignedIn() bool {
 	uid, _, _ := a.API.Tokens()
 	return uid != ""

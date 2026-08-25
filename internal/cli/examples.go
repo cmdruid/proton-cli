@@ -64,7 +64,17 @@ var examples = map[string][]string{
 		"proton calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h",
 		"proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule 'FREQ=WEEKLY;COUNT=10' --remind 15m",
 		"proton calendar events create --title Holiday --start 2026-07-01 --all-day --calendar Personal",
-		"proton calendar events create --title 'Design review' --start 2026-04-20T10:00 --duration 45m --attendee jane@example.com --location 'Room 3'",
+		"proton calendar events create --title 'Design review' --start 2026-04-20T10:00 --end 2026-04-20T10:45 --attendee jane@example.com --location 'Room 3'",
+		"proton calendar events create --title Renewal --start 2026-09-01T09:00 --remind 1d:email",
+	},
+	"proton calendar events export": {
+		"proton calendar events export --start 2026-01-01 --end 2026-12-31 --output year.ics",
+		"proton calendar events export --calendar Work --output - > work.ics",
+	},
+	"proton calendar events import": {
+		"proton calendar events import holidays.ics",
+		"proton calendar events import --calendar Work team.ics",
+		"curl -s https://example.com/team.ics | proton calendar events import -",
 	},
 	"proton calendar events list": {
 		"proton calendar events list",
@@ -85,17 +95,42 @@ var examples = map[string][]string{
 		"proton calendar events delete 4f2a1b9c@2026-05-04T09:00 --future",
 	},
 	"proton calendar events respond": {
-		"proton calendar events respond 'Team sync' --status accept",
-		"proton calendar events respond 'Team sync' --status decline",
+		"proton calendar events respond 'Team sync' --answer accept",
+		"proton calendar events respond 'Team sync' --answer decline",
 	},
 	"proton calendar settings calendars list": {"proton calendar settings calendars list"},
+	"proton calendar settings calendars get": {
+		"proton calendar settings calendars get Work",
+	},
 	"proton calendar settings calendars create": {
 		"proton calendar settings calendars create --name Work",
 		"proton calendar settings calendars create --name Personal --color pacific",
+		"proton calendar settings calendars create --name Timetable --url https://example.com/team.ics",
+	},
+	"proton calendar invitations list": {
+		"proton calendar invitations list",
+	},
+	"proton calendar invitations accept": {
+		"proton calendar invitations accept Work",
+	},
+	"proton calendar invitations decline": {
+		"proton calendar invitations decline Work",
+	},
+	"proton calendar settings calendars share add": {
+		"proton calendar settings calendars share add Work jane@proton.me",
+		"proton calendar settings calendars share add Work jane@proton.me --edit",
+	},
+	"proton calendar settings calendars share list": {
+		"proton calendar settings calendars share list Work",
+	},
+	"proton calendar settings calendars share remove": {
+		"proton calendar settings calendars share remove Work jane@proton.me",
 	},
 	"proton calendar settings calendars update": {
 		"proton calendar settings calendars update Work --name Office",
 		"proton calendar settings calendars update Work --color enzian",
+		"proton calendar settings calendars update Work --default-duration 30m --remind 15m",
+		"proton calendar settings calendars update Personal --busy off",
 	},
 	"proton calendar settings calendars delete": {"proton calendar settings calendars delete Work"},
 	"proton calendar settings get":              {"proton calendar settings get"},
@@ -110,19 +145,36 @@ var examples = map[string][]string{
 		"proton contacts list",
 		"proton contacts list --output json",
 	},
+	"proton contacts export": {
+		"proton contacts export --output-dir ./address-book",
+		"proton contacts export jane --output jane.vcf",
+		"proton contacts export --output - > contacts.vcf",
+	},
+	"proton contacts import": {
+		"proton contacts import contacts.vcf",
+		"proton contacts import - < exported.vcf",
+	},
+	"proton contacts merge": {
+		"proton contacts merge --dry-run",
+		"proton contacts merge",
+	},
 	"proton contacts get": {
 		"proton contacts get jane@example.com",
 		"proton contacts get 'Jane Roe'",
 	},
 	"proton contacts create": {
 		"proton contacts create --name 'Jane Roe' --email jane@example.com",
+		"proton contacts create --name 'Jane Roe' --email work:jane@acme.com --phone cell:+43123456 --anniversary 2015-06-20",
 		"proton contacts create --name 'Jane Roe' --email jane@example.com --phone '+43 660 1234567' --organization Acme",
 	},
 	"proton contacts update": {
 		"proton contacts update jane --job-title 'Head of Design'",
 		"proton contacts update jane --email jane.roe@work.example --birthday 1990-04-16",
 	},
-	"proton contacts delete":      {"proton contacts delete jane"},
+	"proton contacts delete": {"proton contacts delete jane"},
+	"proton contacts groups get": {
+		"proton contacts groups get Team",
+	},
 	"proton contacts groups list": {"proton contacts groups list"},
 	"proton contacts groups create": {
 		"proton contacts groups create --name Team",
@@ -183,29 +235,38 @@ var examples = map[string][]string{
 	"proton drive items revisions restore":  {"proton drive items revisions restore /Documents/report.pdf 5bH2mQxK"},
 	"proton drive items revisions download": {"proton drive items revisions download /Documents/report.pdf 5bH2mQxK --output-dir ."},
 	"proton drive items revisions delete":   {"proton drive items revisions delete /Documents/report.pdf 5bH2mQxK"},
-	"proton drive folders create": {
-		"proton drive folders create /Documents/2026",
+	"proton drive items create": {
+		"proton drive items create /Documents/2026",
 	},
-	"proton drive share get": {"proton drive share get /Documents/report.pdf"},
-	"proton drive share link": {
-		"proton drive share link /Documents/report.pdf",
-		"proton drive share link /Documents/report.pdf --expires 7d --password hunter2",
-		"proton drive share link /Documents --edit",
+	"proton drive items share get": {"proton drive items share get /Documents/report.pdf"},
+	"proton drive items share link": {
+		"proton drive items share link /Documents/report.pdf",
+		"proton drive items share link /Documents/report.pdf --expires 7d --password hunter2",
+		"proton drive items share link /Documents --edit",
 	},
-	"proton drive share unlink": {"proton drive share unlink /Documents/report.pdf"},
-	"proton drive share add": {
-		"proton drive share add /Documents jane@example.com",
-		"proton drive share add /Documents jane@example.com --edit --message 'Have a look'",
+	"proton drive items share unlink": {"proton drive items share unlink /Documents/report.pdf"},
+	"proton drive items share add": {
+		"proton drive items share add /Documents jane@example.com",
+		"proton drive items share add /Documents jane@example.com --edit --message 'Have a look'",
 	},
-	"proton drive share remove":     {"proton drive share remove /Documents jane@example.com"},
-	"proton drive invitations list": {"proton drive invitations list"},
+	"proton drive items share remove": {"proton drive items share remove /Documents jane@example.com"},
+	"proton drive invitations list":   {"proton drive invitations list"},
 	"proton drive invitations accept": {
 		"proton drive invitations accept 5bH2mQxK",
 	},
 	"proton drive invitations decline": {"proton drive invitations decline 5bH2mQxK"},
-	"proton drive trash list":          {"proton drive trash list"},
-	"proton drive trash restore":       {"proton drive trash restore 5bH2mQxK"},
-	"proton drive trash empty":         {"proton drive trash empty"},
+	"proton drive items share update": {
+		"proton drive items share update /Reports jane@proton.me --edit",
+		"proton drive items share update /Reports jane@proton.me --edit=false",
+	},
+	"proton drive items share resend": {
+		"proton drive items share resend /Reports jane@proton.me",
+	},
+	"proton drive shared list":   {"proton drive shared list"},
+	"proton drive sharing list":  {"proton drive sharing list"},
+	"proton drive trash list":    {"proton drive trash list"},
+	"proton drive trash restore": {"proton drive trash restore 5bH2mQxK"},
+	"proton drive trash empty":   {"proton drive trash empty"},
 	"proton drive photos list": {
 		"proton drive photos list",
 		"proton drive photos list --album Holidays",
@@ -218,6 +279,9 @@ var examples = map[string][]string{
 	"proton drive photos trash":       {"proton drive photos trash 5bH2mQxK"},
 	"proton drive photos delete":      {"proton drive photos delete 5bH2mQxK"},
 	"proton drive photos albums list": {"proton drive photos albums list"},
+	"proton drive photos albums update": {
+		"proton drive photos albums update Holidays --cover 5bH2mQxK",
+	},
 	"proton drive photos albums create": {
 		"proton drive photos albums create --name Holidays",
 	},
@@ -237,16 +301,13 @@ var examples = map[string][]string{
 		"proton mail messages list --unread",
 		"proton mail messages list --folder archive --page-size 50",
 		"proton mail messages list --starred --output json",
+		"proton mail messages list --from billing@example.com --folder all",
+		"proton mail messages list --keyword invoice --after 2026-01-01 --folder all",
 	},
 	"proton mail messages get": {
 		"proton mail messages get 'Invoice #2291'",
-		"proton mail messages get 5bH2mQxK --format html",
+		"proton mail messages get 5bH2mQxK --render html",
 		"proton mail messages get 5bH2mQxK --body-only --strip-quotes",
-	},
-	"proton mail messages search": {
-		"proton mail messages search --from billing@example.com",
-		"proton mail messages search --keyword invoice --after 2026-01-01",
-		"proton mail messages search --subject Report --folder archive --limit 20",
 	},
 	"proton mail messages send": {
 		"proton mail messages send --to jane@example.com --subject Report --body 'See attached.' --attach ./report.pdf",
@@ -256,7 +317,7 @@ var examples = map[string][]string{
 	},
 	"proton mail messages reply": {
 		"proton mail messages reply 'Invoice #2291' --body 'Thanks, paid today.'",
-		"proton mail messages reply 'Invoice #2291' --all --body 'Noted.'",
+		"proton mail messages reply 'Invoice #2291' --everyone --body 'Noted.'",
 		"proton mail messages reply 'Invoice #2291' --body 'Draft first.' --draft",
 	},
 	"proton mail messages forward": {
@@ -292,6 +353,18 @@ var examples = map[string][]string{
 		"proton mail messages unschedule 5bH2mQxK",
 		"proton mail messages unschedule --all",
 	},
+	"proton mail messages empty": {
+		"proton mail messages empty --folder trash",
+		"proton mail messages empty --folder spam",
+	},
+	"proton mail messages expire": {
+		"proton mail messages expire 5bH2mQxK --in 7d",
+		"proton mail messages expire --from newsletter@example.com --in 30d",
+		"proton mail messages expire 5bH2mQxK --never",
+	},
+	"proton mail messages unsubscribe": {
+		"proton mail messages unsubscribe 5bH2mQxK",
+	},
 	"proton mail messages export": {
 		"proton mail messages export 'Invoice #2291' --output-dir ./backup",
 		"proton mail messages export --folder archive --all --output-dir ./mail-backup",
@@ -310,18 +383,22 @@ var examples = map[string][]string{
 	"proton mail conversations list": {
 		"proton mail conversations list",
 		"proton mail conversations list --unread --folder inbox",
+		"proton mail conversations list --from jane@example.com --folder all",
 	},
 	"proton mail conversations get": {
 		"proton mail conversations get 'Quarterly numbers'",
 		"proton mail conversations get 5bH2mQxK --summary",
 	},
-	"proton mail conversations search": {
-		"proton mail conversations search --from jane@example.com",
-		"proton mail conversations search --keyword budget --limit 20",
+	"proton mail conversations snooze": {
+		"proton mail conversations snooze 5bH2mQxK --until 3d",
+		"proton mail conversations snooze --unread --until 2026-04-17T09:00",
+	},
+	"proton mail conversations unsnooze": {
+		"proton mail conversations unsnooze 5bH2mQxK",
 	},
 	"proton mail conversations reply": {
 		"proton mail conversations reply 'Quarterly numbers' --body 'Looks right to me.'",
-		"proton mail conversations reply 'Quarterly numbers' --all --body Agreed.",
+		"proton mail conversations reply 'Quarterly numbers' --everyone --body Agreed.",
 	},
 	"proton mail conversations forward": {
 		"proton mail conversations forward 'Quarterly numbers' --to jane@example.com",
@@ -407,9 +484,34 @@ var examples = map[string][]string{
 		"proton mail settings addresses update me@proton.me --signature - --html",
 		"proton mail settings addresses update me@proton.me --clear-signature",
 	},
+	"proton mail settings filters apply": {
+		"proton mail settings filters apply",
+		"proton mail settings filters apply Newsletters",
+	},
+	"proton mail settings filters reorder": {
+		"proton mail settings filters reorder Newsletters Receipts Archive",
+	},
+	"proton mail settings senders list": {"proton mail settings senders list"},
+	"proton mail settings senders block": {
+		"proton mail settings senders block spammer@example.com",
+		"proton mail settings senders block @example.com",
+	},
+	"proton mail settings senders spam": {
+		"proton mail settings senders spam newsletter@example.com",
+	},
+	"proton mail settings senders allow": {
+		"proton mail settings senders allow billing@example.com",
+	},
+	"proton mail settings senders forget": {
+		"proton mail settings senders forget billing@example.com",
+	},
 	"proton mail settings filters list": {"proton mail settings filters list"},
+	"proton mail settings filters get": {
+		"proton mail settings filters get Receipts",
+	},
 	"proton mail settings filters create": {
-		"proton mail settings filters create --name Receipts --sieve ./receipts.sieve",
+		`proton mail settings filters create --name Receipts --if "sender contains billing@" --label Receipts`,
+		"proton mail settings filters create --name Big --sieve ./big.sieve",
 	},
 	"proton mail settings filters update":  {"proton mail settings filters update Receipts --sieve ./receipts.sieve"},
 	"proton mail settings filters enable":  {"proton mail settings filters enable Receipts"},
@@ -424,6 +526,91 @@ var examples = map[string][]string{
 	"proton mail settings autoreply disable": {"proton mail settings autoreply disable"},
 
 	// ── pass ──
+	"proton pass vaults share add": {
+		"proton pass vaults share add Work jane@proton.me",
+		"proton pass vaults share add Work jane@proton.me --access editor",
+	},
+	"proton pass vaults share list": {
+		"proton pass vaults share list Work",
+	},
+	"proton pass vaults share remove": {
+		"proton pass vaults share remove Work jane@proton.me",
+	},
+	"proton pass invitations list": {
+		"proton pass invitations list",
+	},
+	"proton pass invitations accept": {
+		"proton pass invitations accept Work",
+	},
+	"proton pass invitations decline": {
+		"proton pass invitations decline Work",
+	},
+	"proton pass aliases contacts list": {
+		"proton pass aliases contacts list shopping",
+	},
+	"proton pass aliases contacts create": {
+		"proton pass aliases contacts create shopping seller@example.com",
+		`proton pass aliases contacts create shopping seller@example.com --name "The seller"`,
+	},
+	"proton pass aliases contacts delete": {
+		"proton pass aliases contacts delete shopping seller@example.com",
+	},
+	"proton pass aliases contacts block": {
+		"proton pass aliases contacts block shopping seller@example.com",
+	},
+	"proton pass aliases contacts allow": {
+		"proton pass aliases contacts allow shopping seller@example.com",
+	},
+	"proton pass settings mailboxes create": {
+		"proton pass settings mailboxes create me@example.com",
+	},
+	"proton pass settings mailboxes verify": {
+		"proton pass settings mailboxes verify me@example.com --code 123456",
+	},
+	"proton pass settings mailboxes resend": {
+		"proton pass settings mailboxes resend me@example.com",
+	},
+	"proton pass settings mailboxes update": {
+		"proton pass settings mailboxes update me@example.com --default",
+	},
+	"proton pass settings mailboxes delete": {
+		"proton pass settings mailboxes delete me@example.com --transfer-to other@example.com",
+	},
+	"proton pass settings domains list": {
+		"proton pass settings domains list",
+	},
+	"proton pass settings mailboxes list": {
+		"proton pass settings mailboxes list",
+	},
+	"proton pass links list": {
+		"proton pass links list",
+	},
+	"proton pass links create": {
+		"proton pass links create github.com --expires 7d",
+		"proton pass links create github.com --expires 24h --views 1",
+	},
+	"proton pass links revoke": {
+		"proton pass links revoke 5bH2mQxK",
+	},
+	"proton pass breaches list": {
+		"proton pass breaches list",
+	},
+	"proton pass breaches get": {
+		"proton pass breaches get jane@proton.me",
+	},
+	"proton pass export": {
+		"proton pass export --output pass-backup.zip --passphrase-file ~/.backup-passphrase",
+		"proton pass export --output pass-backup.zip",
+	},
+	"proton pass import": {
+		"proton pass import pass-backup.zip --passphrase-file ~/.backup-passphrase",
+		"proton pass import --dry-run pass-backup.zip",
+	},
+	"proton pass generate": {
+		"proton pass generate",
+		"proton pass generate --length 32",
+		"proton pass generate --no-symbols --length 24",
+	},
 	"proton pass items list": {
 		"proton pass items list",
 		"proton pass items list --vault Work",
@@ -437,10 +624,27 @@ var examples = map[string][]string{
 		"proton pass items create --name GitHub --username roman --password hunter2 --url github.com",
 		"proton pass items create --type note --name 'Door codes' --note 'Front: 1234'",
 		"proton pass items create --type credit-card --name 'Travel card' --holder 'Roman' --number 4111111111111111 --expiry 2030-04",
+		"proton pass items create --type custom --name Router --field 'Network/SSID=home' --hidden 'Network/Key=hunter2'",
 	},
 	"proton pass items update": {
 		"proton pass items update GitHub --password hunter3",
 		"proton pass items update GitHub --username roman-16 --url github.com",
+		"proton pass items update Router --hidden 'Network/Key=hunter3'",
+		"proton pass items update GitHub --totp-field 'Backup=otpauth://totp/GitHub?secret=JBSWY3DPEHPK3PXP'",
+	},
+	"proton pass items revisions list": {
+		"proton pass items revisions list github.com",
+		"proton pass items revisions list github.com --output json",
+	},
+	"proton pass items totp": {
+		"proton pass items totp github.com",
+		"proton pass items totp github.com --output json",
+	},
+	"proton pass items pin": {
+		"proton pass items pin github.com",
+	},
+	"proton pass items unpin": {
+		"proton pass items unpin github.com",
 	},
 	"proton pass items trash": {
 		"proton pass items trash GitHub",
@@ -451,10 +655,14 @@ var examples = map[string][]string{
 		"proton pass items delete --vault Work --all --yes",
 	},
 	"proton pass vaults list": {"proton pass vaults list"},
+	"proton pass vaults get":  {"proton pass vaults get Work"},
 	"proton pass vaults create": {
 		"proton pass vaults create --name Work",
 	},
-	"proton pass vaults update":   {"proton pass vaults update Work --name Office"},
+	"proton pass vaults update": {
+		"proton pass vaults update Work --name Office",
+		"proton pass vaults update Work --description 'Shared team logins' --icon 7 --color 3",
+	},
 	"proton pass vaults delete":   {"proton pass vaults delete Work"},
 	"proton pass aliases list":    {"proton pass aliases list", "proton pass aliases list --vault Work"},
 	"proton pass aliases options": {"proton pass aliases options"},

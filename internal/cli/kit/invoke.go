@@ -317,3 +317,44 @@ func Fail(format string, a ...any) *errs.Problem { return errs.Problemf(format, 
 // have no table, record or mutation shape of their own - the self-management
 // commands, which report on the binary rather than on an account.
 func Object(c *Invocation, v any) error { return ui.Record(c.UI(), ui.RecordSpec{Object: v}) }
+
+// ── ingesting ──
+
+// Ingest reads things out of a file and reports what landed.
+//
+// It is separate from Mutate because how many of them land is not known until
+// the work is done: a file offers cards or events, Proton takes the ones it can
+// identify, and the rest are named with the reason. Counting the offer would
+// report a number that is right only when nothing went wrong, which is the one
+// case nobody needs told about.
+//
+// Under --dry-run there is nothing to report but the offer, since no server has
+// yet had the chance to refuse anything.
+func Ingest[T any](c *Invocation, spec ui.ResultSpec, read func() ([]T, error)) error {
+	if c.App.DryRun {
+		if err := c.preview(&spec); err != nil {
+			return err
+		}
+		return ui.Result(c.UI(), spec)
+	}
+	if err := confirm(c, spec); err != nil {
+		return err
+	}
+	if spec.Count == 0 {
+		return ui.Result(c.UI(), spec)
+	}
+	skipped, err := read()
+	if err != nil {
+		return err
+	}
+	spec.Count -= len(skipped)
+	if err := ui.Result(c.UI(), spec); err != nil {
+		return err
+	}
+	// A partial import is the common failure, so what did not land is named
+	// rather than left to a count that does not add up.
+	for _, s := range skipped {
+		c.Warn("%v", s)
+	}
+	return nil
+}

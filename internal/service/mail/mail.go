@@ -49,6 +49,13 @@ const (
 	labelDrafts    = "8"
 	labelStarred   = "10"
 	labelScheduled = "12"
+	labelSnoozed   = "16"
+	// Proton's inbox categories, which the web shows as tabs across the top.
+	labelSocial       = "20"
+	labelPromotions   = "21"
+	labelUpdates      = "22"
+	labelNewsletters  = "25"
+	labelTransactions = "26"
 )
 
 type Service struct {
@@ -153,20 +160,36 @@ func FilterInline(atts []Attachment) []Attachment {
 	return out
 }
 
+// ListOptions is every way of asking Proton for a set of messages or threads.
+//
+// There is one of these rather than a listing shape and a searching shape
+// because Proton has one endpoint: `/mail/v4/messages` takes a label, a page and
+// a handful of text predicates, and which of them are set is the only thing that
+// separated the two. Two option types meant two commands that could not hand a
+// selection to one another.
 type ListOptions struct {
-	Folder   string
-	Page     int
-	PageSize int
-	Unread   bool
-}
+	Folder string
+	// Keyword, From, To and Subject are the server's text predicates.
+	Keyword, From, To, Subject string
+	// After and Before bound the range by date, as YYYY-MM-DD.
+	After, Before string
+	Unread        bool
 
-type SearchOptions struct {
-	Keyword, From, To, Subject, Folder, After, Before string
-	Limit                                             int
-	Unread                                            bool
+	// Page and PageSize walk the result. A bulk selection asks for one page the
+	// size of its own cap, which is what --limit sets.
+	Page, PageSize int
+
 	// ID narrows the query to one message or thread, which is how a reference
 	// that is already an ID is turned back into a row.
 	ID string
+}
+
+// Narrowed reports whether anything but the folder and the page was asked for,
+// which is what decides whether an empty answer means an empty folder or an
+// unmatched filter.
+func (o ListOptions) Narrowed() bool {
+	return o.Keyword != "" || o.From != "" || o.To != "" || o.Subject != "" ||
+		o.After != "" || o.Before != "" || o.Unread
 }
 
 // decryptBody decrypts an armored PGP body with decKR and, when verKR is
@@ -255,7 +278,7 @@ func (s *Service) Resolve(ctx context.Context, r string) (string, error) {
 // message up.
 func (s *Service) FindMessage(ctx context.Context, r string) (Message, error) {
 	if ref.Full(r) {
-		msgs, _, err := s.Search(ctx, SearchOptions{ID: r, Folder: "all", Limit: 1})
+		msgs, _, err := s.List(ctx, ListOptions{ID: r, Folder: "all", PageSize: 1})
 		if err != nil {
 			return Message{}, err
 		}
@@ -266,7 +289,7 @@ func (s *Service) FindMessage(ctx context.Context, r string) (Message, error) {
 		// with the identity we do have rather than refusing to act.
 		return Message{ID: r}, nil
 	}
-	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
+	msgs, _, err := s.List(ctx, ListOptions{Keyword: r, Folder: "all", PageSize: 20})
 	if err != nil {
 		return Message{}, err
 	}
@@ -279,7 +302,7 @@ func (s *Service) ResolveScheduled(ctx context.Context, r string) (string, error
 	if ref.Full(r) {
 		return r, nil
 	}
-	msgs, _, err := s.Search(ctx, SearchOptions{Keyword: r, Folder: "scheduled", Limit: 20})
+	msgs, _, err := s.List(ctx, ListOptions{Keyword: r, Folder: "scheduled", PageSize: 20})
 	if err != nil {
 		return "", err
 	}
@@ -304,7 +327,7 @@ func (s *Service) ResolveConversation(ctx context.Context, r string) (string, er
 // FindConversation resolves a reference to the thread itself.
 func (s *Service) FindConversation(ctx context.Context, r string) (Conversation, error) {
 	if ref.Full(r) {
-		convs, _, err := s.ConversationsSearch(ctx, SearchOptions{ID: r, Folder: "all", Limit: 1})
+		convs, _, err := s.ConversationsList(ctx, ListOptions{ID: r, Folder: "all", PageSize: 1})
 		if err != nil {
 			return Conversation{}, err
 		}
@@ -313,7 +336,7 @@ func (s *Service) FindConversation(ctx context.Context, r string) (Conversation,
 		}
 		return Conversation{ID: r}, nil
 	}
-	convs, _, err := s.ConversationsSearch(ctx, SearchOptions{Keyword: r, Folder: "all", Limit: 20})
+	convs, _, err := s.ConversationsList(ctx, ListOptions{Keyword: r, Folder: "all", PageSize: 20})
 	if err != nil {
 		return Conversation{}, err
 	}

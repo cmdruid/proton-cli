@@ -29,6 +29,25 @@ The `ID` column is always first and always called `ID`. Dates use one format. Th
 
 An empty collection prints **nothing** on stdout - just `No messages.` on stderr - so a redirect yields an empty file rather than a stray header. When a filter was applied it reads `No messages match.` instead, so an unmatched search never looks like an empty account.
 
+### Paging and ordering
+
+Every `list` takes `--page` and `--page-size`, and the footer says where you are:
+
+```console
+$ proton contacts list --page-size 50
+50 of 3000 contacts. Next page: --page 1
+```
+
+Everything except mail is also ordered locally with `--sort` and `--desc`, because the whole collection is decrypted here before it can be shown. Each listing offers only the keys it has, and says so when given another:
+
+```console
+$ proton drive items list --sort size --desc
+$ proton contacts list --sort nope
+Error: --sort accepts: name, email.
+```
+
+Mail is Proton's to order, so `mail messages list` and `mail conversations list` come back newest first and take no `--sort`.
+
 ### Records
 
 ```console
@@ -87,8 +106,8 @@ LABEL=$(proton mail settings labels create --name Work)
 One line for the problem, an indented `Try:` block for the fix.
 
 ```console
-$ proton mail messages get 5bH2mQxK --format htm
-Error: --format accepts: text, html, raw.
+$ proton mail messages get 5bH2mQxK --render htm
+Error: --render accepts: text, html, raw.
 
 $ proton contacts get jane
 Error: "jane" matches 2 contacts.
@@ -97,7 +116,7 @@ Try:   narrow the term, or use one of:
          3Ns8pT2v  jane.roe@work.example
 ```
 
-Mistakes that can be spotted in your command line - a misspelled setting key, an impossible `--format`, a colour outside Proton's palette - are reported immediately, without signing in or contacting Proton.
+Mistakes that can be spotted in your command line - a misspelled setting key, an impossible `--render`, a colour outside Proton's palette - are reported immediately, without signing in or contacting Proton.
 
 ## Exit codes
 

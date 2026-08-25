@@ -50,7 +50,7 @@ func keysListCmd() *cobra.Command {
 				return err
 			}
 			var rows []pinnedKey
-			for _, email := range ct.Emails {
+			for _, email := range ct.EmailAddresses() {
 				crypto, err := c.App.Contacts.PinnedKeysFor(c.Ctx, email)
 				if err != nil {
 					return err
@@ -173,18 +173,19 @@ func pickEmail(c *kit.Invocation, id, flag string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	switch len(ct.Emails) {
+	addresses := ct.EmailAddresses()
+	switch len(addresses) {
 	case 0:
 		return "", kit.Fail("That contact has no email address.").
 			Hint("--email jane@example.com")
 	case 1:
-		return ct.Emails[0], nil
+		return addresses[0], nil
 	}
 	lines := []string{"choose one with --email:"}
-	for _, e := range ct.Emails {
+	for _, e := range addresses {
 		lines = append(lines, "  "+e)
 	}
-	return "", kit.Fail("That contact has %d email addresses.", len(ct.Emails)).
+	return "", kit.Fail("That contact has %d email addresses.", len(addresses)).
 		Hint(lines...).Exit(4)
 }
 

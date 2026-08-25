@@ -22,12 +22,21 @@ type Reauth struct {
 	totp          string
 }
 
+// The one thing each credential flag says, wherever it appears. They are
+// registered from here for the same reason --all is: a usage string each command
+// writes for itself is how one name comes to mean two things.
+const (
+	PasswordFileUsage  = "Read the account password from a file"
+	PasswordStdinUsage = "Read the account password from stdin"
+	TOTPUsage          = "Two-factor code"
+)
+
 // Declare adds the flags to a command. Call Supply from its body.
 func (r *Reauth) Declare(c *cobra.Command) {
 	f := c.Flags()
-	f.StringVar(&r.passwordFile, "password-file", "", "Read the account password from a file")
-	f.BoolVar(&r.passwordStdin, "password-stdin", false, "Read the account password from stdin")
-	f.StringVar(&r.totp, "totp", "", "Two-factor code")
+	f.StringVar(&r.passwordFile, "password-file", "", PasswordFileUsage)
+	f.BoolVar(&r.passwordStdin, "password-stdin", false, PasswordStdinUsage)
+	f.StringVar(&r.totp, "totp", "", TOTPUsage)
 }
 
 // Supply hands what was given to the invocation, before anything that might ask

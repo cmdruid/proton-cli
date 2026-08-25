@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/roman-16/proton-cli/internal/account/keys"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -97,25 +96,31 @@ func TestOppositeKind(t *testing.T) {
 	}
 }
 
-func TestSearchQueryDefaults(t *testing.T) {
-	q := searchQuery(SearchOptions{Limit: 25}, false)
-	if q.Get("LabelID") != "5" { // empty folder defaults to "all"
-		t.Errorf("LabelID = %q, want 5 (all)", q.Get("LabelID"))
+func TestListQueryDefaults(t *testing.T) {
+	q, err := listQuery(ListOptions{}, false)
+	if err != nil {
+		t.Fatalf("listQuery: %v", err)
+	}
+	if q.Get("LabelID") != "0" { // empty folder defaults to the inbox
+		t.Errorf("LabelID = %q, want 0 (inbox)", q.Get("LabelID"))
 	}
 	if q.Get("Sort") != "Time" || q.Get("Desc") != "1" {
 		t.Errorf("expected Sort=Time Desc=1, got Sort=%q Desc=%q", q.Get("Sort"), q.Get("Desc"))
 	}
-	if q.Get("PageSize") != "25" {
-		t.Errorf("PageSize = %q, want 25", q.Get("PageSize"))
+	if q.Get("Page") != "0" || q.Get("PageSize") != "25" {
+		t.Errorf("Page/PageSize = %q/%q, want 0/25", q.Get("Page"), q.Get("PageSize"))
 	}
 }
 
-func TestSearchQueryFieldMapping(t *testing.T) {
-	opts := SearchOptions{
+func TestListQueryFieldMapping(t *testing.T) {
+	opts := ListOptions{
 		Keyword: "invoice", From: "a@x.com", To: "b@x.com",
-		Subject: "hi", Folder: "inbox", Limit: 10, Unread: true,
+		Subject: "hi", Folder: "inbox", PageSize: 10, Unread: true,
 	}
-	q := searchQuery(opts, false)
+	q, err := listQuery(opts, false)
+	if err != nil {
+		t.Fatalf("listQuery: %v", err)
+	}
 	checks := map[string]string{
 		"LabelID": "0",
 		"Keyword": "invoice",
@@ -130,33 +135,35 @@ func TestSearchQueryFieldMapping(t *testing.T) {
 		}
 	}
 	if q.Has("Recipients") {
-		t.Error("messages search must not set Recipients")
+		t.Error("a message query must not set Recipients")
 	}
 }
 
-func TestSearchQueryRecipientsForConversations(t *testing.T) {
-	q := searchQuery(SearchOptions{To: "b@x.com", Limit: 5}, true)
+func TestListQueryRecipientsForConversations(t *testing.T) {
+	q, err := listQuery(ListOptions{To: "b@x.com", PageSize: 5}, true)
+	if err != nil {
+		t.Fatalf("listQuery: %v", err)
+	}
 	if q.Get("Recipients") != "b@x.com" {
-		t.Errorf("conversations search should map To→Recipients, got %q", q.Get("Recipients"))
+		t.Errorf("a thread query should map To\u2192Recipients, got %q", q.Get("Recipients"))
 	}
 	if q.Has("To") {
-		t.Error("conversations search must not set To")
+		t.Error("a thread query must not set To")
 	}
 }
 
-func TestValidateDates(t *testing.T) {
-	q := url.Values{}
-	if err := validateDates(SearchOptions{After: "2020-01-01", Before: "2099-12-31"}, q); err != nil {
+func TestListQueryDates(t *testing.T) {
+	q, err := listQuery(ListOptions{After: "2020-01-01", Before: "2099-12-31"}, false)
+	if err != nil {
 		t.Fatalf("valid dates errored: %v", err)
 	}
 	if q.Get("Begin") == "" || q.Get("End") == "" {
 		t.Errorf("expected Begin and End set, got Begin=%q End=%q", q.Get("Begin"), q.Get("End"))
 	}
-
-	if err := validateDates(SearchOptions{After: "nope"}, url.Values{}); err == nil {
+	if _, err := listQuery(ListOptions{After: "nope"}, false); err == nil {
 		t.Error("invalid --after should error")
 	}
-	if err := validateDates(SearchOptions{Before: "nope"}, url.Values{}); err == nil {
+	if _, err := listQuery(ListOptions{Before: "nope"}, false); err == nil {
 		t.Error("invalid --before should error")
 	}
 }

@@ -18,25 +18,36 @@ proton mail messages list --page 1 --page-size 50
 proton mail messages list --folder scheduled     # queued scheduled sends
 ```
 
-Folders: `inbox`, `sent`, `drafts`, `trash`, `spam`, `archive`, `starred`, `scheduled`, `all`, or any label ID.
+Folders: `inbox`, `sent`, `drafts`, `trash`, `spam`, `archive`, `starred`, `scheduled`, `snoozed`, `all`, or any label ID.
+
+Proton's inbox tabs are folders too: `social`, `promotions`, `updates`, `newsletters`, `transactions`.
 
 ### Search
 
+Searching is `list` with a predicate, because it is one request to Proton either way. `list` opens on the inbox, so `--folder all` is what widens it to everything.
+
 ```bash
-proton mail messages search --keyword invoice
-proton mail messages search --from billing@example.com --after 2026-01-01
-proton mail messages search --subject "Q1 report" --folder archive
-proton mail messages search --to alice@proton.me --before 2026-04-01 --limit 100
+proton mail messages list --keyword invoice --folder all
+proton mail messages list --from billing@example.com --after 2026-01-01 --folder all
+proton mail messages list --subject "Q1 report" --folder archive
+proton mail messages list --to alice@proton.me --before 2026-04-01 --page-size 100
 ```
 
 `--from` and `--to` match addresses; use `--keyword` to match display names and body text too.
+
+The same flags narrow every organising verb, so a selection can be read before it is acted on:
+
+```bash
+proton mail messages list --from newsletter@example.com --older-than 90d --folder all
+proton mail messages trash --from newsletter@example.com --older-than 90d
+```
 
 ### Read
 
 ```bash
 proton mail messages get REF                       # headers, body, attachment list
-proton mail messages get --format html REF         # original HTML
-proton mail messages get --format raw REF          # untouched body
+proton mail messages get --render html REF         # original HTML
+proton mail messages get --render raw REF          # untouched body
 proton mail messages get --body-only REF > body.txt
 proton mail messages get --strip-quotes REF        # drop quoted reply blocks
 proton mail messages get --include-inline REF      # list inline images too
@@ -76,7 +87,7 @@ proton mail messages send --to bob@gmail.com --subject Secret --body "..." --eo-
 
 ```bash
 proton mail messages reply REF --body "Thanks, paid today."
-proton mail messages reply REF --all --body "Looping in the team."
+proton mail messages reply REF --everyone --body "Looping in the team."
 proton mail messages forward REF --to alice@proton.me --body "FYI"
 proton mail conversations reply REF --body "Works for me."   # newest message in a thread
 ```
@@ -169,13 +180,40 @@ proton mail drafts delete REF
 
 Sending a draft delivers it exactly as stored, including whatever signature it was created with.
 
+## Emptying, expiring, unsubscribing
+
+```bash
+proton mail messages empty --folder trash
+proton mail messages empty --folder spam
+proton mail messages expire 5bH2mQxK --in 7d
+proton mail messages expire --from newsletter@example.com --in 30d
+proton mail messages expire 5bH2mQxK --never
+proton mail messages unsubscribe 5bH2mQxK
+```
+
+`empty` is **not** `delete --all`. A filtered delete enumerates what it will touch and shows you; `empty` asks Proton to clear the folder without ever naming its contents. That is why it takes no filter and always asks.
+
+`expire` makes messages delete themselves. Proton stores the moment rather than the duration, so a message already counting down reports *when*. `--never` stops it. Passing both `--in` and `--never` is refused before anything is sent.
+
+`unsubscribe` asks a mailing list to stop, using whatever the message offered - a `List-Unsubscribe` header, or the one-click form behind it. Proton does the asking, because Proton is the party the list already knows.
+
+## Snooze
+
+```bash
+proton mail conversations snooze 5bH2mQxK --until 3d
+proton mail conversations snooze --unread --until 2026-04-17T09:00
+proton mail conversations unsnooze 5bH2mQxK
+```
+
+`--until` takes a duration from now or a moment. Snooze is on **threads**, not messages, because that is what Proton snoozes: a conversation leaves the inbox as a whole and returns as a whole. A moment in the past is refused.
+
 ## Conversations
 
 Conversations are whole threads, with the same verbs as messages.
 
 ```bash
 proton mail conversations list --folder inbox --unread
-proton mail conversations search --keyword invoice
+proton mail conversations list --keyword invoice --folder all
 proton mail conversations get REF            # every message, chronological
 proton mail conversations get --summary REF  # one line per message
 proton mail conversations get --strip-quotes REF
@@ -193,7 +231,7 @@ proton mail conversations star REF...
 proton mail messages attachments list MESSAGE_ID
 proton mail messages attachments list --include-inline MESSAGE_ID
 proton mail messages attachments download MESSAGE_ID ATTACHMENT_ID --output ./file.pdf
-proton mail messages attachments download MESSAGE_ID --all --output-dir ./attachments/
+proton mail messages attachments download MESSAGE_ID --output-dir ./attachments/
 proton mail messages attachments download MESSAGE_ID ATTACHMENT_ID --output - | less
 ```
 
@@ -203,7 +241,7 @@ The same commands work across a whole thread:
 
 ```bash
 proton mail conversations attachments list CONVERSATION_ID
-proton mail conversations attachments download CONVERSATION_ID --all --output-dir ./thread/
+proton mail conversations attachments download CONVERSATION_ID --output-dir ./thread/
 ```
 
 ## Settings
@@ -248,7 +286,7 @@ proton mail settings addresses update me@proton.me --clear-signature
 
 **Your signature is applied to outgoing mail automatically**, as in the web client: the address's own signature, plus Proton's *"Sent with Proton Mail secure email."* footer when your account has it enabled. Free accounts have that footer forced on and cannot switch it off.
 
-Pass `--no-signature` on any sending command to leave both out, or turn the footer off account-wide with `proton mail settings set pm-signature off` (paid plans only). `--eml` and `mail drafts send` never append anything, since in both cases the body is already final.
+Pass `--no-signature` on any sending command to leave both out, or turn the footer off account-wide with `proton mail settings set pm-signature off`. `--eml` and `mail drafts send` never append anything, since in both cases the body is already final.
 
 Proton stores signatures as HTML. Plain text is escaped and its newlines become line breaks; `--html` passes markup through untouched.
 
@@ -271,19 +309,57 @@ A message lives in exactly one folder and carries any number of labels. `move --
 
 ### Filters
 
-Server-side [Sieve](https://en.wikipedia.org/wiki/Sieve_(mail_filtering_language)) filters, the same ones the web client creates.
+Server-side filters, the same ones the web client creates.
 
 ```bash
 proton mail settings filters list
-proton mail settings filters create --name "Archive invoices" --sieve 'require ["fileinto"]; if header :contains "Subject" "invoice" { fileinto "Archive"; }'
-proton mail settings filters create --name Big --sieve - < filter.sieve
-proton mail settings filters update FILTER_ID --name "New name"
+proton mail settings filters get "Archive invoices"       # what it matches and does
+proton mail settings filters create --name "Archive invoices" --if "subject contains invoice" --move-to Archive
+proton mail settings filters update "Archive invoices" --name "New name"
 proton mail settings filters disable "Archive invoices"   # by name, or by filter ID
 proton mail settings filters enable "Archive invoices"
 proton mail settings filters delete "Archive invoices"
 ```
 
-A Sieve script is not recoverable once deleted, so `delete` names the filter and asks first.
+Describe a filter with `--if` and Proton writes the [Sieve](https://en.wikipedia.org/wiki/Sieve_(mail_filtering_language)) - the same script the web client's builder produces, so a filter made here opens in it.
+
+A condition reads `FIELD [not] COMPARATOR VALUE`:
+
+| | |
+| --- | --- |
+| Field | `subject`, `sender`, `recipient`, `attachments` |
+| Comparator | `contains`, `is`, `starts`, `ends`, `matches` |
+
+`is` wants the whole value, `matches` takes `*` and `?` as wildcards, and `not` before the comparator inverts the condition. An `attachments` condition takes no value - it asks whether there is one.
+
+```bash
+proton mail settings filters create --name Receipts \
+  --if "sender contains billing@" --if "subject not contains draft" \
+  --label Receipts --mark-read
+
+proton mail settings filters create --name Loud --match any \
+  --if "subject starts [ALERT]" --if "attachments contains" --star
+```
+
+Every condition has to hold unless you pass `--match any`. The actions are `--move-to` (one folder: `archive`, `inbox`, `spam`, `trash`, or one of yours), `--label` (repeatable), `--mark-read` and `--star`; a filter needs at least one of them, and every filter skips mail Proton has already called spam.
+
+`update` takes the same flags, and rewrites the rule in place:
+
+```bash
+proton mail settings filters update Receipts --if "sender contains billing@" --label Receipts --mark-read
+```
+
+It replaces the whole rule rather than adding to it, for the same reason `reorder` takes every filter: half a rule is not one, and a filter that matches mail and does nothing with it is not worth leaving behind. `get` shows the rule as it stands, in the words `--if` takes. The filter keeps its place in the order and whether it is running, which is what makes this different from deleting it and making a new one.
+
+For a script you would rather write yourself, `--sieve` takes one:
+
+```bash
+proton mail settings filters create --name Big --sieve - < filter.sieve
+```
+
+`get` shows a script it cannot describe as the script itself, rather than as words that would not rebuild it.
+
+A filter is not recoverable once deleted, so `delete` names it and asks first.
 
 ### Auto-reply
 
@@ -307,3 +383,30 @@ proton mail settings autoreply enable
 `--zone` is any IANA name and defaults to your system's. `--message` takes `-` for stdin and is stored as HTML, so plain text is escaped with its newlines turned into line breaks unless you pass `--html`.
 
 Saving a schedule turns the auto-reply on; `disable` switches it off and keeps the schedule for later. Proton sends every auto-reply with the subject `Auto` and offers no way to change it, so neither does proton. Auto-reply is a paid feature.
+
+## Running filters over old mail
+
+```bash
+proton mail settings filters apply                       # every enabled filter
+proton mail settings filters apply Newsletters           # just this one
+proton mail settings filters reorder Newsletters Receipts Archive
+```
+
+A filter ordinarily acts once, as mail arrives, so a rule written today does nothing about what came yesterday. `apply` is the catching-up.
+
+Order decides the outcome - the first rule to file a message wins - so `reorder` replaces the **whole** order and refuses a partial one. A half-stated order is one nobody can predict.
+
+## Who reaches the inbox
+
+Proton's settings page shows three lists - spam, block, allow - but they are one record with a destination on it, so this is one collection and `list` shows all three:
+
+```bash
+proton mail settings senders list
+proton mail settings senders block spammer@example.com
+proton mail settings senders block @example.com          # a whole domain
+proton mail settings senders spam newsletter@example.com
+proton mail settings senders allow billing@example.com
+proton mail settings senders forget billing@example.com
+```
+
+A decision applies before the spam filter forms an opinion. Deciding again about the same sender **replaces** the earlier decision rather than colliding with it. `forget` drops the decision and lets the filter decide again.

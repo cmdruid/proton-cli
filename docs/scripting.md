@@ -19,7 +19,7 @@ MSG=$(proton mail messages send --to me@proton.me --subject Deploy --body "Done.
 proton mail messages list --unread --output json | jq -r '.messages[].subject'
 
 # senders of everything older than a week, deduplicated
-proton mail messages search --before 2026-04-08 --limit 200 --output json | jq -r '.messages[].from_address' | sort -u
+proton mail messages list --before 2026-04-08 --folder all --page-size 200 --output json | jq -r '.messages[].from_address' | sort -u
 
 # total size of a Drive folder
 proton drive items list /Backup --output json | jq '[.items[].size] | add'
@@ -74,7 +74,7 @@ proton mail messages send --eml ./message.eml --to someone-else@proton.me
 
 ```bash
 # acknowledge everything unread from a sender, then archive it
-proton mail messages search --from alerts@example.com --unread --output json | jq -r '.messages[].id' | while read -r id; do
+proton mail messages list --from alerts@example.com --unread --folder all --output json | jq -r '.messages[].id' | while read -r id; do
       proton mail messages reply "$id" --body "Received, thanks." --no-signature
       proton mail messages move "$id" --into archive
     done
@@ -201,4 +201,4 @@ alias newsletter-xyz
 - **CAPTCHA**: a login on a headless machine can hit human verification, which needs a desktop. Log in on a desktop first and copy the session, or run the job somewhere with a display. See [Human verification](human-verification.md).
 - **`--quiet`** silences the `✓` lines and progress bars, useful in cron.
 - **Rate limits**: bulk commands page through Proton's API and respect its caps (150 messages per page). Long-running loops should sleep between iterations.
-- **Search lag**: Proton's index is eventually consistent, so a just-sent message may not appear in `search` for a few seconds. Act on the ID that the command printed instead of searching again.
+- **Search lag**: Proton's index is eventually consistent, so a just-sent message may not appear in `list` for a few seconds. Act on the ID that the command printed instead of searching again.

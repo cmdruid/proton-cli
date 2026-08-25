@@ -121,6 +121,14 @@ type calKeys struct {
 	addrKR   *pgp.KeyRing
 	memberID string
 	email    string
+	// addressID is the address this membership belongs to. Sharing names it, so
+	// Proton knows which of your addresses is doing the sharing.
+	addressID string
+	// passphraseKey is the session key of the passphrase that opens this
+	// calendar. Giving somebody else access means handing them this key,
+	// encrypted to theirs - so it is kept rather than discarded once the
+	// passphrase itself is in hand.
+	passphraseKey *pgp.SessionKey
 }
 
 // unlockCalendar opens a calendar's keys.
@@ -141,6 +149,7 @@ func (s *Service) unlockCalendar(ctx context.Context, calendarID string) (*calKe
 		}
 
 		var calPass []byte
+		var passphraseKey *pgp.SessionKey
 		for _, mp := range b.Passphrase.MemberPassphrases {
 			if mp.MemberID != me.ID {
 				continue
@@ -161,6 +170,12 @@ func (s *Service) unlockCalendar(ctx context.Context, calendarID string) (*calKe
 				return nil, err
 			}
 			calPass = dec.GetBinary()
+			// The session key is what a new member is given, so it is taken here
+			// where the passphrase is already being opened rather than by
+			// decrypting the same message a second time later.
+			if split, err := msg.SplitMessage(); err == nil {
+				passphraseKey, _ = addrKR.DecryptSessionKey(split.GetBinaryKeyPacket())
+			}
 			break
 		}
 		if calPass == nil {
@@ -185,7 +200,10 @@ func (s *Service) unlockCalendar(ctx context.Context, calendarID string) (*calKe
 		if calKR.CountEntities() == 0 {
 			return nil, fmt.Errorf("failed to unlock calendar keys")
 		}
-		return &calKeys{calKR: calKR, addrKR: addrKR, memberID: me.ID, email: me.Email}, nil
+		return &calKeys{
+			calKR: calKR, addrKR: addrKR, memberID: me.ID, email: me.Email,
+			addressID: me.AddressID, passphraseKey: passphraseKey,
+		}, nil
 	})
 }
 

@@ -20,9 +20,9 @@ import (
 
 func itemsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "items", Short: "Files and folders"}
-	c.AddCommand(itemsListCmd(), itemsGetCmd(), itemsUploadCmd(), itemsDownloadCmd(),
-		itemsUpdateCmd(), itemsMoveCmd(), itemsCopyCmd(),
-		itemsTrashCmd(), itemsDeleteCmd(), revisionsCmd())
+	c.AddCommand(itemsListCmd(), itemsGetCmd(), itemsCreateCmd(), itemsUploadCmd(),
+		itemsDownloadCmd(), itemsUpdateCmd(), itemsMoveCmd(), itemsCopyCmd(),
+		itemsTrashCmd(), itemsDeleteCmd(), revisionsCmd(), shareCmd())
 	return c
 }
 
@@ -44,10 +44,17 @@ func childColumns() []ui.Column[drivesvc.Child] {
 }
 
 func itemsListCmd() *cobra.Command {
-	return &cobra.Command{
+	var f filters
+	var page kit.Page
+	var order kit.Order
+	c := &cobra.Command{
 		Use:   "list [PATH]",
 		Short: "List what is in a folder",
-		Args:  cobra.MaximumNArgs(1),
+		Long: "List what is in a folder.\n\n" +
+			"The filters are the same ones move, copy, trash and delete take, so a\n" +
+			"selection can be worked out here and then handed to the verb that acts on\n" +
+			"it. PATH is what those commands call --scope.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)
 			if err != nil {
@@ -57,16 +64,65 @@ func itemsListCmd() *cobra.Command {
 			if len(c.Args) > 0 {
 				at = c.Args[0]
 			}
+			// A listing with no filter is the folder itself, which is one request;
+			// a filtered one is the same walk the bulk verbs do.
 			children, err := c.App.Drive.List(c.Ctx, dc, at)
+			if f.narrowed() {
+				f.scope = at
+				children, err = matchItems(c.Ctx, c, dc, &f)
+			}
 			if err != nil {
 				return err
 			}
+			if err := kit.Sort(order, children, childOrder()); err != nil {
+				return err
+			}
+			rows, total := kit.Slice(page, children)
 			return kit.List(c, ui.TableSpec[drivesvc.Child]{
 				Noun: "items", Columns: childColumns(),
-				Total: ui.Unknown, Page: ui.Unpaged,
-			}, children, func(ch drivesvc.Child) []string { return []string{ch.LinkID} })
+				Total: total, Page: page.Number, PageSize: page.Size,
+				Filtered: f.narrowed(),
+			}, rows, func(ch drivesvc.Child) []string { return []string{ch.LinkID} })
 		}),
 	}
+	f.registerNarrowing(c.Flags())
+	order.Register(c, "name", "size", "modified")
+	page.Register(c, "items")
+	return c
+}
+
+// childOrder is how a Drive listing may be ordered. A folder's children arrive
+// whole, so the ordering is this process's to do.
+//
+// Folders lead whichever key is chosen, as they do in every file manager: a
+// listing sorted by size that scattered the folders through it would be
+// answering a question about files with a mix of both.
+func childOrder() kit.Comparators[drivesvc.Child] {
+	byKind := func(a, b drivesvc.Child) int {
+		return kit.Ints(boolInt(a.Type != drivesvc.TypeFolder), boolInt(b.Type != drivesvc.TypeFolder))
+	}
+	then := func(next func(a, b drivesvc.Child) int) func(a, b drivesvc.Child) int {
+		return func(a, b drivesvc.Child) int {
+			if c := byKind(a, b); c != 0 {
+				return c
+			}
+			return next(a, b)
+		}
+	}
+	return kit.Comparators[drivesvc.Child]{
+		"name": then(func(a, b drivesvc.Child) int { return kit.Fold(a.Name, b.Name) }),
+		"size": then(func(a, b drivesvc.Child) int { return kit.Ints(a.Size, b.Size) }),
+		"modified": then(func(a, b drivesvc.Child) int {
+			return kit.Ints(a.ModifyTime, b.ModifyTime)
+		}),
+	}
+}
+
+func boolInt(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func itemsGetCmd() *cobra.Command {
@@ -674,17 +730,13 @@ func revisionsDeleteCmd() *cobra.Command {
 	}
 }
 
-// ── folders ──
+// ── creating a folder ──
 
-func foldersCmd() *cobra.Command {
-	c := &cobra.Command{
-		Use:   "folders",
-		Short: "Creating folders",
-		Long: "Creating folders.\n\n" +
-			"Every other folder operation is an item operation, because Drive treats files\n" +
-			"and folders alike: rename, move, trash and delete all live under `items`.",
-	}
-	c.AddCommand(&cobra.Command{
+// A folder is the one thing in Drive you make rather than upload, so it is
+// `items create`: Drive addresses one collection, and rename, move, trash and
+// delete already treat files and folders alike.
+func itemsCreateCmd() *cobra.Command {
+	return &cobra.Command{
 		Use:   "create PATH",
 		Short: "Create a folder, and any missing folder above it",
 		Args:  cobra.ExactArgs(1),
@@ -711,6 +763,5 @@ func foldersCmd() *cobra.Command {
 				return c.App.Drive.CreateFolders(c.Ctx, dc, paths)
 			})
 		}),
-	})
-	return c
+	}
 }

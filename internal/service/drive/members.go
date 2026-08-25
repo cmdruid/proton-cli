@@ -158,3 +158,90 @@ func (s *Service) addressKeyRing(ctx context.Context, email string) (*pgp.KeyRin
 	}
 	return pgp.NewKeyRing(key)
 }
+
+// ── changing what somebody may do ──
+
+// SetMemberRole changes an existing member's access, or a pending invitation's.
+//
+// Proton keeps the two apart - somebody who has accepted is a member, somebody
+// who has not is an invitation - but the question a person asks is the same one
+// either way, so this answers it against whichever holds the address.
+//
+// The permission bits are the same ones an invitation carries, so nothing has to
+// be re-encrypted: the key packet the member already holds still opens the share,
+// and only what they are allowed to do with it changes.
+func (s *Service) SetMemberRole(ctx context.Context, dc *Context, path, email string, edit bool) error {
+	res, err := s.ResolvePath(ctx, dc, path)
+	if err != nil {
+		return err
+	}
+	perms := permView
+	if edit {
+		perms = permEdit
+	}
+	for _, sid := range res.Link.ShareIDs {
+		if sid == dc.ShareID {
+			continue
+		}
+		if members, err := s.ListMembers(ctx, sid); err == nil {
+			for _, m := range members {
+				if !strings.EqualFold(m.Email, email) {
+					continue
+				}
+				return s.C.Decode(ctx, proton.Request{
+					Method: "PUT",
+					Path:   fmt.Sprintf("/drive/v2/shares/%s/members/%s", sid, m.MemberID),
+					Body:   map[string]any{"Permissions": perms},
+				}, nil)
+			}
+		}
+		if invites, err := s.ListOutgoingInvites(ctx, sid); err == nil {
+			for _, p := range invites {
+				if !strings.EqualFold(p.Email, email) {
+					continue
+				}
+				return s.C.Decode(ctx, proton.Request{
+					Method: "PUT",
+					Path:   fmt.Sprintf("/drive/v2/shares/%s/invitations/%s", sid, p.InvitationID),
+					Body:   map[string]any{"Permissions": perms},
+				}, nil)
+			}
+		}
+	}
+	return &errs.NotFound{Kind: "member", Ref: email}
+}
+
+// ResendInvite asks Proton to send an invitation's email again.
+//
+// An invitation that was never answered is usually one that was never seen, and
+// the alternative - cancel it and invite again - churns the invitation's identity
+// for no reason.
+func (s *Service) ResendInvite(ctx context.Context, dc *Context, path, email string) error {
+	res, err := s.ResolvePath(ctx, dc, path)
+	if err != nil {
+		return err
+	}
+	for _, sid := range res.Link.ShareIDs {
+		if sid == dc.ShareID {
+			continue
+		}
+		invites, err := s.ListOutgoingInvites(ctx, sid)
+		if err != nil {
+			continue
+		}
+		for _, p := range invites {
+			if !strings.EqualFold(p.Email, email) {
+				continue
+			}
+			return s.C.Decode(ctx, proton.Request{
+				Method: "POST",
+				Path: fmt.Sprintf("/drive/v2/shares/%s/invitations/%s/sendemail",
+					sid, p.InvitationID),
+			}, nil)
+		}
+	}
+	// Somebody who has already accepted has nothing to resend, and saying so is
+	// more use than a generic miss.
+	return errs.Problemf("no invitation to %s is waiting for an answer.", email).
+		Hint("`drive items share get` shows who has accepted and who has not.").Exit(3)
+}

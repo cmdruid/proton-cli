@@ -267,11 +267,19 @@ func pickSuffix(s []AliasSuffix, wanted string) (AliasSuffix, error) {
 			return x, nil
 		}
 	}
+	// The domains, not the suffixes: Proton mints the word in front of a suffix
+	// afresh every time it is asked, so naming the full form back would be
+	// telling somebody to use a value that has already stopped working.
 	avail := make([]string, 0, len(s))
+	seen := make(map[string]bool, len(s))
 	for _, x := range s {
-		avail = append(avail, x.Suffix)
+		if !seen[x.Domain] {
+			seen[x.Domain] = true
+			avail = append(avail, x.Domain)
+		}
 	}
-	return AliasSuffix{}, fmt.Errorf("suffix %q not found; available: %s", wanted, strings.Join(avail, ", "))
+	return AliasSuffix{}, fmt.Errorf("no alias domain matching %q; available: %s",
+		wanted, strings.Join(avail, ", "))
 }
 
 // pickMailboxes resolves the mailboxes an alias should arrive in. Naming none

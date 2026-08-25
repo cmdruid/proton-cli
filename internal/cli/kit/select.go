@@ -25,6 +25,10 @@ type Selector[T any] struct {
 	IDOf func(T) string
 	// ByRef resolves one explicit reference to a row.
 	ByRef func(context.Context, string) (T, error)
+	// Refs are the references to resolve. Leave it nil for the command's own
+	// arguments, which is the usual case; a command whose first argument names
+	// something else - the alias whose contacts these are - passes the rest.
+	Refs []string
 	// ByFilter returns everything the filters matched. Leave it nil when the
 	// user set no filters; that is how Select knows.
 	ByFilter func(context.Context) ([]T, error)
@@ -90,11 +94,15 @@ func Preview[T any](noun string, cols []ui.Column[T], rows []T) func(*ui.UI) err
 func Select[T any](c *Invocation, s Selector[T]) (Selection[T], error) {
 	sel := Selection[T]{noun: s.Noun, cols: s.Columns, idsOf: s.IDOf}
 
-	if len(c.Args) == 0 && s.ByFilter == nil {
+	refs := s.Refs
+	if refs == nil {
+		refs = c.Args
+	}
+	if len(refs) == 0 && s.ByFilter == nil {
 		return sel, NothingSelected(s.FilterHint, s.Scope)
 	}
 
-	for _, ref := range c.Args {
+	for _, ref := range refs {
 		row, err := s.ByRef(c.Ctx, ref)
 		if err != nil {
 			return sel, err
@@ -181,6 +189,24 @@ func (r *Range) Register(f Flags, subject string) {
 
 // Set reports whether either bound was given.
 func (r *Range) Set() bool { return r.OlderThan != "" || r.NewerThan != "" }
+
+// AllUsage is the one thing --all says, wherever it appears.
+//
+// The flag answers a single question - did you mean every one of them, rather
+// than some - and the answer is worth asking for because acting on everything is
+// never what an incomplete command line should be read as. What "everything"
+// covers is the command's own scope: a folder, a subtree, a vault, the trash,
+// the machine's saved profiles, the queue of scheduled sends.
+//
+// It is registered from here rather than declared per command because a usage
+// string each command writes for itself is how one name comes to mean four
+// things. Reply-all is the case that proved it: "everyone who was on the
+// message" is a different idea wearing the same word, so it has a word of its
+// own.
+const AllUsage = "Act on everything in scope, rather than a subset"
+
+// All registers --all on a command.
+func All(f Flags, into *bool) { f.BoolVar(into, "all", false, AllUsage) }
 
 // Flags is the slice of pflag.FlagSet the shared groups need. Declaring it as an
 // interface keeps kit from importing pflag into every caller's mental model.

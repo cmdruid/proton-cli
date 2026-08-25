@@ -76,7 +76,7 @@ func trashRestoreCmd() *cobra.Command {
 			})
 		}),
 	}
-	c.Flags().BoolVar(&all, "all", false, "Restore everything in the trash")
+	kit.All(c.Flags(), &all)
 	return c
 }
 

@@ -8,7 +8,9 @@ package pass
 
 import (
 	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/secret"
 	passsvc "github.com/roman-16/proton-cli/internal/service/pass"
+	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +19,9 @@ func New() *cobra.Command {
 		Use:   "pass",
 		Short: "Vaults, logins and secrets",
 	}
-	c.AddCommand(itemsCmd(), vaultsCmd(), aliasesCmd(), trashCmd())
+	c.AddCommand(itemsCmd(), vaultsCmd(), aliasesCmd(), trashCmd(), generateCmd(), breachesCmd(), linksCmd(),
+		invitationsCmd(), settingsCmd(),
+		exportCmd(), importCmd())
 	return c
 }
 
@@ -46,4 +50,48 @@ func yesNo(b bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+// ── making a password ──
+
+// Generate makes a password without storing it anywhere.
+//
+// It reaches no account and needs no session: a password is made on this machine
+// and may never leave it. That is also the point - a generator you already have
+// beats reaching for whatever is on the path.
+//
+// The alphabet is Proton's own, which leaves out the characters people misread
+// unless letters are all there is.
+func generateCmd() *cobra.Command {
+	var o secret.Options
+	var noDigits, noSymbols, noUpper bool
+	c := &cobra.Command{
+		Use:   "generate",
+		Short: "Make a password",
+		Long: "Make a password, without storing it anywhere.\n\n" +
+			"It reaches no account and needs no session. The alphabet is Proton's own,\n" +
+			"which leaves out i, o, l and their capitals - the characters people misread -\n" +
+			"unless letters are all the password has.\n\n" +
+			"Every kind asked for is guaranteed to appear, so a password that has to\n" +
+			"contain a digit does.",
+		Args: cobra.NoArgs,
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			o.Digits, o.Symbols, o.Upper = !noDigits, !noSymbols, !noUpper
+			pw, err := secret.Password(o)
+			if err != nil {
+				return kit.Fail("%v", err)
+			}
+			return kit.Show(c, ui.RecordSpec{
+				Object: struct {
+					Password string `json:"password"`
+				}{pw},
+				Fields: []ui.Field{{Label: "Password", Value: pw}},
+			})
+		}),
+	}
+	c.Flags().IntVar(&o.Length, "length", secret.DefaultLength, "How many characters")
+	c.Flags().BoolVar(&noDigits, "no-digits", false, "Leave the digits out")
+	c.Flags().BoolVar(&noSymbols, "no-symbols", false, "Leave the symbols out")
+	c.Flags().BoolVar(&noUpper, "no-uppercase", false, "Leave the capitals out")
+	return c
 }

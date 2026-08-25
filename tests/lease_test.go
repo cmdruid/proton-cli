@@ -42,6 +42,18 @@ const (
 	photos = "photos"
 	// driveInvitations: likewise for the invitations the second account can see.
 	driveInvitations = "drive-invitations"
+	// pinnedKeys: a pinned key is looked up by address across every contact, not
+	// per contact, so a test that pins the right key for the second account and
+	// one that pins a wrong key for it decide each other's answer - one asserts a
+	// send goes through and the other that it is refused. A test pinning for an
+	// address of its own shares nothing and needs no lease.
+	pinnedKeys = "pinned-keys"
+	// passLibrary: an export holds every item in the account and reading one back
+	// adds all of them, so a test that does the round trip makes a copy of
+	// everything and has to remove everything it copied. Both halves are account
+	// wide: another test's item would be caught by the copy, and then by the
+	// clean-up.
+	passLibrary = "pass-library"
 	// driveTrash: emptying it acts on everything in it, including what another
 	// test trashed and means to restore.
 	driveTrash = "drive-trash"
@@ -59,6 +71,13 @@ const (
 	labelSlot    = "label-slot"
 	folderSlot   = "folder-slot"
 	filterSlot   = "filter-slot"
+	// calendarDefaults are per-calendar and every test shares the Default one,
+	// so two tests changing what a new event inherits would each see the other's
+	// value and put back the wrong one.
+	calendarDefaults = "calendar-defaults"
+	// mailTrash: emptying it removes everything in it, including what another
+	// test trashed and means to find again.
+	mailTrash = "mail-trash"
 	// sending is held for the moment a message goes out - see runAs, which takes
 	// it for every command that puts one on the wire. Sending is what a free plan
 	// meters and what Proton judges an account by, so the suite never sends two at
@@ -122,6 +141,9 @@ var touching = []struct {
 	{autoReplySetting, []string{`"autoreply", "enable"`}},
 	{autoReplySetting, []string{`"autoreply", "disable"`}},
 	{calendarSlot, []string{`"calendars", "create"`}},
+	{calendarDefaults, []string{`"calendars", "update"`, `"--default-duration"`}},
+	{calendarDefaults, []string{`"calendars", "update"`, `"--busy"`}},
+	{calendarDefaults, []string{`"calendars", "update"`, `"--remind"`}},
 	{vaultSlot, []string{`"vaults", "create"`}},
 	{labelSlot, []string{`"settings", "labels", "create"`}},
 	{labelSlot, []string{`"POST", "/core/v4/labels"`}},
@@ -129,13 +151,19 @@ var touching = []struct {
 	{filterSlot, []string{`"filters", "create"`}},
 	{photos, []string{`photoLinkIDs(t)`}},
 	{driveInvitations, []string{`altInvitationIDs(t)`}},
+	{passLibrary, []string{`passItemRefs(t)`}},
+	{pinnedKeys, []string{`"keys", "pin"`, `secondaryEmail()`}},
 	{attachmentThread, []string{`sharedAttachment(t)`, `"forward"`}},
 	{attachmentThread, []string{`findMessageWithAttachment(t)`, `"conversations"`}},
 	{attachmentThread, []string{`findMessageWithMixedAttachments(t)`, `"conversations"`}},
 	{driveTrash, []string{`"drive", "trash", "empty"`}},
 	{driveTrash, []string{`"drive", "trash", "restore"`}},
+	{mailTrash, []string{`"messages", "empty"`}},
 	{driveInvitations, []string{`"share", "add"`, `secondaryEmail()`}},
 }
+
+// paidTestFile holds the tests that act on the paid account. See testBodies.
+const paidTestFile = "paid_on_test.go"
 
 // serialTests are the tests that run alone, and why. A test without
 // `t.Parallel()` runs to completion before any parallel test resumes, which is
@@ -196,12 +224,20 @@ func resourceConst(resource string) string {
 		return "photos"
 	case driveInvitations:
 		return "driveInvitations"
+	case passLibrary:
+		return "passLibrary"
+	case pinnedKeys:
+		return "pinnedKeys"
 	case driveTrash:
 		return "driveTrash"
+	case mailTrash:
+		return "mailTrash"
 	case attachmentThread:
 		return "attachmentThread"
 	case calendarSlot:
 		return "calendarSlot"
+	case calendarDefaults:
+		return "calendarDefaults"
 	case vaultSlot:
 		return "vaultSlot"
 	case labelSlot:
@@ -224,6 +260,11 @@ func containsAll(body string, phrases []string) bool {
 }
 
 // testBodies is every test in the live suite, by name, as source.
+//
+// The paid tests are left out. What is leased here is shared state on the two
+// free accounts, and a paid test acts on a different account entirely, in a run
+// of its own that goes one test at a time - so it can race nothing, and the
+// words it happens to contain are not a claim on a free account's calendars.
 func testBodies(t *testing.T) map[string]string {
 	t.Helper()
 	entries, err := os.ReadDir(".")
@@ -236,7 +277,7 @@ func testBodies(t *testing.T) map[string]string {
 	test := regexp.MustCompile(`^func (Test\w+)\(t \*testing\.T\) \{`)
 	bodies := map[string]string{}
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") || e.Name() == paidTestFile {
 			continue
 		}
 		src, err := os.ReadFile(e.Name())

@@ -247,7 +247,7 @@ func photosRemoveCmd(use, short string, action ui.Action, permanent bool) *cobra
 
 func albumsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "albums", Short: "Photo albums"}
-	c.AddCommand(albumsListCmd(), albumsCreateCmd(), albumsDeleteCmd(),
+	c.AddCommand(albumsListCmd(), albumsCreateCmd(), albumsDeleteCmd(), albumsUpdateCmd(),
 		albumMembersCmd("add", "Put photos into an album", ui.Added, "into"),
 		albumMembersCmd("remove", "Take photos out of an album", ui.Removed, "from"))
 	return c
@@ -261,6 +261,44 @@ func albumColumns() []ui.Column[drivesvc.Album] {
 			return strconv.Itoa(a.PhotoCount)
 		}},
 	}
+}
+
+// An album's cover is which of its own photos represents it. Nothing is
+// re-encrypted and nothing moves: the album names one of its children.
+func albumsUpdateCmd() *cobra.Command {
+	var cover string
+	c := &cobra.Command{
+		Use:   "update REF",
+		Short: "Change an album's cover",
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepExpand, func(*kit.Invocation) error {
+			if cover == "" {
+				return kit.Fail("Nothing to change.").Hint("--cover REF")
+			}
+			return nil
+		}}, func(c *kit.Invocation) error {
+			dc, err := photosContext(c)
+			if err != nil {
+				return err
+			}
+			album, err := albumList(c, dc).Find(c.Ctx, c.Args[0])
+			if err != nil {
+				return err
+			}
+			photoID, err := kit.Expand(c.App, cover)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Updated, Kind: "albums", Count: 1, Name: album.Name,
+				IDs: []string{album.LinkID},
+			}, func() error {
+				return c.App.Drive.AlbumSetCover(c.Ctx, dc, album.LinkID, photoID)
+			})
+		}),
+	}
+	c.Flags().StringVar(&cover, "cover", "", "Which of the album's photos represents it")
+	return c
 }
 
 func albumList(c *kit.Invocation, dc *drivesvc.Context) *kit.Lookup[drivesvc.Album] {
@@ -307,9 +345,9 @@ func albumsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return kit.Mutate(c, ui.ResultSpec{
-				Action: ui.Created, Kind: "albums", Count: 1, Name: name,
-			}, func() error { return c.App.Drive.AlbumCreate(c.Ctx, dc, name) })
+			return kit.Create(c, ui.ResultSpec{
+				Action: ui.Created, Kind: "albums", Name: name,
+			}, func() (string, error) { return c.App.Drive.AlbumCreate(c.Ctx, dc, name) })
 		}),
 	}
 	c.Flags().StringVar(&name, "name", "", "Name for the new album")

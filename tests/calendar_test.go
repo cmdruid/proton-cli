@@ -3,6 +3,8 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -316,7 +318,7 @@ func TestCalendarEventsRespondDryRun(t *testing.T) {
 		"calendar", "events", "delete", eventID)
 
 	_, stderr := runOKStderr(t, "--dry-run", "calendar", "events", "respond",
-		"--status", "accept", eventID)
+		"--answer", "accept", eventID)
 	assertContains(t, stderr, "Dry run")
 	// The event still reads back (no mutation happened).
 	assertContains(t, runOK(t, "calendar", "events", "get", eventID), title)
@@ -334,7 +336,7 @@ func TestCalendarEventsRespondRejectsOrganizer(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
 		"calendar", "events", "delete", eventID)
 
-	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "accept", eventID)
+	_, stderr, code := run(t, "calendar", "events", "respond", "--answer", "accept", eventID)
 	if code != 1 {
 		t.Errorf("expected exit 1 responding to your own event, got %d (stderr: %s)", code, stderr)
 	}
@@ -426,7 +428,7 @@ func TestCalendarEventsRespondRoundTrip(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete primary event copy: proton calendar events delete %s", primaryRef),
 		"calendar", "events", "delete", primaryRef)
 
-	runOK(t, "calendar", "events", "respond", "--status", "accept", primaryRef)
+	runOK(t, "calendar", "events", "respond", "--answer", "accept", primaryRef)
 
 	// The primary's own attendee record now shows ACCEPTED (ATTENDEE_STATUS_API 3).
 	got := runJSON(t, "api", "GET", "/calendar/v1/"+primaryCal+"/events/"+primaryEventID)
@@ -956,9 +958,298 @@ func TestCalendarRespondRefusesAnOccurrenceReference(t *testing.T) {
 	if len(refs) == 0 {
 		t.Fatal("the series listed no occurrences")
 	}
-	_, stderr, code := run(t, "calendar", "events", "respond", "--status", "accept", "--", refs[0])
+	_, stderr, code := run(t, "calendar", "events", "respond", "--answer", "accept", "--", refs[0])
 	if code == 0 {
 		t.Error("responding to one occurrence was accepted")
 	}
 	assertContains(t, stderr, "whole series")
+}
+
+// Proton's composer takes an end time, so this one does too. It has to land on
+// the same event a duration would have made, or the two spellings mean different
+// things.
+func TestCalendarEventEndIsTheSameAsADuration(t *testing.T) {
+	t.Parallel()
+	title := testID() + "-end"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-08-03T09:00", "--end", "2027-08-03T10:30"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	got := runJSON(t, "calendar", "events", "get", "--", ref)
+	start, _ := got["start"].(string)
+	end, _ := got["end"].(string)
+	if !strings.Contains(start, "2027-08-03T09:00") || !strings.Contains(end, "2027-08-03T10:30") {
+		t.Errorf("--end gave start %q end %q, want 09:00 to 10:30", start, end)
+	}
+}
+
+// A reminder says how it is delivered, and what a listing prints has to be what
+// --remind would accept: an event you can read is an event you can recreate.
+func TestCalendarEventEmailReminderRoundTrips(t *testing.T) {
+	t.Parallel()
+	title := testID() + "-remind-email"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-08-10T09:00", "--duration", "30m",
+		"--remind", "1d:email", "--remind", "17m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	// Proton stores the delivery as the notification's Type: 0 emails, 1 is the
+	// device. Read from the API so the assertion does not rest on our own words.
+	data := runJSON(t, "api", "GET", eventPath(t, ref))
+	ev, _ := data["Event"].(map[string]interface{})
+	notifs, _ := ev["Notifications"].([]interface{})
+	kinds := map[string]float64{}
+	for _, n := range notifs {
+		if m, ok := n.(map[string]interface{}); ok {
+			trig, _ := m["Trigger"].(string)
+			kind, _ := m["Type"].(float64)
+			kinds[trig] = kind
+		}
+	}
+	if kinds["-P1D"] != 0 {
+		t.Errorf("1d:email stored as Type %v, want 0 (email)", kinds["-P1D"])
+	}
+	if kinds["-PT17M"] != 1 {
+		t.Errorf("a bare 17m stored as Type %v, want 1 (device)", kinds["-PT17M"])
+	}
+
+	// And it comes back spelled the way it was written.
+	got := runJSON(t, "calendar", "events", "get", "--", ref)
+	reminders, _ := got["reminders"].([]interface{})
+	var printed []string
+	for _, r := range reminders {
+		if s, ok := r.(string); ok {
+			printed = append(printed, s)
+		}
+	}
+	if !contains(printed, "1d:email") || !contains(printed, "17m") {
+		t.Errorf("reminders printed as %v, want 1d:email and 17m", printed)
+	}
+}
+
+// An export has to be a file another client can open: one VCALENDAR, no METHOD,
+// and a series written once with its rule rather than expanded.
+func TestCalendarEventsExportWritesAnICSFile(t *testing.T) {
+	t.Parallel()
+	title := testID() + "-export"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-09-06T09:00", "--duration", "15m",
+		"--rrule", "FREQ=WEEKLY;COUNT=5", "--remind", "10m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	out := runOK(t, "calendar", "events", "export",
+		"--start", "2027-09-01", "--end", "2027-09-30", "--output", "-")
+
+	for _, want := range []string{"BEGIN:VCALENDAR", "END:VCALENDAR", "BEGIN:VEVENT", title} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the export is missing %q", want)
+		}
+	}
+	if strings.Contains(out, "METHOD") {
+		t.Error("a calendar file must carry no METHOD; that is what makes it a file and not an invitation")
+	}
+	if !strings.Contains(out, "RRULE:FREQ=WEEKLY") {
+		t.Error("a series should be exported once with its rule, not expanded")
+	}
+	if got := strings.Count(out, title); got != 1 {
+		t.Errorf("the series appears %d times; expanding it would make five unrelated events", got)
+	}
+	if !strings.Contains(out, "BEGIN:VALARM") || !strings.Contains(out, "TRIGGER:-PT10M") {
+		t.Error("reminders should travel as VALARM components")
+	}
+}
+
+// An event's own status is not an attendee's answer, so cancelling one keeps it
+// and its history rather than removing it.
+func TestCalendarEventStatusIsStoredAndRead(t *testing.T) {
+	t.Parallel()
+	title := testID() + "-status"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-09-20T09:00", "--duration", "30m", "--status", "tentative"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	if got := runJSON(t, "calendar", "events", "get", "--", ref)["status"]; got != "tentative" {
+		t.Errorf("status came back as %v, want tentative", got)
+	}
+
+	runOK(t, "calendar", "events", "update", "--status", "cancelled", "--", ref)
+	if got := runJSON(t, "calendar", "events", "get", "--", ref)["status"]; got != "cancelled" {
+		t.Errorf("after cancelling, status is %v, want cancelled", got)
+	}
+}
+
+// An event with no status is confirmed - that is what every client reads an
+// absent STATUS as, so the CLI says so rather than leaving it blank.
+func TestCalendarEventWithoutAStatusIsConfirmed(t *testing.T) {
+	t.Parallel()
+	title := testID() + "-nostatus"
+	ref := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", "2027-09-27T09:00", "--duration", "30m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete -- %s", ref),
+		"calendar", "events", "delete", "--", ref)
+
+	if got := runJSON(t, "calendar", "events", "get", "--", ref)["status"]; got != "confirmed" {
+		t.Errorf("an event that never said is %v, want confirmed", got)
+	}
+}
+
+// What a calendar gives a new event is stored per calendar, which is where
+// Proton keeps it: a work calendar can open half-hour meetings with a reminder
+// while a personal one does not.
+func TestCalendarDefaultsAreReadAndWritten(t *testing.T) {
+	t.Parallel()
+	lease(t, calendarDefaults)
+
+	before := runJSON(t, "calendar", "settings", "calendars", "get", "Default")
+	defaults, _ := before["defaults"].(map[string]interface{})
+	if defaults == nil {
+		t.Fatal("calendars get should report the calendar's defaults")
+	}
+	wasDuration, _ := defaults["default_duration_minutes"].(float64)
+	if wasDuration == 0 {
+		t.Fatal("a calendar always has a default event duration")
+	}
+	wasBusy, _ := defaults["shows_as_busy"].(bool)
+
+	// Put back exactly what was there, whichever assertion below fails first.
+	cleanup(t, fmt.Sprintf("Restore calendar defaults: proton calendar settings calendars update Default --default-duration %dm --busy %s",
+		int(wasDuration), onOff(wasBusy)),
+		func() error {
+			_, _, code := run(t, "calendar", "settings", "calendars", "update",
+				"--default-duration", fmt.Sprintf("%dm", int(wasDuration)),
+				"--busy", onOff(wasBusy), "Default")
+			if code != 0 {
+				return fmt.Errorf("restore exit %d", code)
+			}
+			return nil
+		})
+
+	target := 45
+	if int(wasDuration) == target {
+		target = 30
+	}
+	runOK(t, "calendar", "settings", "calendars", "update",
+		"--default-duration", fmt.Sprintf("%dm", target),
+		"--busy", onOff(!wasBusy), "Default")
+
+	after, _ := runJSON(t, "calendar", "settings", "calendars", "get", "Default")["defaults"].(map[string]interface{})
+	if got, _ := after["default_duration_minutes"].(float64); int(got) != target {
+		t.Errorf("default duration is %v, want %d", got, target)
+	}
+	if got, _ := after["shows_as_busy"].(bool); got != !wasBusy {
+		t.Errorf("shows-as-busy is %v, want %v", got, !wasBusy)
+	}
+}
+
+// editEventNamed adds a line to the VEVENT whose SUMMARY is title, leaving every
+// other event in the file alone.
+func editEventNamed(t *testing.T, ics, title, line string) string {
+	t.Helper()
+	const begin = "BEGIN:VEVENT"
+	parts := strings.Split(ics, begin)
+	for i := 1; i < len(parts); i++ {
+		if strings.Contains(parts[i], title) {
+			parts[i] = "\r\n" + line + parts[i]
+			return strings.Join(parts, begin)
+		}
+	}
+	t.Fatalf("the export holds no event called %s", title)
+	return ""
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
+}
+
+// Export and import are each other's inverse, so a file written here reads back
+// as the same events - which is the only thing that makes an export a backup.
+func TestCalendarEventsImportRoundTripsAnExport(t *testing.T) {
+	t.Parallel()
+	title := testID() + "-roundtrip"
+	day := "2027-10-04"
+	runOK(t, "calendar", "events", "create",
+		"--calendar", "Default", "--title", title,
+		"--start", day+"T09:00", "--duration", "45m", "--remind", "20m")
+	// Overwriting by UID replaces the event, and the replacement has an ID of its
+	// own, so cleanup goes looking by name rather than holding the first one.
+	cleanup(t, "Delete event: proton calendar events list, then delete the one called "+title, func() error {
+		for _, ref := range eventsTitled(t, day, title) {
+			if _, stderr, code, err := runArgs(nil, "--yes", "calendar", "events", "delete", "--", ref); err != nil {
+				return err
+			} else if code != 0 {
+				return fmt.Errorf("exit %d: %s", code, stderr)
+			}
+		}
+		return nil
+	})
+
+	file := filepath.Join(t.TempDir(), "export.ics")
+	runOK(t, "calendar", "events", "export",
+		"--start", "2027-10-01", "--end", "2027-10-31", "--output", file)
+
+	// And back in. An event carries the UID of the event it is, so reading the
+	// file back changes that event rather than making a second one - which is the
+	// difference between a backup and a way to fill a calendar with duplicates.
+	written, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("read the export: %v", err)
+	}
+	// The file may hold other events from the same window, so the location goes
+	// on the one this test made rather than on whichever came first.
+	edited := editEventNamed(t, string(written), title, "LOCATION:Room 12")
+	if err := os.WriteFile(file, []byte(edited), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	runOK(t, "calendar", "events", "import", "--calendar", "Default", file)
+
+	copies := eventsTitled(t, day, title)
+	if len(copies) != 1 {
+		t.Fatalf("re-importing an export made %d events out of one", len(copies))
+	}
+	assertContains(t, runOK(t, "calendar", "events", "get", "--", copies[0]), "Room 12")
+}
+
+// eventsTitled returns the references of every event on one day with that title.
+func eventsTitled(t *testing.T, day, title string) []string {
+	t.Helper()
+	var refs []string
+	for _, row := range runJSONArray(t, "calendar", "events", "list", "--start", day, "--end", day) {
+		m, _ := row.(map[string]interface{})
+		if s, _ := m["title"].(string); s != title {
+			continue
+		}
+		id, _ := m["calendar_id"].(string)
+		eid, _ := m["id"].(string)
+		refs = append(refs, id+"/"+eid)
+	}
+	return refs
+}
+
+// A file that holds nothing usable is refused before anything is written, and
+// the refusal says which file.
+func TestCalendarEventsImportRefusesAFileWithNoEvents(t *testing.T) {
+	t.Parallel()
+	empty := filepath.Join(t.TempDir(), "empty.ics")
+	if err := os.WriteFile(empty, []byte("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, stderr, code := run(t, "calendar", "events", "import", empty)
+	if code != 1 {
+		t.Errorf("exit %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "holds no events") {
+		t.Errorf("stderr should say the file holds no events, got: %s", stderr)
+	}
 }

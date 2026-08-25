@@ -14,6 +14,9 @@ const (
 	TagItemContent  = "itemcontent"
 	TagItemKey      = "itemkey"
 	TagVaultContent = "vaultcontent"
+	// TagLinkKey seals the key that opens a secure link. It is the key that ends
+	// up in the URL, so it is sealed under a tag of its own.
+	TagLinkKey = "linkkey"
 )
 
 const (

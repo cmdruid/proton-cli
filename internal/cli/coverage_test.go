@@ -35,26 +35,46 @@ const coverageGolden = "../../tests/api-coverage.golden"
 
 // unresolved stands for a part of a path that is not known until the command
 // runs.
-const unresolved = "\x00"
+const (
+	unresolved = "\x00"
+	// numeric marks a segment a format string will fill with a number, which
+	// the recording end reduces to {n} rather than {id}.
+	numeric = "\x00n"
+)
 
 // unreachable are the requests the suite cannot make, and why. They are the
 // exceptions that have to be argued for, not a list to grow when a test is
 // inconvenient to write.
 var unreachable = map[string]string{
-	"DELETE /auth/v4/sessions":          "revoking every other session would end the run",
-	"DELETE /auth/v4/sessions/{id}":     "the only session there is to revoke is the one running",
-	"DELETE /core/v4/labels/{id}":       "removing a contact group, which needs a paid plan",
-	"GET /core/v4/keys/salts":           "only a first unlock derives the key password, and the suite resumes a session",
-	"PUT /auth/v4/sessions/local/key":   "written once, at the first unlock, before the suite runs",
-	"PUT /contacts/v4/contacts/label":   "contact groups need a paid plan and these accounts are free",
-	"PUT /contacts/v4/contacts/unlabel": "contact groups need a paid plan and these accounts are free",
+	"DELETE /auth/v4/sessions":      "revoking every other session would end the run",
+	"DELETE /auth/v4/sessions/{id}": "the only session there is to revoke is the one running",
+
+	"GET /core/v4/keys/salts":         "only a first unlock derives the key password, and the suite resumes a session",
+	"PUT /auth/v4/sessions/local/key": "written once, at the first unlock, before the suite runs",
 }
 
 // untested are the requests a run could make and does not. Each is a gap somebody
 // chose to leave, so it is named here and reported on every run rather than
 // passing quietly. The list is something to shorten.
 var untested = map[string]string{
-	"GET /calendar/v1/{id}/events/{id}/attendees": "reaching it needs an event with more attendees than a page holds, which would mean inviting a hundred addresses from these accounts",
+	// Both halves of confirming a mailbox. Proton meters everything under a
+	// mailbox's /verify the way a brute-force guard does, so a suite that spends
+	// a code attempt on every run fails on that quota rather than on anything
+	// real - and it stays failing for the best part of an hour, which is the
+	// opposite of what a test is for. The flow itself was walked by hand against
+	// the live API; what is left out is repeating it every run.
+	"GET /pass/v1/user/alias/mailbox/{n}/verify":  "sending the confirmation code again",
+	"POST /pass/v1/user/alias/mailbox/{n}/verify": "handing the confirmation code back",
+
+	// Reading a breach needs an address that has been in one. The paid test asks
+	// for the list and stops when every watched address is clean, which is the
+	// good outcome and an untestable one.
+	"GET /pass/v1/breach/address/{id}/breaches":      "needs a watched address that has actually been breached",
+	"GET /pass/v1/breach/custom_email/{id}/breaches": "needs a breached address added by hand, which is the same problem",
+	"PUT /contacts/v4/contacts/emails/label":         "contact groups; needs a paid test",
+	"PUT /contacts/v4/contacts/emails/unlabel":       "contact groups; needs a paid test",
+	"POST /mail/v4/messages/{id}/unsubscribe":        "reaching it needs a message from a real mailing list carrying a List-Unsubscribe header, which no seeding can put on these accounts",
+	"GET /calendar/v1/{id}/events/{id}/attendees":    "reaching it needs an event with more attendees than a page holds, which would mean inviting a hundred addresses from these accounts",
 }
 
 func TestEveryRequestTheCLICanSendIsOneTheSuiteSends(t *testing.T) {
@@ -178,6 +198,11 @@ func requestsIn(t *testing.T, path string) []string {
 		// settings tables, are built elsewhere and covered by the commands that use
 		// them. Reading source has limits, which is why the other half of this is a
 		// recording of a real run.
+		//
+		// The limit worth knowing: a path chosen into a variable and then handed
+		// over is invisible here. The recording covers that for a path some test
+		// reaches, so only a path that is both built in a variable and never
+		// exercised escapes both halves. Write the path in the request literal.
 		if method == "" || p == "" || p == unresolved || strings.Contains(method, unresolved) {
 			return true
 		}
@@ -264,13 +289,21 @@ func render(e ast.Expr, consts map[string]string) string {
 // template normalises a rendered path: whatever was not a literal, and whatever a
 // format string left a verb for, is the same placeholder an exercised path is
 // reduced to.
+//
+// A number is its own placeholder, because the recording end can tell one from
+// an opaque ID by looking and does. %d is what says a segment is a number here,
+// since nothing else in these paths is formatted with it.
 func template(p string) string {
-	for _, verb := range []string{"%s", "%d", "%v", "%q"} {
+	p = strings.ReplaceAll(p, "%d", numeric)
+	for _, verb := range []string{"%s", "%v", "%q"} {
 		p = strings.ReplaceAll(p, verb, unresolved)
 	}
 	segments := strings.Split(p, "/")
 	for i, s := range segments {
-		if strings.Contains(s, unresolved) {
+		switch {
+		case strings.Contains(s, numeric):
+			segments[i] = "{n}"
+		case strings.Contains(s, unresolved):
 			segments[i] = "{id}"
 		}
 	}

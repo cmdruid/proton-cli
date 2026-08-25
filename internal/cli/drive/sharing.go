@@ -14,7 +14,8 @@ import (
 
 func shareCmd() *cobra.Command {
 	c := &cobra.Command{Use: "share", Short: "Public links and the people you share with"}
-	c.AddCommand(shareGetCmd(), shareLinkCmd(), shareUnlinkCmd(), shareAddCmd(), shareRemoveCmd())
+	c.AddCommand(shareGetCmd(), shareLinkCmd(), shareUnlinkCmd(), shareAddCmd(),
+		shareUpdateCmd(), shareResendCmd(), shareRemoveCmd())
 	return c
 }
 
@@ -189,6 +190,62 @@ func shareAddCmd() *cobra.Command {
 	return c
 }
 
+// Changing what somebody may do is `update`, the same verb every other
+// collection uses for changing a field. Re-running `add` would read as inviting
+// them twice.
+func shareUpdateCmd() *cobra.Command {
+	var edit bool
+	c := &cobra.Command{
+		Use:   "update PATH EMAIL",
+		Short: "Change what somebody may do with a file or folder",
+		Long: "Change what somebody may do with a file or folder.\n\n" +
+			"It applies to whoever holds the address, whether they have accepted yet or\n" +
+			"not: Proton keeps members and invitations apart, but the question is the\n" +
+			"same one either way.",
+		Args: cobra.ExactArgs(2),
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			if !c.Changed("edit") {
+				return kit.Fail("Nothing to change.").
+					Hint("--edit to allow editing, or --edit=false to restrict to viewing.")
+			}
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Updated, Count: 1, Name: c.Args[1],
+				Detail: "to " + access(edit) + " on " + c.Args[0],
+			}, func() error {
+				return c.App.Drive.SetMemberRole(c.Ctx, dc, c.Args[0], c.Args[1], edit)
+			})
+		}),
+	}
+	c.Flags().BoolVar(&edit, "edit", false, "Allow editing rather than only viewing")
+	return c
+}
+
+// An invitation nobody answered is usually one nobody saw, so it can be sent
+// again rather than cancelled and remade.
+func shareResendCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "resend PATH EMAIL",
+		Short: "Send an unanswered invitation again",
+		Args:  cobra.ExactArgs(2),
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			dc, err := context(c)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Resent, Kind: "invitations", Count: 1, Name: c.Args[1],
+				Detail: "for " + c.Args[0],
+			}, func() error {
+				return c.App.Drive.ResendInvite(c.Ctx, dc, c.Args[0], c.Args[1])
+			})
+		}),
+	}
+}
+
 func shareRemoveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove PATH EMAIL",
@@ -354,4 +411,77 @@ func trashEmptyCmd() *cobra.Command {
 			}, func() error { return c.App.Drive.TrashEmpty(c.Ctx, dc) })
 		}),
 	}
+}
+
+// ── shares, in both directions ──
+
+// Sharing has two directions and this CLI now names both. `items share` is what
+// you do to something of yours; `shared` is what other people have done to
+// something of theirs, and `sharing` is the standing answer to "what have I left
+// open".
+
+func sharedItemColumns() []ui.Column[drivesvc.SharedItem] {
+	return []ui.Column[drivesvc.SharedItem]{
+		{Header: "ID", ID: true, Cell: func(i drivesvc.SharedItem) string { return i.LinkID }},
+		{Header: "TYPE", Cell: func(i drivesvc.SharedItem) string { return i.Type }},
+		{Header: "NAME", Flex: true, Cell: func(i drivesvc.SharedItem) string { return i.Name }},
+		{Header: "SIZE", Right: true, Cell: func(i drivesvc.SharedItem) string {
+			if i.Size == 0 {
+				return ""
+			}
+			return units.Size(i.Size)
+		}},
+	}
+}
+
+func sharedCmd() *cobra.Command {
+	c := &cobra.Command{Use: "shared", Short: "Files and folders other people have shared with you"}
+	c.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List what other people have shared with you",
+		Long: "List what other people have shared with you.\n\n" +
+			"These do not live in your tree, so they have no path: they are addressed by\n" +
+			"the ID this listing shows, the way trashed items and photos are.\n\n" +
+			"An item whose name cannot be read is still listed, because knowing it is\n" +
+			"there is what lets you act on it.",
+		Args: cobra.NoArgs,
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			items, err := c.App.Drive.SharedWithMe(c.Ctx)
+			if err != nil {
+				return err
+			}
+			cols := append(sharedItemColumns(), ui.Column[drivesvc.SharedItem]{
+				Header: "SHARED BY", Flex: true,
+				Cell: func(i drivesvc.SharedItem) string { return i.SharedBy },
+			})
+			return kit.List(c, ui.TableSpec[drivesvc.SharedItem]{
+				Noun: "items", Columns: cols,
+				Total: ui.Unknown, Page: ui.Unpaged,
+			}, items, func(i drivesvc.SharedItem) []string { return []string{i.LinkID, i.ShareID} })
+		}),
+	})
+	return c
+}
+
+func sharingCmd() *cobra.Command {
+	c := &cobra.Command{Use: "sharing", Short: "What you have shared with other people"}
+	c.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List what you have shared",
+		Long: "List what you have shared, by link or with named people.\n\n" +
+			"`items share get PATH` answers the question for one item; this answers the\n" +
+			"one you actually have, which is what have I left open.",
+		Args: cobra.NoArgs,
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			items, err := c.App.Drive.SharedByMe(c.Ctx)
+			if err != nil {
+				return err
+			}
+			return kit.List(c, ui.TableSpec[drivesvc.SharedItem]{
+				Noun: "items", Columns: sharedItemColumns(),
+				Total: ui.Unknown, Page: ui.Unpaged,
+			}, items, func(i drivesvc.SharedItem) []string { return []string{i.LinkID, i.ShareID} })
+		}),
+	})
+	return c
 }

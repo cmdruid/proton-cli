@@ -2,6 +2,7 @@ package mail
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/mailtext"
@@ -14,7 +15,8 @@ import (
 func messagesCmd() *cobra.Command {
 	c := &cobra.Command{Use: "messages", Short: "Individual messages"}
 	c.AddCommand(
-		listCmd(), searchCmd(), getCmd(), sendCmd(), replyCmd(), forwardCmd(), exportCmd(),
+		listCmd(), getCmd(), sendCmd(), replyCmd(), forwardCmd(), exportCmd(),
+		emptyCmd(), expireCmd(), unsubscribeCmd(),
 		moveCmd(), labelCmd(), unlabelCmd(), starCmd(), unstarCmd(), markCmd(),
 		trashCmd(), deleteCmd(), unscheduleCmd(), attachmentsCmd(),
 	)
@@ -23,72 +25,57 @@ func messagesCmd() *cobra.Command {
 
 // ── reading ──
 
+// list is where a set of messages is worked out.
+//
+// Paging a folder and querying the index are one request to Proton -
+// `/mail/v4/messages` takes a label, a page and the text predicates together -
+// so they are one command, and the selection it works out is the same one the
+// bulk verbs take.
 func listCmd() *cobra.Command {
-	var opts mailsvc.ListOptions
-	var starred bool
+	var f filters
 	c := &cobra.Command{
 		Use:   "list",
 		Short: "List messages in a folder",
-		Args:  cobra.NoArgs,
+		Long: "List messages in a folder.\n\n" +
+			"The filters are the ones every organising verb takes, so a selection can be\n" +
+			"read here and then handed to trash, move, label or export. Text predicates\n" +
+			"go through Proton's index, which lags a change by a few seconds.\n\n" +
+			"It looks in the inbox unless told otherwise; --folder all searches everything.",
+		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			opts, err := f.list()
+			if err != nil {
+				return err
+			}
 			msgs, total, err := c.App.Mail.List(c.Ctx, opts)
 			if err != nil {
 				return err
 			}
-			if starred {
-				msgs = applyLocalFilters(msgs, &filters{starred: true})
-			}
-			return kit.List(c, ui.TableSpec[mailsvc.Message]{
-				Noun: "messages", Columns: messageColumns(),
-				Total: total, Page: opts.Page, PageSize: opts.PageSize,
-				Filtered: opts.Unread || starred,
-			}, msgs, func(m mailsvc.Message) []string { return []string{m.ID} })
-		}),
-	}
-	registerFolder(c, &opts.Folder, "inbox")
-	c.Flags().IntVar(&opts.Page, "page", 0, "Which page of results, counting from zero")
-	c.Flags().IntVar(&opts.PageSize, "page-size", 25, "How many messages per page")
-	c.Flags().BoolVar(&opts.Unread, "unread", false, "Show only unread messages")
-	c.Flags().BoolVar(&starred, "starred", false, "Show only starred messages")
-	return c
-}
-
-func searchCmd() *cobra.Command {
-	var opts mailsvc.SearchOptions
-	c := &cobra.Command{
-		Use:   "search",
-		Short: "Search messages through Proton's index",
-		Args:  cobra.NoArgs,
-		RunE: kit.Run(nil, func(c *kit.Invocation) error {
-			msgs, _, err := c.App.Mail.Search(c.Ctx, opts)
-			if err != nil {
-				return err
-			}
+			msgs = applyLocalFilters(msgs, &f)
 			if len(msgs) == 0 {
 				addressOnlyHint(c, opts.Keyword, opts.From, opts.To)
 			}
 			return kit.List(c, ui.TableSpec[mailsvc.Message]{
 				Noun: "messages", Columns: messageColumns(),
-				Total: ui.Unknown, Page: ui.Unpaged, Limit: opts.Limit,
-				// A search is a filter by definition, so an empty result means
-				// nothing matched rather than that there is no mail.
-				Filtered: true,
+				Total: total, Page: opts.Page, PageSize: opts.PageSize,
+				Filtered: f.narrowed(),
 			}, msgs, func(m mailsvc.Message) []string { return []string{m.ID} })
 		}),
 	}
-	registerSearchFlags(c, &opts)
+	f.registerNarrowing(c, "inbox")
+	registerPaging(c, &f.page, &f.pageSize, "messages")
 	return c
 }
 
 func getCmd() *cobra.Command {
 	var bodyOnly, stripQuotes, includeInline bool
-	format := bodyFormat()
+	render := bodyRendering()
 	c := &cobra.Command{
 		Use:   "get REF",
 		Short: "Show one message, decrypted",
 		Args:  cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
-			shape, err := format.Value()
+			shape, err := render.Value()
 			if err != nil {
 				return err
 			}
@@ -109,7 +96,7 @@ func getCmd() *cobra.Command {
 			})
 		}),
 	}
-	format.Register(c)
+	render.Register(c)
 	c.Flags().BoolVar(&bodyOnly, "body-only", false, "Emit only the body, with no headers or attachment list")
 	c.Flags().BoolVar(&stripQuotes, "strip-quotes", false, "Drop quoted reply blocks from the body")
 	c.Flags().BoolVar(&includeInline, "include-inline", false, "List inline attachments too, such as signature graphics")
@@ -399,7 +386,7 @@ func unscheduleCmd() *cobra.Command {
 			}, func() error { return c.App.Mail.Unschedule(c.Ctx, ids) })
 		}),
 	}
-	c.Flags().BoolVar(&all, "all", false, "Cancel every scheduled send")
+	kit.All(c.Flags(), &all)
 	return c
 }
 
@@ -437,15 +424,26 @@ func scheduled(c *kit.Invocation, all bool) ([]string, []mailsvc.Message, error)
 // bodyFormat is how a message body should be rendered. Declaring it as an enum
 // gives it one error wording and shell completion, which a hand-checked string
 // never had.
-func bodyFormat() *kit.Enum {
+// The word is "render", not "format", because export already uses --format for
+// the file layout it writes - eml or mbox - and a container on disk is not the
+// same question as which representation of a body to print. One flag name, one
+// question.
+func bodyRendering() *kit.Enum {
 	return &kit.Enum{
-		Name: "format", Usage: "How to render the body", Default: "text",
+		Name: "render", Usage: "Which representation of the body to print", Default: "text",
 		Values: []string{"text", "html", "raw"},
 	}
 }
 
-func registerFolder(c *cobra.Command, target *string, def string) {
-	c.Flags().StringVar(target, "folder", def, "Folder or label to look in")
+// registerFolder adds --folder. The flag's own default is empty so that a
+// command can tell a folder nobody named from one that was; shown names the
+// folder used in that case, which is what the help has to say.
+func registerFolder(c *cobra.Command, target *string, def, shown string) {
+	usage := "Folder or label to look in"
+	if shown != "" {
+		usage += " (default: " + shown + ")"
+	}
+	c.Flags().StringVar(target, "folder", def, usage)
 	registerFolderCompletion(c, "folder")
 }
 
@@ -459,16 +457,10 @@ func registerFolderCompletion(c *cobra.Command, flag string) {
 		})
 }
 
-func registerSearchFlags(c *cobra.Command, opts *mailsvc.SearchOptions) {
-	fl := c.Flags()
-	fl.StringVar(&opts.Keyword, "keyword", "", "Match text anywhere, including display names and bodies")
-	fl.StringVar(&opts.From, "from", "", "Match the sender's address")
-	fl.StringVar(&opts.To, "to", "", "Match a recipient's address")
-	fl.StringVar(&opts.Subject, "subject", "", "Match text in the subject")
-	fl.StringVar(&opts.After, "after", "", "Only messages after this date (YYYY-MM-DD)")
-	fl.StringVar(&opts.Before, "before", "", "Only messages before this date (YYYY-MM-DD)")
-	fl.IntVar(&opts.Limit, "limit", 25, "Most results to return")
-	registerFolder(c, &opts.Folder, "all")
+// registerPaging adds the two flags that walk a result the server counts.
+func registerPaging(c *cobra.Command, page, pageSize *int, noun string) {
+	c.Flags().IntVar(page, "page", 0, "Which page of results, counting from zero")
+	c.Flags().IntVar(pageSize, "page-size", 25, "How many "+noun+" per page")
 }
 
 // addressOnlyHint explains an empty result that a different flag would have
@@ -490,3 +482,145 @@ func addressOnlyHint(c *kit.Invocation, keyword, from, to string) {
 }
 
 func quoted(s string) string { return strconv.Quote(s) }
+
+// ── emptying a folder ──
+
+// Empty removes everything in a folder, which is what the web calls "Empty
+// trash" and "Delete all".
+//
+// It is not `delete --all`, and the difference matters: a filtered delete
+// enumerates what it will touch and shows you, while this asks Proton to clear a
+// folder without ever naming its contents. So the folder is required and there is
+// no filter to narrow it - saying "everything in trash" is the whole command.
+func emptyCmd() *cobra.Command {
+	var folder string
+	c := &cobra.Command{
+		Use:   "empty",
+		Short: "Delete everything in a folder, permanently",
+		Long: "Delete everything in a folder, permanently.\n\n" +
+			"Nothing is listed first: Proton clears the folder without naming what was\n" +
+			"in it, which is why this cannot be narrowed and why it always asks.",
+		Args: cobra.NoArgs,
+		// Which folder to clear is on the command line or it is nowhere, so it is
+		// settled before the sign-in rather than after it.
+		RunE: kit.Run([]kit.Step{func(*kit.Invocation) error {
+			if folder == "" {
+				return kit.Fail("Which folder?").
+					Hint("--folder trash", "--folder spam")
+			}
+			return nil
+		}}, func(c *kit.Invocation) error {
+			box, err := c.App.Mail.ResolveMailbox(c.Ctx, folder)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				// Count stands for "everything", which is the honest number when
+				// nothing was enumerated: a count here would be invented.
+				Action: ui.Emptied, Kind: "messages", Count: 1,
+				Detail: "from " + box.Name,
+			}, func() error {
+				return c.App.Mail.EmptyFolder(c.Ctx, box.ID)
+			})
+		}),
+	}
+	registerFolder(c, &folder, "", "")
+	return c
+}
+
+// ── self-destructing messages ──
+
+// Expire makes messages delete themselves, or stops them.
+//
+// Proton stores the moment rather than the duration, so this takes a duration
+// and works out the moment - which is what a person means by "in a week".
+func expireCmd() *cobra.Command {
+	var f filters
+	var in string
+	var never bool
+	var reauth kit.Reauth
+	c := &cobra.Command{
+		Use:   "expire [REF...]",
+		Short: "Make messages delete themselves after a while",
+		Long: "Make messages delete themselves after a while, or stop them.\n\n" +
+			"--in takes a duration and Proton stores the moment it lands on, so a\n" +
+			"message already counting down reports when rather than how long.",
+		Args: cobra.ArbitraryArgs,
+		RunE: kit.Run([]kit.Step{
+			kit.StepSelection(f.set, filterHint, "a whole folder"), kit.StepExpand,
+			reauth.Supply,
+		}, func(c *kit.Invocation) error {
+			var at int64
+			switch {
+			case never && in != "":
+				return kit.Fail("--in and --never say opposite things.").
+					Hint("pass one of them.")
+			case !never && in == "":
+				return kit.Fail("How long?").Hint("--in 7d, or --never to stop it")
+			case in != "":
+				d, err := units.ParseDuration(in)
+				if err != nil {
+					return kit.Fail("--in: %v", err)
+				}
+				at = time.Now().Add(d).Unix()
+			}
+			sel, err := selectMessages(c, &f)
+			if err != nil {
+				return err
+			}
+			detail := "in " + in
+			if never {
+				detail = "- they will not expire"
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Updated, Kind: "messages", Count: sel.Len(), IDs: sel.IDs,
+				Detail: detail, Preview: sel.Preview(),
+			}, func() error {
+				return c.App.Mail.SetExpiration(c.Ctx, sel.IDs, at)
+			})
+		}),
+	}
+	c.Flags().StringVar(&in, "in", "", "Delete them after DURATION (e.g. 7d, 24h)")
+	c.Flags().BoolVar(&never, "never", false, "Stop them expiring")
+	f.register(c)
+	// Proton guards this endpoint behind an elevated session and grants that only
+	// for another SRP exchange, so the command carries what it can answer with.
+	reauth.Declare(c)
+	return c
+}
+
+// ── mailing lists ──
+
+// Unsubscribe asks a list to stop, using what the message itself offered.
+func unsubscribeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unsubscribe REF...",
+		Short: "Ask a mailing list to stop",
+		Long: "Ask a mailing list to stop.\n\n" +
+			"Proton does the asking, using whatever the message offered - a\n" +
+			"List-Unsubscribe header, or the one-click form behind it - because Proton\n" +
+			"is the party the list already knows.",
+		Args: cobra.MinimumNArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			ids := make([]string, 0, len(c.Args))
+			for _, ref := range c.Args {
+				id, err := c.App.Mail.Resolve(c.Ctx, ref)
+				if err != nil {
+					return wrongTable(err, "unsubscribe")
+				}
+				ids = append(ids, id)
+			}
+			ids = kit.Dedupe(ids)
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Unsubscribed, Kind: "messages", Count: len(ids), IDs: ids,
+			}, func() error {
+				for _, id := range ids {
+					if err := c.App.Mail.Unsubscribe(c.Ctx, id); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}),
+	}
+}

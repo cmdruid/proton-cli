@@ -123,29 +123,57 @@ func deleteOp(eventID string) syncOp { return syncOp{"ID": eventID} }
 
 // sync applies a batch and returns the IDs of the events it created, in order.
 func (s *Service) sync(ctx context.Context, calendarID, memberID string, ops []syncOp) ([]string, error) {
+	return s.syncBatch(ctx, calendarID, memberID, ops, false)
+}
+
+// syncImported applies a batch of events read out of a file.
+//
+// Proton is told these came from an import, which is what lets each one take the
+// place of the event already carrying its UID instead of being refused as a
+// clash. That is the difference between an export you can restore and a file the
+// calendar will not read back.
+func (s *Service) syncImported(ctx context.Context, calendarID, memberID string, ops []syncOp) ([]string, error) {
+	return s.syncBatch(ctx, calendarID, memberID, ops, true)
+}
+
+func (s *Service) syncBatch(ctx context.Context, calendarID, memberID string, ops []syncOp, isImport bool) ([]string, error) {
 	if len(ops) == 0 {
 		return nil, nil
 	}
 	var r struct {
 		Responses []struct {
+			Index    int
 			Response struct {
+				Code  int
+				Error string
 				Event struct{ ID string }
 			}
 		}
 	}
+	body := map[string]any{"MemberID": memberID, "Events": ops}
+	if isImport {
+		body["IsImport"] = 1
+	}
 	if err := s.C.Decode(ctx, proton.Request{
 		Method: "PUT", Path: "/calendar/v1/" + calendarID + "/events/sync",
-		Body: map[string]any{"MemberID": memberID, "Events": ops},
+		Body: body,
 	}, &r); err != nil {
 		return nil, err
 	}
-	created := make([]string, 0, len(r.Responses))
+	// Proton answers a batch inside a 200, so whether an event was written is in
+	// the entry rather than in the status. A refusal read as an empty ID would be
+	// reported as a success that changed nothing.
+	written := make([]string, 0, len(r.Responses))
 	for _, resp := range r.Responses {
-		if resp.Response.Event.ID != "" {
-			created = append(created, resp.Response.Event.ID)
+		if resp.Response.Error != "" {
+			return nil, fmt.Errorf("%s", resp.Response.Error)
 		}
+		if resp.Response.Event.ID == "" {
+			return nil, fmt.Errorf("nothing came back about event %d", resp.Index)
+		}
+		written = append(written, resp.Response.Event.ID)
 	}
-	return created, nil
+	return written, nil
 }
 
 // createOp builds the entry that stores a brand-new event.
@@ -156,6 +184,17 @@ func (ck *calKeys) createOp(b eventBody) (syncOp, *pgp.SessionKey, error) {
 		return nil, nil, err
 	}
 	return syncOp{"Overwrite": 0, "Event": event}, sk, nil
+}
+
+// importOp builds the entry that stores an event read out of a file, which takes
+// the place of whatever already carries its UID.
+func (ck *calKeys) importOp(b eventBody) (syncOp, error) {
+	op, _, err := ck.createOp(b)
+	if err != nil {
+		return nil, err
+	}
+	op["Overwrite"] = 1
+	return op, nil
 }
 
 // updateOp builds the entry that rewrites an existing event in place, reusing its

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
@@ -24,6 +25,10 @@ type Vault struct {
 	Shared      bool   `json:"shared"`
 	Members     int    `json:"members"`
 	AddressID   string `json:"address_id,omitempty"`
+	// Icon and Color are which of Pass's grid the vault picked, numbered from
+	// one. Zero means it never chose.
+	Icon  int `json:"icon,omitempty"`
+	Color int `json:"color,omitempty"`
 }
 
 func (s *Service) VaultsList(ctx context.Context) ([]Vault, error) {
@@ -90,6 +95,10 @@ func (s *Service) VaultsList(ctx context.Context) ([]Vault, error) {
 					if vv, err := decryptVault(sh.Content, key); err == nil {
 						v.Name = vv.Name
 						v.Description = vv.Description
+						if d := vv.GetDisplay(); d != nil {
+							v.Icon = DisplayNumber(int(d.Icon))
+							v.Color = DisplayNumber(int(d.Color))
+						}
 					}
 				}
 			}
@@ -148,7 +157,48 @@ func (s *Service) VaultDelete(ctx context.Context, shareID string) error {
 
 // VaultEdit renames a vault, preserving its description and display settings by
 // re-encrypting the existing vault content with the latest share key.
-func (s *Service) VaultEdit(ctx context.Context, shareID, newName string) error {
+// VaultPatch changes only what it names, so setting an icon does not clear the
+// description somebody wrote in the Pass app.
+type VaultPatch struct {
+	Name        *string
+	Description *string
+	Icon        *int
+	Color       *int
+}
+
+// VaultIcons and VaultColors are the sets Pass offers, named the way a person
+// would say them rather than by the proto's ICON1..ICON30.
+//
+// Proton's own picker shows a grid with no names at all, so the numbers are what
+// there is; naming them one to thirty is the honest rendering of a choice that
+// has no other vocabulary.
+func VaultIcons() []string  { return numbered(30) }
+func VaultColors() []string { return numbered(10) }
+
+func numbered(n int) []string {
+	out := make([]string, 0, n)
+	for i := 1; i <= n; i++ {
+		out = append(out, strconv.Itoa(i))
+	}
+	return out
+}
+
+// icon and colour numbers are offset by two in the proto: zero is unspecified
+// and one is custom, so the first pickable one is two.
+const displayOffset = 2
+
+// DisplayValue turns the number a person writes into the enum Pass stores.
+func DisplayValue(n int) int { return n + displayOffset - 1 }
+
+// DisplayNumber is the inverse, and answers zero for a vault that never chose.
+func DisplayNumber(v int) int {
+	if v < displayOffset {
+		return 0
+	}
+	return v - displayOffset + 1
+}
+
+func (s *Service) VaultEdit(ctx context.Context, shareID string, patch VaultPatch) error {
 	shares, err := s.getShares(ctx)
 	if err != nil {
 		return err
@@ -182,9 +232,9 @@ func (s *Service) VaultEdit(ctx context.Context, shareID, newName string) error 
 	if !ok {
 		return fmt.Errorf("no share key for rotation %d", rotation)
 	}
-	pbBytes, err := renamedVault(content, shareKey, newName)
+	pbBytes, err := patchedVault(content, shareKey, patch)
 	if err != nil {
-		return fmt.Errorf("rename vault %s: %w", shareID, err)
+		return fmt.Errorf("edit vault %s: %w", shareID, err)
 	}
 	writeKey, writeRotation := sk.latest()
 	if writeKey == nil {
@@ -233,15 +283,31 @@ func (s *Service) ResolveVault(ctx context.Context, nameOrID string) (string, er
 // It fails rather than substituting an empty vault when the existing content
 // cannot be read: a rename that rebuilds the vault from nothing is a way of losing
 // its description and every other field it holds.
-func renamedVault(content string, shareKey []byte, newName string) ([]byte, error) {
+func patchedVault(content string, shareKey []byte, patch VaultPatch) ([]byte, error) {
 	if content == "" {
-		return nil, fmt.Errorf("it has no stored content to rename")
+		return nil, fmt.Errorf("it has no stored content to change")
 	}
 	vault, err := decryptVault(content, shareKey)
 	if err != nil {
 		return nil, fmt.Errorf("its stored content could not be read: %w", err)
 	}
-	vault.Name = newName
+	if patch.Name != nil {
+		vault.Name = *patch.Name
+	}
+	if patch.Description != nil {
+		vault.Description = *patch.Description
+	}
+	if patch.Icon != nil || patch.Color != nil {
+		if vault.Display == nil {
+			vault.Display = &pb.VaultDisplayPreferences{}
+		}
+		if patch.Icon != nil {
+			vault.Display.Icon = pb.VaultIcon(DisplayValue(*patch.Icon))
+		}
+		if patch.Color != nil {
+			vault.Display.Color = pb.VaultColor(DisplayValue(*patch.Color))
+		}
+	}
 	return proto.Marshal(vault)
 }
 

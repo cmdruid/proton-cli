@@ -87,3 +87,36 @@ func TestAnAutoReplyScheduleThatContradictsItselfIsRefused(t *testing.T) {
 		refuses(t, 1, append([]string{"mail", "settings", "autoreply", "set"}, tt.args...), tt.phrases...)
 	}
 }
+
+// Which folder to clear is on the command line or it is nowhere, so the question
+// is settled before the sign-in - not after a round trip that was never needed.
+func TestEmptyingAFolderNeedsToKnowWhichOne(t *testing.T) {
+	refuses(t, 1, []string{"mail", "messages", "empty"}, "Which folder", "--folder trash")
+}
+
+// A duration and a stop are opposite instructions, and which was meant is not a
+// question any account can answer.
+func TestExpiringNeedsOneInstruction(t *testing.T) {
+	refuses(t, 1, []string{"mail", "messages", "expire", "--in", "7d", "--never", "any-ref"},
+		"opposite things")
+	refuses(t, 1, []string{"mail", "messages", "expire", "any-ref"}, "How long?", "--in 7d")
+}
+
+// Only the types whose Pass editor offers headings can carry a section, and
+// which those are is known from --type alone.
+func TestASectionNeedsAnItemTypeThatHasOne(t *testing.T) {
+	refuses(t, 1, []string{"pass", "items", "create", "--name", "x", "--field", "Recovery/Code=1"},
+		"has no sections", "--type custom")
+	refuses(t, 1, []string{"pass", "items", "create", "--type", "custom", "--name", "x", "--field", "bad"},
+		"NAME=VALUE")
+	refuses(t, 1, []string{"pass", "items", "update", "ref", "--field", "Section/=x"},
+		"has no name")
+}
+
+// A link with no end is the way a secure link goes wrong, so how long it lasts
+// is required - and that is a question no account needs to be asked.
+func TestASecureLinkNeedsAnExpiry(t *testing.T) {
+	refuses(t, 1, []string{"pass", "links", "create", "anything"}, "How long", "--expires 7d")
+	refuses(t, 1, []string{"pass", "links", "create", "anything", "--expires", "next tuesday"},
+		"--expires")
+}

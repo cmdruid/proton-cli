@@ -97,23 +97,25 @@ func TestMailMessagesListJSONPaginationFields(t *testing.T) {
 	}
 }
 
-func TestMailMessagesSearchFooterNoPageZero(t *testing.T) {
+// A filtered listing still pages, so its footer offers the next page rather than
+// reporting a total that was never asked for.
+func TestMailMessagesListFilteredFooterPages(t *testing.T) {
 	t.Parallel()
-	_, stderr := runOKStderr(t, "mail", "messages", "search", "--keyword", "proton", "--limit", "5")
+	_, stderr := runOKStderr(t, "mail", "messages", "list",
+		"--folder", "all", "--keyword", "proton", "--page-size", "5")
 	last := lastNonEmpty(stderr)
 	if strings.Contains(last, "page 0") {
-		t.Errorf("search footer still has '(page 0)': %q", last)
+		t.Errorf("a footer should never name the page it is on: %q", last)
 	}
-	// Either the limit was reached and more may exist, or it was not and the
-	// count stands on its own.
-	if !strings.HasSuffix(last, "messages.") && !strings.HasSuffix(last, "raise --limit.") {
-		t.Errorf("expected a search footer, got: %q", last)
+	// Either there is another page, or the count stands on its own.
+	if !strings.HasSuffix(last, "messages.") && !strings.Contains(last, "Next page:") {
+		t.Errorf("expected a listing footer, got: %q", last)
 	}
 }
 
-func TestMailMessagesSearchEmptyFooter(t *testing.T) {
+func TestMailMessagesListEmptyFilterFooter(t *testing.T) {
 	t.Parallel()
-	_, stderr := runOKStderr(t, "mail", "messages", "search",
+	_, stderr := runOKStderr(t, "mail", "messages", "list", "--folder", "all",
 		"--keyword", "xyz-no-match-"+testID())
 	// A search that matched nothing says so. "No messages." would read as an
 	// empty mailbox, which is a different and more alarming fact.
@@ -134,26 +136,26 @@ func lastNonEmpty(s string) string {
 	return ""
 }
 
-// ── mail messages search ──
+// ── mail messages list, with a predicate ──
 
-func TestMailMessagesSearch(t *testing.T) {
+func TestMailMessagesListKeyword(t *testing.T) {
 	t.Parallel()
-	runOK(t, "mail", "messages", "search", "--keyword", "proton")
+	runOK(t, "mail", "messages", "list", "--folder", "all", "--keyword", "proton")
 }
 
-func TestMailMessagesSearchFrom(t *testing.T) {
+func TestMailMessagesListFrom(t *testing.T) {
 	t.Parallel()
-	runOK(t, "mail", "messages", "search", "--from", selfEmail())
+	runOK(t, "mail", "messages", "list", "--folder", "all", "--from", selfEmail())
 }
 
-func TestMailMessagesSearchDateRange(t *testing.T) {
+func TestMailMessagesListDateRange(t *testing.T) {
 	t.Parallel()
-	runOK(t, "mail", "messages", "search", "--after", "2020-01-01", "--before", "2099-12-31")
+	runOK(t, "mail", "messages", "list", "--folder", "all", "--after", "2020-01-01", "--before", "2099-12-31")
 }
 
-func TestMailMessagesSearchEmpty(t *testing.T) {
+func TestMailMessagesListEmptyFilter(t *testing.T) {
 	t.Parallel()
-	_, _, code := run(t, "mail", "messages", "search", "--keyword", "xyz-nothing-xxxyyy-"+testID())
+	_, _, code := run(t, "mail", "messages", "list", "--folder", "all", "--keyword", "xyz-nothing-xxxyyy-"+testID())
 	if code != 0 {
 		t.Fatalf("search with no results should exit 0, got %d", code)
 	}
@@ -161,10 +163,10 @@ func TestMailMessagesSearchEmpty(t *testing.T) {
 
 // ── --from / --to zero-result hint ──
 
-func TestMailSearchFromZeroResultsHint(t *testing.T) {
+func TestMailListFromZeroResultsHint(t *testing.T) {
 	t.Parallel()
 	needle := "no-such-sender-" + testID()
-	_, stderr := runOKStderr(t, "mail", "messages", "search", "--from", needle)
+	_, stderr := runOKStderr(t, "mail", "messages", "list", "--folder", "all", "--from", needle)
 	if !strings.Contains(stderr, "--from matches the address only") {
 		t.Errorf("expected the --from hint, got: %s", stderr)
 	}
@@ -173,10 +175,10 @@ func TestMailSearchFromZeroResultsHint(t *testing.T) {
 	}
 }
 
-func TestMailSearchToZeroResultsHint(t *testing.T) {
+func TestMailListToZeroResultsHint(t *testing.T) {
 	t.Parallel()
 	needle := "no-such-rcpt-" + testID()
-	_, stderr := runOKStderr(t, "mail", "messages", "search", "--to", needle)
+	_, stderr := runOKStderr(t, "mail", "messages", "list", "--folder", "all", "--to", needle)
 	if !strings.Contains(stderr, "--to matches the address only") {
 		t.Errorf("expected the --to hint, got: %s", stderr)
 	}
@@ -185,24 +187,24 @@ func TestMailSearchToZeroResultsHint(t *testing.T) {
 	}
 }
 
-func TestMailSearchFromKeywordSuppressesHint(t *testing.T) {
+func TestMailListFromKeywordSuppressesHint(t *testing.T) {
 	t.Parallel()
 	needle := "impossible-" + testID()
-	_, stderr := runOKStderr(t, "mail", "messages", "search",
+	_, stderr := runOKStderr(t, "mail", "messages", "list", "--folder", "all",
 		"--from", needle, "--keyword", "alsoimpossible-"+testID())
 	if strings.Contains(stderr, "matches the address only") {
 		t.Errorf("hint should be suppressed when --keyword is set; got: %s", stderr)
 	}
 }
 
-func TestMailSearchFromHitsNoHint(t *testing.T) {
+func TestMailListFromHitsNoHint(t *testing.T) {
 	t.Parallel()
 	plainMail(t) // ensure a delivered self-mail exists and is indexed
 	// --from selfEmail() should match. May take a beat to index.
 	var stderr string
 	for attempt := 0; attempt < 8; attempt++ {
-		_, s := runOKStderr(t, "mail", "messages", "search",
-			"--from", selfEmail(), "--limit", "5")
+		_, s := runOKStderr(t, "mail", "messages", "list", "--folder", "all",
+			"--from", selfEmail(), "--page-size", "5")
 		stderr = s
 		if !strings.Contains(s, "matches the address only") {
 			return
@@ -212,19 +214,19 @@ func TestMailSearchFromHitsNoHint(t *testing.T) {
 	t.Errorf("hint fired on a successful --from query; stderr: %s", stderr)
 }
 
-func TestMailSearchFromQuietSuppressesHint(t *testing.T) {
+func TestMailListFromQuietSuppressesHint(t *testing.T) {
 	t.Parallel()
-	_, stderr := runOKStderr(t, "--quiet", "mail", "messages", "search",
+	_, stderr := runOKStderr(t, "--quiet", "mail", "messages", "list", "--folder", "all",
 		"--from", "no-such-sender-"+testID())
 	if strings.Contains(stderr, "matches the address only") {
 		t.Errorf("--quiet should suppress the hint; got: %s", stderr)
 	}
 }
 
-func TestMailConversationsSearchFromZeroResultsHint(t *testing.T) {
+func TestMailConversationsListFromZeroResultsHint(t *testing.T) {
 	t.Parallel()
 	needle := "no-such-sender-" + testID()
-	_, stderr := runOKStderr(t, "mail", "conversations", "search", "--from", needle)
+	_, stderr := runOKStderr(t, "mail", "conversations", "list", "--folder", "all", "--from", needle)
 	if !strings.Contains(stderr, "--from matches the address only") {
 		t.Errorf("expected the --from hint, got: %s", stderr)
 	}
@@ -239,7 +241,7 @@ func TestMailMessagesSendAndReadText(t *testing.T) {
 	t.Parallel()
 	msgID, _, subject := plainMail(t)
 
-	// Default --format text: human-readable, fields on stderr-safe stdout
+	// Default --render text: human-readable, fields on stderr-safe stdout
 	stdout := runOK(t, "mail", "messages", "get", "--", msgID)
 	assertContains(t, stdout, subject)
 	assertContains(t, stdout, selfEmail())
@@ -278,7 +280,7 @@ func TestMailMessagesReadFormatRaw(t *testing.T) {
 	t.Parallel()
 	msgID, _, subject := plainMail(t)
 
-	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", "--", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--render", "raw", "--", msgID)
 	assertContains(t, stdout, subject)
 }
 
@@ -902,13 +904,13 @@ func TestMailMessagesReadBodyOnly(t *testing.T) {
 func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
 	t.Parallel()
 	msgID, _, _ := plainMail(t)
-	stdout := runOK(t, "mail", "messages", "get", "--format", "html", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--render", "html", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
-		t.Errorf("--format html must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
+		t.Errorf("--render html must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
 	}
 	for _, marker := range []string{"\nSubject: ", "\nFrom:    ", "\nTo:      ", "\nID:      "} {
 		if strings.Contains(stdout, marker) {
-			t.Errorf("--format html output should not contain header marker %q", marker)
+			t.Errorf("--render html output should not contain header marker %q", marker)
 		}
 	}
 }
@@ -916,9 +918,9 @@ func TestMailMessagesReadFormatHTMLNoHeader(t *testing.T) {
 func TestMailMessagesReadFormatRawNoHeader(t *testing.T) {
 	t.Parallel()
 	msgID, _, _ := plainMail(t)
-	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--render", "raw", msgID)
 	if strings.HasPrefix(strings.TrimSpace(stdout), "Subject:") {
-		t.Errorf("--format raw must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
+		t.Errorf("--render raw must not start with 'Subject:' header; got:\n%s", truncateOutput(stdout))
 	}
 }
 
@@ -981,18 +983,18 @@ func TestMailMessagesReadNoAttachmentsNoFooter(t *testing.T) {
 func TestMailMessagesReadFormatHTMLNoFooter(t *testing.T) {
 	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
-	stdout := runOK(t, "mail", "messages", "get", "--format", "html", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--render", "html", msgID)
 	if strings.Contains(stdout, "Attachments (") {
-		t.Errorf("--format html must not append the footer:\n%s", truncateOutput(stdout))
+		t.Errorf("--render html must not append the footer:\n%s", truncateOutput(stdout))
 	}
 }
 
 func TestMailMessagesReadFormatRawNoFooter(t *testing.T) {
 	t.Parallel()
 	msgID, _, _ := findMessageWithAttachment(t)
-	stdout := runOK(t, "mail", "messages", "get", "--format", "raw", msgID)
+	stdout := runOK(t, "mail", "messages", "get", "--render", "raw", msgID)
 	if strings.Contains(stdout, "Attachments (") {
-		t.Errorf("--format raw must not append the footer:\n%s", truncateOutput(stdout))
+		t.Errorf("--render raw must not append the footer:\n%s", truncateOutput(stdout))
 	}
 }
 
@@ -1236,6 +1238,110 @@ func TestMailFiltersCRUD(t *testing.T) {
 	if got := filterStatus(t, id); got != 1 {
 		t.Errorf("status after enable = %d, want 1", got)
 	}
+}
+
+// A filter described rather than written. Proton generates the script from the
+// conditions, so what this really checks is that what it generated says what was
+// asked for - the one failure here that would be invisible.
+func TestMailFiltersFromConditions(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
+	name := testID() + "-rule"
+
+	id := strings.TrimSpace(runOK(t, "mail", "settings", "filters", "create", "--name", name,
+		"--match", "any",
+		"--if", "subject contains xyz-never-matches-"+testID(),
+		"--if", "sender not is nobody@example.com",
+		"--if", "attachments contains",
+		"--move-to", "Archive", "--mark-read"))
+	if !looksLikeID(id) {
+		t.Fatalf("expected bare ID on stdout, got %q", id)
+	}
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete -- %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
+
+	sieve := filterSieve(t, id)
+	for _, want := range []string{
+		"anyof",                     // --match any
+		`fileinto "Archive"`,        // --move-to
+		`addflag "\\Seen"`,          // --mark-read
+		"not address",               // the negated sender
+		`exists "X-Attached"`,       // the attachment condition
+		"vnd.proton.spam-threshold", // never runs on spam
+	} {
+		if !strings.Contains(sieve, want) {
+			t.Errorf("the generated script is missing %q:\n%s", want, sieve)
+		}
+	}
+}
+
+// A rule can be rewritten in place. That matters because order decides which
+// filter wins, so the alternative - delete and recreate - moves the filter to
+// the end and changes what happens to mail.
+func TestMailFiltersRewriteARuleInPlace(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
+	name := testID() + "-rewrite"
+
+	id := strings.TrimSpace(runOK(t, "mail", "settings", "filters", "create", "--name", name,
+		"--if", "subject contains before-"+testID(), "--move-to", "Archive"))
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete -- %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
+	before := filterPriority(t, id)
+
+	// By name, because every other filter verb takes one.
+	runOK(t, "mail", "settings", "filters", "update", "--if", "sender not is nobody@example.com",
+		"--label", "Receipts", "--star", name)
+
+	shown := runOK(t, "mail", "settings", "filters", "get", "--", id)
+	for _, want := range []string{"sender not is nobody@example.com", "Receipts", "Stars"} {
+		assertContains(t, shown, want)
+	}
+	assertNotContains(t, shown, "before-")
+	if after := filterPriority(t, id); after != before {
+		t.Errorf("the filter moved in the order: priority %v before, %v after", before, after)
+	}
+	if got := filterStatus(t, id); got != 1 {
+		t.Errorf("a rewritten filter should still be on, got status %d", got)
+	}
+}
+
+// A script nothing in the CLI's grammar can describe is shown as itself, rather
+// than as words that would not rebuild it.
+func TestMailFiltersShowAScriptItCannotDescribe(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
+	name := testID() + "-script"
+	sieve := `require ["fileinto"];` + "\n" + `if header :contains "X-Custom-Header" "` + testID() + `" { fileinto "Archive"; }`
+
+	id := strings.TrimSpace(runOK(t, "mail", "settings", "filters", "create", "--name", name, "--sieve", sieve))
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete -- %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
+
+	shown := runOK(t, "mail", "settings", "filters", "get", "--", id)
+	assertContains(t, shown, "X-Custom-Header")
+	assertNotContains(t, shown, "Matches:")
+}
+
+// filterPriority is where a filter sits in the order filters run in.
+func filterPriority(t *testing.T, id string) float64 {
+	t.Helper()
+	shown := runJSON(t, "--output", "json", "api", "GET", "/mail/v4/filters/"+id)
+	filter, _ := shown["Filter"].(map[string]interface{})
+	priority, _ := filter["Priority"].(float64)
+	return priority
+}
+
+// filterSieve reads back the script Proton wrote for a filter.
+func filterSieve(t *testing.T, id string) string {
+	t.Helper()
+	shown := runJSON(t, "--output", "json", "api", "GET", "/mail/v4/filters/"+id)
+	filter, _ := shown["Filter"].(map[string]interface{})
+	sieve, _ := filter["Sieve"].(string)
+	if sieve == "" {
+		t.Fatalf("no script came back for filter %s", id)
+	}
+	return sieve
 }
 
 // filterStatus reads one filter's on/off state, which the table spells as a yes
@@ -1714,4 +1820,240 @@ func TestMailCrossAccountDelivery(t *testing.T) {
 	read := runOKSecondary(t, "mail", "messages", "get", recvID)
 	assertContains(t, read, body)
 	assertField(t, read, "Signature:", "verified")
+}
+
+// ── standing decisions about senders ──
+
+// Proton's three lists are one record with a destination on it, so one listing
+// answers "what have I decided about whom".
+func TestMailSendersBlockAllowAndForget(t *testing.T) {
+	t.Parallel()
+	addr := testID() + "@example.com"
+
+	runOK(t, "mail", "settings", "senders", "block", addr)
+	cleanupRun(t, fmt.Sprintf("Forget sender: proton mail settings senders forget %s", addr),
+		"mail", "settings", "senders", "forget", addr)
+	assertSenderGoes(t, addr, "blocked")
+
+	// Deciding again replaces the earlier decision rather than colliding.
+	runOK(t, "mail", "settings", "senders", "spam", addr)
+	assertSenderGoes(t, addr, "spam")
+	runOK(t, "mail", "settings", "senders", "allow", addr)
+	assertSenderGoes(t, addr, "inbox")
+
+	runOK(t, "mail", "settings", "senders", "forget", addr)
+	if senderRule(t, addr) != nil {
+		t.Error("after forgetting, the sender should carry no standing decision")
+	}
+}
+
+// A whole domain is a rule too, written with the @.
+func TestMailSendersTakeAWholeDomain(t *testing.T) {
+	t.Parallel()
+	domain := "@" + testID() + ".example.com"
+
+	runOK(t, "mail", "settings", "senders", "block", domain)
+	cleanupRun(t, fmt.Sprintf("Forget domain: proton mail settings senders forget %s", domain),
+		"mail", "settings", "senders", "forget", domain)
+	assertSenderGoes(t, domain, "blocked")
+}
+
+func senderRule(t *testing.T, target string) map[string]interface{} {
+	t.Helper()
+	for _, row := range runJSONArray(t, "mail", "settings", "senders", "list") {
+		m, _ := row.(map[string]interface{})
+		email, _ := m["email"].(string)
+		domain, _ := m["domain"].(string)
+		if strings.EqualFold(email, target) || (domain != "" && strings.EqualFold("@"+domain, target)) {
+			return m
+		}
+	}
+	return nil
+}
+
+func assertSenderGoes(t *testing.T, target, want string) {
+	t.Helper()
+	rule := senderRule(t, target)
+	if rule == nil {
+		t.Fatalf("no standing decision found for %s", target)
+	}
+	if got, _ := rule["goes"].(string); got != want {
+		t.Errorf("%s goes to %q, want %q", target, got, want)
+	}
+}
+
+// ── self-destructing messages ──
+
+// Proton stores the moment, not the duration, so a message counting down reports
+// when. Clearing it keeps a message that was going to disappear.
+func TestMailMessagesExpireAndStop(t *testing.T) {
+	t.Parallel()
+	msgID := mutableMail(t)
+
+	_, stderr, code := run(t, "mail", "messages", "expire", "--in", "30d", "--", msgID)
+	skipIfPlanRefuses(t, messageExpiry, code, stderr)
+	cleanupRun(t, fmt.Sprintf("Stop expiry: proton mail messages expire --never -- %s", msgID),
+		"mail", "messages", "expire", "--never", "--", msgID)
+
+	data := runJSON(t, "api", "GET", "/mail/v4/messages/"+msgID)
+	msg, _ := data["Message"].(map[string]interface{})
+	at, _ := msg["ExpirationTime"].(float64)
+	if at <= 0 {
+		t.Fatalf("ExpirationTime = %v, want a moment in the future", at)
+	}
+
+	runOK(t, "mail", "messages", "expire", "--never", "--", msgID)
+	data = runJSON(t, "api", "GET", "/mail/v4/messages/"+msgID)
+	msg, _ = data["Message"].(map[string]interface{})
+	if at, _ := msg["ExpirationTime"].(float64); at != 0 {
+		t.Errorf("after --never, ExpirationTime = %v, want 0", at)
+	}
+}
+
+// ── snooze ──
+
+// A thread leaves the inbox as a whole and returns as a whole, which is why
+// snooze is on threads and not on messages.
+func TestMailConversationsSnoozeAndBringBack(t *testing.T) {
+	t.Parallel()
+	msgID := mutableMail(t)
+	convID := conversationIDOf(msgID)
+	if convID == "" {
+		t.Skip("no conversation to snooze")
+	}
+
+	runOK(t, "mail", "conversations", "snooze", "--until", "3d", "--", convID)
+	cleanupRun(t, fmt.Sprintf("Unsnooze: proton mail conversations unsnooze -- %s", convID),
+		"mail", "conversations", "unsnooze", "--", convID)
+
+	if !waitFor(30*time.Second, 2*time.Second, func() bool {
+		return conversationHasLabel(convID, "16") // SNOOZED
+	}) {
+		t.Error("a snoozed thread should carry the snoozed label")
+	}
+
+	runOK(t, "mail", "conversations", "unsnooze", "--", convID)
+	if !waitFor(30*time.Second, 2*time.Second, func() bool {
+		return !conversationHasLabel(convID, "16")
+	}) {
+		t.Error("after unsnoozing, the thread should be back in the inbox")
+	}
+}
+
+func conversationHasLabel(convID, labelID string) bool {
+	stdout, _, code, _ := runArgs(nil, "--output", "json", "api", "GET", "/mail/v4/conversations/"+convID)
+	if code != 0 {
+		return false
+	}
+	return strings.Contains(stdout, `"`+labelID+`"`)
+}
+
+// A moment in the past is not a moment to wake up at, and that is judged from
+// the command line.
+func TestMailConversationsSnoozeRefusesThePast(t *testing.T) {
+	t.Parallel()
+	_, stderr, code := run(t, "mail", "conversations", "snooze", "--until", "2020-01-01T09:00", "any-ref")
+	if code != 1 {
+		t.Errorf("exit %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "in the past") {
+		t.Errorf("stderr should say the moment has passed, got: %s", stderr)
+	}
+}
+
+// Emptying a folder is not a filtered delete: nothing is enumerated, Proton
+// clears it, and that is why it always asks.
+func TestMailMessagesEmptyClearsAFolder(t *testing.T) {
+	t.Parallel()
+	lease(t, mailTrash)
+
+	subject := testID() + "-empty"
+	msgID := sendTestMail(t, subject)
+	if !waitFor(60*time.Second, 3*time.Second, func() bool {
+		return messageIDInFolder("inbox", subject) != ""
+	}) {
+		t.Skip("the message did not arrive; nothing to empty")
+	}
+	inbox := messageIDInFolder("inbox", subject)
+	runOK(t, "mail", "messages", "trash", "--", inbox)
+	_ = msgID
+
+	if !waitFor(30*time.Second, 2*time.Second, func() bool {
+		return messageIDInFolder("trash", subject) != ""
+	}) {
+		t.Skip("the message did not reach the trash")
+	}
+
+	// Another test moving something into the trash locks the label, and Proton
+	// says so rather than queueing, so this waits for it to be free.
+	runOKUntilFree(t, "mail", "messages", "empty", "--folder", "trash", "--yes")
+
+	if !waitFor(60*time.Second, 3*time.Second, func() bool {
+		return messageIDInFolder("trash", subject) == ""
+	}) {
+		t.Error("after emptying, the trash should not hold the message")
+	}
+}
+
+// A filter ordinarily acts once, as mail arrives. Running it again over what is
+// already here is the catching-up.
+func TestMailFiltersApplyToExistingMail(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
+
+	name := testID() + "-apply"
+	sieve := fmt.Sprintf("require [\"fileinto\"];\n# %s\nif header :contains \"Subject\" \"%s\" {\n  fileinto \"Archive\";\n}\n", name, name)
+	stdout, stderr, code := run(t, "mail", "settings", "filters", "create", "--name", name, "--sieve", sieve)
+	if code != 0 {
+		t.Fatalf("filter create failed (exit %d): %s", code, truncateOutput(stderr))
+	}
+	id := strings.TrimSpace(stdout)
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
+
+	// One apply, not two. Proton runs this over the whole mailbox as a background
+	// job, meters it hard, and refuses a second while the first is going - so
+	// asking twice teaches nothing the endpoint has not already answered and
+	// spends an allowance the rest of the suite needs.
+	runOKUntilFree(t, "mail", "settings", "filters", "apply", "--", id)
+}
+
+// A half-stated order is one nobody can predict, so naming some of them is
+// refused rather than leaving the rest wherever they fell.
+func TestMailFiltersReorderNeedsEveryFilter(t *testing.T) {
+	t.Parallel()
+	lease(t, filterSlot)
+
+	name := testID() + "-order"
+	sieve := fmt.Sprintf("require [\"fileinto\"];\n# %s\nif header :contains \"Subject\" \"%s\" {\n  fileinto \"Archive\";\n}\n", name, name)
+	stdout, stderr, code := run(t, "mail", "settings", "filters", "create", "--name", name, "--sieve", sieve)
+	if code != 0 {
+		t.Fatalf("filter create failed (exit %d): %s", code, truncateOutput(stderr))
+	}
+	id := strings.TrimSpace(stdout)
+	cleanupRun(t, fmt.Sprintf("Delete filter: proton mail settings filters delete %s", id),
+		"mail", "settings", "filters", "delete", "--", id)
+
+	all := runJSONArray(t, "mail", "settings", "filters", "list")
+	if len(all) < 2 {
+		// One filter is already in the only order there is.
+		runOK(t, "mail", "settings", "filters", "reorder", "--", id, id)
+		return
+	}
+	var ids []string
+	for _, row := range all {
+		m, _ := row.(map[string]interface{})
+		if fid, _ := m["id"].(string); fid != "" {
+			ids = append(ids, fid)
+		}
+	}
+	runOK(t, append([]string{"mail", "settings", "filters", "reorder", "--"}, ids...)...)
+
+	_, stderr, code = run(t, "mail", "settings", "filters", "reorder", "--", ids[0], ids[0])
+	if code != 1 {
+		t.Errorf("naming fewer filters than exist should exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "name every filter") {
+		t.Errorf("the refusal should say to name them all, got: %s", stderr)
+	}
 }

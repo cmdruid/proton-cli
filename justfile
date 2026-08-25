@@ -52,6 +52,9 @@ lint:
     goreleaser check
     shellcheck scripts/*.sh scripts/terminal-demo/*.sh
     golangci-lint run ./...
+    # The paid tests are behind a build tag, so the pass above does not compile
+    # them. Without this they are the one part of the tree nothing lints.
+    golangci-lint run --build-tags=paid ./...
 
 [doc("Sign the two test accounts in, for working with them by hand")]
 login: build
@@ -101,17 +104,45 @@ snapshot: build
 
 # How many live tests run at once.
 #
-# Four, measured: it puts the suite within a minute of what eight does, and these
-# are real accounts. Raise it one step at a time and only after a full run shows no
-# rate limiting - the suite fails on the first sign of it - and never past eight.
-parallel := "4"
+# Two: what limits this is not the client but what the free plan meters. Several
+# tests each need an alias of their own, and Proton allows few per hour, so above
+# this they arrive close enough together to be refused. Raise it one step at a
+# time and only after a full run shows no rate limiting - the suite fails on the
+# first sign of it - and never past eight.
+parallel := "2"
 
 # The timeouts say how long a run may take before something is wrong, not how long
 # it takes: the suite runs in about three minutes and one test in seconds. A
 # timeout of half an hour would let a hang look like a slow day.
-[doc("Everything, including the live-API suite against the two test accounts")]
+[doc("The live-API suite against the two free test accounts, and everything that needs no account")]
 test: test-fast
     go test ./tests/ -v -count=1 -timeout 10m -parallel {{ parallel }} -shuffle=on
+
+[doc("The tests that need a paid plan, against the account in PROTON_CLI_TEST_PAID_*")]
+test-paid: test-fast
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # A separate recipe, and a build tag, because this is the only thing here
+    # that touches an account somebody depends on. `just test` cannot reach it:
+    # without the tag those tests are not compiled in at all.
+    #
+    # Only the paid tests: the free suite has its own recipe and running it here
+    # would spend the sending allowance for nothing. Every test that needs the
+    # account says Paid in its name, which TestEveryPaidTestSaysSoInItsName
+    # enforces so the filter cannot quietly miss one.
+    #
+    # One at a time, because there is no second paid account to spread the load
+    # over and nothing here is worth racing.
+    go test ./tests/ -tags=paid -v -count=1 -timeout 20m -parallel 1 -run Paid
+
+# Both suites, which is two recipes rather than one because they run against
+# different accounts under different rules. This is the only place they are
+# named together: `test` still cannot reach the paid account, since without the
+# build tag those tests are not compiled in at all, and that is the property
+# worth keeping. Asking for them here is opting in, out loud.
+[doc("Every test there is: the free suite, then the paid one")]
+test-all: test
+    just test-paid
 
 [doc("The live suite one test at a time, for a run that looks flaky or an account that has been throttled")]
 test-serial: test-fast
@@ -141,7 +172,22 @@ coverage:
     trace="${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
     PROTON_CLI_TEST_TRACE="$trace" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
         go test ./tests/ -count=1 -timeout 10m -parallel {{ parallel }}
-    go run ./scripts/testreport --coverage "$trace" > tests/api-coverage.golden
+    # Both suites, because the golden is what every request the CLI can send has
+    # to appear in, and some of them only a paid plan can reach. Without a paid
+    # account the free half is recorded on its own and the paid endpoints show up
+    # as gaps, which is the truth for that machine.
+    traces="$trace"
+    if [ -n "${PROTON_CLI_TEST_PAID_USER:-}" ]; then
+        paid="${trace%.jsonl}-paid.jsonl"
+        PROTON_CLI_TEST_TRACE="$paid" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
+            go test ./tests/ -tags=paid -count=1 -timeout 20m -parallel 1 -run Paid
+        traces="$traces $paid"
+    else
+        echo "no paid account configured; recording the free suite only" >&2
+    fi
+    # shellcheck disable=SC2086
+    cat $traces > "${trace%.jsonl}-all.jsonl"
+    go run ./scripts/testreport --coverage "${trace%.jsonl}-all.jsonl" > tests/api-coverage.golden
     git --no-pager diff --stat tests/api-coverage.golden || true
 
 [doc("Move every dependency and tool to the latest version")]

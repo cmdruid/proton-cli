@@ -18,7 +18,9 @@ An inconsistency is far more likely to be caught there than here.
 ## Running Tests
 
 ```bash
-just test                             # all integration tests, four at a time
+just test                             # the free accounts' integration tests, two at a time
+just test-paid                        # the ones needing a paid plan (see below)
+just test-all                         # both suites, one after the other
 just test-one TestDriveItemsMove      # a single one
 just test-serial                      # one at a time, for a run that looks flaky
 just test-report                      # where the time went, and how deep each request graph was
@@ -26,7 +28,7 @@ just test-report                      # where the time went, and how deep each r
 
 `just login` and `just seed` sign the accounts in and fill them, for working with them by hand.
 
-The suite requires all four of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`.
+The suite requires all four of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`. `PROTON_CLI_TEST_PAID_USER` and `PROTON_CLI_TEST_PAID_PASSWORD` are optional - see [The paid account](#the-paid-account). `.env.example` lists all of them.
 
 ## The two accounts
 
@@ -59,6 +61,9 @@ An **external, non-Proton** recipient comes from `PROTON_CLI_TEST_EXTERNAL_RECIP
 tests/
 ├── integration_test.go      TestMain + helpers
 ├── lease_test.go            what two tests cannot both have, and the guards
+├── paid_test.go             what a plan gates, and what may not be done to the paid account
+├── paid_on_test.go          the paid tests themselves, behind the `paid` build tag
+├── paid_off_test.go         what stands in for them when the tag is absent
 ├── trace_test.go            the per-invocation trace `just test-report` reads
 ├── fixture/                  what the seed puts on the account for the suite to read
 ├── offline/                  the real binary, no session, no network
@@ -87,18 +92,25 @@ tests/
 2. Each test calls the binary as a subprocess via `run()` / `runOK()` / `runJSON()`.
 3. `TestMain` signs both profiles in and runs `scripts/seed/seed.sh`; each checks before it acts, so an account already in shape costs a read.
 4. Each invocation names its profile through `PROTON_PROFILE` in a scrubbed child environment, and the session is reused across invocations.
-5. Tests run **four at a time**, and every one of them calls `t.Parallel()`. What two tests cannot both have at once is declared and leased - see below.
+5. Tests run **two at a time**, and every one of them calls `t.Parallel()`. What two tests cannot both have at once is declared and leased - see below.
 
-## Running four at a time
+## Running two at a time
 
-The suite is bound by waiting for Proton, not by doing anything, so tests overlap. Proton absorbs it easily: sixteen concurrent invocations were measured to cost the same wall time as one. The reason the setting is **four** rather than sixteen is that these are real accounts, and four already lands within a minute of what eight does.
+The suite is bound by waiting for Proton, not by doing anything, so tests overlap. Proton absorbs a good deal of that: sixteen concurrent invocations were measured to cost the same wall time as one.
+
+What decides the setting is not the client but the account, and **what gives out first is whichever endpoint the free plan meters hardest**:
+
+- `PUT /calendar/v1/{id}/events/sync`, because the free plan allows few calendars and so every calendar test writes to the same one. At four, a full run failed on it three times out of three.
+- Making an alias. Several tests need one of their own, and Proton allows few per hour, so at three they arrive close enough together to be refused.
+
+Raising it means either a paid account with room to spare, or a lease that makes the tests competing for one endpoint take turns.
 
 The safeguards, in the order they bite:
 
 - **A single 429 fails the run.** The client backs off and would very likely succeed, so the suite would otherwise pass and teach nobody anything. Proton's first sign of displeasure stops the run and says to lower the concurrency.
 - **Sends never overlap.** `runAs` takes the `sending` lease for any command that puts a message on the wire, so no test has to remember. It is held for the send and not for the wait after it.
 - **The client holds at most 8 requests in flight**, and refreshes a session once per process however many requests discover it expired together.
-- **Raise `parallel` in the justfile one step at a time**, only after a full run shows no rate limiting, and never past eight.
+- **Raise `parallel` in the justfile one step at a time**, only after a full run shows no rate limiting, and never past eight. The calendar sync and alias endpoints are what give out first, so that is where a run that was raised too far will fail.
 
 ### Leases: what two tests cannot both have
 
@@ -327,16 +339,74 @@ The copy-pasteable commands surfaced on cleanup failure do not need `--`; the us
 - This makes them identifiable in the Proton UI if cleanup ever fails.
 - Never use short or common names that could collide with real data.
 
+## The paid account
+
+Proton gates a good deal of what the web clients offer behind a subscription, and the two accounts above are free ones. Buying a second subscription to test with is not a reasonable thing to ask, so the paid tests run against **an account somebody actually uses** - under rules that make a run reversible rather than merely careful.
+
+```bash
+just test-paid          # the paid tests alone
+just test-all           # the free suite first, then these
+```
+
+Those two recipes are the only things that compile the paid tests. `just test` does not, which is the point of the tag rather than a habit.
+
+```go
+func TestPaidCalendarSharing(t *testing.T) {
+    t.Parallel()
+    requirePaid(t)
+    // create something, use it, delete it
+}
+```
+
+Five rules, in the order they bite:
+
+1. **`just test` cannot reach it.** The paid tests live behind the `paid` build tag, so an ordinary run does not compile them, does not sign the account in and does not read it. This is stronger than a skip, which is one edit away from not skipping.
+2. **Nothing seeds it.** `scripts/seed` knows the two free accounts and no others; `TestNothingSeedsThePaidAccount` reads its source and fails if that changes.
+3. **A test acts only on what it made.** It does not list the account's own calendars, vaults, messages or files and act on what it finds. There is real data there, and a filter that matches more than it meant to is the mistake this rules out.
+4. **Some commands are refused outright.** `offLimitsOnPaid` names them and why - an auto-reply that answers real mail, a setting whose previous value cannot be read back, an address that cannot be recreated, emptying a folder that had things in it before the run. `runAs` enforces it: the one place a target account is chosen is the one place the choice can be refused, so a test cannot opt out by forgetting. `TestEveryPaidRestrictionSaysWhy` fails on a rule with no reason written out.
+5. **The account is photographed before and after.** Calendars, vaults, Pass items, labels, folders, filters, addresses, contacts, the root of the drive, the newest of the inbox, and all four settings pages. Anything left behind or missing after the run fails it and is named in a box. This is the one that catches a mistake nobody predicted - the other four are promises, and this checks them.
+
+Only the newest slice of the inbox is looked at: the rest is somebody's real mail and none of the suite's business.
+
+### Mail a run causes Proton to send
+
+Sharing something makes Proton write to the owner when the other side answers, and no setting on this end turns that off. So a run **sweeps its own notices**: mail from `no-reply@proton.me`, matching one of the subjects in `noticesProtonSends`, that arrived after the run began. It is moved to the **trash**, never deleted, because it is real mail.
+
+The sweep runs before the photograph, so what it clears is not then reported as something the run left behind - and anything it fails to clear stays, and the photograph names it. Adding a test that makes Proton write to the account means adding its subject to that list.
+
+Sending is allowed: a paid test may send from that address like any other.
+
+A run refuses to start if an account's user and password look swapped - an address in the password variable and something that is not one in the user variable. Signing in with them the wrong way round is a failed login attempt against a real account, and failed attempts are what Proton counts before it starts demanding a CAPTCHA.
+
+The runners mirror the free ones - `runPaid`, `runOKPaid`, `runJSONPaid`, `cleanupRunPaid` - and live in `paid_on_test.go` with the tests. Add the shapes a new test needs alongside it rather than up front.
+
+`just lint` runs `golangci-lint` twice, once with the tag, because the pass without it does not compile these files at all - a helper used only here would otherwise look unused, and a mistake in here would never be caught.
+
+**A paid test's name has to contain `Paid`.** `just test-paid` selects them with `-run Paid`, so one named anything else would never run and would look like it had passed. `TestEveryPaidTestSaysSoInItsName` reads the file and enforces it.
+
+The canary earns its own two tests: one that it photographed something (an empty photograph compares equal to another empty one and would pass forever), and one that the comparison notices an item appearing, disappearing, or turning up twice.
+
 ## Paid-plan features
 
-The accounts are free ones, and Proton gates some features behind a plan. A test that reaches one skips rather than fails, because no seeding can make a free account able to do it:
+Even with a paid account configured, most tests still run on the free ones, and a test that reaches a gated feature there skips rather than fails.
 
-| Feature | How it refuses |
-| --- | --- |
-| Contact groups | HTTP 401, Proton code `2027` |
-| Auto-reply | a message naming "upgrade", "paid" or "subscription" |
+Which features those are is declared in **`paid_test.go`**, not recognised test by test:
 
-Match the code where there is one; the sentence is Proton's to reword.
+```go
+stdout, stderr, code := run(t, "contacts", "groups", "create", "--name", gname, "--color", "#8080FF")
+skipIfPlanRefuses(t, contactGroups, code, stderr)
+```
+
+| Feature | Declared as | How Proton refuses |
+| --- | --- | --- |
+| Contact groups | `contactGroups` | HTTP 401, Proton code `2027` |
+| Auto-reply | `autoReplySchedule` | a message naming "upgrade", "paid" or "subscription" |
+
+A refusal recognised by whatever substring happened to be in one error message is a skip that stops working the day Proton rewords it, and the test then fails somewhere unrelated to what it was about. So a gate is matched **by code where there is one**, and by words only where there is not - the sentence is Proton's to reword, the code is not.
+
+`skipIfPlanRefuses` also takes the exit code, so a command that succeeded is never mistaken for one that was refused: a message that happens to contain the word "upgrade" is not a refusal. That judgement is made in one place.
+
+Adding a gated feature means adding a `gate` to `paid_test.go` and calling `skipIfPlanRefuses`, never writing a new `strings.Contains` in a test.
 
 Auto-reply is worth a note: Proton refuses it with 9100, the same code it uses for a missing scope, so the CLI elevates the session first and only then hears the real reason. That is why `mail settings autoreply set` carries the credential flags even though the answer is a subscription and not a password.
 

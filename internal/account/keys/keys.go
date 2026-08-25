@@ -322,3 +322,53 @@ func decryptToken(tokenArm, sigArm string, kr *pgp.KeyRing) ([]byte, error) {
 	}
 	return dec.GetBinary(), nil
 }
+
+// Published returns the keys Proton holds for somebody else's address.
+//
+// Handing a person something encrypted - a calendar's passphrase, a vault's key -
+// means encrypting it to the key Proton publishes for them. An address Proton
+// holds none for is one nothing can be shared with, which is what makes this the
+// place that decides whether a share is possible at all.
+//
+// Only the primary key is returned: it is what Proton's own clients encrypt to,
+// and adding the others would mean sealing a secret under keys the owner may
+// have retired.
+func Published(ctx context.Context, c proton.Doer, email string) (*pgp.KeyRing, error) {
+	var r struct {
+		Address struct {
+			Keys []struct {
+				PublicKey string
+				Primary   int
+			}
+		}
+	}
+	q := proton.Query()
+	q.Set("Email", email)
+	// Internal only: an address outside Proton has no key here, and asking for
+	// external ones would return records that cannot be encrypted to.
+	q.Set("InternalOnly", "1")
+	if err := c.Decode(ctx, proton.Request{
+		Method: "GET", Path: "/core/v4/keys/all", Query: q,
+	}, &r); err != nil {
+		return nil, err
+	}
+
+	kr, err := pgp.NewKeyRing(nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range r.Address.Keys {
+		if k.Primary != 1 {
+			continue
+		}
+		key, err := pgp.NewKeyFromArmored(k.PublicKey)
+		if err != nil {
+			continue
+		}
+		_ = kr.AddKey(key)
+	}
+	if len(kr.GetKeys()) == 0 {
+		return nil, nil
+	}
+	return kr, nil
+}

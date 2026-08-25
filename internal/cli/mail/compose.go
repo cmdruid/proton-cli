@@ -431,7 +431,7 @@ func answerCmd(use, short, long string, forward bool) *cobra.Command {
 	if forward {
 		c.Flags().BoolVar(&noAttachments, "no-attachments", false, "Leave the original's attachments behind")
 	} else {
-		c.Flags().BoolVar(&replyAll, "all", false, "Reply to everyone who was on the message")
+		c.Flags().BoolVar(&replyAll, "everyone", false, "Reply to everyone who was on the message, not just the sender")
 	}
 	return c
 }

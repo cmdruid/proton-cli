@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
@@ -107,11 +108,77 @@ func TestLatestItemKeyRefusesWhatItCannotOpen(t *testing.T) {
 	})
 
 	t.Run("a request that failed", func(t *testing.T) {
-		// The error used to be discarded, which left the rotation at zero.
+		// Discarding the error would leave the rotation at zero, which labels the
+		// ciphertext with a key that cannot open it.
 		d := &keyDoer{err: context.DeadlineExceeded}
 		sk := &shareKeys{keys: map[int][]byte{1: shareKey}}
 		if _, _, err := New(d, testKeys(nil)).latestItemKey(context.Background(), sk, "share", "item"); err == nil {
 			t.Error("a failed request was treated as an answer")
 		}
 	})
+}
+
+// The identity fields are declared once and walked by the create path, the
+// update path, the read path and the flag registration. If any of them stopped
+// agreeing, an item would be writable in a field nothing could read back.
+func TestIdentityFieldsRoundTripThroughTheDeclaration(t *testing.T) {
+	values := make(map[string]string, len(IdentityFields))
+	for i, f := range IdentityFields {
+		values[f.Flag] = fmt.Sprintf("value-%d", i)
+	}
+
+	idn := buildIdentity(values)
+	got := readIdentity(idn)
+	if len(got) != len(IdentityFields) {
+		t.Fatalf("wrote %d fields and read back %d", len(IdentityFields), len(got))
+	}
+	for flag, want := range values {
+		if got[flag] != want {
+			t.Errorf("%s round-tripped as %q, want %q", flag, got[flag], want)
+		}
+	}
+}
+
+// No two fields may share a flag, and none may point at the same place on the
+// stored item - either would make one field silently overwrite another.
+func TestIdentityFieldsAreDistinct(t *testing.T) {
+	seenFlag := map[string]bool{}
+	for _, f := range IdentityFields {
+		if seenFlag[f.Flag] {
+			t.Errorf("two identity fields both use --%s", f.Flag)
+		}
+		seenFlag[f.Flag] = true
+		if f.Label == "" {
+			t.Errorf("--%s has no label", f.Flag)
+		}
+	}
+	// Two fields aliasing one storage slot: set each in turn and check nothing
+	// else moved.
+	for _, f := range IdentityFields {
+		idn := buildIdentity(map[string]string{f.Flag: "only-this"})
+		for _, other := range IdentityFields {
+			if other.Flag == f.Flag {
+				continue
+			}
+			if other.Get(idn) != "" {
+				t.Errorf("setting --%s also set --%s; they share a storage slot",
+					f.Flag, other.Flag)
+			}
+		}
+	}
+}
+
+// A patch changes only what it names, so editing a job title leaves the address
+// exactly as it was.
+func TestPatchIdentityLeavesTheRestAlone(t *testing.T) {
+	idn := buildIdentity(map[string]string{"first-name": "Jane", "city": "Vienna"})
+	patchIdentity(idn, map[string]string{"city": "Graz"})
+
+	got := readIdentity(idn)
+	if got["city"] != "Graz" {
+		t.Errorf("city = %q, want Graz", got["city"])
+	}
+	if got["first-name"] != "Jane" {
+		t.Errorf("changing the city dropped the first name: %q", got["first-name"])
+	}
 }

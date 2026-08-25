@@ -45,6 +45,13 @@ type Credentials struct {
 	signedInAs string
 	flagTOTP   string
 	source     passwordSource
+	// passphrase locks an exported file rather than the account, so it has a
+	// source and a memory of its own.
+	passphrase struct {
+		source passwordSource
+		value  string
+		have   bool
+	}
 	// stdinOwner is set once the App exists, so Supply can claim standard input.
 	stdinOwner func(claim string) (io.Reader, error)
 
@@ -64,15 +71,54 @@ const (
 	labelEmail    = "Email"
 	labelPassword = "Password"
 	labelTOTP     = "Two-factor code"
+	// labelPassphrase is the secret that locks a file rather than the account.
+	// It is never the account password, and calling it something else is what
+	// keeps somebody from typing one where the other was meant.
+	labelPassphrase = "Passphrase"
 )
 
 func newCredentials(u *ui.UI, signedInAs string) *Credentials {
 	return &Credentials{ui: u, signedInAs: signedInAs}
 }
 
-// Supply records the credentials a command was given. Only the two commands
-// that can be asked to re-authenticate declare them, so this is the one place
-// standard input is claimed for a password.
+// SupplyPassphrase records where the passphrase that locks an exported file may
+// be read from.
+//
+// It is kept apart from the account password because it is a different secret
+// with a different life: one unlocks the account, the other unlocks one file,
+// and a person who exports a backup chooses it themselves.
+func (c *Credentials) SupplyPassphrase(file string, stdin bool) error {
+	c.passphrase.source.file = file
+	if !stdin {
+		return nil
+	}
+	r, err := c.stdinOwner("--passphrase-stdin")
+	if err != nil {
+		return err
+	}
+	c.passphrase.source.stdin = r
+	return nil
+}
+
+// Passphrase returns the passphrase for a file, asking for it if there is
+// somebody to ask. reason completes "A passphrase is required to <reason>".
+func (c *Credentials) Passphrase(reason string) (string, error) {
+	if c.passphrase.have {
+		return c.passphrase.value, nil
+	}
+	v, err := c.read(c.passphrase.source, labelPassphrase,
+		errs.Problemf("A passphrase is required to %s.", reason).
+			Hint("pass --passphrase-file, or run this in a terminal"))
+	if err != nil {
+		return "", err
+	}
+	c.passphrase.value, c.passphrase.have = v, true
+	return v, nil
+}
+
+// Supply records the credentials a command was given. Only the commands that can
+// be asked to re-authenticate declare them, so this is the one place standard
+// input is claimed for a password.
 func (c *Credentials) Supply(passwordFile string, passwordStdin bool, totp string) error {
 	c.source.file = passwordFile
 	c.flagTOTP = totp
@@ -126,29 +172,36 @@ func (c *Credentials) Password(reason string) (string, error) {
 }
 
 func (c *Credentials) readPassword(reason string) (string, error) {
-	if c.source.file != "" {
-		b, err := os.ReadFile(c.source.file)
-		if err != nil {
-			return "", errs.Problemf("Could not read the password file: %v", err)
-		}
-		if v := strings.TrimSpace(string(b)); v != "" {
-			return v, nil
-		}
-		return "", errs.Problemf("The password file %s is empty.", c.source.file)
-	}
-	if c.source.stdin != nil {
-		b, err := io.ReadAll(c.source.stdin)
-		if err != nil {
-			return "", errs.Problemf("Could not read the password from stdin: %v", err)
-		}
-		if v := strings.TrimSpace(string(b)); v != "" {
-			return v, nil
-		}
-		return "", errs.Problemf("No password arrived on stdin.")
-	}
-	return c.ask(labelPassword, true,
+	return c.read(c.source, labelPassword,
 		errs.Problemf("Your password is required to %s.", reason).
 			Hint("pass --password-file, or run this in a terminal"))
+}
+
+// read takes a secret from wherever it was told to look, and asks for it only
+// when it was told nothing. A file that exists but holds nothing is an error
+// rather than an empty secret: somebody meant to put one there.
+func (c *Credentials) read(src passwordSource, label string, missing error) (string, error) {
+	if src.file != "" {
+		b, err := os.ReadFile(src.file)
+		if err != nil {
+			return "", errs.Problemf("Could not read %s: %v", src.file, err)
+		}
+		if v := strings.TrimSpace(string(b)); v != "" {
+			return v, nil
+		}
+		return "", errs.Problemf("%s is empty.", src.file)
+	}
+	if src.stdin != nil {
+		b, err := io.ReadAll(src.stdin)
+		if err != nil {
+			return "", errs.Problemf("Could not read from stdin: %v", err)
+		}
+		if v := strings.TrimSpace(string(b)); v != "" {
+			return v, nil
+		}
+		return "", errs.Problemf("Nothing arrived on stdin.")
+	}
+	return c.ask(label, true, missing)
 }
 
 // TOTP returns the current two-factor code.
@@ -188,7 +241,7 @@ func (c *Credentials) ask(label string, secret bool, missing error) (string, err
 		return "", missing
 	}
 	if c.prompter == nil {
-		c.prompter = c.ui.Ask(labelEmail, labelPassword, labelTOTP)
+		c.prompter = c.ui.Ask(labelEmail, labelPassword, labelTOTP, labelPassphrase)
 	}
 	p := c.prompter
 	var (

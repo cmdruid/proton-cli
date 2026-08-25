@@ -215,7 +215,7 @@ func logoutCmd() *cobra.Command {
 			})
 		}),
 	}
-	c.Flags().BoolVar(&all, "all", false, "Sign out of every profile on this machine")
+	kit.All(c.Flags(), &all)
 	c.Flags().BoolVar(&revoke, "revoke", false, "Also invalidate the session at Proton")
 	return c
 }

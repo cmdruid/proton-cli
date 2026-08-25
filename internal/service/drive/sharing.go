@@ -5,11 +5,15 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
+	"net/url"
 	"strings"
 
 	srp "github.com/ProtonMail/go-srp"
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
+	"github.com/roman-16/proton-cli/internal/fetch"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -550,4 +554,161 @@ func randomPassword(n int) (string, error) {
 		out[i] = passwordCharset[int(b[i])%len(passwordCharset)]
 	}
 	return string(out), nil
+}
+
+// ── what other people have shared with you ──
+
+// Share types, as Proton numbers them. A share is how Drive grants access to a
+// subtree, so the one you own and the one somebody granted you differ only in
+// who created it.
+const (
+	shareTypeMain     = 1
+	shareTypeStandard = 2
+	shareTypeDevice   = 3
+	shareTypePhotos   = 4
+)
+
+// SharedItem is a file or folder somebody else shared with you.
+//
+// It has no path, because it does not live in your tree: it is the root of a
+// share of theirs that you were granted. So it is addressed by ID, the way
+// trashed items and photos are.
+type SharedItem struct {
+	ShareID  string `json:"share_id"`
+	LinkID   string `json:"link_id"`
+	VolumeID string `json:"volume_id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Size     int64  `json:"size,omitempty"`
+	// SharedBy is the address that granted the access.
+	SharedBy string `json:"shared_by,omitempty"`
+	Created  int64  `json:"create_time,omitempty"`
+}
+
+// SharedWithMe lists what other people have granted you.
+//
+// Accepting an invitation makes you a member of somebody's share, and until now
+// nothing reached it: `invitations accept` succeeded and the item was
+// unaddressable. This is where it lands.
+//
+// A share is somebody else's when its creator is not one of your own addresses.
+// The main share, the photos share and the desktop client's device shares are
+// yours by definition and are left out.
+func (s *Service) SharedWithMe(ctx context.Context) ([]SharedItem, error) {
+	shares, mine, err := s.listShares(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []SharedItem
+	for _, sh := range shares {
+		if sh.Locked || sh.Type != shareTypeStandard || mine[strings.ToLower(sh.Creator)] {
+			continue
+		}
+		item, err := s.describeShare(ctx, sh)
+		if err != nil {
+			// A share whose key will not open is reported by its identity rather
+			// than dropped: knowing it is there is what lets somebody act on it.
+			slog.Debug("drive: could not read a share", "share", sh.ShareID, "error", err)
+			out = append(out, SharedItem{
+				ShareID: sh.ShareID, LinkID: sh.LinkID, VolumeID: sh.VolumeID,
+				SharedBy: sh.Creator, Created: sh.CreateTime,
+			})
+			continue
+		}
+		out = append(out, *item)
+	}
+	return out, nil
+}
+
+// SharedByMe lists what you have shared, whether by link or with named people.
+//
+// `share get PATH` answers the question for one item; this answers the one a
+// person actually has, which is "what have I left open".
+func (s *Service) SharedByMe(ctx context.Context) ([]SharedItem, error) {
+	shares, mine, err := s.listShares(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []SharedItem
+	for _, sh := range shares {
+		if sh.Locked || sh.Type != shareTypeStandard || !mine[strings.ToLower(sh.Creator)] {
+			continue
+		}
+		item, err := s.describeShare(ctx, sh)
+		if err != nil {
+			continue
+		}
+		out = append(out, *item)
+	}
+	return out, nil
+}
+
+type rawShare struct {
+	ShareID    string
+	LinkID     string
+	VolumeID   string
+	AddressID  string
+	Creator    string
+	Type       int
+	State      int
+	Locked     bool
+	CreateTime int64
+}
+
+// listShares reads every share the account can see, and the addresses that
+// decide which of them are its own.
+func (s *Service) listShares(ctx context.Context) ([]rawShare, map[string]bool, error) {
+	var r struct{ Shares []rawShare }
+	q := url.Values{}
+	q.Set("ShowAll", "1")
+	var u *keys.Unlocked
+	if err := fetch.Together(ctx,
+		func(ctx context.Context) error {
+			return s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/drive/shares", Query: q}, &r)
+		},
+		func(ctx context.Context) error {
+			var err error
+			u, err = s.keys(ctx)
+			return err
+		},
+	); err != nil {
+		return nil, nil, err
+	}
+	mine := make(map[string]bool, len(u.Addresses))
+	for _, a := range u.Addresses {
+		mine[strings.ToLower(a.Email)] = true
+	}
+	return r.Shares, mine, nil
+}
+
+// describeShare opens a share and reads the name of what it grants.
+func (s *Service) describeShare(ctx context.Context, sh rawShare) (*SharedItem, error) {
+	dc, err := s.unlockShare(ctx, sh.ShareID, sh.LinkID, sh.VolumeID)
+	if err != nil {
+		return nil, err
+	}
+	root := dc.rootLink
+	if root == nil {
+		return nil, fmt.Errorf("share %s has no root", sh.ShareID)
+	}
+	// A link's name is encrypted to its parent's node key, and the root of a
+	// share granted to you has a parent you cannot open. The share key is what
+	// membership grants, so it is what is tried; where it does not answer, the
+	// name is left empty rather than filled with an apology. An item you can
+	// address by ID is still an item you can act on.
+	name, err := decryptName(root.Name, dc.ShareKR)
+	if err != nil {
+		slog.Debug("drive: could not read a shared item's name",
+			"share", sh.ShareID, "error", err)
+		name = ""
+	}
+	kind := TypeFile
+	if root.Type == 1 {
+		kind = TypeFolder
+	}
+	return &SharedItem{
+		ShareID: sh.ShareID, LinkID: sh.LinkID, VolumeID: sh.VolumeID,
+		Name: name, Type: kind, Size: root.Size,
+		SharedBy: sh.Creator, Created: sh.CreateTime,
+	}, nil
 }

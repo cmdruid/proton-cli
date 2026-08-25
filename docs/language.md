@@ -23,7 +23,7 @@ One word per idea, everywhere it appears.
 | --- | --- |
 | `list` | enumerate a collection |
 | `get` | show one thing in full |
-| `search` | ask Proton's index (mail only) |
+| `list --keyword` | ask Proton's index (mail only) |
 | `create` | make a new thing |
 | `update` | change fields of an existing thing |
 | `delete` | remove permanently |
@@ -107,8 +107,27 @@ proton mail messages trash 5bH2mQxK --unread --folder spam
 | `--type` | by kind |
 | `--unread` · `--starred` | by state (Mail) |
 | `--recursive` | descend into subfolders (Drive) |
-| `--limit` | cap how many |
-| `--all` | yes, really everything in scope |
+| `--limit` | cap how many a bulk verb affects |
+| `--sort` · `--desc` · `--page` · `--page-size` | how a listing is ordered and walked |
+| `--all` | act on everything in scope, rather than a subset |
+
+### Try it with `list` first
+
+`list` takes the same filters as the verbs beside it, so a selection can be read before it is acted on:
+
+```bash
+proton drive items list /Build --pattern "*.tmp" --recursive   # see what matches
+proton drive items trash --scope /Build --pattern "*.tmp" --recursive
+```
+
+What `list` says with its `PATH` argument, a bulk verb says with `--scope`, because it uses its arguments to name things instead. `list` needs no `--all` - showing everything is what it is for - and pages instead of capping with `--limit`.
+
+When a filter matches nothing, a listing says so rather than looking like an empty account:
+
+```console
+$ proton drive items list --pattern "*.tmp"
+No items match.
+```
 
 A command needs at least one reference or filter:
 
@@ -189,7 +208,7 @@ Each flag name means the same thing everywhere. `--to` is always an email recipi
 
 ```bash
 proton mail messages send --to alice@proton.me       # a recipient
-proton mail messages search --to alice@proton.me     # matching a recipient
+proton mail messages list --to alice@proton.me       # matching a recipient
 proton mail messages move REF --into archive         # a destination
 ```
 

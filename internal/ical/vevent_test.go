@@ -260,3 +260,173 @@ func TestEventUIDDoesNotRepeat(t *testing.T) {
 		}
 	}
 }
+
+// A calendar file is not a message about an event: it carries no METHOD, so a
+// client that opens it files the events rather than acting on them.
+func TestCalendarFileCarriesNoMethod(t *testing.T) {
+	doc := Calendar([]VEvent{{UID: "a", Summary: "One"}, {UID: "b", Summary: "Two"}})
+	if strings.Contains(doc, "METHOD") {
+		t.Errorf("a calendar file must carry no METHOD:\n%s", doc)
+	}
+	for _, want := range []string{"BEGIN:VCALENDAR", "UID:a", "UID:b", "END:VCALENDAR"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("calendar file is missing %q:\n%s", want, doc)
+		}
+	}
+	if got := strings.Count(doc, "BEGIN:VEVENT"); got != 2 {
+		t.Errorf("two events rendered as %d components", got)
+	}
+	if got := strings.Count(doc, "BEGIN:VCALENDAR"); got != 1 {
+		t.Errorf("the events should share one calendar, got %d", got)
+	}
+}
+
+// An exported reminder has to survive the trip: every other client reads VALARM,
+// and Proton's two kinds map onto its two actions.
+func TestAlarmsRenderAsValarmComponents(t *testing.T) {
+	doc := Calendar([]VEvent{{
+		UID: "a", Summary: "Standup",
+		Alarms: []Alarm{
+			{Action: "DISPLAY", Trigger: "-PT15M"},
+			{Action: "EMAIL", Trigger: "-P1D"},
+		},
+	}})
+	for _, want := range []string{
+		"BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M",
+		"ACTION:EMAIL", "TRIGGER:-P1D", "END:VALARM",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("missing %q:\n%s", want, doc)
+		}
+	}
+	// An emailed reminder has to say something, and clients require both.
+	if !strings.Contains(doc, "SUMMARY:Reminder") || !strings.Contains(doc, "DESCRIPTION:Reminder") {
+		t.Errorf("an EMAIL alarm needs a summary and a description:\n%s", doc)
+	}
+	if got := strings.Count(doc, "BEGIN:VALARM"); got != 2 {
+		t.Errorf("two reminders rendered as %d alarms", got)
+	}
+}
+
+// An event's own status round-trips, so exporting a cancelled event and reading
+// it back does not quietly revive it.
+func TestStatusSurvivesTheRoundTrip(t *testing.T) {
+	v := VEvent{UID: "a", Summary: "Off", Status: "CANCELLED"}
+	back, err := Parse(v.SharedSigned() + "\r\n" + v.SharedEncrypted())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if back.Status != "CANCELLED" {
+		t.Errorf("status came back as %q, want CANCELLED", back.Status)
+	}
+}
+
+// A file's events are separate events, and a VALARM inside one is not an event
+// property. Reading a component's lines in flat would let a reminder's own
+// SUMMARY overwrite the event's, which is the trap this exists to avoid.
+func TestParseCalendarKeepsComponentsApart(t *testing.T) {
+	file := strings.Join([]string{
+		"BEGIN:VCALENDAR",
+		"VERSION:2.0",
+		"PRODID:-//Example//EN",
+		"BEGIN:VTIMEZONE",
+		"TZID:Europe/Vienna",
+		"END:VTIMEZONE",
+		"BEGIN:VEVENT",
+		"UID:one@example.com",
+		"DTSTART:20260416T090000Z",
+		"SUMMARY:Standup",
+		"BEGIN:VALARM",
+		"ACTION:DISPLAY",
+		"TRIGGER:-PT15M",
+		"SUMMARY:Reminder wording that is not the event's",
+		"DESCRIPTION:Nor is this",
+		"END:VALARM",
+		"END:VEVENT",
+		"BEGIN:VEVENT",
+		"UID:two@example.com",
+		"DTSTART:20260417T090000Z",
+		"SUMMARY:Retro",
+		"END:VEVENT",
+		"END:VCALENDAR",
+	}, "\r\n")
+
+	events, err := ParseCalendar(file)
+	if err != nil {
+		t.Fatalf("ParseCalendar: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("read %d events, want 2", len(events))
+	}
+	if events[0].Summary != "Standup" {
+		t.Errorf("the alarm's wording leaked into the event: summary is %q", events[0].Summary)
+	}
+	if events[0].Description != "" {
+		t.Errorf("the alarm's description leaked into the event: %q", events[0].Description)
+	}
+	if len(events[0].Alarms) != 1 || events[0].Alarms[0].Trigger != "-PT15M" {
+		t.Errorf("alarms = %v, want one at -PT15M", events[0].Alarms)
+	}
+	if events[1].Summary != "Retro" {
+		t.Errorf("second event = %q, want Retro", events[1].Summary)
+	}
+	// The VTIMEZONE's TZID must not have been read as an event.
+	for _, e := range events {
+		if e.UID == "" {
+			t.Error("a component outside VEVENT was read as an event")
+		}
+	}
+}
+
+// What this writes, it reads back.
+func TestCalendarRoundTripsThroughTheParser(t *testing.T) {
+	want := []VEvent{
+		{
+			UID: "a@example.com", Summary: "Weekly", RRule: "FREQ=WEEKLY;COUNT=5",
+			Start:  DateTime{Time: time.Date(2026, 4, 16, 9, 0, 0, 0, time.UTC)},
+			Alarms: []Alarm{{Action: "EMAIL", Trigger: "-P1D"}},
+		},
+		{
+			UID: "b@example.com", Summary: "One off", Status: "CANCELLED",
+			Start: DateTime{Time: time.Date(2026, 4, 17, 9, 0, 0, 0, time.UTC)},
+		},
+	}
+	got, err := ParseCalendar(Calendar(want))
+	if err != nil {
+		t.Fatalf("ParseCalendar: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("round-tripped %d events, want 2", len(got))
+	}
+	if got[0].RRule != want[0].RRule {
+		t.Errorf("rule came back as %q, want %q", got[0].RRule, want[0].RRule)
+	}
+	if len(got[0].Alarms) != 1 || got[0].Alarms[0].Action != "EMAIL" {
+		t.Errorf("alarms came back as %v", got[0].Alarms)
+	}
+	if got[1].Status != "CANCELLED" {
+		t.Errorf("status came back as %q", got[1].Status)
+	}
+}
+
+// A file another tool wrote may carry properties this one has never heard of.
+// Skipping them beats refusing the events around them.
+func TestParseCalendarIgnoresPropertiesItDoesNotKnow(t *testing.T) {
+	file := strings.Join([]string{
+		"BEGIN:VCALENDAR",
+		"BEGIN:VEVENT",
+		"UID:x@example.com",
+		"DTSTART:20260416T090000Z",
+		"SUMMARY:Kept",
+		"X-SOMEONE-ELSES-EXTENSION:whatever",
+		"END:VEVENT",
+		"END:VCALENDAR",
+	}, "\r\n")
+	events, err := ParseCalendar(file)
+	if err != nil {
+		t.Fatalf("ParseCalendar: %v", err)
+	}
+	if len(events) != 1 || events[0].Summary != "Kept" {
+		t.Errorf("an unknown property lost the event: %v", events)
+	}
+}

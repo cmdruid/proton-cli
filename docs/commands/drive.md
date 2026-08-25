@@ -9,6 +9,8 @@ Your Drive as paths. Files are encrypted before they leave your machine and decr
 ```bash
 proton drive items list                       # root
 proton drive items list /Documents
+proton drive items list /Build --pattern "*.tmp" --recursive
+proton drive items list --larger-than 100MB --recursive
 proton drive items get /Documents/report.pdf  # type, size, checksum, sharing state
 ```
 
@@ -58,7 +60,30 @@ proton drive items move /Documents/report.pdf --into /Archive
 proton drive items copy /Documents/report.pdf --into /Archive
 ```
 
-### Trash and delete
+### Changing what somebody may do
+
+```bash
+proton drive items share update /Reports jane@proton.me --edit
+proton drive items share update /Reports jane@proton.me --edit=false
+proton drive items share resend /Reports jane@proton.me
+```
+
+`update` applies whether they have accepted yet or not - Proton keeps members and invitations apart, but the question is the same one either way. Nothing is re-encrypted: the key they already hold still opens the share, and only what they may do with it changes.
+
+`resend` sends an unanswered invitation again, rather than cancelling it and inviting afresh. Somebody who has already accepted has nothing to resend, and it says so.
+
+## Shared with you, and shared by you
+
+```bash
+proton drive shared list      # what other people have shared with you
+proton drive sharing list     # what you have left open
+```
+
+An item somebody shared with you does not live in your tree, so it has **no path**: it is addressed by the ID the listing shows, the way trashed items and photos are. Accepting an invitation puts it here.
+
+An item whose name cannot be read is still listed - knowing it is there is what lets you act on it.
+
+## Trash and delete
 
 ```bash
 proton drive items trash /Documents/old.pdf     # reversible
@@ -96,8 +121,8 @@ The version the file is at now is the one thing neither command touches: restori
 ## Folders
 
 ```bash
-proton drive folders create /Documents/Invoices
-proton drive folders create /Documents/2026/Q1/receipts  # makes 2026 and Q1 on the way
+proton drive items create /Documents/Invoices
+proton drive items create /Documents/2026/Q1/receipts  # makes 2026 and Q1 on the way
 ```
 
 A path names every folder along it, so the ones above the last are made too, and the result says how many: `Created 3 folders down to /Documents/2026/Q1/receipts`. The folder asked for is the exception - a name Drive already holds is refused, as is a path running through a file.
@@ -107,19 +132,19 @@ A path names every folder along it, so the ones above the last are made too, and
 ### Public links
 
 ```bash
-proton drive share get /Documents/report.pdf   # who has access, plus the link
-proton drive share link /Documents/report.pdf  # create or show the link
-proton drive share link /Documents/report.pdf --expires 7d --password hunter2
-proton drive share link /Documents/project --edit
-proton drive share unlink /Documents/report.pdf
+proton drive items share get /Documents/report.pdf   # who has access, plus the link
+proton drive items share link /Documents/report.pdf  # create or show the link
+proton drive items share link /Documents/report.pdf --expires 7d --password hunter2
+proton drive items share link /Documents/project --edit
+proton drive items share unlink /Documents/report.pdf
 ```
 
 ### Sharing with people
 
 ```bash
-proton drive share add /Documents/report.pdf bob@proton.me
-proton drive share add /Documents/project bob@proton.me --edit --message "Draft for review"
-proton drive share remove /Documents/report.pdf bob@proton.me
+proton drive items share add /Documents/report.pdf bob@proton.me
+proton drive items share add /Documents/project bob@proton.me --edit --message "Draft for review"
+proton drive items share remove /Documents/report.pdf bob@proton.me
 ```
 
 ### Invitations sent to you

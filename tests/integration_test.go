@@ -55,9 +55,21 @@ func TestMain(m *testing.M) {
 
 	writePasswordFiles()
 	openTrace()
-	seed()
+	// A paid run touches an account somebody depends on, so it does as little as
+	// it can: it signs that account in, records what it looked like, and does not
+	// seed anything. A run without the tag never reaches it at all.
+	if paidBuild {
+		signInPaid()
+		snapshotPaid()
+	} else {
+		seed()
+	}
 
 	code := m.Run()
+
+	if paidBuild && !comparePaid() {
+		code = 1
+	}
 
 	// os.Exit skips deferred funcs, so the temp-dir removal is explicit.
 	closeTrace()
@@ -77,6 +89,15 @@ func TestMain(m *testing.M) {
 const (
 	primary   = "primary"
 	secondary = "secondary"
+	// paid is a third account on a plan that includes what Proton gates. It is
+	// optional: without it the suite runs exactly as before and the tests that
+	// need one skip, because no seeding can make a free account able to do what
+	// a subscription buys.
+	//
+	// It is a third account rather than an upgrade of the primary, so the free
+	// plan's limits - three calendars, three folders, one filter - keep being
+	// exercised by the tests that exist to exercise them.
+	paid = "paid"
 )
 
 // workDir is the per-run temp directory, where the password files live.
@@ -100,6 +121,31 @@ var accounts = map[string]*testAccount{
 		userVar:     "PROTON_CLI_TEST_SECONDARY_USER",
 		passwordVar: "PROTON_CLI_TEST_SECONDARY_PASSWORD",
 	},
+	paid: {
+		profile:     paid,
+		userVar:     "PROTON_CLI_TEST_PAID_USER",
+		passwordVar: "PROTON_CLI_TEST_PAID_PASSWORD",
+	},
+}
+
+// required are the accounts without which there is no suite. The paid one is
+// not among them.
+var required = []string{primary, secondary}
+
+// configured reports whether an account has both its variables set.
+func configured(name string) bool {
+	a := accounts[name]
+	return os.Getenv(a.userVar) != "" && os.Getenv(a.passwordVar) != ""
+}
+
+// signedIn are the accounts this run has: the required two, and the paid one
+// when somebody supplied it.
+func signedIn() []string {
+	out := append([]string{}, required...)
+	if configured(paid) {
+		out = append(out, paid)
+	}
+	return out
 }
 
 // requireCredentials verifies both accounts are configured before any test runs,
@@ -107,7 +153,7 @@ var accounts = map[string]*testAccount{
 // incomplete.
 func requireCredentials() {
 	var missing []string
-	for _, name := range []string{primary, secondary} {
+	for _, name := range required {
 		a := accounts[name]
 		for _, v := range []string{a.userVar, a.passwordVar} {
 			if os.Getenv(v) == "" {
@@ -119,6 +165,47 @@ func requireCredentials() {
 		fmt.Fprintf(os.Stderr, "integration tests require these env vars: %s\n", strings.Join(missing, ", "))
 		os.Exit(1)
 	}
+	// Half a paid account is a typo, not a choice, and it would otherwise show up
+	// as every paid test skipping for no stated reason.
+	a := accounts[paid]
+	if (os.Getenv(a.userVar) == "") != (os.Getenv(a.passwordVar) == "") {
+		fmt.Fprintf(os.Stderr, "the paid account needs both %s and %s, or neither\n",
+			a.userVar, a.passwordVar)
+		os.Exit(1)
+	}
+	for _, name := range signedIn() {
+		if err := looksSwapped(accounts[name]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+}
+
+// looksSwapped catches an address put in the password variable and a password
+// put in the address one.
+//
+// Signing in with them the wrong way round is a failed login attempt against a
+// real account, which is what Proton's anti-abuse system counts before it starts
+// demanding a CAPTCHA - so it is worth refusing to start over. Neither value is
+// ever printed: the message says which variables to look at.
+func looksSwapped(a *testAccount) error {
+	user, password := os.Getenv(a.userVar), os.Getenv(a.passwordVar)
+	if user == "" || password == "" {
+		return nil
+	}
+	// Proton takes a bare username as well as an address, so an address is not
+	// required. Only the pair being the wrong way round is.
+	if !isAddress(user) && isAddress(password) {
+		return fmt.Errorf("%s and %s look swapped: the password holds an address and the user does not",
+			a.userVar, a.passwordVar)
+	}
+	return nil
+}
+
+// isAddress reports whether a value is shaped like an email address.
+func isAddress(v string) bool {
+	at := strings.LastIndex(v, "@")
+	return at > 0 && strings.Contains(v[at:], ".")
 }
 
 // writePasswordFiles puts each account's password where runAs can hand it to
@@ -128,7 +215,7 @@ func requireCredentials() {
 // key blob sealed at login is a one-way derivation of the password rather than
 // the password itself.
 func writePasswordFiles() {
-	for _, name := range []string{primary, secondary} {
+	for _, name := range signedIn() {
 		a := accounts[name]
 		a.passwordFile = filepath.Join(workDir, a.profile+".password")
 		if err := os.WriteFile(a.passwordFile, []byte(os.Getenv(a.passwordVar)), 0o600); err != nil {
@@ -188,6 +275,12 @@ func runAs(profile string, stdin io.Reader, args ...string) (stdout, stderr stri
 	if !ok {
 		return "", "", -1, fmt.Errorf("unknown test profile %q", profile)
 	}
+	if profile == paid {
+		if why := offLimits(args); why != "" {
+			return "", "", -1, fmt.Errorf(
+				"refusing to run %v as the paid account: %s", args, why)
+		}
+	}
 	args = withPassword(a, args)
 
 	var outBuf, errBuf bytes.Buffer
@@ -228,6 +321,7 @@ func runAs(profile string, stdin io.Reader, args ...string) (stdout, stderr stri
 // which internal/cli/conformance_test.go pins.
 var reauthCommands = [][]string{
 	{"calendar", "settings", "calendars", "delete"},
+	{"mail", "messages", "expire"},
 	{"mail", "settings", "autoreply", "set"},
 }
 
@@ -303,6 +397,12 @@ func childEnv(profile string) []string {
 		"PATH", "HOME", "TMPDIR", "USER", "LANG", "TZ",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR",
 		"DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS",
+		// The CAPTCHA webview needs both halves of a working browser: somewhere
+		// to draw, which the display variables give it, and a way to fetch, which
+		// these do. GIO takes TLS from a loadable module rather than from glib
+		// itself, and finds it through these - so without them the window opens
+		// and says "TLS support is not available" instead of showing a CAPTCHA.
+		"GIO_EXTRA_MODULES", "GIO_MODULE_DIR",
 	} {
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
@@ -645,6 +745,38 @@ func waitFor(timeout, interval time.Duration, check func() bool) bool {
 		}
 		time.Sleep(interval)
 	}
+}
+
+// busy is how Proton says something else holds what a command wants.
+//
+// This is not rate limiting - which fails a run on purpose - but an account-wide
+// lock on one folder or one background job, and Proton's own answer says to try
+// again. It has more than one sentence for it ("Another action is currently in
+// progress", "There is already an active operation on your folders or labels"),
+// so the status is what is matched: the wording is Proton's to reword, 409 is
+// not.
+const busy = "[HTTP 409]"
+
+// runOKUntilFree runs a command that another test may be holding the lock for,
+// and fails only once Proton has been saying so for a minute.
+func runOKUntilFree(t *testing.T, args ...string) {
+	t.Helper()
+	var last string
+	if waitFor(60*time.Second, 3*time.Second, func() bool {
+		_, stderr, code := run(t, args...)
+		if code == 0 {
+			return true
+		}
+		last = stderr
+		if strings.Contains(stderr, busy) {
+			return false
+		}
+		t.Fatalf("command %v failed (exit %d): %s", args, code, truncateOutput(stderr))
+		return false
+	}) {
+		return
+	}
+	t.Fatalf("command %v was still refused after a minute: %s", args, truncateOutput(last))
 }
 
 // messageIDInFolder returns the ID of the first message in folder whose subject

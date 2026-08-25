@@ -50,7 +50,16 @@ type Event struct {
 	Count int `json:"occurrence_count,omitempty"`
 	// Reminders are the triggers before the start, e.g. "-PT15M". Absent means the
 	// event takes the calendar's defaults.
-	Reminders []string               `json:"reminders,omitempty"`
+	Reminders []string `json:"reminders,omitempty"`
+	// Attendees are the participants, spelled the way --attendee accepts them, so
+	// an event that has been read can be described back.
+	Attendees []string `json:"attendees,omitempty"`
+	// Status is whether the event is going ahead. It is always reported, since
+	// an event nobody said anything about is confirmed and that is worth stating.
+	Status string `json:"status"`
+	// Organizer is whoever called the meeting. It is empty for an event with no
+	// participants, which has nobody to organise.
+	Organizer string                 `json:"organizer,omitempty"`
 	Signature pgphelper.VerifyResult `json:"signature,omitempty"`
 }
 
@@ -125,10 +134,12 @@ func (e rawEvent) notifications() []map[string]any {
 	return out
 }
 
+// triggers renders an event's reminders the way --remind spells them, so what a
+// listing shows is what would recreate it.
 func (e rawEvent) triggers() []string {
 	out := make([]string, 0, len(e.Notifications))
 	for _, n := range e.Notifications {
-		out = append(out, n.Trigger)
+		out = append(out, ReminderText(n.Type, n.Trigger))
 	}
 	return out
 }
@@ -429,6 +440,11 @@ func (e stored) row() Event {
 	ev.Location = e.model.Location
 	ev.Description = e.model.Description
 	ev.RRule = e.model.RRule
+	ev.Organizer = e.model.Organizer
+	ev.Status = StatusText(e.model.Status)
+	for _, a := range e.model.Attendees {
+		ev.Attendees = append(ev.Attendees, AttendeeText(a.Email, a.Role))
+	}
 	return ev
 }
 
@@ -565,6 +581,10 @@ type EventInput struct {
 	RRule     string
 	Reminders []string
 	Attendees []string
+	// Status is whether the event is going ahead: CONFIRMED, TENTATIVE or
+	// CANCELLED. Empty means it never said, which every client reads as
+	// confirmed.
+	Status string
 }
 
 // EventResult is the outcome of a write. Mail is non-nil when participants have
@@ -599,6 +619,7 @@ func (s *Service) EventCreate(ctx context.Context, calendarID string, in EventIn
 		Summary:     in.Title,
 		Location:    in.Location,
 		Description: in.Description,
+		Status:      in.Status,
 		RRule:       in.RRule,
 	}
 	loc, err := zoneOf(in.Zone)
@@ -680,10 +701,17 @@ func updateMail(v ical.VEvent, recipients []string) *Mail {
 // once, when the cards are built.
 func (s *Service) resolveAttendees(ctx context.Context, uid string, emails []string) (atts []ical.Attendee, clear []map[string]any, keys []protonAttendee, external []string, err error) {
 	written := make([]string, 0, len(emails))
+	roles := make(map[string]string, len(emails))
 	for _, raw := range emails {
-		if e := strings.TrimSpace(raw); e != "" {
-			written = append(written, e)
+		e, role, err := attendeeRole(raw)
+		if err != nil {
+			return nil, nil, nil, nil, err
 		}
+		if e == "" {
+			continue
+		}
+		written = append(written, e)
+		roles[e] = role
 	}
 	canonical, err := s.canonicalEmails(ctx, written)
 	if err != nil {
@@ -699,7 +727,7 @@ func (s *Service) resolveAttendees(ctx context.Context, uid string, emails []str
 		}
 		seen[canonical[email]] = true
 		token := attendeeToken(uid, canonical[email])
-		atts = append(atts, ical.Attendee{Email: email, Token: token})
+		atts = append(atts, ical.Attendee{Email: email, Token: token, Role: roles[email]})
 		clear = append(clear, map[string]any{"Token": token, "Status": 0})
 
 		kr, err := s.attendeeKeyRing(ctx, email)
@@ -774,20 +802,120 @@ func (s *Service) ResolveEvent(ctx context.Context, needle string) (calendarID, 
 
 // ── reminders ──
 
+// Proton's two kinds of reminder. The web client offers both wherever it offers
+// one, so a reminder here says which it is by suffixing the duration - "1d:email"
+// - and a bare duration is the notification, which is what the composer defaults
+// to.
+const (
+	remindByEmail  = 0
+	remindOnDevice = 1
+)
+
 func buildReminders(reminders []string) ([]map[string]any, error) {
 	if reminders == nil {
 		return nil, nil
 	}
 	out := make([]map[string]any, 0, len(reminders))
 	for _, r := range reminders {
-		trig, err := icalTrigger(r)
+		spec, kind, err := reminderKind(r)
+		if err != nil {
+			return nil, err
+		}
+		trig, err := icalTrigger(spec)
 		if err != nil {
 			return nil, fmt.Errorf("invalid reminder %q: %w", r, err)
 		}
-		// Type 1 = device notification.
-		out = append(out, map[string]any{"Type": 1, "Trigger": trig})
+		out = append(out, map[string]any{"Type": kind, "Trigger": trig})
 	}
 	return out, nil
+}
+
+// reminderKind splits "15m" or "1d:email" into the duration and how to deliver
+// it.
+func reminderKind(r string) (spec string, kind int, err error) {
+	spec, suffix, found := strings.Cut(r, ":")
+	if !found {
+		return spec, remindOnDevice, nil
+	}
+	switch strings.ToLower(suffix) {
+	case "email":
+		return spec, remindByEmail, nil
+	case "notification":
+		return spec, remindOnDevice, nil
+	}
+	return "", 0, fmt.Errorf("reminder %q: after the colon write email or notification", r)
+}
+
+// iCalendar's two participation roles. Proton's composer lets an organiser mark
+// anyone optional, so an attendee says which by suffixing the address -
+// "jane@example.com:optional" - and a bare address is required, which is what
+// inviting someone ordinarily means.
+const (
+	roleRequired = "REQ-PARTICIPANT"
+	roleOptional = "OPT-PARTICIPANT"
+)
+
+// attendeeRole splits "jane@example.com" or "jane@example.com:optional" into the
+// address and how much their presence matters.
+//
+// The address is split on the last colon, not the first, so that a scheme or a
+// port somebody pasted in does not eat the address.
+func attendeeRole(raw string) (email, role string, err error) {
+	email = strings.TrimSpace(raw)
+	i := strings.LastIndex(email, ":")
+	if i < 0 {
+		return email, roleRequired, nil
+	}
+	suffix := strings.ToLower(strings.TrimSpace(email[i+1:]))
+	email = strings.TrimSpace(email[:i])
+	switch suffix {
+	case "optional":
+		return email, roleOptional, nil
+	case "required":
+		return email, roleRequired, nil
+	}
+	return "", "", fmt.Errorf("attendee %q: after the colon write required or optional", raw)
+}
+
+// AttendeeText renders a participant the way --attendee spells them, so a
+// listing can be read back into a command.
+func AttendeeText(email, role string) string {
+	if role == roleOptional {
+		return email + ":optional"
+	}
+	return email
+}
+
+// Event statuses, as iCalendar spells them and as the CLI does.
+var eventStatuses = map[string]string{
+	"confirmed": "CONFIRMED", "tentative": "TENTATIVE", "cancelled": "CANCELLED",
+}
+
+// EventStatuses lists the words --status accepts, for the flag's declared domain.
+func EventStatuses() []string { return []string{"confirmed", "tentative", "cancelled"} }
+
+// ICalStatus turns the word a person writes into the one iCalendar stores.
+func ICalStatus(word string) string { return eventStatuses[strings.ToLower(word)] }
+
+// StatusText is the inverse, and answers "confirmed" for an event that never
+// said: an absent STATUS is what every client reads as going ahead.
+func StatusText(status string) string {
+	for word, ical := range eventStatuses {
+		if ical == strings.ToUpper(status) {
+			return word
+		}
+	}
+	return "confirmed"
+}
+
+// ReminderText renders a stored reminder the way it is written on the command
+// line, so what a listing shows can be passed straight back to --remind.
+func ReminderText(kind int, trigger string) string {
+	spec := units.Duration(triggerDuration(trigger))
+	if kind == remindByEmail {
+		return spec + ":email"
+	}
+	return spec
 }
 
 // icalTrigger converts a duration-before-start ("15m", "1h", "1d") into an iCal
@@ -804,4 +932,224 @@ func icalTrigger(dur string) (string, error) {
 		return fmt.Sprintf("-P%dD", int(d/(24*time.Hour))), nil
 	}
 	return fmt.Sprintf("-PT%dM", int(d/time.Minute)), nil
+}
+
+// triggerDuration reads an iCalendar trigger back into how long before the start
+// it fires. It is icalTrigger's inverse, over the shapes icalTrigger writes and
+// the ones Proton's other clients write beside them.
+func triggerDuration(trigger string) time.Duration {
+	body := strings.TrimPrefix(strings.TrimPrefix(trigger, "-"), "P")
+	date, clock, _ := strings.Cut(body, "T")
+	var total time.Duration
+	for _, part := range []struct {
+		in    string
+		units map[byte]time.Duration
+	}{
+		{date, map[byte]time.Duration{'W': 7 * 24 * time.Hour, 'D': 24 * time.Hour}},
+		{clock, map[byte]time.Duration{'H': time.Hour, 'M': time.Minute, 'S': time.Second}},
+	} {
+		n := 0
+		for i := 0; i < len(part.in); i++ {
+			if ch := part.in[i]; ch >= '0' && ch <= '9' {
+				n = n*10 + int(ch-'0')
+				continue
+			}
+			if unit, ok := part.units[part.in[i]]; ok {
+				total += time.Duration(n) * unit
+			}
+			n = 0
+		}
+	}
+	return total
+}
+
+// ── exporting ──
+
+// EventsExport returns what a calendar holds as iCalendar models, ready to be
+// written as a file.
+//
+// A series is exported **once**, carrying its rule, rather than expanded into the
+// occurrences a listing shows. That is what a calendar file is: expanding it
+// would turn one weekly standup into fifty-two unrelated events, and no client
+// could put it back.
+//
+// An event that cannot be decrypted is left out rather than written as a stub,
+// because a file is something another client will trust.
+func (s *Service) EventsExport(ctx context.Context, calendarIDs []string, w ical.Window) ([]ical.VEvent, error) {
+	var out []ical.VEvent
+	var first error
+	read := 0
+	for _, calID := range calendarIDs {
+		events, err := s.calendarExport(ctx, calID, w)
+		if err != nil {
+			if first == nil {
+				first = err
+			}
+			slog.Debug("calendar: skipped a calendar that could not be exported",
+				"calendar", calID, "error", err)
+			continue
+		}
+		read++
+		out = append(out, events...)
+	}
+	if read == 0 && first != nil {
+		return nil, first
+	}
+	slices.SortStableFunc(out, func(a, b ical.VEvent) int {
+		return a.Start.Time.Compare(b.Start.Time)
+	})
+	return out, nil
+}
+
+func (s *Service) calendarExport(ctx context.Context, calendarID string, w ical.Window) ([]ical.VEvent, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
+	if err != nil {
+		return nil, err
+	}
+	raws, err := s.rawEventsBetween(ctx, calendarID, w)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ical.VEvent, 0, len(raws))
+	for _, raw := range raws {
+		e := s.decrypt(ctx, ck, raw)
+		if e.readErr != nil {
+			continue
+		}
+		v := e.model
+		v.Alarms = alarmsOf(raw)
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// alarmsOf turns Proton's notifications into the VALARM components every other
+// client reads.
+func alarmsOf(raw rawEvent) []ical.Alarm {
+	alarms := make([]ical.Alarm, 0, len(raw.Notifications))
+	for _, n := range raw.Notifications {
+		action := "DISPLAY"
+		if n.Type == remindByEmail {
+			action = "EMAIL"
+		}
+		alarms = append(alarms, ical.Alarm{Action: action, Trigger: n.Trigger})
+	}
+	return alarms
+}
+
+// ── importing ──
+
+// ImportResult says what an import did, per event, so a partial success reports
+// which events landed rather than one number that hides the rest.
+type ImportResult struct {
+	Imported []string       `json:"imported"`
+	Skipped  []SkippedEvent `json:"skipped,omitempty"`
+}
+
+// SkippedEvent is one event an import could not take, and why.
+type SkippedEvent struct {
+	Summary string `json:"summary,omitempty"`
+	UID     string `json:"uid,omitempty"`
+	Reason  string `json:"reason"`
+}
+
+// String names the event, falling back to the UID for one with no summary, since
+// an untitled event still has to be findable in the file.
+func (s SkippedEvent) String() string {
+	switch {
+	case s.Summary != "":
+		return fmt.Sprintf("Skipped %q: %s.", s.Summary, s.Reason)
+	case s.UID != "":
+		return fmt.Sprintf("Skipped the event with UID %s: %s.", s.UID, s.Reason)
+	default:
+		return fmt.Sprintf("Skipped an event: %s.", s.Reason)
+	}
+}
+
+// EventsImport writes the events of a parsed calendar file into a calendar.
+//
+// Each event keeps its own UID, so importing the same file twice into the same
+// calendar produces duplicates rather than merging - which is what Proton's own
+// import does, and the honest behaviour: this cannot know whether two events
+// sharing a UID are the same event or a file somebody edited.
+//
+// Attendees are dropped. An imported event is a record of something, not an
+// invitation being reissued, and writing the participants back would make this
+// account the organiser of a meeting it did not call - which, for an event with
+// external addresses, means email going out.
+//
+// An event that cannot be written is reported and the rest continue: a file of a
+// thousand events should not be lost to one of them.
+func (s *Service) EventsImport(ctx context.Context, calendarID string, events []ical.VEvent) (*ImportResult, error) {
+	ck, err := s.unlockCalendar(ctx, calendarID)
+	if err != nil {
+		return nil, err
+	}
+	res := &ImportResult{}
+	for _, v := range events {
+		if v.Start.IsZero() {
+			res.Skipped = append(res.Skipped, SkippedEvent{
+				Summary: v.Summary, UID: v.UID, Reason: "no start time",
+			})
+			continue
+		}
+		body := eventBody{
+			model:         importable(v),
+			notifications: notificationsOf(v.Alarms),
+			// The participants and the organiser are stripped on the way in, so
+			// what is written is this account's own event rather than a meeting
+			// somebody else called - and Proton refuses to store an event in your
+			// calendar that claims neither.
+			isOrganizer: 1,
+		}
+		op, err := ck.importOp(body)
+		if err != nil {
+			res.Skipped = append(res.Skipped, SkippedEvent{
+				Summary: v.Summary, UID: v.UID, Reason: err.Error(),
+			})
+			continue
+		}
+		created, err := s.syncImported(ctx, calendarID, ck.memberID, []syncOp{op})
+		if err != nil {
+			res.Skipped = append(res.Skipped, SkippedEvent{
+				Summary: v.Summary, UID: v.UID, Reason: err.Error(),
+			})
+			continue
+		}
+		if len(created) > 0 {
+			res.Imported = append(res.Imported, created[0])
+		}
+	}
+	return res, nil
+}
+
+// importable strips what an imported event must not carry: the participants and
+// the organiser, since this account did not call the meeting, and a stamp, since
+// the event is being written now.
+func importable(v ical.VEvent) ical.VEvent {
+	v.Attendees = nil
+	v.Organizer = ""
+	v.Alarms = nil
+	v.DTStamp = time.Now().UTC()
+	if v.UID == "" {
+		v.UID = ical.EventUID()
+	}
+	return v
+}
+
+// notificationsOf turns VALARM components back into Proton's notifications, so a
+// file's reminders survive the import.
+func notificationsOf(alarms []ical.Alarm) []map[string]any {
+	if len(alarms) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(alarms))
+	for _, a := range alarms {
+		kind := remindOnDevice
+		if strings.EqualFold(a.Action, "EMAIL") {
+			kind = remindByEmail
+		}
+		out = append(out, map[string]any{"Type": kind, "Trigger": a.Trigger})
+	}
+	return out
 }

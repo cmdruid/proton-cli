@@ -2,8 +2,6 @@ package mail
 
 import (
 	"context"
-	"fmt"
-	"net/url"
 	"sort"
 
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -32,38 +30,8 @@ func toConversation(c rawConversation) Conversation {
 }
 
 func (s *Service) ConversationsList(ctx context.Context, opts ListOptions) ([]Conversation, int, error) {
-	if opts.PageSize <= 0 {
-		opts.PageSize = 25
-	}
-	q := url.Values{}
-	q.Set("LabelID", ResolveFolder(opts.Folder))
-	q.Set("Page", fmt.Sprintf("%d", opts.Page))
-	q.Set("PageSize", fmt.Sprintf("%d", opts.PageSize))
-	q.Set("Sort", "Time")
-	q.Set("Desc", "1")
-	if opts.Unread {
-		q.Set("Unread", "1")
-	}
-	var r struct {
-		Total         int
-		Conversations []rawConversation
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/conversations", Query: q}, &r); err != nil {
-		return nil, 0, err
-	}
-	out := make([]Conversation, 0, len(r.Conversations))
-	for _, c := range r.Conversations {
-		out = append(out, toConversation(c))
-	}
-	return out, r.Total, nil
-}
-
-func (s *Service) ConversationsSearch(ctx context.Context, opts SearchOptions) ([]Conversation, int, error) {
-	if opts.Limit <= 0 {
-		opts.Limit = 25
-	}
-	q := searchQuery(opts, true)
-	if err := validateDates(opts, q); err != nil {
+	q, err := listQuery(opts, true)
+	if err != nil {
 		return nil, 0, err
 	}
 	var r struct {

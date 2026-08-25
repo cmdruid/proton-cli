@@ -256,3 +256,93 @@ func testKeys(u *keys.Unlocked) keys.Get {
 		return u, nil
 	}
 }
+
+// Two entries reachable at the same address are one person. Two merely sharing a
+// name are not - people are routinely called the same thing, and folding them
+// together would lose one of them.
+func TestDuplicatesGroupByAddressNotByName(t *testing.T) {
+	all := []Contact{
+		{ID: "1", Name: "Jane Roe", Emails: []string{"jane@example.com"}},
+		{ID: "2", Name: "J. Roe", Emails: []string{"JANE@example.com", "j@work.com"}},
+		{ID: "3", Name: "Jane Roe", Emails: []string{"different@example.com"}},
+		{ID: "4", Name: "Nobody", Emails: nil},
+	}
+	groups := Duplicates(all)
+	if len(groups) != 1 {
+		t.Fatalf("found %d duplicate sets, want 1: %+v", len(groups), groups)
+	}
+	if groups[0].Email != "jane@example.com" {
+		t.Errorf("grouped on %q, want the shared address", groups[0].Email)
+	}
+	if len(groups[0].Contacts) != 2 {
+		t.Fatalf("set holds %d contacts, want 2", len(groups[0].Contacts))
+	}
+	// The two Jane Roes that share no address stay apart.
+	for _, ct := range groups[0].Contacts {
+		if ct.ID == "3" {
+			t.Error("a contact sharing only a name was folded in")
+		}
+	}
+}
+
+// A contact already folded into one set is not offered in another; merging it
+// twice would move it out from under the first merge.
+func TestDuplicatesClaimAContactOnlyOnce(t *testing.T) {
+	all := []Contact{
+		{ID: "1", Emails: []string{"a@example.com"}},
+		{ID: "2", Emails: []string{"a@example.com", "b@example.com"}},
+		{ID: "3", Emails: []string{"b@example.com"}},
+	}
+	groups := Duplicates(all)
+	seen := map[string]bool{}
+	for _, g := range groups {
+		for _, ct := range g.Contacts {
+			if seen[ct.ID] {
+				t.Errorf("contact %s appears in two merge sets", ct.ID)
+			}
+			seen[ct.ID] = true
+		}
+	}
+}
+
+// The kept contact wins every scalar, and every list keeps the union: a merge
+// adds what the others had and overwrites nothing.
+func TestMergeCardsKeepsTheFirstAndUnionsTheRest(t *testing.T) {
+	first := Contact{ID: "1", Name: "Jane Roe", Cards: []string{
+		"BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Jane Roe\r\nEMAIL:jane@example.com\r\n" +
+			"NOTE:Original note\r\nTEL:+43 1 111\r\nEND:VCARD",
+	}}
+	second := Contact{ID: "2", Name: "J. Roe", Cards: []string{
+		"BEGIN:VCARD\r\nVERSION:4.0\r\nFN:J. Roe\r\nEMAIL:j@work.com\r\n" +
+			"NOTE:Different note\r\nTEL:+43 1 222\r\nORG:Acme\r\nEND:VCARD",
+	}}
+
+	got := mergeCards([]Contact{first, second})
+	if got.name != "Jane Roe" {
+		t.Errorf("name = %q, want the kept contact's", got.name)
+	}
+	if got.encrypted.Note != "Original note" {
+		t.Errorf("note = %q; the kept contact's value must not be overwritten", got.encrypted.Note)
+	}
+	if got.encrypted.Org != "Acme" {
+		t.Errorf("org = %q; a field the kept contact lacked should be filled in", got.encrypted.Org)
+	}
+	if len(got.emails) != 2 {
+		t.Errorf("emails = %v, want both", got.emails)
+	}
+	if len(got.encrypted.Phones) != 2 {
+		t.Errorf("phones = %v, want both", got.encrypted.Phones)
+	}
+}
+
+// The same mailbox written two ways is one mailbox, so a merge does not keep it
+// twice.
+func TestMergeCardsDeduplicatesAddressesByCase(t *testing.T) {
+	got := mergeCards([]Contact{
+		{ID: "1", Cards: []string{"BEGIN:VCARD\r\nVERSION:4.0\r\nEMAIL:jane@example.com\r\nEND:VCARD"}},
+		{ID: "2", Cards: []string{"BEGIN:VCARD\r\nVERSION:4.0\r\nEMAIL:JANE@Example.com\r\nEND:VCARD"}},
+	})
+	if len(got.emails) != 1 {
+		t.Errorf("emails = %v, want one; the same mailbox written twice is one mailbox", got.emails)
+	}
+}

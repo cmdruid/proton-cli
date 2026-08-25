@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/roman-16/proton-cli/internal/crypto/aead"
@@ -39,19 +40,10 @@ type Item struct {
 	PublicKey  string   `json:"public_key,omitempty"`
 	PrivateKey string   `json:"private_key,omitempty"`
 
-	// identity
-	FullName      string `json:"full_name,omitempty"`
-	FirstName     string `json:"first_name,omitempty"`
-	LastName      string `json:"last_name,omitempty"`
-	Phone         string `json:"phone,omitempty"`
-	Organization  string `json:"organization,omitempty"`
-	JobTitle      string `json:"job_title,omitempty"`
-	StreetAddress string `json:"street_address,omitempty"`
-	City          string `json:"city,omitempty"`
-	PostalCode    string `json:"postal_code,omitempty"`
-	Country       string `json:"country,omitempty"`
-	Birthdate     string `json:"birthdate,omitempty"`
-	Website       string `json:"website,omitempty"`
+	// Identity is what an identity item holds, keyed by the flag that sets it.
+	// It is a map rather than thirty fields because Pass stores thirty and the
+	// set is IdentityFields' to declare, not this struct's to repeat.
+	Identity map[string]string `json:"identity,omitempty"`
 
 	// alias: the address, and the route behind it. Everything but the status
 	// takes a request of its own, so a list carries the first two and one item
@@ -88,10 +80,16 @@ func aliasStatus(kind string, flags int) string {
 
 // ItemField is a custom extra field attached to an item.
 type ItemField struct {
-	Name  string `json:"name"`
-	Value string `json:"value,omitempty"`
-	Type  string `json:"type"`
+	Name string `json:"name"`
+	// Section is the heading the field sits under, or "" for one that sits on
+	// its own. Only the types whose editor offers headings can carry them.
+	Section string `json:"section,omitempty"`
+	Value   string `json:"value,omitempty"`
+	Type    string `json:"type"`
 }
+
+// Ref renders the field the way --field accepts it.
+func (f ItemField) Ref() string { return FieldRef(f.Section, f.Name) }
 
 // ItemsList reads what is in every vault, or in the one named.
 //
@@ -260,39 +258,23 @@ type NewItem struct {
 	StreetAddress, City, PostalCode, Country   string
 	Birthdate, Website                         string
 	// extra custom fields, each "NAME=VALUE"
-	Fields       []string
-	HiddenFields []string
+	// ExtraFields are the custom fields the item carries beyond its type's own.
+	ExtraFields ExtraFields
+	// Identity is an identity item's fields, keyed by the flag that sets it.
+	Identity map[string]string
 }
 
-func buildExtraFields(textFields, hiddenFields []string) ([]*pb.ExtraField, error) {
-	var out []*pb.ExtraField
-	for _, f := range textFields {
-		name, val, ok := strings.Cut(f, "=")
-		if !ok {
-			return nil, fmt.Errorf("invalid --field %q (expected NAME=VALUE)", f)
-		}
-		out = append(out, &pb.ExtraField{FieldName: name, Content: &pb.ExtraField_Text{Text: &pb.ExtraTextField{Content: val}}})
-	}
-	for _, f := range hiddenFields {
-		name, val, ok := strings.Cut(f, "=")
-		if !ok {
-			return nil, fmt.Errorf("invalid --hidden %q (expected NAME=VALUE)", f)
-		}
-		out = append(out, &pb.ExtraField{FieldName: name, Content: &pb.ExtraField_Hidden{Hidden: &pb.ExtraHiddenField{Content: val}}})
-	}
-	return out, nil
-}
-
-func extraFieldToItem(f *pb.ExtraField) ItemField {
+func extraFieldToItem(section string, f *pb.ExtraField) ItemField {
+	out := ItemField{Name: f.FieldName, Section: section, Type: "unknown"}
 	switch c := f.Content.(type) {
 	case *pb.ExtraField_Text:
-		return ItemField{Name: f.FieldName, Value: c.Text.Content, Type: "text"}
+		out.Value, out.Type = c.Text.Content, "text"
 	case *pb.ExtraField_Hidden:
-		return ItemField{Name: f.FieldName, Value: c.Hidden.Content, Type: "hidden"}
+		out.Value, out.Type = c.Hidden.Content, "hidden"
 	case *pb.ExtraField_Totp:
-		return ItemField{Name: f.FieldName, Value: c.Totp.TotpUri, Type: "totp"}
+		out.Value, out.Type = c.Totp.TotpUri, "totp"
 	}
-	return ItemField{Name: f.FieldName, Type: "unknown"}
+	return out
 }
 
 // wifiSecurity maps a CLI security string to the protobuf enum; an unknown or
@@ -345,25 +327,35 @@ func (s *Service) ItemCreate(ctx context.Context, shareID string, nc NewItem) (s
 			PrivateKey: nc.PrivateKey, PublicKey: nc.PublicKey,
 		}}
 	case "identity":
-		item.Content.Content = &pb.Content_Identity{Identity: &pb.ItemIdentity{
-			FullName: nc.FullName, FirstName: nc.FirstName, LastName: nc.LastName,
-			Email: nc.Email, PhoneNumber: nc.PhoneNumber,
-			Organization: nc.Organization, JobTitle: nc.JobTitle,
-			StreetAddress: nc.StreetAddress, City: nc.City,
-			ZipOrPostalCode: nc.PostalCode, CountryOrRegion: nc.Country,
-			Birthdate: nc.Birthdate, Website: nc.Website,
-		}}
+		item.Content.Content = &pb.Content_Identity{Identity: buildIdentity(nc.Identity)}
 	case "custom":
 		item.Content.Content = &pb.Content_Custom{Custom: &pb.ItemCustom{}}
 	default:
 		return "", fmt.Errorf("unsupported item type %q (supported: login, note, credit-card, wifi, ssh-key, identity, custom)", nc.Type)
 	}
-	extra, err := buildExtraFields(nc.Fields, nc.HiddenFields)
+	fields, err := parseExtraFields(nc.ExtraFields)
 	if err != nil {
 		return "", err
 	}
-	item.ExtraFields = extra
+	loose, sections := split(fields)
+	item.ExtraFields = loose
+	if len(sections) > 0 && !setSections(item.Content, sections) {
+		return "", fmt.Errorf("a %s item has no sections to put a field under", nc.Type)
+	}
 
+	return s.putItem(ctx, shareID, shareKey, rotation, item)
+}
+
+// contentFormatVersion is the version of the item protobuf this writes. It
+// travels with every item, so a reader knows how to take the content apart, and
+// an export says the same thing about the items it carries.
+const contentFormatVersion = 7
+
+// putItem seals one item under a fresh key of its own and stores it.
+//
+// Creating an item and reading one out of a backup differ only in where the
+// protobuf came from, so they seal and send it the same way.
+func (s *Service) putItem(ctx context.Context, shareID string, shareKey []byte, rotation int, item *pb.Item) (string, error) {
 	itemKey, err := aead.NewKey()
 	if err != nil {
 		return "", err
@@ -385,7 +377,7 @@ func (s *Service) ItemCreate(ctx context.Context, shareID string, nc NewItem) (s
 		Method: "POST", Path: "/pass/v1/share/" + shareID + "/item",
 		Body: map[string]any{
 			"Content":              base64.StdEncoding.EncodeToString(ct),
-			"ContentFormatVersion": 7,
+			"ContentFormatVersion": contentFormatVersion,
 			"ItemKey":              base64.StdEncoding.EncodeToString(ek),
 			"KeyRotation":          rotation,
 		},
@@ -396,21 +388,30 @@ func (s *Service) ItemCreate(ctx context.Context, shareID string, nc NewItem) (s
 }
 
 type Patch struct {
+	Scalars
+	// Identity is an identity item's fields, keyed by the flag that sets it.
+	Identity map[string]string
+	// ExtraFields are custom fields to set, each NAME=VALUE or
+	// SECTION/NAME=VALUE. One that names an existing field replaces its value;
+	// the rest of them are left alone.
+	ExtraFields ExtraFields
+}
+
+// Scalars are the single-valued fields a patch can carry. They are their own
+// struct so that Empty can compare them, which a struct holding a map cannot do.
+type Scalars struct {
 	Name, Username, Password, Email, URL, Note string
 	TOTP                                       string
 	Holder, Number, Expiry, CVV, PIN           string
 	SSID, WifiSecurity                         string
 	PrivateKey, PublicKey                      string
-	// identity
-	FullName, FirstName, LastName, PhoneNumber string
-	Organization, JobTitle                     string
-	StreetAddress, City, PostalCode, Country   string
-	Birthdate, Website                         string
 }
 
 // Empty reports whether the patch changes nothing about the item, which is what
 // an edit that only moved an alias's forwarding leaves behind.
-func (p Patch) Empty() bool { return p == Patch{} }
+func (p Patch) Empty() bool {
+	return p.Scalars == Scalars{} && len(p.Identity) == 0 && p.ExtraFields.Empty()
+}
 
 func (s *Service) ItemEdit(ctx context.Context, shareID, itemID string, patch Patch) error {
 	if patch.Empty() {
@@ -462,6 +463,9 @@ func (s *Service) ItemEdit(ctx context.Context, shareID, itemID string, patch Pa
 	}
 	if patch.Note != "" {
 		it.Metadata.Note = patch.Note
+	}
+	if err := patchExtraFields(&it, patch); err != nil {
+		return err
 	}
 	if it.Content != nil {
 		switch content := it.Content.Content.(type) {
@@ -519,46 +523,7 @@ func (s *Service) ItemEdit(ctx context.Context, shareID, itemID string, patch Pa
 				k.PublicKey = patch.PublicKey
 			}
 		case *pb.Content_Identity:
-			idn := content.Identity
-			if patch.FullName != "" {
-				idn.FullName = patch.FullName
-			}
-			if patch.FirstName != "" {
-				idn.FirstName = patch.FirstName
-			}
-			if patch.LastName != "" {
-				idn.LastName = patch.LastName
-			}
-			if patch.Email != "" {
-				idn.Email = patch.Email
-			}
-			if patch.PhoneNumber != "" {
-				idn.PhoneNumber = patch.PhoneNumber
-			}
-			if patch.Organization != "" {
-				idn.Organization = patch.Organization
-			}
-			if patch.JobTitle != "" {
-				idn.JobTitle = patch.JobTitle
-			}
-			if patch.StreetAddress != "" {
-				idn.StreetAddress = patch.StreetAddress
-			}
-			if patch.City != "" {
-				idn.City = patch.City
-			}
-			if patch.PostalCode != "" {
-				idn.ZipOrPostalCode = patch.PostalCode
-			}
-			if patch.Country != "" {
-				idn.CountryOrRegion = patch.Country
-			}
-			if patch.Birthdate != "" {
-				idn.Birthdate = patch.Birthdate
-			}
-			if patch.Website != "" {
-				idn.Website = patch.Website
-			}
+			patchIdentity(content.Identity, patch.Identity)
 		}
 	}
 	pbBytes, err := proto.Marshal(&it)
@@ -735,6 +700,7 @@ func (s *Service) fetchItems(ctx context.Context, shareID string, sk *shareKeys)
 				continue
 			}
 			item := itemFromProto(&it)
+
 			item.ShareID = shareID
 			item.ItemID = enc.ItemID
 			item.Revision = enc.Revision
@@ -782,23 +748,15 @@ func itemFromProto(it *pb.Item) *Item {
 		item.PrivateKey = c.SshKey.PrivateKey
 		item.PublicKey = c.SshKey.PublicKey
 	case *pb.Content_Identity:
-		idn := c.Identity
-		item.FullName = idn.FullName
-		item.FirstName = idn.FirstName
-		item.LastName = idn.LastName
-		item.Email = idn.Email
-		item.Phone = idn.PhoneNumber
-		item.Organization = idn.Organization
-		item.JobTitle = idn.JobTitle
-		item.StreetAddress = idn.StreetAddress
-		item.City = idn.City
-		item.PostalCode = idn.ZipOrPostalCode
-		item.Country = idn.CountryOrRegion
-		item.Birthdate = idn.Birthdate
-		item.Website = idn.Website
+		item.Identity = readIdentity(c.Identity)
 	}
 	for _, f := range it.ExtraFields {
-		item.Fields = append(item.Fields, extraFieldToItem(f))
+		item.Fields = append(item.Fields, extraFieldToItem("", f))
+	}
+	for _, s := range sectionsOf(it.Content) {
+		for _, f := range s.GetSectionFields() {
+			item.Fields = append(item.Fields, extraFieldToItem(s.GetSectionName(), f))
+		}
 	}
 	return item
 }
@@ -826,4 +784,125 @@ func itemTypeName(it *pb.Item) string {
 		return "custom"
 	}
 	return "unknown"
+}
+
+// ── pinning ──
+
+// ItemPin puts an item at the top of the list, and ItemUnpin takes it back down.
+//
+// Pinning carries no content, so nothing is encrypted or re-encrypted: it is the
+// vault recording that one of its items is wanted often.
+func (s *Service) ItemPin(ctx context.Context, shareID, itemID string, pinned bool) error {
+	method := "POST"
+	if !pinned {
+		method = "DELETE"
+	}
+	return s.C.Decode(ctx, proton.Request{
+		Method: method,
+		Path:   fmt.Sprintf("/pass/v1/share/%s/item/%s/pin", shareID, itemID),
+	}, nil)
+}
+
+// ── history ──
+
+// Revision is one earlier state of an item.
+//
+// Pass keeps every edit, so a password changed by mistake is recoverable by
+// reading what it was. The content is decrypted the same way the current item is,
+// because a revision is the item as it stood.
+type Revision struct {
+	Revision   int   `json:"revision"`
+	CreateTime int64 `json:"create_time,omitempty"`
+	ModifyTime int64 `json:"modify_time,omitempty"`
+	// Item is the item as it stood at this revision.
+	Item *Item `json:"item"`
+}
+
+// ItemHistory reads an item's earlier states, newest first.
+func (s *Service) ItemHistory(ctx context.Context, shareID, itemID string) ([]Revision, error) {
+	sk, err := s.decryptShareKeys(ctx, shareID)
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Revisions struct {
+			RevisionsData []struct {
+				ItemID           string
+				Revision         int
+				State            int
+				Flags            int
+				Content, ItemKey string
+				KeyRotation      int
+				CreateTime       int64
+				ModifyTime       int64
+				AliasEmail       string
+			}
+		}
+	}
+	q := proton.Query("PageSize", "50")
+	if err := s.C.Decode(ctx, proton.Request{
+		Method: "GET",
+		Path:   fmt.Sprintf("/pass/v1/share/%s/item/%s/revision", shareID, itemID),
+		Query:  q,
+	}, &r); err != nil {
+		return nil, err
+	}
+	out := make([]Revision, 0, len(r.Revisions.RevisionsData))
+	for _, rev := range r.Revisions.RevisionsData {
+		shareKey, ok := sk.keys[rev.KeyRotation]
+		if !ok {
+			continue
+		}
+		item, err := decodeItem(shareKey, rev.Content, rev.ItemKey)
+		if err != nil {
+			// A revision written under a key this account no longer holds is
+			// still part of the history, so it is reported by its number rather
+			// than dropped.
+			out = append(out, Revision{
+				Revision: rev.Revision, CreateTime: rev.CreateTime, ModifyTime: rev.ModifyTime,
+			})
+			continue
+		}
+		item.ShareID, item.ItemID = shareID, rev.ItemID
+		item.Revision, item.State = rev.Revision, rev.State
+		item.CreateTime, item.ModifyTime = rev.CreateTime, rev.ModifyTime
+		item.Alias = rev.AliasEmail
+		item.AliasStatus = aliasStatus(item.Type, rev.Flags)
+		out = append(out, Revision{
+			Revision: rev.Revision, CreateTime: rev.CreateTime,
+			ModifyTime: rev.ModifyTime, Item: item,
+		})
+	}
+	// Newest first, which is the order somebody looking for "what did it used to
+	// be" reads in. Sorted rather than reversed, so the answer does not depend on
+	// which way round Proton happened to send the page.
+	slices.SortFunc(out, func(a, b Revision) int { return b.Revision - a.Revision })
+	return out, nil
+}
+
+// decodeItem unwraps one item's content with the share key that sealed it. The
+// current item and every revision of it are stored the same way, so both read
+// through here.
+func decodeItem(shareKey []byte, content, itemKey string) (*Item, error) {
+	ikBytes, err := base64.StdEncoding.DecodeString(itemKey)
+	if err != nil {
+		return nil, err
+	}
+	key, err := aead.Decrypt(shareKey, ikBytes, []byte(aead.TagItemKey))
+	if err != nil {
+		return nil, err
+	}
+	cBytes, err := base64.StdEncoding.DecodeString(content)
+	if err != nil {
+		return nil, err
+	}
+	plain, err := aead.Decrypt(key, cBytes, []byte(aead.TagItemContent))
+	if err != nil {
+		return nil, err
+	}
+	var it pb.Item
+	if err := proto.Unmarshal(plain, &it); err != nil {
+		return nil, err
+	}
+	return itemFromProto(&it), nil
 }

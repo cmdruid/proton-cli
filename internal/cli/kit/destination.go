@@ -293,3 +293,27 @@ func (d *Destination) Dir() (string, error) {
 	}
 	return ".", nil
 }
+
+// ReadBytesArg resolves a path argument that may be "-", meaning stdin, for
+// something that is not text.
+//
+// An archive is bytes rather than a string, so reading one through ReadTextArg
+// would put it through a conversion it does not survive on every platform.
+func ReadBytesArg(c *Invocation, path, name string) ([]byte, error) {
+	if path == "-" {
+		r, err := c.App.Stdin(name + " -")
+		if err != nil {
+			return nil, err
+		}
+		b, err := io.ReadAll(r)
+		if err != nil {
+			return nil, Fail("could not read %s from stdin: %v", name, err)
+		}
+		return b, nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, Fail("could not read %s: %v", path, err)
+	}
+	return b, nil
+}

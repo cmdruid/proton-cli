@@ -53,7 +53,7 @@ func cliHVResolver(_ context.Context, a *app.App) proton.HVResolver {
 				if a != nil {
 					a.HVUnavailableDetail = "this build of proton has no embedded captcha helper " +
 						"(produced by `go install` or a non-release build); install via the official " +
-						"release tarball"
+						"release tarball, or set " + hv.EnvHelper + " to a helper you built"
 				}
 				return "", "", proton.ErrHVUnavailable
 			default:

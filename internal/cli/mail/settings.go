@@ -118,6 +118,31 @@ var specs = map[string]kit.Setting{
 		Path: settingsPath + "/viewlayout", Field: "ViewLayout",
 		Page: "General", Desc: "Mailbox layout", Enum: kit.Ordered("column", "row"),
 	},
+	"next-message-on-move": {
+		Path: settingsPath + "/next-message-on-move", Field: "NextMessageOnMove",
+		Page: "General", Desc: "Open the next message after moving one", Enum: kit.OnOffChoices(),
+	},
+	"pgp-scheme": {
+		Path: settingsPath + "/pgpscheme", Field: "PGPScheme",
+		Page: "Encryption and keys", Desc: "How mail to external PGP recipients is packaged",
+		// Proton stores these as the package-type bits they select.
+		Enum: []kit.Choice{{Name: "pgp-mime", N: 16}, {Name: "pgp-inline", N: 8}},
+	},
+	"remove-image-metadata": {
+		Path: settingsPath + "/remove-image-metadata", Field: "RemoveImageMetadata",
+		Page: "Email privacy", Desc: "Strip EXIF and location from images you attach",
+		Enum: kit.OnOffChoices(),
+	},
+	"right-to-left": {
+		Path: settingsPath + "/righttoleft", Field: "RightToLeft",
+		Page: "General", Desc: "Compose right to left",
+		Enum: kit.Ordered("left-to-right", "right-to-left"),
+	},
+	"spam-action": {
+		Path: settingsPath + "/spam-action", Field: "SpamAction",
+		Page: "General", Desc: "What moving to spam also does",
+		Enum: []kit.Choice{{Name: "just-move", N: 0}, {Name: "move-and-unsubscribe", N: 1}},
+	},
 	"view-mode": {
 		Path: settingsPath + "/viewmode", Field: "ViewMode",
 		Page: "General", Desc: "Group mail into threads or list single messages",
@@ -217,7 +242,8 @@ func settingsCmd() *cobra.Command {
 			},
 		})
 	})
-	c.AddCommand(addressesCmd(), foldersCmd(), labelsCmd(), filtersCmd(), autoreplyCmd())
+	c.AddCommand(addressesCmd(), foldersCmd(), labelsCmd(), filtersCmd(),
+		autoreplyCmd(), sendersCmd())
 	return c
 }
 

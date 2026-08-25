@@ -27,9 +27,8 @@ const (
 // the one that reads as ordinary English.
 var Verbs = map[string]string{
 	// Reading
-	"list":   "enumerate a collection",
-	"get":    "show one thing in full",
-	"search": "query the server's index",
+	"list": "enumerate a collection",
+	"get":  "show one thing in full",
 
 	// Writing
 	"create": "make a new thing",
@@ -50,6 +49,8 @@ var Verbs = map[string]string{
 	"upload":   "send a local file",
 	"download": "write a remote file to disk",
 	"export":   "write documents to disk",
+	"import":   "read documents in from disk",
+	"merge":    "fold duplicates into one",
 
 	// Mail
 	"send":       "deliver a message",
@@ -68,16 +69,32 @@ var Verbs = map[string]string{
 	"disable": "turn off",
 
 	// Sharing
-	"link":    "create a public link",
-	"unlink":  "remove a public link",
-	"add":     "put a member into a container",
-	"remove":  "take a member out of a container",
-	"accept":  "agree to an invitation",
-	"decline": "refuse an invitation",
+	"link":        "create a public link",
+	"unlink":      "remove a public link",
+	"add":         "put a member into a container",
+	"remove":      "take a member out of a container",
+	"accept":      "agree to an invitation",
+	"verify":      "confirm an address is yours",
+	"resend":      "send an invitation again",
+	"block":       "send a sender's mail straight to blocked",
+	"allow":       "always let a sender reach the inbox",
+	"spam":        "send a sender's mail straight to spam",
+	"forget":      "drop a standing decision",
+	"expire":      "make something delete itself later",
+	"unsubscribe": "ask a mailing list to stop",
+	"apply":       "run existing rules over what is already here",
+	"reorder":     "set the order things run in",
+	"snooze":      "take something out of the inbox until later",
+	"unsnooze":    "bring something back to the inbox early",
+	"decline":     "refuse an invitation",
 
 	// Photos
 	"favorite":   "mark as a favourite",
 	"unfavorite": "unmark as a favourite",
+
+	// Secrets
+	"totp":     "print the code a stored secret currently stands for",
+	"generate": "make a new secret",
 
 	// Keys
 	"pin":   "trust a public key for a contact",
@@ -133,13 +150,45 @@ const OnThisMachine = "on-this-machine"
 var Mutating = map[string]bool{
 	"create": true, "update": true, "set": true, "delete": true, "trash": true,
 	"restore": true, "empty": true, "move": true, "copy": true, "upload": true,
+	"import": true, "merge": true,
 	"send": true, "reply": true, "forward": true, "unschedule": true,
 	"read": true, "unread": true, "label": true, "unlabel": true, "star": true,
 	"unstar": true, "enable": true, "disable": true, "link": true,
 	"unlink": true, "add": true, "remove": true, "accept": true,
-	"decline": true, "favorite": true, "unfavorite": true, "pin": true,
+	"decline": true, "resend": true, "block": true, "allow": true,
+	"spam": true, "forget": true, "expire": true, "unsubscribe": true,
+	"snooze": true, "unsnooze": true, "apply": true, "reorder": true, "favorite": true, "unfavorite": true, "pin": true,
 	"unpin": true, "respond": true, "login": true, "logout": true,
 	"revoke": true, "uninstall": true,
+}
+
+// SettingsPages declares every collection that lives under a `settings` group,
+// and the page of Proton's own settings app it mirrors.
+//
+// Where a collection hangs is the one structural question this CLI answers over
+// and over, and it is not a matter of taste. Proton's clients already answer it:
+// what the product app itself creates and edits is a working surface, and what
+// only the settings app reaches is a setting. A vault, a contact group and a
+// photo album have no settings page at all, so they sit at app level; a filter
+// and an address have no place in the mail window, so they sit under `settings`.
+//
+// Folders, labels and calendars are the interesting case: Proton offers all
+// three in both places, in the sidebar and again as a settings page. The tie
+// goes to `settings`, because a CLI has no sidebar and the settings page is the
+// one that enumerates them.
+//
+// The value is the page, not a boolean, so the entry carries its own reason and
+// a new collection cannot be filed here without someone having looked.
+var SettingsPages = map[string]string{
+	"calendar settings calendars": "Calendars",
+	"mail settings addresses":     "Identity and addresses",
+	"mail settings autoreply":     "Forward and auto-reply",
+	"mail settings filters":       "Filters",
+	"mail settings folders":       "Folders and labels",
+	"mail settings labels":        "Folders and labels",
+	"mail settings senders":       "Spam, block, and allow lists",
+	"pass settings domains":       "Aliases",
+	"pass settings mailboxes":     "Aliases",
 }
 
 // Placeholders is every argument name a usage string may contain.

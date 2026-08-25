@@ -31,60 +31,34 @@ func toMessage(m rawListMessage) Message {
 }
 
 func (s *Service) List(ctx context.Context, opts ListOptions) ([]Message, int, error) {
+	q, err := listQuery(opts, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	var r struct {
+		Total    int
+		Messages []rawListMessage
+	}
+	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/messages", Query: q}, &r); err != nil {
+		return nil, 0, err
+	}
+	out := make([]Message, 0, len(r.Messages))
+	for _, m := range r.Messages {
+		out = append(out, toMessage(m))
+	}
+	return out, r.Total, nil
+}
+
+// listQuery builds the one request both a listing and a filtered selection make.
+// Its recipients flag renames the To field to "Recipients", as the conversations
+// endpoint expects.
+func listQuery(opts ListOptions, recipients bool) (url.Values, error) {
 	if opts.PageSize <= 0 {
 		opts.PageSize = 25
 	}
-	q := url.Values{}
-	q.Set("LabelID", ResolveFolder(opts.Folder))
-	q.Set("Page", fmt.Sprintf("%d", opts.Page))
-	q.Set("PageSize", fmt.Sprintf("%d", opts.PageSize))
-	q.Set("Sort", "Time")
-	q.Set("Desc", "1")
-	if opts.Unread {
-		q.Set("Unread", "1")
-	}
-	var r struct {
-		Total    int
-		Messages []rawListMessage
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/messages", Query: q}, &r); err != nil {
-		return nil, 0, err
-	}
-	out := make([]Message, 0, len(r.Messages))
-	for _, m := range r.Messages {
-		out = append(out, toMessage(m))
-	}
-	return out, r.Total, nil
-}
-
-func (s *Service) Search(ctx context.Context, opts SearchOptions) ([]Message, int, error) {
-	if opts.Limit <= 0 {
-		opts.Limit = 25
-	}
-	q := searchQuery(opts, false)
-	if err := validateDates(opts, q); err != nil {
-		return nil, 0, err
-	}
-	var r struct {
-		Total    int
-		Messages []rawListMessage
-	}
-	if err := s.C.Decode(ctx, proton.Request{Method: "GET", Path: "/mail/v4/messages", Query: q}, &r); err != nil {
-		return nil, 0, err
-	}
-	out := make([]Message, 0, len(r.Messages))
-	for _, m := range r.Messages {
-		out = append(out, toMessage(m))
-	}
-	return out, r.Total, nil
-}
-
-// searchQuery's recipients flag renames the To field to "Recipients", as the
-// conversations endpoint expects.
-func searchQuery(opts SearchOptions, recipients bool) url.Values {
 	folder := opts.Folder
 	if folder == "" {
-		folder = "all"
+		folder = "inbox"
 	}
 	q := url.Values{}
 	q.Set("LabelID", ResolveFolder(folder))
@@ -93,7 +67,8 @@ func searchQuery(opts SearchOptions, recipients bool) url.Values {
 	}
 	q.Set("Sort", "Time")
 	q.Set("Desc", "1")
-	q.Set("PageSize", fmt.Sprintf("%d", opts.Limit))
+	q.Set("Page", fmt.Sprintf("%d", opts.Page))
+	q.Set("PageSize", fmt.Sprintf("%d", opts.PageSize))
 	if opts.Unread {
 		q.Set("Unread", "1")
 	}
@@ -113,25 +88,21 @@ func searchQuery(opts SearchOptions, recipients bool) url.Values {
 	if opts.Subject != "" {
 		q.Set("Subject", opts.Subject)
 	}
-	return q
-}
-
-func validateDates(opts SearchOptions, q url.Values) error {
 	if opts.After != "" {
 		t, err := time.Parse("2006-01-02", opts.After)
 		if err != nil {
-			return fmt.Errorf("invalid --after: %w", err)
+			return nil, fmt.Errorf("invalid --after: %w", err)
 		}
 		q.Set("Begin", fmt.Sprintf("%d", t.Unix()))
 	}
 	if opts.Before != "" {
 		t, err := time.Parse("2006-01-02", opts.Before)
 		if err != nil {
-			return fmt.Errorf("invalid --before: %w", err)
+			return nil, fmt.Errorf("invalid --before: %w", err)
 		}
 		q.Set("End", fmt.Sprintf("%d", t.Unix()))
 	}
-	return nil
+	return q, nil
 }
 
 type rawMessage struct {

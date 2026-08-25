@@ -28,11 +28,11 @@ func tokenOf(t *testing.T, url string) string {
 func TestDriveShareLinkLifecycle(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-share"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	url := strings.TrimSpace(runOK(t, "drive", "share", "link", folder))
+	url := strings.TrimSpace(runOK(t, "drive", "items", "share", "link", folder))
 	if !strings.Contains(url, "/urls/") {
 		t.Fatalf("link stdout has no public URL: %q", url)
 	}
@@ -40,12 +40,12 @@ func TestDriveShareLinkLifecycle(t *testing.T) {
 		t.Errorf("public link is missing the password fragment: %q", url)
 	}
 
-	status := runOK(t, "drive", "share", "get", folder)
+	status := runOK(t, "drive", "items", "share", "get", folder)
 	assertContains(t, status, "Public Link:")
 	assertContains(t, status, tokenOf(t, url))
 
-	runOK(t, "drive", "share", "unlink", folder)
-	after := runOKStderr2(t, "drive", "share", "get", folder)
+	runOK(t, "drive", "items", "share", "unlink", folder)
+	after := runOKStderr2(t, "drive", "items", "share", "get", folder)
 	assertField(t, after, "Shared:", "no")
 }
 
@@ -56,11 +56,11 @@ func TestDriveShareLinkLifecycle(t *testing.T) {
 func TestDriveShareLinkPublicHandshake(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-handshake"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	url := strings.TrimSpace(runOK(t, "drive", "share", "link", folder))
+	url := strings.TrimSpace(runOK(t, "drive", "items", "share", "link", folder))
 	token := tokenOf(t, url)
 	linkID := strings.TrimSpace(runJSON(t, "drive", "items", "get", folder)["link_id"].(string))
 
@@ -85,12 +85,12 @@ func TestDriveShareLinkPublicHandshake(t *testing.T) {
 func TestDriveShareLinkIdempotent(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-idem"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	first := strings.TrimSpace(runOK(t, "drive", "share", "link", folder))
-	second := strings.TrimSpace(runOK(t, "drive", "share", "link", folder))
+	first := strings.TrimSpace(runOK(t, "drive", "items", "share", "link", folder))
+	second := strings.TrimSpace(runOK(t, "drive", "items", "share", "link", folder))
 	if tokenOf(t, first) != tokenOf(t, second) {
 		t.Errorf("link is not idempotent: %q vs %q", first, second)
 	}
@@ -99,11 +99,11 @@ func TestDriveShareLinkIdempotent(t *testing.T) {
 func TestDriveShareLinkExpires(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-exp"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	link := runJSON(t, "drive", "share", "link", folder, "--expires", "7d")
+	link := runJSON(t, "drive", "items", "share", "link", folder, "--expires", "7d")
 	if link["expire_time"] == nil {
 		t.Errorf("expected expire_time to be set, got %v", link["expire_time"])
 	}
@@ -112,31 +112,31 @@ func TestDriveShareLinkExpires(t *testing.T) {
 func TestDriveShareLinkPassword(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-pw"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	// The record is the answer, so the custom password is reported there rather
 	// than in the confirmation on stderr.
-	stdout := runOK(t, "drive", "share", "link", folder, "--password", "hunter2")
+	stdout := runOK(t, "drive", "items", "share", "link", folder, "--password", "hunter2")
 	if !strings.Contains(stdout, "#") {
 		t.Errorf("link should still carry a generated fragment: %q", stdout)
 	}
 	assertField(t, stdout, "Password:", "hunter2")
-	assertField(t, runOK(t, "drive", "share", "get", folder), "Link Password:", "hunter2")
+	assertField(t, runOK(t, "drive", "items", "share", "get", folder), "Link Password:", "hunter2")
 }
 
 func TestDriveShareLinkDryRun(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-sharedry"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	_, stderr := runOKStderr(t, "--dry-run", "drive", "share", "link", folder)
+	_, stderr := runOKStderr(t, "--dry-run", "drive", "items", "share", "link", folder)
 	assertContains(t, stderr, "Dry run")
 
-	status := runOKStderr2(t, "drive", "share", "get", folder)
+	status := runOKStderr2(t, "drive", "items", "share", "get", folder)
 	assertField(t, status, "Shared:", "no")
 }
 
@@ -145,18 +145,18 @@ func TestDriveShareLinkDryRun(t *testing.T) {
 func TestDriveShareLinkUpdatesTheLinkItAlreadyHas(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-relink"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	first := strings.TrimSpace(runOK(t, "drive", "share", "link", folder))
-	updated := runOK(t, "drive", "share", "link", folder, "--password", "hunter2")
+	first := strings.TrimSpace(runOK(t, "drive", "items", "share", "link", folder))
+	updated := runOK(t, "drive", "items", "share", "link", folder, "--password", "hunter2")
 
 	assertField(t, updated, "Password:", "hunter2")
 	if !strings.Contains(updated, tokenOf(t, first)) {
 		t.Errorf("setting a password made a new link:\nwas %q\nnow %s", first, truncateOutput(updated))
 	}
-	assertField(t, runOK(t, "drive", "share", "get", folder), "Link Password:", "hunter2")
+	assertField(t, runOK(t, "drive", "items", "share", "get", folder), "Link Password:", "hunter2")
 }
 
 // ── members ──
@@ -164,11 +164,11 @@ func TestDriveShareLinkUpdatesTheLinkItAlreadyHas(t *testing.T) {
 func TestDriveShareAddNotProtonUser(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-member"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	_, stderr, code := run(t, "drive", "share", "add", folder, "nobody-"+testID()+"@example.invalid")
+	_, stderr, code := run(t, "drive", "items", "share", "add", folder, "nobody-"+testID()+"@example.invalid")
 	if code == 0 {
 		t.Error("expected non-zero exit inviting a non-Proton address")
 	}
@@ -180,11 +180,11 @@ func TestDriveShareAddNotProtonUser(t *testing.T) {
 func TestDriveShareAddDryRun(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-memberdry"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	_, stderr := runOKStderr(t, "--dry-run", "drive", "share", "add", folder, "someone@example.invalid")
+	_, stderr := runOKStderr(t, "--dry-run", "drive", "items", "share", "add", folder, "someone@example.invalid")
 	assertContains(t, stderr, "Dry run")
 }
 
@@ -198,31 +198,31 @@ func TestDriveShareMemberRoundTrip(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "m.txt")
 	_ = os.WriteFile(src, []byte("member round-trip"), 0644)
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	// Permanent folder deletion cascades the share + any pending invitation.
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 	runOK(t, "drive", "items", "upload", src, folder)
 	file := folder + "/m.txt"
 
-	runOK(t, "drive", "share", "add", file, invitee)
-	status := runOK(t, "drive", "share", "get", file)
+	runOK(t, "drive", "items", "share", "add", file, invitee)
+	status := runOK(t, "drive", "items", "share", "get", file)
 	assertContains(t, status, invitee)
 	assertContains(t, status, "not yet accepted")
 
-	runOK(t, "drive", "share", "remove", file, invitee)
-	after := runOKStderr2(t, "drive", "share", "get", file)
+	runOK(t, "drive", "items", "share", "remove", file, invitee)
+	after := runOKStderr2(t, "drive", "items", "share", "get", file)
 	assertNotContains(t, after, invitee)
 }
 
 func TestDriveShareRemoveNotFound(t *testing.T) {
 	t.Parallel()
 	folder := "/" + testID() + "-rm"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
-	_, _, code := run(t, "drive", "share", "remove", folder, "nobody@example.invalid")
+	_, _, code := run(t, "drive", "items", "share", "remove", folder, "nobody@example.invalid")
 	if code != 3 {
 		t.Errorf("expected exit 3 removing an unknown member, got %d", code)
 	}
@@ -280,14 +280,14 @@ func TestDriveShareInvitationCanBeDeclined(t *testing.T) {
 	t.Parallel()
 	lease(t, driveInvitations)
 	folder := "/" + testID() + "-decline"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	before := altInvitationIDs(t)
-	runOK(t, "drive", "share", "add", folder, secondaryEmail())
-	cleanupRun(t, fmt.Sprintf("Revoke member: proton drive share remove %s %s", folder, secondaryEmail()),
-		"drive", "share", "remove", folder, secondaryEmail())
+	runOK(t, "drive", "items", "share", "add", folder, secondaryEmail())
+	cleanupRun(t, fmt.Sprintf("Revoke member: proton drive items share remove %s %s", folder, secondaryEmail()),
+		"drive", "items", "share", "remove", folder, secondaryEmail())
 
 	var invID string
 	waitFor(45*time.Second, 3*time.Second, func() bool {
@@ -308,7 +308,7 @@ func TestDriveShareInvitationCanBeDeclined(t *testing.T) {
 	if altInvitationIDs(t)[invID] {
 		t.Error("the invitation is still waiting for an answer after being declined")
 	}
-	st := runJSON(t, "drive", "share", "get", folder)
+	st := runJSON(t, "drive", "items", "share", "get", folder)
 	members, _ := st["members"].([]interface{})
 	if strings.Contains(fmt.Sprintf("%v", members), secondaryEmail()) {
 		t.Errorf("declining made the second account a member anyway: %v", members)
@@ -319,16 +319,16 @@ func TestDriveShareInvitationRoundTrip(t *testing.T) {
 	t.Parallel()
 	lease(t, driveInvitations)
 	folder := "/" + testID() + "-share-rt"
-	runOK(t, "drive", "folders", "create", folder)
+	runOK(t, "drive", "items", "create", folder)
 	// Permanent delete cascades the share + membership.
 	cleanupRun(t, fmt.Sprintf("Delete folder: proton drive items delete --permanent %s", folder),
 		"drive", "items", "delete", folder)
 
 	before := altInvitationIDs(t)
 
-	runOK(t, "drive", "share", "add", folder, secondaryEmail(), "--edit")
-	cleanupRun(t, fmt.Sprintf("Revoke member: proton drive share remove %s %s", folder, secondaryEmail()),
-		"drive", "share", "remove", folder, secondaryEmail())
+	runOK(t, "drive", "items", "share", "add", folder, secondaryEmail(), "--edit")
+	cleanupRun(t, fmt.Sprintf("Revoke member: proton drive items share remove %s %s", folder, secondaryEmail()),
+		"drive", "items", "share", "remove", folder, secondaryEmail())
 
 	// The alt sees the new pending invitation and accepts it.
 	var invID string
@@ -349,12 +349,142 @@ func TestDriveShareInvitationRoundTrip(t *testing.T) {
 	// The primary now sees the alt as a member, not a pending invitee.
 	var members string
 	waitFor(30*time.Second, 3*time.Second, func() bool {
-		st := runJSON(t, "drive", "share", "get", folder)
+		st := runJSON(t, "drive", "items", "share", "get", folder)
 		ms, _ := st["members"].([]interface{})
 		members = fmt.Sprintf("%v", ms)
 		return strings.Contains(members, secondaryEmail())
 	})
 	if !strings.Contains(members, secondaryEmail()) {
 		t.Errorf("alt is not listed as a member after accepting; members=%s", members)
+	}
+}
+
+// An item somebody shared with you is reachable once the invitation is accepted,
+// and this listing is where it is reachable from.
+func TestDriveSharedListsWhatOthersHaveShared(t *testing.T) {
+	t.Parallel()
+	lease(t, driveInvitations)
+
+	// The primary shares a folder with the secondary, which accepts it.
+	folder := "/" + testID() + "-sharedwithme"
+	runOK(t, "drive", "items", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete: proton drive items delete %s", folder),
+		"drive", "items", "delete", folder)
+
+	// The invitation this test caused is the one that was not there before it
+	// shared: an invitation names no item, so taking whichever came first would
+	// accept something another test left behind.
+	before := altInvitationIDs(t)
+	runOK(t, "drive", "items", "share", "add", folder, secondaryEmail())
+	cleanupRun(t, fmt.Sprintf("Revoke member: proton drive items share remove %s %s", folder, secondaryEmail()),
+		"drive", "items", "share", "remove", folder, secondaryEmail())
+
+	var invitationID string
+	waitFor(60*time.Second, 3*time.Second, func() bool {
+		for id := range altInvitationIDs(t) {
+			if !before[id] {
+				invitationID = id
+				return true
+			}
+		}
+		return false
+	})
+	if invitationID == "" {
+		t.Skip("the invitation did not arrive; nothing to accept")
+	}
+	runOKSecondary(t, "drive", "invitations", "accept", "--", invitationID)
+	cleanupRunSecondary(t, "Leave the share: remove the member from the primary side",
+		"drive", "invitations", "list")
+
+	// It is now reachable, which is the whole point.
+	var found bool
+	for _, row := range runJSONArraySecondary(t, "drive", "shared", "list") {
+		m, _ := row.(map[string]interface{})
+		if by, _ := m["shared_by"].(string); strings.EqualFold(by, selfEmail()) {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("after accepting, the shared folder should appear in `drive shared list`")
+	}
+
+	// And the primary can see it going the other way.
+	var mine bool
+	for _, row := range runJSONArray(t, "drive", "sharing", "list") {
+		m, _ := row.(map[string]interface{})
+		if name, _ := m["name"].(string); strings.Contains(folder, name) && name != "" {
+			mine = true
+		}
+	}
+	if !mine {
+		t.Error("what the primary shared should appear in `drive sharing list`")
+	}
+	runOK(t, "drive", "items", "share", "remove", folder, secondaryEmail())
+}
+
+// What somebody may do can be changed without cancelling and re-inviting them,
+// and it applies whether they have accepted yet or not.
+func TestDriveShareUpdateChangesWhatAnInviteeMayDo(t *testing.T) {
+	t.Parallel()
+	lease(t, driveInvitations)
+	folder := "/" + testID() + "-perm"
+	runOK(t, "drive", "items", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete: proton drive items delete %s", folder),
+		"drive", "items", "delete", folder)
+
+	before := altInvitationIDs(t)
+	runOK(t, "drive", "items", "share", "add", folder, secondaryEmail())
+	cleanupRun(t, fmt.Sprintf("Revoke: proton drive items share remove %s %s", folder, secondaryEmail()),
+		"drive", "items", "share", "remove", folder, secondaryEmail())
+
+	// While the invitation is still unanswered, the role lives on the invitation.
+	assertContains(t, runOK(t, "drive", "items", "share", "get", folder), "viewer")
+	runOK(t, "drive", "items", "share", "update", folder, secondaryEmail(), "--edit")
+	assertContains(t, runOK(t, "drive", "items", "share", "get", folder), "editor")
+
+	// Once it is accepted the role lives on the member instead, which is a
+	// different endpoint - so the claim that this works either way is only
+	// tested by doing both.
+	var invID string
+	waitFor(60*time.Second, 3*time.Second, func() bool {
+		for id := range altInvitationIDs(t) {
+			if !before[id] {
+				invID = id
+				return true
+			}
+		}
+		return false
+	})
+	if invID == "" {
+		t.Skip("the invitation did not arrive; the accepted half cannot be reached")
+	}
+	runOKSecondary(t, "drive", "invitations", "accept", "--", invID)
+
+	runOK(t, "drive", "items", "share", "update", folder, secondaryEmail(), "--edit=false")
+	assertContains(t, runOK(t, "drive", "items", "share", "get", folder), "viewer")
+}
+
+// An invitation nobody answered can be sent again; one that was accepted has
+// nothing to resend, and says so rather than failing vaguely.
+func TestDriveShareResendAnUnansweredInvitation(t *testing.T) {
+	t.Parallel()
+	lease(t, driveInvitations)
+	folder := "/" + testID() + "-resend"
+	runOK(t, "drive", "items", "create", folder)
+	cleanupRun(t, fmt.Sprintf("Delete: proton drive items delete %s", folder),
+		"drive", "items", "delete", folder)
+
+	runOK(t, "drive", "items", "share", "add", folder, secondaryEmail())
+	cleanupRun(t, fmt.Sprintf("Revoke: proton drive items share remove %s %s", folder, secondaryEmail()),
+		"drive", "items", "share", "remove", folder, secondaryEmail())
+
+	runOK(t, "drive", "items", "share", "resend", folder, secondaryEmail())
+
+	_, stderr, code := run(t, "drive", "items", "share", "resend", folder, "nobody@example.com")
+	if code != 3 {
+		t.Errorf("resending to somebody who was never invited should exit 3, got %d", code)
+	}
+	if !strings.Contains(stderr, "waiting for an answer") {
+		t.Errorf("the refusal should say there is no pending invitation, got: %s", stderr)
 	}
 }

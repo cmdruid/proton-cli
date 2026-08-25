@@ -79,67 +79,56 @@ Every command reads the same way - `proton <app> <collection> <verb>` - and anyw
 
 ```bash
 proton mail messages list --unread
-proton mail messages search --from billing@example.com --after 2026-01-01
 proton mail messages get "Invoice #2291"
 proton mail messages send --to alice@proton.me --subject Report --body "See attached." --attach ./report.pdf
 proton mail messages reply "Invoice #2291" --body "Thanks, paid today."
-proton mail messages forward "Invoice #2291" --to alice@proton.me
-proton mail drafts create --to team@example.com --subject Standup --body "Notes to follow."
-proton mail messages label "Invoice #2291" --label Accounting
-proton mail messages export --folder archive --older-than 1y --output-dir ./backup
-proton mail messages trash --unread --older-than 30d
 ```
 
-Threads, attachments, filters, and auto-reply. → [Mail](docs/commands/mail.md)
+Threads, attachments, filters, snoozing, block and allow lists, and auto-reply. → [Mail](docs/commands/mail.md)
 
 ### Drive
 
 ```bash
 proton drive items list /Documents
 proton drive items upload --recursive ./project /Backup
-proton drive items upload --if-exists replace ./report.pdf /Documents
 proton drive items download /Documents/report.pdf --output-dir .
-proton drive items move /Documents/report.pdf --into /Archive
-proton drive share link /Documents/report.pdf --expires 7d --password hunter2
-proton drive items trash --pattern "*.tmp" --scope /Build --recursive
+proton drive items share link /Documents/report.pdf --expires 7d
 ```
 
-Revisions, sharing with people, and photo albums. → [Drive](docs/commands/drive.md)
+Revisions, sharing with people, what others shared with you, and photo albums. → [Drive](docs/commands/drive.md)
 
 ### Calendar
 
 ```bash
 proton calendar events list --start 2026-04-15 --end 2026-04-30
-proton calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
 proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m
-proton calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30
-proton calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
-proton calendar events respond "Team sync" --status accept
+proton calendar events respond "Team sync" --answer accept
+proton calendar events export --start 2026-01-01 --end 2026-12-31 --output year.ics
 ```
 
-Recurring events occurrence by occurrence, your own calendars, all-day events, and attendees. → [Calendar](docs/commands/calendar.md)
+Recurring events occurrence by occurrence, your own calendars, all-day events, attendees, and .ics in and out. → [Calendar](docs/commands/calendar.md)
 
 ### Pass
 
 ```bash
 proton pass items list --vault Work
 proton pass items get github.com
-proton pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com
-proton pass aliases create --prefix shop --mailbox me@proton.me
+proton pass items create --name GitHub --username roman --url github.com --password "$(proton pass generate)"
+proton pass items totp github.com
 ```
 
-Notes, cards, SSH keys, and identities. → [Pass](docs/commands/pass.md)
+Notes, cards, SSH keys, identities, two-factor codes, item history, and backups Proton Pass itself can read. → [Pass](docs/commands/pass.md)
 
 ### Contacts
 
 ```bash
 proton contacts list
+proton contacts get jane
 proton contacts create --name "Jane Roe" --email jane@example.com
-proton contacts keys pin jane --key jane-pubkey.asc
-proton contacts groups add GROUP_ID jane
+proton contacts export --output-dir ./address-book
 ```
 
-Multiple addresses, organizations, and birthdays. → [Contacts](docs/commands/contacts.md)
+Typed addresses and phones, the full vCard field set, duplicate merging, and vCard import/export. → [Contacts](docs/commands/contacts.md)
 
 ### Account
 

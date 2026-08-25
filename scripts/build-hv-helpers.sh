@@ -27,9 +27,10 @@
 # against apt's libwebkit2gtk-4.1-dev, with no nix involved).
 #
 # To render the webview on a non-NixOS host, build this helper with
-# the host toolchain instead of the devbox one. Supplying nix's own
-# mesa and glib-networking also works but costs ~800 MiB of closure,
-# which is not worth it for an occasional check.
+# the host toolchain instead of the devbox one, then run the CLI
+# against it with PROTON_HV_HELPER=<path>. Supplying nix's own mesa
+# and glib-networking also works but costs ~800 MiB of closure, which
+# is not worth it for an occasional check.
 #
 # Inputs:
 #   PWD           = repo root

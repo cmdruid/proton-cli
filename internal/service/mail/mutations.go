@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/roman-16/proton-cli/internal/proton"
 )
@@ -124,4 +125,62 @@ func orAllMail(labelID string) string {
 		return labelAllMail
 	}
 	return labelID
+}
+
+// ── emptying, expiring, unsubscribing, snoozing ──
+
+// EmptyFolder removes everything in a folder, permanently.
+//
+// This is what the web calls "Empty trash" and "Delete all". It is a different
+// act from deleting a selection: nothing is enumerated first, so it does not
+// page and cannot be narrowed - which is exactly why the CLI stops for a yes
+// before it.
+func (s *Service) EmptyFolder(ctx context.Context, folder string) error {
+	q := url.Values{}
+	q.Set("LabelID", ResolveFolder(folder))
+	return s.C.Decode(ctx, proton.Request{
+		Method: "DELETE", Path: "/mail/v4/messages/empty", Query: q,
+	}, nil)
+}
+
+// SetExpiration makes messages delete themselves at a moment, or stops them.
+//
+// A zero time clears it, which is how a message that was going to disappear is
+// kept. Proton stores the moment, not the duration, so a message already counting
+// down reports when rather than how long.
+func (s *Service) SetExpiration(ctx context.Context, ids []string, at int64) error {
+	body := map[string]any{"IDs": ids, "ExpirationTime": nil}
+	if at > 0 {
+		body["ExpirationTime"] = at
+	}
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/mail/v4/messages/expire", Body: body,
+	}, nil)
+}
+
+// Unsubscribe asks a mailing list to stop, using whatever the message itself
+// offered - a List-Unsubscribe header, or the one-click form behind it.
+//
+// Proton does the asking, because it is the party the list already knows; this
+// only says which message.
+func (s *Service) Unsubscribe(ctx context.Context, id string) error {
+	return s.C.Decode(ctx, proton.Request{
+		Method: "POST", Path: "/mail/v4/messages/" + id + "/unsubscribe",
+	}, nil)
+}
+
+// Snooze takes threads out of the inbox until a moment, and Unsnooze brings them
+// back early.
+func (s *Service) Snooze(ctx context.Context, ids []string, until int64) error {
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/mail/v4/conversations/snooze",
+		Body: map[string]any{"IDs": ids, "SnoozeTime": until},
+	}, nil)
+}
+
+func (s *Service) Unsnooze(ctx context.Context, ids []string) error {
+	return s.C.Decode(ctx, proton.Request{
+		Method: "PUT", Path: "/mail/v4/conversations/unsnooze",
+		Body: map[string]any{"IDs": ids},
+	}, nil)
 }

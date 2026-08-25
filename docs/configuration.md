@@ -105,7 +105,7 @@ Try:   proton account logout --profile work
 
 ## Environment variables
 
-Seven, and none of them can name an account.
+Eight, and none of them can name an account.
 
 | Variable | Description |
 | --- | --- |
@@ -116,6 +116,7 @@ Seven, and none of them can name an account.
 | `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
 | `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
 | `PROTON_NO_UPDATE_CHECK` | Set to any value, even empty, to never look for a new release ([what that is](installation.md#the-update-notice)) |
+| `PROTON_HV_HELPER` | An executable to open a CAPTCHA with, instead of the embedded one ([why](human-verification.md#bringing-your-own-helper)) |
 
 ## Files on disk
 

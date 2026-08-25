@@ -9,10 +9,14 @@ package contacts
 
 import (
 	"context"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	ctsvc "github.com/roman-16/proton-cli/internal/service/contacts"
 	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/roman-16/proton-cli/internal/vcard"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +25,8 @@ func New() *cobra.Command {
 		Use:   "contacts",
 		Short: "Contacts, their groups and their pinned keys",
 	}
-	c.AddCommand(listCmd(), getCmd(), createCmd(), updateCmd(), deleteCmd(), keysCmd(), groupsCmd())
+	c.AddCommand(listCmd(), getCmd(), createCmd(), updateCmd(), deleteCmd(),
+		exportCmd(), importCmd(), mergeCmd(), keysCmd(), groupsCmd())
 	return c
 }
 
@@ -43,8 +48,21 @@ func spec() ui.TableSpec[ctsvc.Contact] {
 	}
 }
 
+// contactOrder is how a contact list may be ordered. Proton hands the whole
+// address book over as one encrypted export, so the ordering is this process's
+// to do and the whole set is there to do it with.
+func contactOrder() kit.Comparators[ctsvc.Contact] {
+	return kit.Comparators[ctsvc.Contact]{
+		"name":  func(a, b ctsvc.Contact) int { return kit.Fold(a.Name, b.Name) },
+		"email": func(a, b ctsvc.Contact) int { return kit.Fold(a.Email, b.Email) },
+	}
+}
+
 func listCmd() *cobra.Command {
-	return &cobra.Command{
+	var page kit.Page
+	var order kit.Order
+	var keyword string
+	c := &cobra.Command{
 		Use:   "list",
 		Short: "List contacts",
 		Args:  cobra.NoArgs,
@@ -53,9 +71,38 @@ func listCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return kit.List(c, spec(), all, func(ct ctsvc.Contact) []string { return []string{ct.ID} })
+			all = matchContacts(all, keyword)
+			if err := kit.Sort(order, all, contactOrder()); err != nil {
+				return err
+			}
+			rows, total := kit.Slice(page, all)
+			s := spec()
+			s.Total, s.Page, s.PageSize, s.Filtered = total, page.Number, page.Size, keyword != ""
+			return kit.List(c, s, rows, func(ct ctsvc.Contact) []string { return []string{ct.ID} })
 		}),
 	}
+	c.Flags().StringVar(&keyword, "keyword", "", "Match text in the name or the address")
+	order.Register(c, "name", "email")
+	page.Register(c, "contacts")
+	return c
+}
+
+// matchContacts narrows an address book by free text, over the fields a listing
+// shows. The whole book is already decrypted here, so this is the search Proton
+// has no endpoint for.
+func matchContacts(all []ctsvc.Contact, keyword string) []ctsvc.Contact {
+	if keyword == "" {
+		return all
+	}
+	needle := strings.ToLower(keyword)
+	kept := make([]ctsvc.Contact, 0, len(all))
+	for _, ct := range all {
+		if strings.Contains(strings.ToLower(ct.Name), needle) ||
+			strings.Contains(strings.ToLower(ct.Email), needle) {
+			kept = append(kept, ct)
+		}
+	}
+	return kept
 }
 
 func getCmd() *cobra.Command {
@@ -72,19 +119,34 @@ func getCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fields := []ui.Field{{Label: "Name", Value: ct.Name}}
-			for _, e := range ct.Emails {
-				fields = append(fields, ui.Field{Label: "Email", Value: e})
+			fields := []ui.Field{
+				{Label: "Name", Value: ct.Name},
+				{Label: "First Name", Value: ct.FirstName},
+				{Label: "Last Name", Value: ct.LastName},
+				{Label: "Nickname", Value: ct.Nickname},
 			}
-			for _, p := range ct.Phones {
-				fields = append(fields, ui.Field{Label: "Phone", Value: p})
+			for _, group := range []struct {
+				label  string
+				values []string
+			}{
+				{"Email", ct.Emails},
+				{"Phone", ct.Phones},
+				{"Address", ct.Addresses},
+				{"Website", ct.URLs},
+			} {
+				for _, v := range group.values {
+					fields = append(fields, ui.Field{Label: group.label, Value: v})
+				}
 			}
 			fields = append(fields,
 				ui.Field{Label: "Organization", Value: ct.Org},
 				ui.Field{Label: "Job Title", Value: ct.Title},
+				ui.Field{Label: "Role", Value: ct.Role},
 				ui.Field{Label: "Birthday", Value: ct.Birthday},
-				ui.Field{Label: "Address", Value: ct.Address},
-				ui.Field{Label: "Website", Value: ct.URL},
+				ui.Field{Label: "Anniversary", Value: ct.Anniversary},
+				ui.Field{Label: "Gender", Value: ct.Gender},
+				ui.Field{Label: "Language", Value: ct.Language},
+				ui.Field{Label: "Time Zone", Value: ct.Timezone},
 				ui.Field{Label: "Note", Value: ct.Note},
 				kit.SignatureField(string(ct.Signature)),
 				ui.Field{Label: "ID", Value: ct.ID, ID: true},
@@ -100,16 +162,31 @@ type details struct {
 	nc ctsvc.NewContact
 }
 
+// A repeatable field may say what kind it is, the way Proton's own editor offers
+// one on each: --phone cell:+43… , --email work:jane@example.com. A bare value
+// states no kind, which vCard distinguishes from "other".
 func (d *details) register(c *cobra.Command, verb string) {
 	f := c.Flags()
-	f.StringVar(&d.nc.Name, "name", "", verb+" the contact's name")
-	f.StringArrayVar(&d.nc.Emails, "email", nil, verb+" an email address (repeatable)")
-	f.StringArrayVar(&d.nc.Phones, "phone", nil, verb+" a phone number (repeatable)")
+	f.StringVar(&d.nc.Name, "name", "", verb+" the name shown in listings")
+	f.StringVar(&d.nc.FirstName, "first-name", "", verb+" the given name")
+	f.StringVar(&d.nc.LastName, "last-name", "", verb+" the family name")
+	f.StringVar(&d.nc.Nickname, "nickname", "", verb+" the nickname")
+	f.StringArrayVar(&d.nc.Emails, "email", nil,
+		verb+" an email address, as ADDRESS or KIND:ADDRESS (repeatable)")
+	f.StringArrayVar(&d.nc.Phones, "phone", nil,
+		verb+" a phone number, as NUMBER or KIND:NUMBER (repeatable)")
+	f.StringArrayVar(&d.nc.Addresses, "address", nil,
+		verb+" a postal address, as ADDRESS or KIND:ADDRESS (repeatable)")
+	f.StringArrayVar(&d.nc.URLs, "website", nil,
+		verb+" a website, as URL or KIND:URL (repeatable)")
 	f.StringVar(&d.nc.Org, "organization", "", verb+" the organization")
 	f.StringVar(&d.nc.Title, "job-title", "", verb+" the job title")
+	f.StringVar(&d.nc.Role, "role", "", verb+" the role played in the organization")
 	f.StringVar(&d.nc.Birthday, "birthday", "", verb+" the birthday (e.g. 1990-01-31)")
-	f.StringVar(&d.nc.Address, "address", "", verb+" the postal address")
-	f.StringVar(&d.nc.URL, "website", "", verb+" the website")
+	f.StringVar(&d.nc.Anniversary, "anniversary", "", verb+" the anniversary (e.g. 2015-06-20)")
+	f.StringVar(&d.nc.Gender, "gender", "", verb+" the gender")
+	f.StringVar(&d.nc.Language, "language", "", verb+" the preferred language (e.g. de-AT)")
+	f.StringVar(&d.nc.Timezone, "timezone", "", verb+" the time zone (e.g. Europe/Vienna)")
 	f.StringVar(&d.nc.Note, "note", "", verb+" the note")
 }
 
@@ -193,5 +270,207 @@ func deleteCmd() *cobra.Command {
 				return c.App.Contacts.Delete(c.Ctx, sel.IDs)
 			})
 		}),
+	}
+}
+
+// ── export and import ──
+
+// Export writes contacts as vCards, which is what every other address book
+// reads and what Proton's own Contacts widget offers.
+//
+// A contact is stored as several cards, each a complete vCard carrying a slice
+// of the properties; a file has to be one card with all of them, so they are
+// merged. That merge is why this is not simply `get --output`.
+func exportCmd() *cobra.Command {
+	var dest kit.Destination
+	var keyword string
+	c := &cobra.Command{
+		Use:   "export [REF...]",
+		Short: "Write contacts out as vCards",
+		Long: "Write contacts out as .vcf files, or as one stream with --output -.\n\n" +
+			"Named contacts are written; with none named, the whole address book is,\n" +
+			"narrowed by --keyword. Properties this tool has no flag for travel too,\n" +
+			"since the stored card goes out whole.",
+		Args: cobra.ArbitraryArgs,
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			all, err := c.App.Contacts.List(c.Ctx)
+			if err != nil {
+				return err
+			}
+			chosen, err := chooseContacts(c, all, keyword)
+			if err != nil {
+				return err
+			}
+			if err := dest.Validate(len(chosen) == 1 || dest.Stdout()); err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Exported, Kind: "contacts", Count: len(chosen),
+				Detail: "to " + dest.Describe(), AnswerFollows: dest.Stdout(),
+				Preview: kit.Preview("contacts", columns(), chosen),
+			}, func() error {
+				// One stream carries every card one after another, which is what a
+				// .vcf file is; separate files get one contact each.
+				if dest.Stdout() {
+					var doc strings.Builder
+					for _, ct := range chosen {
+						doc.WriteString(vcard.Document(ct.Cards))
+						doc.WriteString("\r\n")
+					}
+					_, err := dest.Write(c, "", []byte(doc.String()))
+					return err
+				}
+				for _, ct := range chosen {
+					name := ct.Name
+					if name == "" {
+						name = ct.ID
+					}
+					if _, err := dest.Write(c, name+".vcf", []byte(vcard.Document(ct.Cards))); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}),
+	}
+	c.Flags().StringVar(&keyword, "keyword", "", "Match text in the name or the address")
+	dest.Register(c)
+	return c
+}
+
+// chooseContacts resolves what to export: the references named, or everything
+// the keyword matched.
+func chooseContacts(c *kit.Invocation, all []ctsvc.Contact, keyword string) ([]ctsvc.Contact, error) {
+	if len(c.Args) == 0 {
+		return matchContacts(all, keyword), nil
+	}
+	byID := make(map[string]ctsvc.Contact, len(all))
+	for _, ct := range all {
+		byID[ct.ID] = ct
+	}
+	out := make([]ctsvc.Contact, 0, len(c.Args))
+	for _, ref := range c.Args {
+		id, err := c.App.Contacts.Resolve(c.Ctx, ref)
+		if err != nil {
+			return nil, err
+		}
+		ct, ok := byID[id]
+		if !ok {
+			return nil, kit.Fail("%q resolved to a contact the address book does not hold.", ref)
+		}
+		out = append(out, ct)
+	}
+	return out, nil
+}
+
+// Import reads vCards in. It is export's inverse and the other half of what
+// Proton's own Contacts offers.
+func importCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "import PATH",
+		Short: "Read contacts in from a .vcf file",
+		Long: "Read contacts in from a .vcf file, or from stdin with -.\n\n" +
+			"Each card goes in whole, so a property this tool has no flag for survives\n" +
+			"the trip. A card with no name and no address is skipped and named, since\n" +
+			"there would be nothing to file it under.\n\n" +
+			"Nothing is merged: importing the same file twice makes duplicates, because\n" +
+			"nothing here can tell a re-import from a file somebody edited.",
+		Args: cobra.ExactArgs(1),
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			text, err := readWholeArg(c, c.Args[0])
+			if err != nil {
+				return err
+			}
+			cards := vcard.ParseDocuments(text)
+			if len(cards) == 0 {
+				return kit.Fail("%s holds no contacts.", c.Args[0])
+			}
+			return kit.Ingest(c, ui.ResultSpec{
+				Action: ui.Imported, Kind: "contacts", Count: len(cards),
+				Detail: "from " + c.Args[0],
+			}, func() ([]ctsvc.SkippedContact, error) {
+				res, err := c.App.Contacts.Import(c.Ctx, cards)
+				if err != nil {
+					return nil, err
+				}
+				return res.Skipped, nil
+			})
+		}),
+	}
+}
+
+// readWholeArg reads a path, or standard input when it is "-".
+func readWholeArg(c *kit.Invocation, path string) (string, error) {
+	if path == "-" {
+		return kit.ReadTextArg(c, "-", "PATH")
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", kit.Fail("could not read %s: %v", path, err)
+	}
+	return string(b), nil
+}
+
+// ── merge ──
+
+// Merge folds duplicate contacts together, which is what Proton's own Contacts
+// offers and what an address book imported from two places needs.
+func mergeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "merge",
+		Short: "Fold duplicate contacts into one",
+		Long: "Fold duplicate contacts into one.\n\n" +
+			"Two entries reachable at the same address are one person; two merely\n" +
+			"sharing a name are not, so a shared address is what decides. Addresses are\n" +
+			"compared case-insensitively, so the same mailbox written two ways counts\n" +
+			"once.\n\n" +
+			"The oldest of each set is kept, so anything referring to it - a group, a\n" +
+			"pinned key - still does afterwards. Everything the others had that it did\n" +
+			"not is added, and nothing it already had is overwritten.",
+		Args: cobra.NoArgs,
+		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			all, err := c.App.Contacts.List(c.Ctx)
+			if err != nil {
+				return err
+			}
+			groups := ctsvc.Duplicates(all)
+			folded := 0
+			for _, g := range groups {
+				folded += len(g.Contacts) - 1
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Merged, Kind: "contacts", Count: folded,
+				Detail:  duplicateDetail(groups),
+				Preview: kit.Preview("duplicates", duplicateColumns(), groups),
+			}, func() error {
+				for _, g := range groups {
+					if _, err := c.App.Contacts.Merge(c.Ctx, g); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}),
+	}
+}
+
+func duplicateDetail(groups []ctsvc.Duplicate) string {
+	if len(groups) == 0 {
+		return ""
+	}
+	return "into " + ui.Quantity(len(groups), "contacts")
+}
+
+// duplicateColumns previews what a merge would fold, by the address that says
+// they are the same person.
+func duplicateColumns() []ui.Column[ctsvc.Duplicate] {
+	return []ui.Column[ctsvc.Duplicate]{
+		{Header: "EMAIL", Flex: true, Cell: func(d ctsvc.Duplicate) string { return d.Email }},
+		{Header: "KEEPING", Flex: true, Cell: func(d ctsvc.Duplicate) string {
+			return d.Contacts[0].Name
+		}},
+		{Header: "FOLDING IN", Right: true, Cell: func(d ctsvc.Duplicate) string {
+			return strconv.Itoa(len(d.Contacts) - 1)
+		}},
 	}
 }

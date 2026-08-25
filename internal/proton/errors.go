@@ -67,7 +67,10 @@ const (
 // The code Proton answers with when the name is already taken where it was to
 // be written. The web clients read the same code to know a duplicate was found
 // and ask what to do about it (useUploadFile.ts).
-const alreadyExistsCode = 2500
+const (
+	alreadyExistsCode        = 2500
+	tooManyActiveFiltersCode = 50016
+)
 
 // DoesNotExist reports whether err is Proton saying that what was named is not
 // there, so a caller holding the reference can say so in its own words.
@@ -89,6 +92,17 @@ func DoesNotExist(err error) bool {
 func AlreadyExists(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.Code == alreadyExistsCode
+}
+
+// AtFilterLimit reports whether err is Proton refusing to have another filter
+// running.
+//
+// It writes the filter anyway and leaves it turned off, so a caller can say that
+// rather than let a refusal imply nothing happened. The refusal carries no ID,
+// which is why the caller has to send somebody to the listing to find it.
+func AtFilterLimit(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Code == tooManyActiveFiltersCode
 }
 
 // ExitCode maps an HTTP failure to the CLI's exit-code scheme.

@@ -56,6 +56,19 @@ var (
 	Uploaded     = Action{"Uploaded", "upload", "uploaded", Ordinary}
 	Downloaded   = Action{"Downloaded", "download", "downloaded", Ordinary}
 	Exported     = Action{"Exported", "export", "exported", Ordinary}
+	Imported     = Action{"Imported", "import", "imported", Ordinary}
+	Merged       = Action{"Merged", "merge", "merged", Ordinary}
+	Resent       = Action{"Resent", "resend", "resent", Ordinary}
+	Verified     = Action{"Verified", "verify", "verified", Ordinary}
+	Blocked      = Action{"Blocked", "block", "blocked", Ordinary}
+	Allowed      = Action{"Allowed", "allow", "allowed", Ordinary}
+	Filed        = Action{"Filed", "file", "filed", Ordinary}
+	Forgot       = Action{"Forgot", "forget", "forgot", Ordinary}
+	Unsubscribed = Action{"Unsubscribed", "unsubscribe", "unsubscribed", Ordinary}
+	Snoozed      = Action{"Snoozed", "snooze", "snoozed", Ordinary}
+	Unsnoozed    = Action{"Unsnoozed", "unsnooze", "unsnoozed", Ordinary}
+	Applied      = Action{"Applied", "apply", "applied", Ordinary}
+	Reordered    = Action{"Reordered", "reorder", "reordered", Ordinary}
 	Sent         = Action{"Sent", "send", "sent", Ordinary}
 	Scheduled    = Action{"Scheduled", "schedule", "scheduled", Ordinary}
 	Unscheduled  = Action{"Unscheduled", "unschedule", "unscheduled", Ordinary}
@@ -77,7 +90,7 @@ var (
 	Favorited    = Action{"Favorited", "favorite", "favorited", Ordinary}
 	Unfavorited  = Action{"Unfavorited", "unfavorite", "unfavorited", Ordinary}
 	Pinned       = Action{"Pinned", "pin", "pinned", Ordinary}
-	Unpinned     = Action{"Removed", "remove", "unpinned", Ordinary}
+	Unpinned     = Action{"Unpinned", "unpin", "unpinned", Ordinary}
 	Responded    = Action{"Responded", "respond", "responded", Ordinary}
 	Set          = Action{"Set", "set", "set", Ordinary}
 	Invited      = Action{"Invited", "invite", "invited", Ordinary}
@@ -98,7 +111,7 @@ func (a Action) Asks(computed bool) bool {
 // Actions is the vocabulary, for the conformance test to check against.
 var Actions = []Action{
 	Created, Updated, Deleted, Trashed, Restored, Emptied, Uninstalled, Moved,
-	Copied, Uploaded, Downloaded, Exported, Sent, Scheduled, Unscheduled, Saved,
+	Copied, Uploaded, Downloaded, Exported, Imported, Merged, Resent, Verified, Blocked, Allowed, Filed, Forgot, Unsubscribed, Snoozed, Unsnoozed, Applied, Reordered, Sent, Scheduled, Unscheduled, Saved,
 	Labelled, Unlabelled, Starred, Unstarred, MarkedRead, MarkedUnread,
 	Enabled, Disabled, Linked, Unlinked, Added, Removed, Accepted, Declined,
 	Favorited, Unfavorited, Pinned, Unpinned, Responded, Set, Invited, Revoked,

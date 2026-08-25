@@ -18,7 +18,7 @@ func New() *cobra.Command {
 		Use:   "drive",
 		Short: "Files and folders in Drive",
 	}
-	c.AddCommand(itemsCmd(), foldersCmd(), trashCmd(), shareCmd(), invitationsCmd(),
+	c.AddCommand(itemsCmd(), trashCmd(), invitationsCmd(), sharedCmd(), sharingCmd(),
 		photosCmd(), settingsCmd())
 	return c
 }

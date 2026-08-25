@@ -25,12 +25,29 @@ type filters struct {
 	subject string
 	keyword string
 	folder  string
-	age     kit.Range
-	all     bool
-	limit   int
+	// whereByDefault is the folder used when none was given. It is kept apart
+	// from folder so that a default never counts as something the user asked
+	// for: a bulk verb refuses an empty selection, and a folder nobody named
+	// would otherwise look like a narrowing and let it through.
+	whereByDefault string
+	after          string
+	before         string
+	age            kit.Range
+	all            bool
+	limit          int
+	page           int
+	pageSize       int
 }
 
-func (f *filters) register(c *cobra.Command) {
+// registerNarrowing adds the flags that say which messages, and nothing else.
+// `list` and every organising verb register the same set, which is what lets a
+// selection be read before it is acted on.
+//
+// The default folder differs: a listing opens on the inbox, while a verb that
+// acts on what a filter found looks everywhere unless told not to, because a
+// filter is already the narrowing.
+func (f *filters) registerNarrowing(c *cobra.Command, folder string) {
+	f.whereByDefault = folder
 	fl := c.Flags()
 	fl.BoolVar(&f.unread, "unread", false, "Match unread messages")
 	fl.BoolVar(&f.starred, "starred", false, "Match starred messages")
@@ -38,34 +55,53 @@ func (f *filters) register(c *cobra.Command) {
 	fl.StringVar(&f.to, "to", "", "Match a recipient's address")
 	fl.StringVar(&f.subject, "subject", "", "Match text in the subject")
 	fl.StringVar(&f.keyword, "keyword", "", "Match text anywhere, including display names and bodies")
-	fl.StringVar(&f.folder, "folder", "", "Look only in this folder or label")
+	fl.StringVar(&f.after, "after", "", "Match messages after this date (YYYY-MM-DD)")
+	fl.StringVar(&f.before, "before", "", "Match messages before this date (YYYY-MM-DD)")
 	f.age.Register(fl, "messages")
-	fl.BoolVar(&f.all, "all", false, "Confirm that no narrowing filter means everything in scope")
+	registerFolder(c, &f.folder, "", folder)
+}
+
+func (f *filters) register(c *cobra.Command) {
+	f.registerNarrowing(c, "all")
+	fl := c.Flags()
+	kit.All(fl, &f.all)
 	fl.IntVar(&f.limit, "limit", 150, "Most messages to affect (Proton pages at 150)")
 }
 
-// set reports whether the user asked for a filtered selection at all.
-func (f *filters) set() bool {
+// narrowed reports whether the user asked for a subset, which decides whether an
+// empty answer means an empty folder or an unmatched filter. The folder is not
+// part of it: opening a different folder is still a listing.
+func (f *filters) narrowed() bool {
 	return f.unread || f.starred || f.from != "" || f.to != "" || f.subject != "" ||
-		f.keyword != "" || f.folder != "" || f.age.Set() || f.all
+		f.keyword != "" || f.after != "" || f.before != "" || f.age.Set()
 }
+
+// set reports whether the user asked for a filtered selection at all.
+func (f *filters) set() bool { return f.narrowed() || f.folder != "" || f.all }
 
 // unbounded reports whether --all was given with nothing to narrow it, which is
 // worth warning about before it happens.
-func (f *filters) unbounded() bool {
-	return f.all && !f.unread && !f.starred && f.from == "" && f.to == "" &&
-		f.subject == "" && f.keyword == "" && f.folder == "" && !f.age.Set()
-}
+func (f *filters) unbounded() bool { return f.all && !f.narrowed() && f.folder == "" }
 
-// search converts the filters into the service's query.
-func (f *filters) search() (mailsvc.SearchOptions, error) {
-	opts := mailsvc.SearchOptions{
+// list converts the filters into the one request Proton takes.
+func (f *filters) list() (mailsvc.ListOptions, error) {
+	folder := f.folder
+	if folder == "" {
+		folder = f.whereByDefault
+	}
+	opts := mailsvc.ListOptions{
 		Keyword: f.keyword, From: f.from, To: f.to, Subject: f.subject,
-		Folder: f.folder, Limit: f.limit, Unread: f.unread,
+		Folder: folder, Unread: f.unread,
+		After: f.after, Before: f.before,
+		Page: f.page, PageSize: f.pageSize,
 	}
-	if opts.Folder == "" {
-		opts.Folder = "all"
+	// A cap and a page are the same request to Proton; a bulk verb sets the
+	// first and a listing the second.
+	if f.limit > 0 {
+		opts.PageSize = f.limit
 	}
+	// A duration is the same bound as a date, said relatively. Whichever is
+	// given, the server sees a date.
 	if f.age.OlderThan != "" {
 		d, err := units.ParseDuration(f.age.OlderThan)
 		if err != nil {
@@ -104,11 +140,11 @@ func selectMessages(c *kit.Invocation, f *filters) (kit.Selection[mailsvc.Messag
 	}
 	if f.set() {
 		sel.ByFilter = func(ctx context.Context) ([]mailsvc.Message, error) {
-			opts, err := f.search()
+			opts, err := f.list()
 			if err != nil {
 				return nil, err
 			}
-			msgs, _, err := c.App.Mail.Search(ctx, opts)
+			msgs, _, err := c.App.Mail.List(ctx, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -135,24 +171,15 @@ func selectConversations(c *kit.Invocation, f *filters) (kit.Selection[mailsvc.C
 	}
 	if f.set() {
 		sel.ByFilter = func(ctx context.Context) ([]mailsvc.Conversation, error) {
-			opts, err := f.search()
+			opts, err := f.list()
 			if err != nil {
 				return nil, err
 			}
-			convs, _, err := c.App.Mail.ConversationsSearch(ctx, opts)
+			convs, _, err := c.App.Mail.ConversationsList(ctx, opts)
 			if err != nil {
 				return nil, err
 			}
-			if f.starred {
-				kept := convs[:0]
-				for _, cv := range convs {
-					if cv.Starred() {
-						kept = append(kept, cv)
-					}
-				}
-				convs = kept
-			}
-			return convs, nil
+			return keepStarred(convs, f.starred), nil
 		}
 	}
 	return kit.Select(c, sel)
@@ -162,13 +189,28 @@ func selectConversations(c *kit.Invocation, f *filters) (kit.Selection[mailsvc.C
 // starred predicate, so that one is applied here rather than being silently
 // ignored - which is what a flag the server drops amounts to.
 func applyLocalFilters(msgs []mailsvc.Message, f *filters) []mailsvc.Message {
-	if !f.starred {
+	if f == nil || !f.starred {
 		return msgs
 	}
 	kept := make([]mailsvc.Message, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Starred() {
 			kept = append(kept, m)
+		}
+	}
+	return kept
+}
+
+// keepStarred narrows what the server could not: Proton's query has no starred
+// predicate, so a flag it would silently drop is applied here instead.
+func keepStarred(convs []mailsvc.Conversation, starred bool) []mailsvc.Conversation {
+	if !starred {
+		return convs
+	}
+	kept := make([]mailsvc.Conversation, 0, len(convs))
+	for _, cv := range convs {
+		if cv.Starred() {
+			kept = append(kept, cv)
 		}
 	}
 	return kept

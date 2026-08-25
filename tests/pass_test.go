@@ -3,6 +3,10 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -212,6 +216,37 @@ func TestPassAliasOptions(t *testing.T) {
 	assertContains(t, stdout, "KIND")
 	assertContains(t, stdout, "suffix")
 	assertContains(t, stdout, "mailbox")
+}
+
+// What the listing offers has to be something --suffix will take.
+//
+// Proton mints the word in front of a suffix afresh on every request, so a
+// listing that showed the whole thing would be offering a value that had already
+// stopped working - which is exactly what this used to do. Making an alias here
+// would prove it end to end and would also be a fifth alias in one run, which is
+// more than Proton allows in an hour; the shape is what went wrong and the shape
+// is what is checked.
+func TestPassAliasOptionsOfferDomains(t *testing.T) {
+	t.Parallel()
+	suffixes := 0
+	for _, row := range runJSONArray(t, "pass", "aliases", "options") {
+		o, _ := row.(map[string]interface{})
+		if kind, _ := o["kind"].(string); kind != "suffix" {
+			continue
+		}
+		suffixes++
+		value, _ := o["value"].(string)
+		if strings.Contains(value, "@") || strings.HasPrefix(value, ".") {
+			t.Errorf("the suffix %q is a whole address ending, which Proton regenerates "+
+				"on every request and refuses when it is passed back; --suffix takes the domain", value)
+		}
+		if !strings.Contains(value, ".") {
+			t.Errorf("the suffix %q does not look like a domain", value)
+		}
+	}
+	if suffixes == 0 {
+		t.Fatal("no suffix was offered, so no alias could be made")
+	}
 }
 
 // An alias is an address Proton makes for you, so making one is its own request
@@ -426,4 +461,389 @@ func TestPassLoginTOTPRoundTrips(t *testing.T) {
 		"pass", "items", "delete", "--", ref)
 
 	assertContains(t, runOK(t, "pass", "items", "get", "--", ref), secret)
+}
+
+// Pass keeps every edit, so a password changed by mistake can be read back.
+func TestPassItemRevisionsShowWhatItUsedToBe(t *testing.T) {
+	t.Parallel()
+	name := testID() + "-history"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create",
+		"--name", name, "--username", "first", "--password", "first-secret"))
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", ref),
+		"pass", "items", "delete", "--", ref)
+
+	runOK(t, "pass", "items", "update", "--username", "second", "--", ref)
+
+	revs := runJSONArray(t, "pass", "items", "revisions", "list", "--", ref)
+	if len(revs) < 2 {
+		t.Fatalf("after one edit there should be at least two revisions, got %d", len(revs))
+	}
+	// Newest first, which is the order somebody asking "what did it used to be"
+	// reads in.
+	newest, _ := revs[0].(map[string]interface{})
+	if n, _ := newest["revision"].(float64); int(n) < 2 {
+		t.Errorf("the first row is revision %v; the newest should lead", n)
+	}
+	// The earlier state is readable, which is the whole point.
+	var foundFirst bool
+	for _, row := range revs {
+		m, _ := row.(map[string]interface{})
+		item, _ := m["item"].(map[string]interface{})
+		if item == nil {
+			continue
+		}
+		if u, _ := item["username"].(string); u == "first" {
+			foundFirst = true
+		}
+	}
+	if !foundFirst {
+		t.Error("the earlier username should be readable in the history")
+	}
+}
+
+// Pinning carries no content, so nothing is encrypted: it is the vault recording
+// that one of its items is wanted often.
+func TestPassItemPinAndUnpin(t *testing.T) {
+	t.Parallel()
+	name := testID() + "-pin"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create",
+		"--name", name, "--username", "someone"))
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", ref),
+		"pass", "items", "delete", "--", ref)
+
+	runOK(t, "pass", "items", "pin", "--", ref)
+	cleanupRun(t, fmt.Sprintf("Unpin item: proton pass items unpin %s", ref),
+		"pass", "items", "unpin", "--", ref)
+	runOK(t, "pass", "items", "unpin", "--", ref)
+}
+
+// Pass stores the secret, not the code, so the code is worked out here. The
+// arithmetic is checked against RFC 6238's own vectors in internal/otp; this
+// checks it reaches a stored item.
+func TestPassItemTOTPCode(t *testing.T) {
+	t.Parallel()
+	name := testID() + "-totp"
+	secret := "GEZDGNBVGY3TQOJQ"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create",
+		"--name", name, "--username", "someone",
+		"--totp-uri", "otpauth://totp/Example:someone?secret="+secret+"&issuer=Example"))
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", ref),
+		"pass", "items", "delete", "--", ref)
+
+	got := runJSON(t, "pass", "items", "totp", "--", ref)
+	code, _ := got["code"].(string)
+	if len(code) != 6 {
+		t.Errorf("code = %q, want six digits", code)
+	}
+	for _, r := range code {
+		if r < '0' || r > '9' {
+			t.Errorf("code %q is not all digits", code)
+			break
+		}
+	}
+	if left, _ := got["expires_in_seconds"].(float64); left < 1 || left > 30 {
+		t.Errorf("expires in %v seconds, want between 1 and 30", left)
+	}
+}
+
+// An item with no second factor says so rather than printing a code for nothing.
+func TestPassItemTOTPWithoutASecret(t *testing.T) {
+	t.Parallel()
+	name := testID() + "-nototp"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create",
+		"--name", name, "--username", "someone"))
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", ref),
+		"pass", "items", "delete", "--", ref)
+
+	_, stderr, code := run(t, "pass", "items", "totp", "--", ref)
+	if code == 0 {
+		t.Error("an item with no second factor should not produce a code")
+	}
+	if !strings.Contains(stderr, "no two-factor secret") {
+		t.Errorf("the refusal should say there is no secret, got: %s", stderr)
+	}
+}
+
+// A field can name the heading it sits under, and what a record shows is what
+// --field accepts.
+func TestPassItemFieldsCarryTheirSection(t *testing.T) {
+	t.Parallel()
+	name := testID() + "-sections"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--type", "custom", "--name", name,
+		"--field", "Network/SSID=home", "--hidden", "Network/Key=hunter2",
+		"--field", "Admin/URL=http://192.168.0.1", "--field", "Loose=1"))
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", ref),
+		"pass", "items", "delete", "--", ref)
+
+	got := runJSON(t, "pass", "items", "get", "--", ref)
+	rows, _ := got["fields"].([]interface{})
+	fields := map[string]string{}
+	kinds := map[string]string{}
+	for _, row := range rows {
+		m, _ := row.(map[string]interface{})
+		n, _ := m["name"].(string)
+		section, _ := m["section"].(string)
+		v, _ := m["value"].(string)
+		k, _ := m["type"].(string)
+		key := n
+		if section != "" {
+			key = section + "/" + n
+		}
+		fields[key], kinds[key] = v, k
+	}
+	for key, want := range map[string]string{
+		"Network/SSID": "home", "Network/Key": "hunter2",
+		"Admin/URL": "http://192.168.0.1", "Loose": "1",
+	} {
+		if fields[key] != want {
+			t.Errorf("%s = %q, want %q (got %v)", key, fields[key], want, fields)
+		}
+	}
+	if kinds["Network/Key"] != "hidden" {
+		t.Errorf("a hidden field in a section came back as %q", kinds["Network/Key"])
+	}
+
+	// A patch names one field and leaves the rest alone, and two sections may
+	// hold a field of the same name. A field can hold a two-factor secret too.
+	runOK(t, "pass", "items", "update", "--hidden", "Network/Key=hunter3",
+		"--field", "Admin/URL=http://10.0.0.1",
+		"--totp-field", "Admin/Code=JBSWY3DPEHPK3PXP", "--", ref)
+	after := runOK(t, "pass", "items", "get", "--", ref)
+	assertContains(t, after, "hunter3")
+	assertContains(t, after, "http://10.0.0.1")
+	assertContains(t, after, "home")
+	assertNotContains(t, after, "hunter2")
+
+	// A two-factor field is where a second factor for the same login lands, and
+	// `totp` reads one wherever it sits.
+	shown := runOK(t, "pass", "items", "totp", "--", ref)
+	if !regexp.MustCompile(`\b\d{6}\b`).MatchString(shown) {
+		t.Errorf("no six-digit code came out of the custom field:\n%s", shown)
+	}
+}
+
+// A backup is only a backup if it can be read back, so the archive this writes
+// is the one it reads. The format is Proton Pass's own, which is what lets the
+// app open it too.
+//
+// An export holds the whole account and reading it back adds all of it, so this
+// test creates a copy of every item there is. What it cleans up is therefore
+// everything that was not there before it ran, not just the item it made: taking
+// only its own would leave the account doubled, and doubled again next run.
+func TestPassExportAndImportRoundTrip(t *testing.T) {
+	t.Parallel()
+	lease(t, passLibrary)
+
+	name := testID() + "-backup"
+	ref := strings.TrimSpace(runOK(t, "pass", "items", "create", "--name", name,
+		"--username", "jane", "--password", "hunter2", "--url", "https://example.com",
+		"--field", "Recovery codes=abc-def"))
+	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", ref),
+		"pass", "items", "delete", "--", ref)
+
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "backup.zip")
+	runOK(t, "pass", "export", "--output", archive)
+
+	raw, err := os.ReadFile(archive)
+	if err != nil {
+		t.Fatalf("read the archive: %v", err)
+	}
+	// Without a passphrase the archive is readable, which is what the warning
+	// says and what makes this assertion possible at all.
+	if !strings.Contains(string(raw), "Proton Pass/data.json") {
+		t.Errorf("the archive does not hold the file Proton Pass looks for")
+	}
+
+	// A dry run says what it would do and does none of it.
+	_, stderr := runOKStderr(t, "--dry-run", "pass", "import", archive)
+	assertContains(t, stderr, "Dry run")
+
+	before := passItemRefs(t)
+	cleanup(t, "Delete the items a restored backup added: proton pass items list, "+
+		"then delete every duplicate", func() error {
+		for ref := range passItemRefs(t) {
+			if before[ref] {
+				continue
+			}
+			if _, stderr, code, err := runArgs(nil, "--yes", "pass", "items", "delete", "--", ref); err != nil {
+				return err
+			} else if code != 0 {
+				return fmt.Errorf("exit %d: %s", code, stderr)
+			}
+		}
+		return nil
+	})
+
+	runOK(t, "pass", "import", archive)
+	after := passItemRefs(t)
+	if len(after) <= len(before) {
+		t.Fatalf("the read-back added nothing: %d items before, %d after", len(before), len(after))
+	}
+
+	// Reading it back adds the items again rather than matching them, so there
+	// are now two of everything - including two of the one this test made.
+	restored := ""
+	for _, row := range runJSONArray(t, "pass", "items", "list") {
+		m, _ := row.(map[string]interface{})
+		if n, _ := m["name"].(string); n != name {
+			continue
+		}
+		share, _ := m["share_id"].(string)
+		id, _ := m["item_id"].(string)
+		if r := share + "/" + id; r != ref {
+			restored = r
+		}
+	}
+	if restored == "" {
+		t.Fatalf("the backup did not bring %s back", name)
+	}
+	// What the item held has to come back with it.
+	shown := runOK(t, "pass", "items", "get", "--", restored)
+	for _, want := range []string{"hunter2", "jane", "https://example.com", "Recovery codes", "abc-def"} {
+		assertContains(t, shown, want)
+	}
+}
+
+// passItemRefs is every item in the account, as the references a command takes.
+//
+// It pages, because a listing stops at fifty. Reading only the first page makes
+// a vault that outgrew it look unchanged however much was added to it - and
+// leaves whatever is past the cap out of the cleanup that reads this too.
+func passItemRefs(t *testing.T) map[string]bool {
+	t.Helper()
+	const pageSize = 100
+	out := map[string]bool{}
+	for page := 0; ; page++ {
+		rows := runJSONArray(t, "pass", "items", "list",
+			"--page", strconv.Itoa(page), "--page-size", strconv.Itoa(pageSize))
+		for _, row := range rows {
+			m, _ := row.(map[string]interface{})
+			share, _ := m["share_id"].(string)
+			id, _ := m["item_id"].(string)
+			out[share+"/"+id] = true
+		}
+		if len(rows) < pageSize {
+			return out
+		}
+	}
+}
+
+// A passphrase locks the archive, and without it nothing can be read back.
+func TestPassExportWithAPassphrase(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "passphrase")
+	if err := os.WriteFile(secret, []byte("correct horse battery staple"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	archive := filepath.Join(dir, "locked.zip")
+	runOK(t, "pass", "export", "--output", archive, "--passphrase-file", secret)
+
+	raw, err := os.ReadFile(archive)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(raw), "Proton Pass/data.pgp") {
+		t.Error("a locked archive should hold data.pgp")
+	}
+	if strings.Contains(string(raw), "\"vaults\"") {
+		t.Error("the document is readable inside a locked archive")
+	}
+
+	// The passphrase is what opens it, and a dry run proves it was opened without
+	// writing anything.
+	_, stderr := runOKStderr(t, "--dry-run", "pass", "import", archive, "--passphrase-file", secret)
+	assertContains(t, stderr, "Dry run")
+
+	wrong := filepath.Join(dir, "wrong")
+	if err := os.WriteFile(wrong, []byte("nope"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, stderr, code := run(t, "pass", "import", archive, "--passphrase-file", wrong)
+	if code == 0 {
+		t.Error("the wrong passphrase opened the archive")
+	}
+	assertContains(t, stderr, "passphrase")
+}
+
+// An alias is a route rather than a mailbox of its own, so what an account can
+// build one out of - where it arrives, and what comes after the @ - is worth
+// being able to see.
+func TestPassAliasMailboxesAndDomains(t *testing.T) {
+	t.Parallel()
+
+	boxes := runJSONArray(t, "pass", "settings", "mailboxes", "list")
+	if len(boxes) == 0 {
+		t.Fatal("an account always forwards its aliases somewhere, but no mailbox came back")
+	}
+	first, _ := boxes[0].(map[string]interface{})
+	if email, _ := first["email"].(string); !strings.Contains(email, "@") {
+		t.Errorf("a mailbox should be an address, got %q", email)
+	}
+	// The one an alias goes to by default has to be usable, or nothing arrives.
+	verified := false
+	for _, row := range boxes {
+		m, _ := row.(map[string]interface{})
+		if d, _ := m["default"].(bool); d {
+			verified, _ = m["verified"].(bool)
+		}
+	}
+	if !verified {
+		t.Error("the default mailbox is not verified, so aliases would receive nothing")
+	}
+
+	domains := runJSONArray(t, "pass", "settings", "domains", "list")
+	if len(domains) == 0 {
+		t.Fatal("no alias domain came back, so no alias could be made")
+	}
+	for _, row := range domains {
+		d, _ := row.(map[string]interface{})
+		if name, _ := d["domain"].(string); !strings.Contains(name, ".") {
+			t.Errorf("a domain should look like one, got %q", name)
+		}
+	}
+}
+
+// A reply to mail an alias forwarded would leave from the real address and give
+// the alias away. A contact is the address that stops that happening, so what
+// this checks is that Proton hands one back.
+func TestPassAliasContacts(t *testing.T) {
+	t.Parallel()
+	alias, _ := makeAlias(t)
+
+	// Listing works on any plan; making one does not. A new alias has none.
+	if rows := runJSONArray(t, "pass", "aliases", "contacts", "list", alias); len(rows) != 0 {
+		t.Fatalf("a new alias should have no contacts, got %d", len(rows))
+	}
+
+	email := fmt.Sprintf("pcli-%d@example.com", time.Now().UnixNano()%1_000_000_000)
+	stdout, stderr, code := run(t, "pass", "aliases", "contacts", "create", "--name", "Seller", alias, email)
+	skipIfPlanRefuses(t, aliasContacts, code, stderr)
+	if code != 0 {
+		t.Fatalf("creating a contact failed (exit %d): %s", code, truncateOutput(stderr))
+	}
+	id := strings.TrimSpace(stdout)
+	cleanupRun(t, fmt.Sprintf("Delete alias contact: proton pass aliases contacts delete %s %s", alias, id),
+		"pass", "aliases", "contacts", "delete", alias, id)
+
+	// The address Proton mints is the whole point of the feature.
+	assertContains(t, stderr, "Write to")
+
+	shown := runOK(t, "pass", "aliases", "contacts", "list", alias)
+	assertContains(t, shown, email)
+
+	runOK(t, "pass", "aliases", "contacts", "block", alias, id)
+	assertContains(t, runOK(t, "pass", "aliases", "contacts", "list", alias), "yes")
+	runOK(t, "pass", "aliases", "contacts", "allow", alias, id)
+}
+
+// Only an alias has contacts, and saying so costs no request.
+func TestPassAliasContactsRefuseANonAlias(t *testing.T) {
+	t.Parallel()
+	_, stderr, code := run(t, "pass", "aliases", "contacts", "list", "GitHub")
+	if code == 0 {
+		t.Fatal("a login is not an alias, but listing its contacts was allowed")
+	}
+	assertContains(t, stderr, "not an alias")
 }

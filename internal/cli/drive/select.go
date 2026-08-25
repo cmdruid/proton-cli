@@ -28,15 +28,35 @@ type filters struct {
 	all         bool
 }
 
-func (f *filters) register(c *cobra.Command) {
-	fl := c.Flags()
+// registerNarrowing adds the flags that say which items, and nothing else.
+//
+// `list` and every bulk verb register the same set, which is what lets a filter
+// be read with the command that only reads before it is handed to one that
+// removes. A dry run is a preview of a change; `list` is where a filter is
+// worked out in the first place.
+func (f *filters) registerNarrowing(fl kit.Flags) {
 	fl.StringVar(&f.pattern, "pattern", "", "Match names against a shell glob, e.g. *.tmp")
 	fl.StringVar(&f.largerThan, "larger-than", "", "Match files above SIZE (e.g. 100MB, 2GB)")
 	fl.StringVar(&f.smallerThan, "smaller-than", "", "Match files below SIZE")
-	fl.StringVar(&f.scope, "scope", "", "Look only inside this folder (default: the whole drive)")
 	f.age.Register(fl, "files")
 	fl.BoolVar(&f.recursive, "recursive", false, "Descend into subfolders when filtering")
-	fl.BoolVar(&f.all, "all", false, "Confirm that no narrowing filter means everything in scope")
+}
+
+// register adds what a bulk verb needs on top: where to look, which `list` says
+// with its PATH argument instead, and --all.
+func (f *filters) register(c *cobra.Command) {
+	fl := c.Flags()
+	f.registerNarrowing(fl)
+	fl.StringVar(&f.scope, "scope", "", "Look only inside this folder (default: the whole drive)")
+	kit.All(fl, &f.all)
+}
+
+// narrowed reports whether the user asked for a subset of what is there, which
+// is the question `list` asks: it decides both whether to walk the tree and
+// whether an empty answer means an empty folder or an unmatched filter.
+func (f *filters) narrowed() bool {
+	return f.pattern != "" || f.largerThan != "" || f.smallerThan != "" ||
+		f.age.Set() || f.recursive
 }
 
 func (f *filters) set() bool {

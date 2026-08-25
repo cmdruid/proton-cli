@@ -12,7 +12,8 @@ import (
 
 func vaultsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "vaults", Short: "The vaults your items live in"}
-	c.AddCommand(vaultsListCmd(), vaultsCreateCmd(), vaultsUpdateCmd(), vaultsDeleteCmd())
+	c.AddCommand(vaultsListCmd(), vaultsGetCmd(), vaultsShareCmd(), vaultsCreateCmd(),
+		vaultsUpdateCmd(), vaultsDeleteCmd())
 	return c
 }
 
@@ -82,24 +83,62 @@ func vaultsCreateCmd() *cobra.Command {
 }
 
 func vaultsUpdateCmd() *cobra.Command {
-	var name string
+	var name, description string
+	icon := &kit.Enum{
+		Name: "icon", Usage: "Which of Pass's icons represents it",
+		Values: passsvc.VaultIcons(),
+	}
+	colour := &kit.Enum{
+		Name: "color", Usage: "Which of Pass's vault colors it takes",
+		Values: passsvc.VaultColors(),
+	}
 	c := &cobra.Command{
 		Use:   "update REF",
-		Short: "Rename a vault",
-		Args:  cobra.ExactArgs(1),
+		Short: "Rename a vault, or change how it looks",
+		Long: "Rename a vault, or change how it looks.\n\n" +
+			"Pass shows its icons and colors as a grid with no names, so the numbers are\n" +
+			"what there is: --icon 7, --color 3. Anything not mentioned is left alone,\n" +
+			"including a description written in the Pass app.",
+		Args: cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
-			if name == "" {
-				return kit.Fail("Nothing to change.").Hint("pass --name.")
+			iconValue, err := icon.Value()
+			if err != nil {
+				return err
+			}
+			colourValue, err := colour.Value()
+			if err != nil {
+				return err
+			}
+			var patch passsvc.VaultPatch
+			if c.Changed("name") {
+				patch.Name = &name
+			}
+			if c.Changed("description") {
+				patch.Description = &description
+			}
+			if n, err := strconv.Atoi(iconValue); err == nil {
+				patch.Icon = &n
+			}
+			if n, err := strconv.Atoi(colourValue); err == nil {
+				patch.Color = &n
+			}
+			if patch.Name == nil && patch.Description == nil &&
+				patch.Icon == nil && patch.Color == nil {
+				return kit.Fail("Nothing to change.").
+					Hint("pass --name, --description, --icon or --color.")
 			}
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Updated, Kind: "vaults", Count: 1, Name: name,
 				IDs: []string{c.Args[0]},
 			}, func() error {
-				return c.App.Pass.VaultEdit(c.Ctx, c.Args[0], name)
+				return c.App.Pass.VaultEdit(c.Ctx, c.Args[0], patch)
 			})
 		}),
 	}
 	c.Flags().StringVar(&name, "name", "", "New name")
+	c.Flags().StringVar(&description, "description", "", "What the vault is for")
+	icon.Register(c)
+	colour.Register(c)
 	return c
 }
 
@@ -127,4 +166,42 @@ func vaultsDeleteCmd() *cobra.Command {
 			})
 		}),
 	}
+}
+
+// A vault has more to it than a listing has room for: what it is for, and which
+// of Pass's icons and colours it took.
+func vaultsGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get REF",
+		Short: "Show one vault in full",
+		Args:  cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			v, err := vaultList(c).Find(c.Ctx, c.Args[0])
+			if err != nil {
+				return err
+			}
+			return kit.Show(c, ui.RecordSpec{
+				Object: v,
+				Fields: []ui.Field{
+					{Label: "Name", Value: v.Name},
+					{Label: "Description", Value: v.Description},
+					{Label: "Icon", Value: displayNumber(v.Icon)},
+					{Label: "Color", Value: displayNumber(v.Color)},
+					{Label: "Members", Value: strconv.Itoa(v.Members)},
+					{Label: "Owner", Value: yesNo(v.Owner), Always: true},
+					{Label: "Shared", Value: yesNo(v.Shared), Always: true},
+					{Label: "ID", Value: v.ShareID, ID: true},
+				},
+			})
+		}),
+	}
+}
+
+// displayNumber renders a vault's icon or colour. Zero is a vault that never
+// chose, which is a fact rather than the number nought.
+func displayNumber(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
 }

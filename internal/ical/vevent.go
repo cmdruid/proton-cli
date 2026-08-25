@@ -65,6 +65,45 @@ type VEvent struct {
 	Summary     string
 	Location    string
 	Description string
+	// Status is the event's own state - CONFIRMED, TENTATIVE or CANCELLED - which
+	// says whether it is going ahead. It is distinct from an attendee's PARTSTAT,
+	// which says whether one person is coming. Empty means the event never said,
+	// which every client reads as confirmed.
+	Status string
+	// Alarms are the reminders. Proton stores them beside the event rather than
+	// inside its cards, so they are only set where they matter: a file somebody
+	// else's client will open.
+	Alarms []Alarm
+}
+
+// Alarm is a reminder, as iCalendar writes one.
+//
+// Action is DISPLAY or EMAIL, and Trigger is the offset from the start, negative
+// for a reminder before it ("-PT15M").
+type Alarm struct {
+	Action  string
+	Trigger string
+}
+
+func (a Alarm) lines() []contentline.Line {
+	action := a.Action
+	if action == "" {
+		action = "DISPLAY"
+	}
+	lines := []contentline.Line{
+		{Name: "BEGIN", Value: "VALARM"},
+		{Name: "ACTION", Value: action},
+		{Name: "TRIGGER", Value: a.Trigger},
+	}
+	// An emailed reminder has to say something, and every client requires the
+	// two properties even when it shows neither.
+	if action == "EMAIL" {
+		lines = append(lines,
+			contentline.Line{Name: "SUMMARY", Value: contentline.EscapeText("Reminder")},
+			contentline.Line{Name: "DESCRIPTION", Value: contentline.EscapeText("Reminder")},
+		)
+	}
+	return append(lines, contentline.Line{Name: "END", Value: "VALARM"})
 }
 
 // Recurring reports whether the event carries a rule, and so stands for more
@@ -186,6 +225,8 @@ func (v *VEvent) set(l contentline.Line) error {
 		v.Location = contentline.UnescapeText(l.Value)
 	case "DESCRIPTION":
 		v.Description = contentline.UnescapeText(l.Value)
+	case "STATUS":
+		v.Status = strings.ToUpper(l.Value)
 	}
 	return nil
 }
@@ -261,6 +302,9 @@ func (v VEvent) SharedEncrypted() string {
 	}
 	if v.Description != "" {
 		lines = append(lines, contentline.Line{Name: "DESCRIPTION", Value: contentline.EscapeText(v.Description)})
+	}
+	if v.Status != "" {
+		lines = append(lines, contentline.Line{Name: "STATUS", Value: v.Status})
 	}
 	return component(lines)
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
+	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
@@ -269,37 +270,40 @@ func (s *Service) PhotoUpload(ctx context.Context, dc *Context, name string, r i
 	return s.Upload(ctx, dc, plan, bytes.NewReader(data), opts)
 }
 
-// AlbumCreate creates a new (unlocked) photo album.
-func (s *Service) AlbumCreate(ctx context.Context, dc *Context, name string) error {
+// AlbumCreate creates a new (unlocked) photo album and returns its link ID.
+func (s *Service) AlbumCreate(ctx context.Context, dc *Context, name string) (string, error) {
 	root, rootKR, err := s.photosRoot(ctx, dc)
 	if err != nil {
-		return err
+		return "", err
 	}
 	hashKey, err := hashKeyOf(root, rootKR)
 	if err != nil {
-		return err
+		return "", err
 	}
 	hash, err := lookupHash(strings.ToLower(name), hashKey)
 	if err != nil {
-		return err
+		return "", err
 	}
 	encName, err := encryptName(name, rootKR, dc.AddrKR)
 	if err != nil {
-		return err
+		return "", err
 	}
 	nodeKey, nodePass, nodePassSig, nodePriv, err := genNodeKeys(rootKR, dc.AddrKR)
 	if err != nil {
-		return err
+		return "", err
 	}
 	nodeKR, err := pgp.NewKeyRing(nodePriv)
 	if err != nil {
-		return err
+		return "", err
 	}
 	_, nodeHashKey, err := genNodeHashKey(nodeKR, nodeKR)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return s.C.Decode(ctx, proton.Request{
+	var r struct {
+		Album struct{ Link struct{ LinkID string } }
+	}
+	if err := s.C.Decode(ctx, proton.Request{
 		Method: "POST", Path: fmt.Sprintf("/drive/photos/volumes/%s/albums", dc.VolumeID),
 		Body: map[string]any{
 			"Locked": false,
@@ -310,7 +314,10 @@ func (s *Service) AlbumCreate(ctx context.Context, dc *Context, name string) err
 				"NodeKey":        nodeKey, "NodeHashKey": nodeHashKey,
 			},
 		},
-	}, nil)
+	}, &r); err != nil {
+		return "", err
+	}
+	return r.Album.Link.LinkID, nil
 }
 
 // AlbumAddPhotos adds existing timeline photos to an album. Each photo's node
@@ -582,4 +589,29 @@ func (s *Service) photoContentHash(link *Link, parentKR *pgp.KeyRing, rootHashKe
 		return "", fmt.Errorf("photo %s has no content hash and no SHA-1 digest to recompute it", link.LinkID)
 	}
 	return lookupHash(x.Common.Digests.SHA1, rootHashKey)
+}
+
+// AlbumSetCover chooses which of an album's photos represents it.
+//
+// The cover is a plain reference to a photo already in the album, so nothing is
+// re-encrypted and nothing moves: it is the album saying which of its own
+// children to show.
+func (s *Service) AlbumSetCover(ctx context.Context, dc *Context, albumLinkID, photoLinkID string) error {
+	photos, err := s.AlbumItems(ctx, dc, albumLinkID)
+	if err != nil {
+		return err
+	}
+	// A cover that is not in the album would be a reference the album cannot
+	// resolve, so it is refused here rather than stored and shown as a gap.
+	for _, p := range photos {
+		if p.LinkID == photoLinkID {
+			return s.C.Decode(ctx, proton.Request{
+				Method: "PUT",
+				Path:   fmt.Sprintf("/drive/photos/volumes/%s/albums/%s", dc.VolumeID, albumLinkID),
+				Body:   map[string]any{"CoverLinkID": photoLinkID},
+			}, nil)
+		}
+	}
+	return errs.Problemf("that photo is not in the album.").
+		Hint("`drive photos list --album " + albumLinkID + "` shows what is.").Exit(3)
 }

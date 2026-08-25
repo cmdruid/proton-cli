@@ -15,7 +15,7 @@ import (
 
 func aliasesCmd() *cobra.Command {
 	c := &cobra.Command{Use: "aliases", Short: "Hide-my-email addresses that forward to you"}
-	c.AddCommand(aliasesListCmd(), aliasesCreateCmd(), aliasesOptionsCmd(),
+	c.AddCommand(aliasesListCmd(), aliasesCreateCmd(), aliasesOptionsCmd(), aliasContactsCmd(),
 		aliasesToggleCmd("enable", "Start receiving mail sent to an alias", ui.Enabled, true),
 		aliasesToggleCmd("disable", "Stop receiving mail sent to an alias", ui.Disabled, false))
 	return c
@@ -149,7 +149,12 @@ func aliasesOptionsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "options",
 		Short: "List the suffixes and mailboxes an alias can use",
-		Args:  cobra.NoArgs,
+		Long: "List the suffixes and mailboxes an alias can use.\n\n" +
+			"A suffix is the domain an address can be made on. Proton puts a word of\n" +
+			"its own in front of it, picks a new one every time it is asked, and only\n" +
+			"settles on one when the alias is created - so what is listed here is the\n" +
+			"part that lasts, and the part `--suffix` takes.",
+		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			shareID, err := resolveVault(c, "")
 			if err != nil {
@@ -160,8 +165,16 @@ func aliasesOptionsCmd() *cobra.Command {
 				return err
 			}
 			rows := make([]option, 0, len(suffixes)+len(mailboxes))
+			// The domain, not the whole suffix. Proton mints the word before it
+			// afresh on every request, so the full form is out of date by the
+			// time it is read, and passing it back is refused.
+			seen := make(map[string]bool, len(suffixes))
 			for _, s := range suffixes {
-				rows = append(rows, option{Kind: "suffix", Value: s.Suffix})
+				if seen[s.Domain] {
+					continue
+				}
+				seen[s.Domain] = true
+				rows = append(rows, option{Kind: "suffix", Value: s.Domain})
 			}
 			for _, m := range mailboxes {
 				rows = append(rows, option{Kind: "mailbox", Value: m.Email, ID: strconv.Itoa(m.ID)})

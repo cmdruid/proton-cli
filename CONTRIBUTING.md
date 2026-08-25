@@ -63,7 +63,8 @@ export PROTON_CLI_TEST_SECONDARY_USER=secondary@proton.me
 export PROTON_CLI_TEST_SECONDARY_PASSWORD=...
 
 just test-one TestMailSendAndRead    # a single integration test
-just test                            # everything
+just test                            # every test that runs on the two free accounts
+just test-all                        # those, then the ones needing a paid plan
 ```
 
 `just login` and `just seed` sign the accounts in and fill them, for working with them by hand.

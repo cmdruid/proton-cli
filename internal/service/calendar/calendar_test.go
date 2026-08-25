@@ -388,3 +388,101 @@ func testKeys(u *keys.Unlocked) keys.Get {
 		return u, nil
 	}
 }
+
+// A reminder says how it is delivered by what follows the colon, and a bare
+// duration is the notification the composer defaults to.
+func TestBuildRemindersCarriesTheDeliveryKind(t *testing.T) {
+	out, err := buildReminders([]string{"15m", "1d:email", "2h:notification"})
+	if err != nil {
+		t.Fatalf("buildReminders: %v", err)
+	}
+	want := []struct {
+		kind    int
+		trigger string
+	}{{1, "-PT15M"}, {0, "-P1D"}, {1, "-PT120M"}}
+	for i, w := range want {
+		if out[i]["Type"] != w.kind || out[i]["Trigger"] != w.trigger {
+			t.Errorf("reminder %d = %v, want Type %d Trigger %s", i, out[i], w.kind, w.trigger)
+		}
+	}
+	if _, err := buildReminders([]string{"15m:carrier-pigeon"}); err == nil {
+		t.Error("an unknown delivery should be refused")
+	}
+}
+
+// What a listing prints is what --remind would accept, so an event can be read
+// and recreated without translating anything by hand.
+func TestReminderTextRoundTripsThroughTheTrigger(t *testing.T) {
+	for _, spec := range []string{"15m", "1h", "1d", "2d:email", "90m:email"} {
+		built, err := buildReminders([]string{spec})
+		if err != nil {
+			t.Fatalf("%q: %v", spec, err)
+		}
+		got := ReminderText(built[0]["Type"].(int), built[0]["Trigger"].(string))
+		again, err := buildReminders([]string{got})
+		if err != nil {
+			t.Fatalf("%q rendered as %q, which is not accepted: %v", spec, got, err)
+		}
+		if again[0]["Trigger"] != built[0]["Trigger"] || again[0]["Type"] != built[0]["Type"] {
+			t.Errorf("%q rendered as %q, which means something else: %v", spec, got, again[0])
+		}
+	}
+}
+
+// Proton's other clients write triggers this one does not, so reading has to
+// cover more shapes than writing.
+func TestTriggerDurationReadsWhatOtherClientsWrite(t *testing.T) {
+	for _, c := range []struct {
+		trigger string
+		want    time.Duration
+	}{
+		{"-PT15M", 15 * time.Minute},
+		{"-P1D", 24 * time.Hour},
+		{"-P1W", 7 * 24 * time.Hour},
+		{"-PT1H30M", 90 * time.Minute},
+		{"-P1DT2H", 26 * time.Hour},
+		{"-PT30S", 30 * time.Second},
+	} {
+		if got := triggerDuration(c.trigger); got != c.want {
+			t.Errorf("triggerDuration(%q) = %v, want %v", c.trigger, got, c.want)
+		}
+	}
+}
+
+// An attendee says how much their presence matters by what follows the colon,
+// and a bare address is required - which is what inviting someone ordinarily
+// means.
+func TestAttendeeRoleReadsTheSuffix(t *testing.T) {
+	for _, c := range []struct{ in, email, role string }{
+		{"jane@example.com", "jane@example.com", roleRequired},
+		{"jane@example.com:optional", "jane@example.com", roleOptional},
+		{"jane@example.com:required", "jane@example.com", roleRequired},
+		{"  jane@example.com : optional ", "jane@example.com", roleOptional},
+	} {
+		email, role, err := attendeeRole(c.in)
+		if err != nil {
+			t.Errorf("attendeeRole(%q): %v", c.in, err)
+			continue
+		}
+		if email != c.email || role != c.role {
+			t.Errorf("attendeeRole(%q) = %q/%q, want %q/%q", c.in, email, role, c.email, c.role)
+		}
+	}
+	if _, _, err := attendeeRole("jane@example.com:maybe"); err == nil {
+		t.Error("an unknown role should be refused rather than silently ignored")
+	}
+}
+
+// What a listing prints is what --attendee accepts, so a participant can be read
+// back into a command.
+func TestAttendeeTextRoundTrips(t *testing.T) {
+	for _, in := range []string{"jane@example.com", "jane@example.com:optional"} {
+		email, role, err := attendeeRole(in)
+		if err != nil {
+			t.Fatalf("%q: %v", in, err)
+		}
+		if got := AttendeeText(email, role); got != in {
+			t.Errorf("AttendeeText round-tripped %q as %q", in, got)
+		}
+	}
+}

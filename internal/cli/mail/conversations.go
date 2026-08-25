@@ -2,8 +2,10 @@ package mail
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/ical"
 	"github.com/roman-16/proton-cli/internal/mailtext"
 	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
 	"github.com/roman-16/proton-cli/internal/ui"
@@ -18,74 +20,61 @@ import (
 func conversationsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "conversations", Short: "Whole threads"}
 	c.AddCommand(
-		convListCmd(), convSearchCmd(), convGetCmd(), conversationExportCmd(),
+		convListCmd(), convGetCmd(), conversationExportCmd(),
 		convReplyCmd(), convForwardCmd(),
 		convMoveCmd(), convLabelCmd(), convUnlabelCmd(),
 		convStarCmd(), convUnstarCmd(), convMarkCmd(),
 		convTrashCmd(), convDeleteCmd(), convAttachmentsCmd(),
+		convSnoozeCmd(), convUnsnoozeCmd(),
 	)
 	return c
 }
 
 func convListCmd() *cobra.Command {
-	var opts mailsvc.ListOptions
+	var f filters
 	c := &cobra.Command{
 		Use:   "list",
 		Short: "List threads in a folder",
-		Args:  cobra.NoArgs,
+		Long: "List threads in a folder.\n\n" +
+			"The filters are the ones every organising verb takes, so a selection can be\n" +
+			"read here and then handed to one of them. Text predicates go through Proton's\n" +
+			"index, which lags a change by a few seconds.\n\n" +
+			"It looks in the inbox unless told otherwise; --folder all searches everything.",
+		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
+			opts, err := f.list()
+			if err != nil {
+				return err
+			}
 			convs, total, err := c.App.Mail.ConversationsList(c.Ctx, opts)
 			if err != nil {
 				return err
 			}
-			return kit.List(c, ui.TableSpec[mailsvc.Conversation]{
-				Noun: "conversations", Columns: conversationColumns(),
-				Total: total, Page: opts.Page, PageSize: opts.PageSize,
-				Filtered: opts.Unread,
-			}, convs, func(cv mailsvc.Conversation) []string { return []string{cv.ID} })
-		}),
-	}
-	registerFolder(c, &opts.Folder, "inbox")
-	c.Flags().IntVar(&opts.Page, "page", 0, "Which page of results, counting from zero")
-	c.Flags().IntVar(&opts.PageSize, "page-size", 25, "How many threads per page")
-	c.Flags().BoolVar(&opts.Unread, "unread", false, "Show only threads with something unread")
-	return c
-}
-
-func convSearchCmd() *cobra.Command {
-	var opts mailsvc.SearchOptions
-	c := &cobra.Command{
-		Use:   "search",
-		Short: "Search threads through Proton's index",
-		Args:  cobra.NoArgs,
-		RunE: kit.Run(nil, func(c *kit.Invocation) error {
-			convs, _, err := c.App.Mail.ConversationsSearch(c.Ctx, opts)
-			if err != nil {
-				return err
-			}
+			convs = keepStarred(convs, f.starred)
 			if len(convs) == 0 {
 				addressOnlyHint(c, opts.Keyword, opts.From, opts.To)
 			}
 			return kit.List(c, ui.TableSpec[mailsvc.Conversation]{
 				Noun: "conversations", Columns: conversationColumns(),
-				Total: ui.Unknown, Page: ui.Unpaged, Limit: opts.Limit,
-				Filtered: true,
+				Total: total, Page: opts.Page, PageSize: opts.PageSize,
+				Filtered: f.narrowed(),
 			}, convs, func(cv mailsvc.Conversation) []string { return []string{cv.ID} })
 		}),
 	}
-	registerSearchFlags(c, &opts)
+	f.registerNarrowing(c, "inbox")
+	registerPaging(c, &f.page, &f.pageSize, "threads")
 	return c
 }
 
 func convGetCmd() *cobra.Command {
 	var bodyOnly, stripQuotes, includeInline, summary bool
-	format := bodyFormat()
+	render := bodyRendering()
 	c := &cobra.Command{
 		Use:   "get REF",
 		Short: "Show a whole thread, decrypted",
 		Args:  cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
-			shape, err := format.Value()
+			shape, err := render.Value()
 			if err != nil {
 				return err
 			}
@@ -103,7 +92,7 @@ func convGetCmd() *cobra.Command {
 			return kit.Read(c, threadDocument(conv, shape, bodyOnly, stripQuotes, includeInline))
 		}),
 	}
-	format.Register(c)
+	render.Register(c)
 	c.Flags().BoolVar(&bodyOnly, "body-only", false, "Emit only the bodies, with no headers or dividers")
 	c.Flags().BoolVar(&stripQuotes, "strip-quotes", false, "Drop quoted reply blocks from each body")
 	c.Flags().BoolVar(&includeInline, "include-inline", false, "List inline attachments too")
@@ -378,7 +367,7 @@ func convAnswerCmd(use, short string, forward bool) *cobra.Command {
 	if forward {
 		c.Flags().BoolVar(&noAttachments, "no-attachments", false, "Leave the original's attachments behind")
 	} else {
-		c.Flags().BoolVar(&replyAll, "all", false, "Reply to everyone who was on the message")
+		c.Flags().BoolVar(&replyAll, "everyone", false, "Reply to everyone who was on the message, not just the sender")
 	}
 	return c
 }
@@ -493,5 +482,92 @@ func convAttachmentsDownloadCmd() *cobra.Command {
 	}
 	dest.Register(c)
 	c.Flags().BoolVar(&includeInline, "include-inline", false, "Include inline attachments")
+	return c
+}
+
+// ── snooze ──
+
+// Snooze takes threads out of the inbox until a moment and brings them back
+// then, which is what the web's snooze does.
+//
+// It is on threads and not on messages because that is what Proton snoozes: a
+// conversation leaves the inbox as a whole and returns as a whole.
+func convSnoozeCmd() *cobra.Command {
+	var f filters
+	var until string
+	c := &cobra.Command{
+		Use:   "snooze [REF...]",
+		Short: "Take threads out of the inbox until later",
+		Long: "Take threads out of the inbox until later.\n\n" +
+			"--until takes a duration from now, such as 3d, or a moment written out\n" +
+			"in full, such as 2026-04-17T09:00. The thread returns to the inbox then,\n" +
+			"unread.",
+		Args: cobra.ArbitraryArgs,
+		RunE: kit.Run([]kit.Step{
+			kit.StepSelection(f.set, filterHint, "a whole folder"), kit.StepExpand,
+		}, func(c *kit.Invocation) error {
+			at, err := snoozeMoment(until)
+			if err != nil {
+				return err
+			}
+			sel, err := selectConversations(c, &f)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Snoozed, Kind: "conversations", Count: sel.Len(), IDs: sel.IDs,
+				Detail: "until " + units.Time(at), Preview: sel.Preview(),
+			}, func() error {
+				return c.App.Mail.Snooze(c.Ctx, sel.IDs, at)
+			})
+		}),
+	}
+	c.Flags().StringVar(&until, "until", "", "When they come back (e.g. 3d, or 2026-04-17T09:00)")
+	f.register(c)
+	return c
+}
+
+// snoozeMoment reads either spelling of "when", judged before the network.
+func snoozeMoment(until string) (int64, error) {
+	if until == "" {
+		return 0, kit.Fail("Until when?").
+			Hint("--until 3d, or --until 2026-04-17T09:00")
+	}
+	if d, err := units.ParseDuration(until); err == nil {
+		return time.Now().Add(d).Unix(), nil
+	}
+	at, err := ical.ParseTime(until, time.Local)
+	if err != nil {
+		return 0, kit.Fail("--until: %v", err).
+			Hint("a duration such as 3d, or a moment such as 2026-04-17T09:00")
+	}
+	if !at.After(time.Now()) {
+		return 0, kit.Fail("--until is in the past.")
+	}
+	return at.Unix(), nil
+}
+
+func convUnsnoozeCmd() *cobra.Command {
+	var f filters
+	c := &cobra.Command{
+		Use:   "unsnooze [REF...]",
+		Short: "Bring snoozed threads back to the inbox now",
+		Args:  cobra.ArbitraryArgs,
+		RunE: kit.Run([]kit.Step{
+			kit.StepSelection(f.set, filterHint, "a whole folder"), kit.StepExpand,
+		}, func(c *kit.Invocation) error {
+			sel, err := selectConversations(c, &f)
+			if err != nil {
+				return err
+			}
+			return kit.Mutate(c, ui.ResultSpec{
+				Action: ui.Unsnoozed, Kind: "conversations", Count: sel.Len(), IDs: sel.IDs,
+				Preview: sel.Preview(),
+			}, func() error {
+				return c.App.Mail.Unsnooze(c.Ctx, sel.IDs)
+			})
+		}),
+	}
+	f.register(c)
 	return c
 }

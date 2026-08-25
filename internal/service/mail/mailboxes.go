@@ -45,13 +45,25 @@ var systemFolders = map[string]string{
 	"archive":   labelArchive,
 	"starred":   labelStarred,
 	"scheduled": labelScheduled,
+	"snoozed":   labelSnoozed,
 	"all":       labelAllMail,
+	// The inbox categories. Proton shows them as tabs, and a tab is a place mail
+	// is, so they are folders here like any other.
+	"social":       labelSocial,
+	"promotions":   labelPromotions,
+	"updates":      labelUpdates,
+	"newsletters":  labelNewsletters,
+	"transactions": labelTransactions,
 }
 
 // SystemFolderNames lists the built-in folder names, for help text and
 // completion.
 func SystemFolderNames() []string {
-	return []string{"inbox", "drafts", "sent", "trash", "spam", "archive", "starred", "scheduled", "all"}
+	return []string{
+		"inbox", "drafts", "sent", "trash", "spam", "archive", "starred",
+		"scheduled", "snoozed", "all",
+		"social", "promotions", "updates", "newsletters", "transactions",
+	}
 }
 
 // ResolveFolder maps a folder alias to its label ID, passing anything unknown

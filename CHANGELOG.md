@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Adding a version section here is what publishes a release, so this file is the one place a version is decided: see [Releases](CONTRIBUTING.md#releases). Versions that shipped before this file existed are on the [releases page](https://github.com/roman-16/proton-cli/releases).
 
+## [2.6.0] - 2026-08-26
+
+### Added
+
+- Calendar sharing: `calendar settings calendars share add|list|remove` hands a calendar to another Proton account, and `calendar invitations list|accept|decline` is the other side of it.
+- `calendar settings calendars create --url` subscribes to a calendar published elsewhere, and `calendar settings calendars get` shows one in full.
+- `calendar events export` and `calendar events import PATH` read and write `.ics` files. An import is addressed by each event's UID, so exporting, editing and importing back is a restore rather than a second copy.
+- Events take `--end`, `--status`, optional attendees, and reminders that email rather than notify.
+- `contacts export` and `contacts import PATH` read and write vCard files, addressed by UID the same way.
+- `contacts merge` folds duplicate contacts into one, and `contacts groups get` shows which addresses are in a group.
+- Contact values can say what kind they are - `--email work:jane@acme.com` - and eleven more fields are settable, among them the organization, the title and the birthday.
+- Vault sharing: `pass vaults share add|list|remove` and `pass invitations list|accept|decline`.
+- `pass export` and `pass import PATH` write and read a Proton Pass archive, the same zip the web client produces. Without a passphrase the archive is not encrypted, and says so as it writes.
+- `pass links create|list|revoke` shows one item to somebody without a Proton account, for a while or a number of views.
+- `pass breaches list|get` reports which of your addresses have turned up in somebody else's data breach.
+- `pass aliases contacts create|list|block|allow|delete` gives an alias an address per correspondent, so a reply leaves as the alias instead of the mailbox behind it.
+- `pass settings mailboxes list|create|verify|resend|update|delete` manages where aliases forward, and `pass settings domains list` shows what an alias can be made on.
+- `pass items revisions list`, `pass items pin|unpin`, `pass items totp`, `pass vaults get`, and `pass generate` for a password.
+- Items take custom sections: `--field SECTION/NAME=VALUE`, `--hidden` for a secret one, and `--totp-field` for a second code. An identity takes all 31 of its fields, not 13.
+- `pass vaults create` and `update` take `--description`, `--icon` and `--color`.
+- `mail settings filters create --if "subject contains invoice" --move-to Archive` describes a filter in conditions and actions and lets Proton write the Sieve; `--sieve` still takes a script of your own. `filters get` shows an existing one in the same words, and `filters update` rewrites a rule in place, keeping its position in the order.
+- `mail settings filters apply` runs filters over mail already in the mailbox, and `filters reorder` sets the order they run in.
+- `mail settings senders list|block|allow|spam|forget` manages the block and allow lists.
+- `mail conversations snooze|unsnooze` takes a thread out of the inbox until a time you choose, and `snoozed` is addressable wherever a folder is - as are the categories Proton sorts into: `social`, `promotions`, `newsletters`, `transactions` and `updates`.
+- `mail messages expire` makes a message delete itself later, `mail messages unsubscribe` asks a mailing list to stop, and `mail messages empty --folder` empties a folder outright.
+- Five more mail settings: `next-message-on-move`, `pgp-scheme`, `remove-image-metadata`, `right-to-left` and `spam-action`.
+- `drive shared list` shows what you have shared and `drive sharing list` what others have shared with you. `drive items share update|resend` changes or resends an invitation, and `drive photos albums update --cover` sets an album's cover.
+- `PROTON_HV_HELPER` names a CAPTCHA helper to run instead of the built-in one, which is what lets a `go install` build verify at all.
+- `--passphrase-file` and `--passphrase-stdin` hand over a passphrase without putting it in the command line.
+
+### Changed
+
+- **Breaking.** `mail messages search` and `mail conversations search` are gone. `mail messages list` and `mail conversations list` take the same filters; they were always one request to Proton.
+- **Breaking.** `drive folders create` is now `drive items create`, and `drive share ...` is now `drive items share ...`. Update any scripts that call them.
+- The CAPTCHA window works on a Nix install. It opened blank saying "TLS support is not available", because nothing supplied the TLS backend GIO loads as a module.
+
+### Fixed
+
+- `contacts create` reports Proton's refusal instead of exiting `0` having written nothing. Proton answers inside a successful response, and only the response was being read.
+- `contacts groups add` puts every one of a contact's addresses in the group, as it always said it would, and `--email` acts on the address you named rather than one that happens to belong to another contact.
+- `pass aliases options` lists the domain an alias can be made on rather than a whole suffix. Proton mints the word in front of it afresh on every request, so what was listed had already stopped working by the time it could be typed back.
+- `drive photos albums create` prints the new album's ID instead of nothing.
+
 ## [2.5.0] - 2026-08-17
 
 ### Added

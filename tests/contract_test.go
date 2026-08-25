@@ -299,7 +299,7 @@ func TestDryRunLabelCreate(t *testing.T) {
 func TestDryRunFolderCreate(t *testing.T) {
 	t.Parallel()
 	path := "/" + testID() + "-dryrun"
-	_, stderr := runOKStderr(t, "--dry-run", "drive", "folders", "create", path)
+	_, stderr := runOKStderr(t, "--dry-run", "drive", "items", "create", path)
 	assertContains(t, stderr, "Dry run")
 
 	list := runOK(t, "drive", "items", "list")
@@ -375,7 +375,7 @@ func TestTrashOfANamedReferenceNeedsNoConsent(t *testing.T) {
 	t.Parallel()
 	lease(t, driveTrash)
 	path := "/" + testID() + "-consent-trash"
-	runOK(t, "drive", "folders", "create", path)
+	runOK(t, "drive", "items", "create", path)
 	cleanupRun(t, "Delete: proton drive items delete "+path,
 		"drive", "items", "delete", path)
 	// Taken before the trash, because a trashed item has no path any more - and

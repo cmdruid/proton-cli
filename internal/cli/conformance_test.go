@@ -160,126 +160,165 @@ func argTokens(use string) []string {
 // This is the rule that would have caught --all meaning four different things
 // and --html meaning three.
 var flagMeanings = map[string]string{
-	"address":          "a postal or street address",
-	"after":            "only things after a date",
-	"album":            "the photo album to act in",
-	"all":              "confirm that a filter-less selection really means everything in scope",
-	"all-day":          "an event with no time of day",
-	"attach":           "a file to attach",
-	"attach-inline":    "an image to embed in an HTML body by Content-ID",
-	"attendee":         "someone invited",
-	"bcc":              "a blind-carbon-copy recipient",
-	"before":           "only things before a date",
-	"birthdate":        "a date of birth",
-	"birthday":         "a date of birth",
-	"body":             "the message body",
-	"body-only":        "emit only the body",
-	"calendar":         "the calendar to act in",
-	"cc":               "a carbon-copy recipient",
-	"check":            "report without changing anything",
-	"city":             "a city",
-	"clear-signature":  "remove the signature",
-	"color":            "the accent colour to set",
-	"country":          "a country",
-	"cvv":              "a payment card verification number",
-	"days":             "the days a schedule is active",
-	"delete-photos":    "also remove the photos an album held",
-	"description":      "free-text description",
-	"detach":           "an attachment to remove",
-	"disabled":         "create without turning it on",
-	"display-name":     "the name recipients see",
-	"draft":            "save instead of sending",
-	"duration":         "how long something lasts",
-	"edit":             "grant edit rather than view access",
-	"email":            "an email address",
-	"eml":              "an RFC 822 file to build the message from",
-	"end":              "the end of a range or event",
-	"eo-password":      "password-protect the message for recipients outside Proton",
-	"eo-password-hint": "hint shown to password-protected recipients",
-	"expires":          "how long before it stops working",
-	"expiry":           "a payment card expiry date",
-	"field":            "a custom field, as NAME=VALUE",
-	"first-name":       "a given name",
-	"folder":           "the mail location to look in",
-	"force":            "overwrite a local file that already exists",
-	"format":           "the shape of the output",
-	"from":             "the sender: compose sets it, a filter matches it",
-	"full-name":        "a full name",
-	"future":           "extend the change to every later occurrence of a series",
-	"hidden":           "a hidden custom field, as NAME=VALUE",
-	"holder":           "the name on a payment card",
-	"html":             "treat the text as HTML rather than escaping it",
-	"include-inline":   "include inline attachments",
-	"into":             "the destination container of a move or copy",
-	"job-title":        "a job title",
-	"key":              "an armoured PGP key",
-	"keyword":          "full-text search term",
-	"label":            "the label to attach or detach",
-	"larger-than":      "select files above a size",
-	"last-name":        "a family name",
-	"limit":            "cap how many things are selected",
-	"location":         "where something is",
-	"mailbox":          "where mail to an alias should arrive",
-	"message":          "an accompanying note",
-	"name":             "the name to set",
-	"newer-than":       "select things newer than a duration",
-	"no-attachments":   "leave attachments out",
-	"no-quote":         "do not quote the message being answered",
-	"no-signature":     "leave the signature out",
-	"note":             "free-text note",
-	"number":           "a payment card number",
-	"older-than":       "select things older than a duration",
-	"organization":     "an organization name",
-	"others":           "act on every session but this one",
-	"output":           "where to write the payload; - is stdout",
-	"output-dir":       "a directory to fill, keeping each item's own name",
-	"page":             "which page of results",
-	"page-size":        "how many results per page",
-	"parent":           "the containing folder",
-	"password":         "a password",
-	"password-file":    "where to read the account password from",
-	"password-stdin":   "read the account password from stdin",
-	"pattern":          "select by glob against the name",
-	"phone":            "a phone number",
-	"pin":              "a payment card PIN",
-	"postal-code":      "a postal code",
-	"prefix":           "the local part of an alias",
-	"private-key":      "a private key",
-	"public-key":       "a public key",
-	"purge":            "also remove local data",
-	"query":            "a URL query parameter",
-	"recursive":        "descend into subdirectories",
-	"reinstall":        "install again even if already current",
-	"remind":           "a reminder before the start",
-	"repeat":           "how a schedule repeats",
-	"revoke":           "also invalidate the session at Proton",
-	"rrule":            "an iCalendar recurrence rule",
-	"scope":            "the Drive subtree to look in",
-	"security":         "a Wi-Fi security protocol",
-	"send-at":          "when to deliver",
-	"sieve":            "a Sieve script",
-	"smaller-than":     "select files below a size",
-	"ssid":             "a Wi-Fi network name",
-	"starred":          "select starred things",
-	"start":            "the beginning of a range or event",
-	"status":           "the state to set",
-	"strip-quotes":     "drop quoted reply blocks",
-	"subject":          "the subject line: compose sets it, a filter matches it",
-	"suffix":           "the domain part of an alias",
-	"summary":          "one line per item instead of the whole thing",
-	"tag":              "the photo tag to select",
-	"title":            "a title: an event's, or a person's job title",
-	"to":               "an email recipient: compose sets one, a filter matches one",
-	"totp":             "a two-factor code",
-	"totp-uri":         "a TOTP URI or secret, stored on a Pass login",
-	"type":             "the kind of thing to create or select",
-	"unread":           "select unread things",
-	"url":              "a URL",
-	"username":         "a login username",
-	"vault":            "the Pass vault to act in",
-	"website":          "a website address",
-	"yes":              "proceed without asking",
-	"zone":             "an IANA time zone",
+	"address":                "a postal or street address",
+	"after":                  "only things after a date",
+	"album":                  "the photo album to act in",
+	"all":                    "act on everything in the command's scope, rather than a subset",
+	"all-day":                "an event with no time of day",
+	"anniversary":            "a date being commemorated",
+	"answer":                 "a reply to an invitation",
+	"attach":                 "a file to attach",
+	"attach-inline":          "an image to embed in an HTML body by Content-ID",
+	"attendee":               "someone invited",
+	"bcc":                    "a blind-carbon-copy recipient",
+	"before":                 "only things before a date",
+	"birthdate":              "a date of birth",
+	"birthday":               "a date of birth",
+	"body":                   "the message body",
+	"body-only":              "emit only the body",
+	"calendar":               "the calendar to act in",
+	"cc":                     "a carbon-copy recipient",
+	"check":                  "report without changing anything",
+	"city":                   "a city",
+	"clear-signature":        "remove the signature",
+	"color":                  "the accent colour to set",
+	"company":                "the company somebody works for",
+	"country":                "a country",
+	"county":                 "an administrative county",
+	"cvv":                    "a payment card verification number",
+	"days":                   "the days a schedule is active",
+	"delete-photos":          "also remove the photos an album held",
+	"desc":                   "reverse the order a listing is in",
+	"description":            "free-text description",
+	"detach":                 "an attachment to remove",
+	"disabled":               "create without turning it on",
+	"display-name":           "the name recipients see",
+	"draft":                  "save instead of sending",
+	"duration":               "how long something lasts",
+	"edit":                   "grant edit rather than view access",
+	"email":                  "an email address",
+	"eml":                    "an RFC 822 file to build the message from",
+	"end":                    "the end of a range or event",
+	"eo-password":            "password-protect the message for recipients outside Proton",
+	"eo-password-hint":       "hint shown to password-protected recipients",
+	"everyone":               "answer every address that was on the message, not only the sender",
+	"expires":                "how long before it stops working",
+	"expiry":                 "a payment card expiry date",
+	"facebook":               "a Facebook handle",
+	"field":                  "a custom field, as NAME=VALUE",
+	"first-name":             "a given name",
+	"floor":                  "a floor within a building",
+	"folder":                 "the mail location to look in",
+	"force":                  "overwrite a local file that already exists",
+	"format":                 "the file layout to write: eml or mbox",
+	"from":                   "the sender: compose sets it, a filter matches it",
+	"full-name":              "a full name",
+	"future":                 "extend the change to every later occurrence of a series",
+	"gender":                 "a gender",
+	"hidden":                 "a hidden custom field, as NAME=VALUE",
+	"holder":                 "the name on a payment card",
+	"html":                   "treat the text as HTML rather than escaping it",
+	"include-inline":         "include inline attachments",
+	"instagram":              "an Instagram handle",
+	"into":                   "the destination container of a move or copy",
+	"job-title":              "a job title",
+	"key":                    "an armoured PGP key",
+	"keyword":                "full-text search term",
+	"if":                     "a condition matching mail must meet",
+	"label":                  "the label to attach or detach",
+	"mark-read":              "mark matching mail as read",
+	"match":                  "whether every condition must hold or any one of them",
+	"language":               "a preferred language",
+	"larger-than":            "select files above a size",
+	"last-name":              "a family name",
+	"license-number":         "a driving licence number",
+	"limit":                  "cap how many things are selected",
+	"linkedin":               "a LinkedIn handle",
+	"location":               "where something is",
+	"mailbox":                "where mail to an alias should arrive",
+	"message":                "an accompanying note",
+	"middle-name":            "a middle name",
+	"move-to":                "the folder to move matching mail into",
+	"name":                   "the name to set",
+	"newer-than":             "select things newer than a duration",
+	"nickname":               "a familiar name",
+	"no-attachments":         "leave attachments out",
+	"no-quote":               "do not quote the message being answered",
+	"no-remind":              "leave an event with no reminder",
+	"no-signature":           "leave the signature out",
+	"note":                   "free-text note",
+	"number":                 "a payment card number",
+	"older-than":             "select things older than a duration",
+	"organization":           "an organization name",
+	"others":                 "act on every session but this one",
+	"output":                 "where to write the payload; - is stdout",
+	"output-dir":             "a directory to fill, keeping each item's own name",
+	"page":                   "which page of results",
+	"page-size":              "how many results per page",
+	"parent":                 "the containing folder",
+	"passport-number":        "a passport number",
+	"password":               "a password",
+	"passphrase-file":        "where to read the passphrase that locks a file",
+	"passphrase-stdin":       "read the passphrase that locks a file from stdin",
+	"password-file":          "where to read the account password from",
+	"password-stdin":         "read the account password from stdin",
+	"pattern":                "select by glob against the name",
+	"personal-website":       "a personal website, as opposed to a work one",
+	"phone":                  "a phone number",
+	"pin":                    "a payment card PIN",
+	"postal-code":            "a postal code",
+	"prefix":                 "the local part of an alias",
+	"private-key":            "a private key",
+	"public-key":             "a public key",
+	"purge":                  "also remove local data",
+	"query":                  "a URL query parameter",
+	"recursive":              "descend into subdirectories",
+	"reddit":                 "a Reddit handle",
+	"reinstall":              "install again even if already current",
+	"remind":                 "a reminder before the start",
+	"render":                 "which representation of a message body to print",
+	"repeat":                 "how a schedule repeats",
+	"revoke":                 "also invalidate the session at Proton",
+	"role":                   "the part somebody plays in an organization",
+	"rrule":                  "an iCalendar recurrence rule",
+	"scope":                  "the Drive subtree to look in",
+	"second-phone":           "a second phone number",
+	"security":               "a Wi-Fi security protocol",
+	"send-at":                "when to deliver",
+	"sieve":                  "a Sieve script",
+	"star":                   "star matching mail",
+	"smaller-than":           "select files below a size",
+	"social-security-number": "a social security number",
+	"sort":                   "which key a listing is ordered by",
+	"ssid":                   "a Wi-Fi network name",
+	"starred":                "select starred things",
+	"start":                  "the beginning of a range or event",
+	"state":                  "a state or province",
+	"status":                 "whether an event is going ahead: confirmed, tentative or cancelled",
+	"strip-quotes":           "drop quoted reply blocks",
+	"subject":                "the subject line: compose sets it, a filter matches it",
+	"suffix":                 "the domain part of an alias",
+	"summary":                "one line per item instead of the whole thing",
+	"tag":                    "the photo tag to select",
+	"timezone":               "an IANA time zone",
+	"title":                  "a title: an event's, or a person's job title",
+	"to":                     "an email recipient: compose sets one, a filter matches one",
+	"totp-field":             "a custom field holding a two-factor secret",
+	"totp":                   "a two-factor code",
+	"totp-uri":               "a TOTP URI or secret, stored on a Pass login",
+	"type":                   "the kind of thing to create or select",
+	"unread":                 "select unread things",
+	"until":                  "where a range stops",
+	"url":                    "a URL",
+	"username":               "a login username",
+	"vault":                  "the Pass vault to act in",
+	"website":                "a website address",
+	"work-email":             "a work email address",
+	"work-phone":             "a work phone number",
+	"x-handle":               "an X handle",
+	"yahoo":                  "a Yahoo handle",
+	"yes":                    "proceed without asking",
+	"zone":                   "an IANA time zone",
 }
 
 func TestSharedFlagNamesShareOneMeaning(t *testing.T) {
@@ -297,6 +336,230 @@ func TestSharedFlagNamesShareOneMeaning(t *testing.T) {
 		if _, declared := flagMeanings[name]; !declared {
 			t.Errorf("--%s is used by %d commands but has no declared meaning:\n  %s",
 				name, len(cmds), strings.Join(cmds, "\n  "))
+		}
+	}
+}
+
+// A flag whose meaning is shared is registered from one place.
+//
+// The rule above asks only that a name appear in the registry, which a flag
+// satisfies by being written down once however many different things it goes on
+// to mean. That is how --all came to say "everything in scope" on twenty-five
+// commands, "reply to everyone" on two, "every scheduled send" on one and "every
+// profile on this machine" on one, with the registry holding a single sentence
+// true of the first group only.
+//
+// Comparing the help text would be the obvious repair and it is the wrong
+// instrument: usage strings vary for good reasons - "Set the postal address" on
+// a create and "Replace the postal address" on the update beside it are one
+// meaning, not two - so a textual check either passes everything or fails on
+// wording.
+//
+// So the enforcement is structural instead. The names below belong to kit, which
+// registers each with the one usage string it has; a command that wants a
+// different meaning has to pick a different name, because this fails on any
+// command that declares one of them itself.
+var kitOwnedFlags = map[string]string{
+	"all":              "kit.All",
+	"passphrase-file":  "kit.Passphrase",
+	"passphrase-stdin": "kit.Passphrase",
+	"password-file":    "kit.Reauth",
+	"password-stdin":   "kit.Reauth",
+	"totp":             "kit.Reauth",
+}
+
+// kitFlagUsage is what kit itself registers each of those with, so the guard
+// below can tell kit's own registration from a command redeclaring the name.
+var kitFlagUsage = map[string]string{
+	"all":              kit.AllUsage,
+	"passphrase-file":  kit.PassphraseFileUsage,
+	"passphrase-stdin": kit.PassphraseStdinUsage,
+	"password-file":    kit.PasswordFileUsage,
+	"password-stdin":   kit.PasswordStdinUsage,
+	"totp":             kit.TOTPUsage,
+}
+
+// A flag name that names a fixed set of values names the same set everywhere.
+//
+// The rule above catches a shared flag whose meaning is a shared *behaviour*, by
+// making kit own the registration. It cannot catch the other half: two commands
+// that each declare their own Enum under one name, with different values. Those
+// are two meanings wearing one word just as surely, and they are easier to write
+// by accident, because each declaration reads fine on its own.
+//
+// `--status` was the case that proved it - whether an event is going ahead
+// (confirmed, tentative, cancelled) against whether one participant is coming
+// (accept, tentative, decline). Two subjects, one word, and nothing said so.
+//
+// The domains are compared rather than the help text, because a domain is what
+// the flag actually means: two commands offering different values are asking
+// different questions whatever their usage strings say.
+func TestAFlagNameNamesOneSetOfValues(t *testing.T) {
+	// Building the tree is what populates the registry.
+	newRoot()
+
+	domains := map[string]map[string][]string{}
+	for path, values := range kit.DeclaredEnums() {
+		cmd, flag, ok := strings.Cut(path, " --")
+		if !ok {
+			t.Errorf("unreadable enum registration %q", path)
+			continue
+		}
+		if domains[flag] == nil {
+			domains[flag] = map[string][]string{}
+		}
+		domains[flag][strings.Join(values, ", ")] = append(domains[flag][strings.Join(values, ", ")], cmd)
+	}
+
+	flags := make([]string, 0, len(domains))
+	for flag := range domains {
+		flags = append(flags, flag)
+	}
+	sort.Strings(flags)
+
+	for _, flag := range flags {
+		if len(domains[flag]) < 2 {
+			continue
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "--%s accepts %d different sets of values; a flag name means one thing:",
+			flag, len(domains[flag]))
+		sets := make([]string, 0, len(domains[flag]))
+		for set := range domains[flag] {
+			sets = append(sets, set)
+		}
+		sort.Strings(sets)
+		for _, set := range sets {
+			cmds := domains[flag][set]
+			sort.Strings(cmds)
+			fmt.Fprintf(&b, "\n  %s\n    %s", set, strings.Join(cmds, "\n    "))
+		}
+		t.Error(b.String())
+	}
+}
+
+func TestSharedFlagsAreRegisteredFromOnePlace(t *testing.T) {
+	leaves, _ := partition(t)
+	for _, c := range leaves {
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			owner, owned := kitOwnedFlags[f.Name]
+			if !owned || f.Usage == kitFlagUsage[f.Name] {
+				return
+			}
+			t.Errorf("%s declares its own --%s (%q); that name belongs to %s, "+
+				"so a different meaning needs a different name", cmdPath(c), f.Name, f.Usage, owner)
+		})
+	}
+}
+
+// ── rule 4: a collection sits where Proton's own clients put it ──
+
+// `settings` means one thing: what you set.
+//
+// It is the group most likely to become a drawer, because anything can be argued
+// into it and nothing argues its way out. So every collection filed under one
+// has to name the page of Proton's settings app it mirrors, and a collection
+// that names a page has to be filed under one. Both halves matter: the first
+// stops `settings` collecting things Proton puts in the product window, and the
+// second stops a declaration going stale after a move.
+//
+// This is what decides where a new collection goes, and it decides it by
+// research rather than by taste - which is the only way five apps end up
+// agreeing.
+func TestCollectionsUnderSettingsMirrorASettingsPage(t *testing.T) {
+	_, groups := partition(t)
+	found := map[string]bool{}
+	for _, c := range groups {
+		parent := c.Parent()
+		if parent == nil || parent.Name() != "settings" {
+			continue
+		}
+		path := strings.TrimPrefix(cmdPath(c), kit.Program+" ")
+		found[path] = true
+		if _, ok := kit.SettingsPages[path]; !ok {
+			t.Errorf("%s sits under `settings` but names no page of Proton's settings app; "+
+				"declare it in kit.SettingsPages, or move it beside what it contains", cmdPath(c))
+		}
+	}
+	for path := range kit.SettingsPages {
+		if !found[path] {
+			t.Errorf("kit.SettingsPages declares %q, but no such group sits under a `settings`", path)
+		}
+	}
+}
+
+// ── rule 4b: a filter can be read before it is acted on ──
+
+// Whatever narrows a bulk verb narrows the listing beside it.
+//
+// A filter decides what a removal touches, so the command to work one out on
+// should be the one that only reads. Where `list` does not take what `trash`
+// takes, the only way to see a selection is to point the destructive verb at it
+// and add --dry-run, which is exactly the wrong place to be finding out.
+//
+// The comparison is one-way: a listing may offer more than a bulk verb - paging
+// is its own business - but it may not offer less.
+var filterParityExceptions = map[string]string{}
+
+// notNarrowing are flags a bulk verb carries that say something other than which
+// things: how many, whether everything was meant, where to look when there is no
+// argument to say it with, and what to do with what it found.
+var notNarrowing = map[string]bool{
+	"limit": true, "scope": true, "help": true,
+	"into": true, "output": true, "output-dir": true, "force": true,
+	"format": true, "no-attachments": true, "label": true,
+	"in": true, "never": true, "until": true,
+}
+
+// narrows reports whether a flag on a bulk verb says which things it acts on.
+// Nothing kit registers does: those say how the command is run, not what it is
+// run over.
+func narrows(name string) bool {
+	_, fromKit := kitOwnedFlags[name]
+	return !fromKit && !notNarrowing[name]
+}
+
+func TestListTakesWhateverNarrowsTheVerbsBesideIt(t *testing.T) {
+	leaves, _ := partition(t)
+	lists := map[string]*cobra.Command{}
+	bulk := map[string][]*cobra.Command{}
+	for _, c := range leaves {
+		parent := c.Parent()
+		if parent == nil {
+			continue
+		}
+		collection := strings.TrimPrefix(cmdPath(parent), kit.Program+" ")
+		switch {
+		case c.Name() == "list":
+			lists[collection] = c
+		case c.Flags().Lookup("all") != nil:
+			bulk[collection] = append(bulk[collection], c)
+		}
+	}
+
+	for collection, verbs := range bulk {
+		list, ok := lists[collection]
+		if !ok {
+			continue
+		}
+		if why, excused := filterParityExceptions[collection]; excused {
+			t.Logf("%s: filter parity not required - %s", collection, why)
+			continue
+		}
+		for _, verb := range verbs {
+			verb.LocalFlags().VisitAll(func(f *pflag.Flag) {
+				if !narrows(f.Name) || list.Flags().Lookup(f.Name) != nil {
+					return
+				}
+				t.Errorf("%s takes --%s and `%s %s list` does not, so the only way to see "+
+					"what it selects is to aim the verb at it",
+					cmdPath(verb), f.Name, kit.Program, collection)
+			})
+		}
+	}
+	for collection := range filterParityExceptions {
+		if _, ok := bulk[collection]; !ok {
+			t.Errorf("filterParityExceptions names %q, which has no bulk verbs", collection)
 		}
 	}
 }
@@ -420,6 +683,7 @@ func TestReauthCommandsAreDeclared(t *testing.T) {
 	want := []string{
 		"proton account login",
 		"proton calendar settings calendars delete",
+		"proton mail messages expire",
 		"proton mail settings autoreply set",
 	}
 	leaves, _ := partition(t)
@@ -869,4 +1133,87 @@ func TestShorthandsAreDeclared(t *testing.T) {
 			t.Errorf("-%s is declared as --%s but nothing defines it", letter, name)
 		}
 	}
+}
+
+// A creation reports the identity it made.
+//
+// `ID=$(proton ... create ...)` is the whole reason stdout and stderr are split,
+// and it works because kit.Create puts the new ID on stdout. A create routed
+// through kit.Mutate instead reports the same sentence to a human and gives a
+// script nothing, which is a contract broken in the one place nobody looks:
+// the exit code is zero and the output is empty.
+//
+// So the action names the seam. Anything reporting ui.Created goes through
+// kit.Create, and this reads the source rather than trusting it.
+func TestACreationIsReportedByTheSeamThatKnowsItsID(t *testing.T) {
+	for _, dir := range []string{"."} {
+		err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+				return err
+			}
+			fset := token.NewFileSet()
+			file, perr := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
+			if perr != nil {
+				return nil
+			}
+			ast.Inspect(file, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				seam := selectorName(call.Fun)
+				if !strings.HasPrefix(seam, "kit.") {
+					return true
+				}
+				for _, arg := range call.Args {
+					if !reportsCreated(arg) {
+						continue
+					}
+					if seam != "kit.Create" {
+						t.Errorf("%s:%d: %s reports ui.Created; a creation goes through "+
+							"kit.Create, which is what puts the new ID on stdout",
+							p, fset.Position(call.Pos()).Line, seam)
+					}
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// reportsCreated reports whether an argument is a result spec whose action is
+// ui.Created.
+func reportsCreated(arg ast.Expr) bool {
+	lit, ok := arg.(*ast.CompositeLit)
+	if !ok || selectorName(lit.Type) != "ui.ResultSpec" {
+		return false
+	}
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		if name, _ := kv.Key.(*ast.Ident); name != nil && name.Name == "Action" &&
+			selectorName(kv.Value) == "ui.Created" {
+			return true
+		}
+	}
+	return false
+}
+
+// selectorName renders a package-qualified name, or "" for anything else.
+func selectorName(e ast.Expr) string {
+	sel, ok := e.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return pkg.Name + "." + sel.Sel.Name
 }

@@ -73,9 +73,10 @@ func (e *CancelledError) Error() string {
 	return "human verification was cancelled: " + e.Detail
 }
 
-// ErrHelperMissing signals the helper binary could not be located or
-// extracted. This is a packaging bug (the embed didn't include a real
-// binary for this OS/arch) and never normal operation.
+// ErrHelperMissing signals no helper binary was embedded for this OS/arch and
+// none was named by EnvHelper. In a release build that is a packaging bug and
+// never normal operation; in a build made without -tags embed_hv it is expected,
+// and EnvHelper is the way through.
 var ErrHelperMissing = errors.New("hv helper binary not embedded for this OS/arch")
 
 // Resolve runs the embedded helper against a CAPTCHA page URL, as built by
@@ -93,7 +94,7 @@ func Resolve(ctx context.Context, captchaURL string) (string, error) {
 	if captchaURL == "" {
 		return "", errors.New("hv: empty captcha url")
 	}
-	bin, err := extractHelper()
+	bin, err := helperPath()
 	if err != nil {
 		return "", err
 	}

@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/roman-16/proton-cli/internal/app"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/proton"
 	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
 	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/roman-16/proton-cli/internal/units"
 	"github.com/spf13/cobra"
 )
 
@@ -127,7 +130,8 @@ func settingsCmd() *cobra.Command {
 
 func calendarsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "calendars", Short: "The calendars you keep events in"}
-	c.AddCommand(calendarsListCmd(), calendarsCreateCmd(), calendarsUpdateCmd(), calendarsDeleteCmd())
+	c.AddCommand(calendarsListCmd(), calendarsGetCmd(), calendarsCreateCmd(), calendarsShareCmd(),
+		calendarsUpdateCmd(), calendarsDeleteCmd())
 	return c
 }
 
@@ -136,6 +140,7 @@ func calendarColumns() []ui.Column[calsvc.Calendar] {
 		{Header: "ID", ID: true, Cell: func(cal calsvc.Calendar) string { return cal.ID }},
 		{Header: "NAME", Flex: true, Cell: func(cal calsvc.Calendar) string { return cal.Name }},
 		kit.ColorColumn(func(cal calsvc.Calendar) string { return cal.Color }),
+		{Header: "KIND", Cell: func(cal calsvc.Calendar) string { return cal.Kind }},
 		{Header: "MEMBERS", Right: true, Cell: func(cal calsvc.Calendar) string {
 			return strconv.Itoa(cal.MemberCount)
 		}},
@@ -170,12 +175,18 @@ func calendarsListCmd() *cobra.Command {
 }
 
 func calendarsCreateCmd() *cobra.Command {
-	var name string
+	var name, url string
 	color := &kit.Color{Name: "color", Default: kit.DefaultAccentColor}
 	c := &cobra.Command{
 		Use:   "create",
-		Short: "Create a calendar",
-		Args:  cobra.NoArgs,
+		Short: "Create a calendar, or subscribe to one published elsewhere",
+		Long: "Create a calendar, or subscribe to one published elsewhere.\n\n" +
+			"--url takes the address of an .ics file - a timetable, a team's shared\n" +
+			"calendar, a holiday feed. Proton fetches it on a schedule and fills the\n" +
+			"calendar from it, so its events are read-only: they belong to whoever\n" +
+			"publishes them. Proton is asked whether it can read the address before\n" +
+			"the calendar is made, so a wrong one is refused rather than left empty.",
+		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if name == "" {
 				return kit.Fail("A calendar needs a name.").Hint("--name Work")
@@ -183,37 +194,160 @@ func calendarsCreateCmd() *cobra.Command {
 			return kit.Create(c, ui.ResultSpec{
 				Action: ui.Created, Kind: "calendars", Name: name,
 			}, func() (string, error) {
-				return c.App.Calendar.CalendarCreate(c.Ctx, name, color.Value())
+				return c.App.Calendar.CalendarCreate(c.Ctx, name, color.Value(), url)
 			})
 		}),
 	}
 	c.Flags().StringVar(&name, "name", "", "Name for the new calendar")
+	c.Flags().StringVar(&url, "url", "",
+		"Subscribe to the calendar published at this address instead of making an empty one")
 	color.Register(c)
 	return c
 }
 
-func calendarsUpdateCmd() *cobra.Command {
-	var name string
-	color := &kit.Color{Name: "color", Usage: "New accent color, as a hex value"}
-	c := &cobra.Command{
-		Use:   "update REF",
-		Short: "Rename or recolor a calendar",
+// calendarsGetCmd shows one calendar in full, including the defaults it applies
+// to events made in it - which nothing else reports.
+func calendarsGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get REF",
+		Short: "Show one calendar, with the defaults it gives new events",
 		Args:  cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
-			if name == "" && !color.Set() {
-				return kit.Fail("Nothing to change.").Hint("pass --name or --color.")
+			cal, err := calendarList(c).Find(c.Ctx, c.Args[0])
+			if err != nil {
+				return err
+			}
+			d, err := c.App.Calendar.CalendarDefaults(c.Ctx, cal.ID)
+			if err != nil {
+				return err
+			}
+			view := struct {
+				calsvc.Calendar
+				Defaults *calsvc.CalendarDefaults `json:"defaults"`
+			}{cal, d}
+			return kit.Show(c, ui.RecordSpec{
+				Object: view,
+				Fields: []ui.Field{
+					{Label: "Name", Value: cal.Name},
+					{Label: "Color", Value: cal.Color},
+					{Label: "Kind", Value: cal.Kind},
+					{Label: "Description", Value: cal.Description},
+					{Label: "Members", Value: strconv.Itoa(cal.MemberCount)},
+					{Label: "Default Duration", Value: units.Duration(
+						time.Duration(d.Duration) * time.Minute), Always: true},
+					{Label: "Default Reminders", Value: strings.Join(d.Reminders, ", ")},
+					{Label: "All-day Reminders", Value: strings.Join(d.AllDayReminders, ", ")},
+					{Label: "Shows As Busy", Value: kit.OnOffText(boolInt(d.Busy)), Always: true},
+					{Label: "ID", Value: cal.ID, ID: true},
+				},
+			})
+		}),
+	}
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func calendarsUpdateCmd() *cobra.Command {
+	var name, duration string
+	var reminders, allDayReminders []string
+	var noRemind bool
+	color := &kit.Color{Name: "color", Usage: "New accent color, as a hex value"}
+	busy := &kit.Enum{
+		Name: "busy", Usage: "Whether events here make you look busy to others",
+		Values: []string{"on", "off"},
+	}
+	c := &cobra.Command{
+		Use:   "update REF",
+		Short: "Rename or recolor a calendar, or change what it gives new events",
+		Long: "Rename or recolor a calendar, or change what it gives new events.\n\n" +
+			"The defaults are per-calendar because that is where Proton keeps them: a\n" +
+			"work calendar can open half-hour meetings with a reminder while a personal\n" +
+			"one does not.",
+		Args: cobra.ExactArgs(1),
+		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
+			busyValue, err := busy.Value()
+			if err != nil {
+				return err
+			}
+			touchesDefaults := c.Changed("default-duration") || c.Changed("remind") ||
+				c.Changed("remind-all-day") || c.Changed("no-remind") || busy.Set()
+			if name == "" && !color.Set() && !touchesDefaults {
+				return kit.Fail("Nothing to change.").
+					Hint("pass --name, --color, --default-duration, --remind or --busy.")
+			}
+			patch, err := defaultsPatch(c, duration, reminders, allDayReminders, noRemind, busyValue)
+			if err != nil {
+				return err
+			}
+			cal, err := calendarList(c).Find(c.Ctx, c.Args[0])
+			if err != nil {
+				return err
 			}
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Updated, Kind: "calendars", Count: 1, Name: name,
-				IDs: []string{c.Args[0]},
+				IDs: []string{cal.ID},
 			}, func() error {
-				return c.App.Calendar.CalendarRename(c.Ctx, c.Args[0], name, color.Value())
+				if name != "" || color.Set() {
+					if err := c.App.Calendar.CalendarRename(c.Ctx, cal.ID, name, color.Value()); err != nil {
+						return err
+					}
+				}
+				if !touchesDefaults {
+					return nil
+				}
+				return c.App.Calendar.CalendarDefaultsUpdate(c.Ctx, cal.ID, patch)
 			})
 		}),
 	}
 	c.Flags().StringVar(&name, "name", "", "New name")
+	c.Flags().StringVar(&duration, "default-duration", "",
+		"How long a new event lasts unless it says otherwise (e.g. 30m, 1h)")
+	c.Flags().StringArrayVar(&reminders, "remind", nil,
+		"Default reminder for a new event, as DURATION or DURATION:email (repeatable)")
+	c.Flags().StringArrayVar(&allDayReminders, "remind-all-day", nil,
+		"Default reminder for a new all-day event (repeatable)")
+	c.Flags().BoolVar(&noRemind, "no-remind", false, "Give new events no reminder by default")
 	color.Register(c)
+	busy.Register(c)
 	return c
+}
+
+// defaultsPatch reads the per-calendar flags, judging what it can before the
+// network: a duration that does not parse is wrong whoever is signed in.
+func defaultsPatch(c *kit.Invocation, duration string, reminders, allDay []string,
+	noRemind bool, busy string) (calsvc.DefaultsPatch, error) {
+	var p calsvc.DefaultsPatch
+	if c.Changed("default-duration") {
+		d, err := units.ParseDuration(duration)
+		if err != nil {
+			return p, kit.Fail("--default-duration: %v", err)
+		}
+		minutes := int(d / time.Minute)
+		if minutes <= 0 {
+			return p, kit.Fail("--default-duration has to be at least a minute.")
+		}
+		p.Duration = &minutes
+	}
+	if c.Changed("remind") {
+		p.Reminders = &reminders
+	}
+	if c.Changed("remind-all-day") {
+		p.AllDayReminders = &allDay
+	}
+	if noRemind {
+		none := []string{}
+		p.Reminders, p.AllDayReminders = &none, &none
+	}
+	if busy != "" {
+		on := busy == "on"
+		p.Busy = &on
+	}
+	return p, nil
 }
 
 func calendarsDeleteCmd() *cobra.Command {
