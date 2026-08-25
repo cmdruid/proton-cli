@@ -32,7 +32,7 @@ Adding a version section here is what publishes a release, so this file is the o
 - `mail conversations snooze|unsnooze` takes a thread out of the inbox until a time you choose, and `snoozed` is addressable wherever a folder is - as are the categories Proton sorts into: `social`, `promotions`, `newsletters`, `transactions` and `updates`.
 - `mail messages expire` makes a message delete itself later, `mail messages unsubscribe` asks a mailing list to stop, and `mail messages empty --folder` empties a folder outright.
 - Five more mail settings: `next-message-on-move`, `pgp-scheme`, `remove-image-metadata`, `right-to-left` and `spam-action`.
-- `drive shared list` shows what you have shared and `drive sharing list` what others have shared with you. `drive items share update|resend` changes or resends an invitation, and `drive photos albums update --cover` sets an album's cover.
+- `drive shared list` shows what other people have shared with you and `drive sharing list` what you have shared. `drive items share update|resend` changes or resends an invitation, and `drive photos albums update --cover` sets an album's cover.
 - `PROTON_HV_HELPER` names a CAPTCHA helper to run instead of the built-in one, which is what lets a `go install` build verify at all.
 - `--passphrase-file` and `--passphrase-stdin` hand over a passphrase without putting it in the command line.
 
