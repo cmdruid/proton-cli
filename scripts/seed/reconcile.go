@@ -2,51 +2,9 @@ package main
 
 import (
 	"fmt"
-	"path"
-	"strings"
+	"github.com/roman-16/proton-cli/tests/fixture"
 	"sync"
 )
-
-// A pin is one row a collection has to hold.
-//
-// It is judged on the fields named here and on nothing else: an ID and a
-// timestamp are the server's to choose, so demanding those match would mean
-// rebuilding the account on every run.
-type pin struct {
-	id     string            // the value identifying it, under the collection's key
-	fields map[string]string // what else has to match
-	create []string          // the command that makes it
-}
-
-// A collection is one list the fixture pins rows in.
-type collection struct {
-	what   string   // a noun for the report
-	list   []string // the command that lists it
-	key    string   // the field holding a row's identity
-	idKeys []string // the fields holding a row's ID, joined into the reference a removal takes
-	remove []string // the command that removes one, with the target appended
-	// parent is set on a collection the CLI addresses by path rather than by ID:
-	// Drive names a thing by where it sits in the tree.
-	parent string
-	pins   []pin
-}
-
-// target renders the reference c.remove takes for one row. An event needs two
-// IDs to address it and is written the way the CLI writes it, which is why this
-// is a join rather than a lookup.
-func (c collection) target(row map[string]any, name string) string {
-	if c.parent != "" {
-		return path.Join(c.parent, name)
-	}
-	parts := make([]string, 0, len(c.idKeys))
-	for _, k := range c.idKeys {
-		parts = append(parts, str(row[k]))
-	}
-	return strings.Join(parts, "/")
-}
-
-// testPrefix is the namespace the suite makes its artifacts under.
-const testPrefix = "proton-cli-test-"
 
 // sweep removes what an interrupted suite run left behind.
 //
@@ -58,28 +16,9 @@ const testPrefix = "proton-cli-test-"
 //
 // A recurring event is listed once per occurrence and removed as a series, so a
 // reference already swept is not swept again.
-func (r *report) sweep(profile string, c collection, list []map[string]any) {
-	swept := map[string]bool{}
-	for _, row := range list {
-		name := str(row[c.key])
-		if !strings.HasPrefix(name, testPrefix) {
-			continue
-		}
-		what := fmt.Sprintf("%s: %s", c.what, name)
-		if len(c.remove) == 0 {
-			r.fail(what, fmt.Errorf("left by the suite and cannot be removed"))
-			continue
-		}
-		target := c.target(row, name)
-		if swept[target] {
-			continue
-		}
-		swept[target] = true
-		if _, err := run(profile, append(append([]string{"--yes"}, c.remove...), target)...); err != nil {
-			r.fail(what, err)
-			continue
-		}
-		r.note("-", profile, what)
+func (r *report) sweep(profile string, c fixture.Collection, list []map[string]any) {
+	for _, name := range fixture.Sweep(seedRunner, profile, c, list) {
+		r.note("-", profile, fmt.Sprintf("%s: %s", c.What, name))
 	}
 }
 
@@ -90,41 +29,24 @@ func (r *report) sweep(profile string, c collection, list []map[string]any) {
 // a missing one: it passes a presence check and then fails an assertion
 // somewhere far away. Rows the fixture says nothing about are left alone, unless
 // they are the suite's own leftovers, which sweep takes.
-func (r *report) reconcile(profile string, c collection) {
-	list, err := rows(profile, c.list...)
+func (r *report) reconcile(profile string, c fixture.Collection) {
+	list, err := fixture.Rows(seedRunner, profile, c.List...)
 	if err != nil {
-		r.fail(c.what, err)
+		r.fail(c.What, err)
 		return
 	}
 	r.sweep(profile, c, list)
-	for _, p := range c.pins {
-		what := fmt.Sprintf("%s: %s", c.what, p.id)
-		row, found := find(list, c.key, p.id)
-		switch {
-		case !found:
-			r.make(profile, what, p.create)
-		case !agrees(row, p.fields):
-			if len(c.remove) == 0 {
-				r.fail(what, fmt.Errorf("does not match the fixture and cannot be replaced"))
-				continue
-			}
-			if _, err := run(profile, append(append([]string{"--yes"}, c.remove...), c.target(row, p.id))...); err != nil {
-				r.fail(what, err)
-				continue
-			}
-			r.remake(profile, what, p.create)
+	for _, p := range c.Pins {
+		before := len(list)
+		if _, err := fixture.Ensure(seedRunner, profile, c, p); err != nil {
+			r.fail(fmt.Sprintf("%s: %s", c.What, p.ID), err)
+			continue
 		}
-	}
-}
-
-// agrees reports whether a row matches every field the pin names.
-func agrees(row map[string]any, fields map[string]string) bool {
-	for k, want := range fields {
-		if str(row[k]) != want {
-			return false
+		if _, found := fixture.Find(list, c.Key, p.ID); !found {
+			r.note("+", profile, fmt.Sprintf("%s: %s", c.What, p.ID))
 		}
+		_ = before
 	}
-	return true
 }
 
 // report is what the run did, so a seed that changed nothing can say so.

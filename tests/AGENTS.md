@@ -18,11 +18,10 @@ An inconsistency is far more likely to be caught there than here.
 ## Running Tests
 
 ```bash
-just test                             # the free accounts' integration tests, two at a time
+just test                             # the free accounts' integration tests, one at a time
 just test-paid                        # the ones needing a paid plan (see below)
 just test-all                         # both suites, one after the other
 just test-one TestDriveItemsMove      # a single one
-just test-serial                      # one at a time, for a run that looks flaky
 just test-report                      # where the time went, and how deep each request graph was
 ```
 
@@ -90,18 +89,18 @@ tests/
 
 1. `TestMain` in `integration_test.go` builds the binary once into a temp directory.
 2. Each test calls the binary as a subprocess via `run()` / `runOK()` / `runJSON()`.
-3. `TestMain` signs both profiles in and runs `scripts/seed/seed.sh`; each checks before it acts, so an account already in shape costs a read.
+3. `TestMain` signs both profiles in and seeds nothing. What the account has to hold is brought about by the test that reads it.
 4. Each invocation names its profile through `PROTON_PROFILE` in a scrubbed child environment, and the session is reused across invocations.
-5. Tests run **two at a time**, and every one of them calls `t.Parallel()`. What two tests cannot both have at once is declared and leased - see below.
+5. Tests run **one at a time**, and every one of them calls `t.Parallel()`. What two tests cannot both have at once is declared and leased - see below.
 
-## Running two at a time
+## Running one at a time
 
 The suite is bound by waiting for Proton, not by doing anything, so tests overlap. Proton absorbs a good deal of that: sixteen concurrent invocations were measured to cost the same wall time as one.
 
 What decides the setting is not the client but the account, and **what gives out first is whichever endpoint the free plan meters hardest**:
 
 - `PUT /calendar/v1/{id}/events/sync`, because the free plan allows few calendars and so every calendar test writes to the same one. At four, a full run failed on it three times out of three.
-- Making an alias. Several tests need one of their own, and Proton allows few per hour, so at three they arrive close enough together to be refused.
+- Making an alias, which is the tightest of them. Several tests need one of their own, and Proton allows few per hour, so any overlap at all has the later ones refused.
 
 Raising it means either a paid account with room to spare, or a lease that makes the tests competing for one endpoint take turns.
 
@@ -220,7 +219,17 @@ func TestDriveItemsFoo(t *testing.T) {
 
 The accounts are on the free plan, which allows **50 messages an hour and 150 a day**, counted per recipient. A run sends about 19. That, not the wall clock, is what decides how often the suite can be run: a suite that sends 30 can be run once an hour however fast it is.
 
-So a message is only sent when the sending is the thing being tested. Everything that merely needs *a* message of some shape reads one the account already holds: `tests/fixture` declares them, `scripts/seed` puts them there, and both read the same declaration so they cannot drift. Nothing sends them per run.
+So a message is only sent when the sending is the thing being tested. Everything that merely needs *a* message of some shape reads one the account already holds.
+
+### Fixtures are made when something asks
+
+`tests/fixture` declares what the accounts hold and how to bring each one about. Nothing is made up front: the accessor a test calls finds its fixture, makes it if the account has not got it, and remembers it for the rest of the run.
+
+That is what makes a run cost only what it uses. `just test-one TestMailMessagesList` never touches Pass, Drive or Calendar; a run that reads no mail sends none. And a fixture that cannot be made - Proton meters making an alias to a handful an hour - fails the tests that need it rather than every test there is.
+
+`just seed` asks for all of it at once, through the same declaration, for putting an account in shape by hand. It is the only thing that sweeps collections a run never looks at; a run sweeps what it lists, which costs nothing because it was listing anyway.
+
+**Only what the suite never changes may be remembered.** A listing held from before another test changed the thing is a false pass, which is worse than a slow run. A test that mutates its fixture leases it and puts it back - see [Leases](#leases-what-two-tests-cannot-both-have).
 
 ### Seeded fixtures (read-only tests)
 
@@ -249,7 +258,7 @@ func TestMailMessagesGetBodyOnly(t *testing.T) {
 }
 ```
 
-Adding a fixture means adding it to `tests/fixture` and running `just seed`. A test whose fixture is missing says so and names the command.
+Adding a fixture means declaring it in `tests/fixture`. The first run that asks for it makes it.
 
 ### Polling for delivery
 

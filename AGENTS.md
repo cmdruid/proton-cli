@@ -41,19 +41,21 @@ proton-cli has one grammar, one verb per idea, and one shape per response. All o
 
 After making code changes, run these in order. Stop on the first failure and fix it before continuing.
 
-1. **Tests** - `just test` runs everything: the credential-free suites first (unit, golden, conformance and offline - `just test-fast` on its own is the inner loop while working), then the live suite against the two accounts, two tests at a time. It fails on the first sign of Proton rate-limiting rather than pressing on, so a failure that says so means lower the concurrency and wait, not fix the code.
+**The live suites are the user's to run, never the agent's.** `just test` and `just test-paid` take minutes, spend allowances Proton meters by the hour, and act on real accounts. An agent runs **`just test-fast`** and nothing else. When a change wants one of the live suites - a new command, anything touching a request, a fix that only the live API can confirm - say so, say which one and why, and let the user decide. Never start one to find out.
+
+1. **Tests** - `just test-fast` is the gate an agent runs: unit, golden, conformance and offline, no credentials, about a second. `just test` adds the live suite against the two accounts one test at a time, and `just test-paid` the ones needing a subscription; both are the user's. A live run fails on the first sign of Proton rate-limiting rather than pressing on, so a failure that says so means wait, not fix the code.
 2. **Lint** - **always run `just lint`** and fix everything before considering the work done. It formats Go and Nix and regenerates the command reference, then checks the workflows with `actionlint`, the release configuration with `goreleaser check`, the shell scripts with `shellcheck`, and the Go with `golangci-lint` (CGO-free, so no C compiler needed). CI runs the same recipe and then fails on anything it rewrote, so leaving a generated file stale is the same failure as leaving a finding.
 3. **Build** - `just build` produces the release-shaped binary (`-tags=embed_hv` + the CGO webview helper); it needs the toolchain from `devbox shell`.
 4. **Nix, when `go.mod` moved** - `just flake` builds the flake package from the working tree. `vendorHash` in `flake.nix` goes stale on every dependency change and nothing else catches it; the recipe prints the hash to paste in.
 5. **Packaging, when the release surface moved** - `just snapshot` builds every artifact a tag would, without publishing. Run it after touching `.goreleaser.yaml`, the completions or the embedded helpers.
-6. **Coverage, when the CLI's requests moved** - `just coverage` re-records which of Proton's API the live suite reaches. `just test-fast` fails when the CLI can send a request no test has ever sent, so run this after adding or removing one, and read the diff. See [Testing](#testing).
+6. **Coverage, when the CLI's requests moved** - `just coverage` re-records which of Proton's API the live suite reaches. It runs both live suites, so it is the user's too. `just test-fast` fails when the CLI can send a request no test has ever sent, which is how an agent finds out it needs one; ask for the re-record and read the diff together. See [Testing](#testing).
 
 ## Testing
 
 Tests are **integration tests** that run against the live Proton API. They run on the primary and secondary test accounts, and require `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`.
 
-- **`just test-fast` is always safe** - no API, no credentials, about a second to run
-- **`just test` is the gate**, and it is yours to run: about three minutes, and it includes `test-fast`
+- **`just test-fast` is always safe** - no API, no credentials, about a second to run, and the only one an agent starts
+- **`just test` and `just test-paid` are the user's**, not the agent's: minutes each, against real accounts, spending allowances that are metered by the hour. An agent that wants one asks for it and says why.
 - **What limits how often you can run it is the sending allowance, not the clock.** A run sends about seventeen messages and these are free accounts, which Proton caps at fifty an hour and a hundred and fifty a day. Two runs back to back are fine; four in an hour will start failing on the quota, and those failures look like bugs but are not. When in doubt, wait rather than debug.
 - **Single tests are cheaper** (`just test-one TestName`) when verifying one change
 - **`just test-report`** says where the time went and how deep each command's request graph was

@@ -56,13 +56,18 @@ func TestMain(m *testing.M) {
 	writePasswordFiles()
 	openTrace()
 	// A paid run touches an account somebody depends on, so it does as little as
-	// it can: it signs that account in, records what it looked like, and does not
-	// seed anything. A run without the tag never reaches it at all.
+	// it can: it signs that account in and records what it looked like. A run
+	// without the tag never reaches it at all.
+	//
+	// Nothing is seeded here. What the account has to hold is brought about by
+	// the test that reads it, so a run pays only for the fixtures it actually
+	// asks for and one that cannot be made fails those tests rather than all of
+	// them. `just seed` fills an account by hand, through the same declaration.
 	if paidBuild {
 		signInPaid()
 		snapshotPaid()
 	} else {
-		seed()
+		signIn()
 	}
 
 	code := m.Run()
@@ -225,19 +230,16 @@ func writePasswordFiles() {
 	}
 }
 
-// seed signs both accounts in and brings them to the state the fixture declares.
-//
-// Whole assertions here are guarded by a skip when a collection is empty - no
-// contacts, no vaults, no calendars - which is what that data is for. Each datum
-// is judged before it is touched, so an account already in shape costs reads.
-func seed() {
-	cmd := exec.Command("go", "run", "./scripts/seed")
+// signIn brings both free accounts to a signed-in session, which every test
+// needs and nothing else can arrange for itself.
+func signIn() {
+	cmd := exec.Command("go", "run", "./scripts/seed", "--login")
 	cmd.Dir = ".."
 	cmd.Env = append(os.Environ(), "PROTON_CLI="+binaryPath)
 	out, err := cmd.CombinedOutput()
 	fmt.Fprint(os.Stderr, string(out))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to seed the accounts: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to sign the accounts in: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -886,11 +888,22 @@ type seeded struct {
 	attName string
 }
 
-// find locates one seeded message and reads whatever else a test will ask of it.
+// find locates one seeded message, sending it if the account has not got it, and
+// reads whatever else a test will ask of it.
+//
+// It sends rather than failing because a fixture is brought about when something
+// needs it: a run that reads no mail sends none, and an account that has never
+// been seeded fills itself as the tests that need it ask.
 func find(m fixture.Mail) (seeded, error) {
 	id := inboxMessageID(m.Subject)
 	if id == "" {
-		return seeded{}, fmt.Errorf("the inbox holds no message subject %q; run `just seed`", m.Subject)
+		if err := deliver(m); err != nil {
+			return seeded{}, err
+		}
+		id = inboxMessageID(m.Subject)
+	}
+	if id == "" {
+		return seeded{}, fmt.Errorf("the inbox holds no message subject %q and one could not be sent", m.Subject)
 	}
 	s := seeded{msgID: id, subject: m.Subject, convID: conversationIDOf(id)}
 	if m.Attach == "" {
@@ -912,6 +925,58 @@ func find(m fixture.Mail) (seeded, error) {
 	// The listing leaves inline parts out by default, so this is the regular one.
 	s.attID, s.attName = env.Attachments[0].ID, env.Attachments[0].Name
 	return s, nil
+}
+
+// deliver sends one of the fixture's messages and waits for it to arrive.
+//
+// The files an attachment needs are written where this run can reach them, which
+// is why the fixture declares their contents rather than a path.
+func deliver(m fixture.Mail) error {
+	send := []string{"mail", "messages", "send", "--to", selfEmail(), "--subject", m.Subject, "--body", m.Body}
+	if m.HTML {
+		send = append(send, "--html")
+	}
+	for flag, name := range map[string]string{"--attach": m.Attach, "--attach-inline": m.Inline} {
+		if name == "" {
+			continue
+		}
+		path, err := fixtureFile(name)
+		if err != nil {
+			return err
+		}
+		send = append(send, flag, path)
+	}
+	if _, stderr, code, err := runArgs(nil, send...); err != nil || code != 0 {
+		return fmt.Errorf("send the %q fixture (exit %d): %v: %s", m.Subject, code, err, stderr)
+	}
+	if !waitFor(90*time.Second, 3*time.Second, func() bool { return inboxMessageID(m.Subject) != "" }) {
+		return fmt.Errorf("the %q fixture was sent and has not arrived", m.Subject)
+	}
+	return nil
+}
+
+// fixtureFile writes one of the files the fixture uploads, once per run, and
+// says where it is.
+var fixtureDir = sync.OnceValues(func() (string, error) { return os.MkdirTemp("", "proton-cli-fixture-*") })
+
+func fixtureFile(name string) (string, error) {
+	dir, err := fixtureDir()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, name)
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	}
+	body := fixture.Files()[name]
+	if body == "" {
+		// Some bulk, so a listing shows a size worth reading.
+		body = strings.Repeat("proton-cli\n", 4000)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // The lookups happen at most once per run, and only if something asks.

@@ -80,3 +80,11 @@ var Mutable = []Mail{
 
 // All is every message the suite expects, for the seed to reconcile.
 func All() []Mail { return append([]Mail{Plain, Quoted, Attachments}, Mutable...) }
+
+// AliasName is the Pass alias the suite reads rather than makes.
+//
+// Making an alias is the tightest thing the free plan meters - a handful an
+// hour, against five tests that each want one - so only the test about creating
+// one makes its own. The address behind this is Proton's to choose and differs
+// per account, which is why the name is what identifies it.
+const AliasName = "Newsletters"

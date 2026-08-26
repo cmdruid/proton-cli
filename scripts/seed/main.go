@@ -92,7 +92,7 @@ func main() {
 			// Then everything the account holds, in lanes: a folder has to exist
 			// before the file in it, so collections of the same thing keep their
 			// order, while a label and a vault have nothing to do with each other.
-			lanes := lanesOf(mailbox(work), func(c collection) { r.reconcile(a.profile, c) })
+			lanes := lanesOf(fixture.Mailbox(work), func(c fixture.Collection) { r.reconcile(a.profile, c) })
 			lanes = append(lanes,
 				func() { r.photos(a.profile, work) },
 				func() {
@@ -128,14 +128,14 @@ func main() {
 // lanesOf groups collections by the thing they hold. Two collections of the same
 // thing are reconciled in order, because that is where a dependency between them
 // can exist - a folder and the file inside it are both "drive".
-func lanesOf(cs []collection, reconcile func(collection)) []func() {
+func lanesOf(cs []fixture.Collection, reconcile func(fixture.Collection)) []func() {
 	var order []string
-	by := map[string][]collection{}
+	by := map[string][]fixture.Collection{}
 	for _, c := range cs {
-		if _, seen := by[c.what]; !seen {
-			order = append(order, c.what)
+		if _, seen := by[c.What]; !seen {
+			order = append(order, c.What)
 		}
-		by[c.what] = append(by[c.what], c)
+		by[c.What] = append(by[c.What], c)
 	}
 	lanes := make([]func(), 0, len(order))
 	for _, what := range order {
@@ -196,7 +196,7 @@ func signIn(profile, address, password string) error {
 }
 
 func writeFiles(work string) error {
-	for name, body := range files {
+	for name, body := range fixture.Files() {
 		if body == "" {
 			// A file with some bulk, so a listing shows a size worth reading.
 			body = strings.Repeat("proton-cli\n", 4000)
@@ -246,7 +246,7 @@ func (r *report) across(work string) {
 	from, to := os.Getenv(accounts[0].userVar), os.Getenv(accounts[1].userVar)
 	fmt.Println("between the two")
 
-	found, err := rows("secondary", "mail", "messages", "list", "--subject", "Trip photos", "--folder", "inbox", "--page-size", "1")
+	found, err := fixture.Rows(seedRunner, "secondary", "mail", "messages", "list", "--subject", "Trip photos", "--folder", "inbox", "--page-size", "1")
 	switch {
 	case err != nil:
 		r.fail("mail: primary -> secondary", err)
@@ -261,15 +261,15 @@ func (r *report) across(work string) {
 			[]string{"drive", "items", "share", "add", "/Documents", to, "--edit", "--message", "Have a look"})
 	}
 
-	events, err := rows("secondary", "calendar", "events", "list", "--start", today(), "--end", inDays(30))
+	events, err := fixture.Rows(seedRunner, "secondary", "calendar", "events", "list", "--start", fixture.Today(), "--end", fixture.InDays(30))
 	switch {
 	case err != nil:
 		r.fail("calendar: invitation", err)
 	default:
-		if _, ok := find(events, "title", "Quarterly sync"); !ok {
+		if _, ok := fixture.Find(events, "title", "Quarterly sync"); !ok {
 			r.make("secondary", "calendar: invitation awaiting a response",
 				[]string{"calendar", "events", "create", "--title", "Quarterly sync",
-					"--start", inDays(5) + "T14:00", "--duration", "30m", "--attendee", from})
+					"--start", fixture.InDays(5) + "T14:00", "--duration", "30m", "--attendee", from})
 		}
 	}
 }

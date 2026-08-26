@@ -16,183 +16,6 @@ import (
 // second reason. Nothing here uses the `proton-cli-test-` prefix, which belongs
 // to the artifacts the suite makes and clears up itself.
 
-// panelMail is what the README panel shows, in the order it shows it.
-var panelMail = []struct{ subject, body, attach string }{
-	{"Invoice #2291 is ready", "Your invoice for this month is attached to your account.", ""},
-	{"Your monthly security report", "No unusual sign-ins this month.", ""},
-	{"Re: hiking weekend", "The north trail is open again - shall we take it?", "packing-list.txt"},
-}
-
-// files the fixture uploads, and their contents.
-var files = map[string]string{
-	"packing-list.txt": "Two tents, a stove, and the good map.\n",
-	"trail-map.txt":    "The north trail is open again.\n",
-	"panorama.jpg":     "",
-}
-
-func mailbox(work string) []collection {
-	return []collection{{
-		what:   "label",
-		list:   []string{"mail", "settings", "labels", "list"},
-		key:    "name",
-		idKeys: []string{"id"},
-		remove: []string{"mail", "settings", "labels", "delete"},
-		pins: []pin{{
-			id:     "Newsletters",
-			fields: map[string]string{"color": "#8080FF"},
-			create: []string{"mail", "settings", "labels", "create", "--name", "Newsletters", "--color", "#8080FF"},
-		}},
-	}, {
-		what:   "folder",
-		list:   []string{"mail", "settings", "folders", "list"},
-		key:    "name",
-		idKeys: []string{"id"},
-		remove: []string{"mail", "settings", "folders", "delete"},
-		pins: []pin{{
-			id:     "Projects",
-			fields: map[string]string{"color": "#3CBB3A"},
-			create: []string{"mail", "settings", "folders", "create", "--name", "Projects", "--color", "#3CBB3A"},
-		}},
-	}, {
-		what:   "filter",
-		list:   []string{"mail", "settings", "filters", "list"},
-		key:    "name",
-		idKeys: []string{"id"},
-		remove: []string{"mail", "settings", "filters", "delete"},
-		// Disabled, and matching a word none of the fixture's mail carries. A free
-		// account may hold one *active* filter, which the suite needs for itself,
-		// and a filter that fired on the fixture's mail would file it out of the
-		// inbox, which is where the panel looks.
-		pins: []pin{{
-			id:     "Archive newsletters",
-			fields: map[string]string{"status": "0"},
-			create: []string{"mail", "settings", "filters", "create", "--name", "Archive newsletters", "--disabled",
-				"--sieve", `require ["fileinto"]; if header :contains "Subject" "newsletter" { fileinto "Archive"; }`},
-		}},
-	}, {
-		what:   "contact",
-		list:   []string{"contacts", "list"},
-		key:    "name",
-		idKeys: []string{"id"},
-		remove: []string{"contacts", "delete"},
-		pins: []pin{{
-			id:     "Anna Berger",
-			fields: map[string]string{"email": "anna@example.org"},
-			create: []string{"contacts", "create", "--name", "Anna Berger", "--email", "anna@example.org",
-				"--phone", "+43 1 234567", "--organization", "Berger & Co"},
-		}},
-	}, {
-		what:   "vault",
-		list:   []string{"pass", "vaults", "list"},
-		key:    "name",
-		idKeys: []string{"share_id"},
-		remove: []string{"pass", "vaults", "delete"},
-		pins: []pin{{
-			id:     "Personal",
-			create: []string{"pass", "vaults", "create", "--name", "Personal"},
-		}},
-	}, {
-		what:   "pass item",
-		list:   []string{"pass", "items", "list", "--vault", "Personal"},
-		key:    "name",
-		idKeys: []string{"item_id"},
-		remove: []string{"pass", "items", "delete"},
-		pins: []pin{{
-			id:     "GitHub",
-			fields: map[string]string{"type": "login"},
-			create: []string{"pass", "items", "create", "--vault", "Personal", "--name", "GitHub",
-				"--username", "roman", "--url", "github.com", "--password", "correct-horse-battery"},
-		}, {
-			id:     "Home Wi-Fi",
-			fields: map[string]string{"type": "wifi"},
-			create: []string{"pass", "items", "create", "--vault", "Personal", "--type", "wifi",
-				"--name", "Home Wi-Fi", "--ssid", "Fritzbox", "--security", "WPA2", "--password", "hunter2hunter2"},
-		}, {
-			id:     "Door codes",
-			fields: map[string]string{"type": "note"},
-			create: []string{"pass", "items", "create", "--vault", "Personal", "--type", "note",
-				"--name", "Door codes", "--note", "Front door: 1234"},
-		}, {
-			id:     "Travel card",
-			fields: map[string]string{"type": "credit-card"},
-			create: []string{"pass", "items", "create", "--vault", "Personal", "--type", "credit-card",
-				"--name", "Travel card", "--holder", "Anna Berger", "--number", "4111111111111111",
-				"--expiry", "2030-12", "--cvv", "123"},
-		}},
-	}, {
-		what:   "drive",
-		list:   []string{"drive", "items", "list", "/"},
-		key:    "name",
-		idKeys: []string{"link_id"},
-		remove: []string{"drive", "items", "delete"},
-		parent: "/",
-		pins: []pin{{
-			id:     "Documents",
-			fields: map[string]string{"type": "folder"},
-			create: []string{"drive", "items", "create", "/Documents"},
-		}},
-	}, {
-		what:   "drive",
-		list:   []string{"drive", "items", "list", "/Documents"},
-		key:    "name",
-		idKeys: []string{"link_id"},
-		remove: []string{"drive", "items", "delete"},
-		parent: "/Documents",
-		pins: []pin{{
-			id:     "Trips",
-			fields: map[string]string{"type": "folder"},
-			create: []string{"drive", "items", "create", "/Documents/Trips"},
-		}, {
-			id:     "packing-list.txt",
-			fields: map[string]string{"type": "file"},
-			create: []string{"drive", "items", "upload", filepath.Join(work, "packing-list.txt"), "/Documents"},
-		}, {
-			id:     "panorama.jpg",
-			fields: map[string]string{"type": "file"},
-			create: []string{"drive", "items", "upload", filepath.Join(work, "panorama.jpg"), "/Documents"},
-		}},
-	}, {
-		what:   "drive",
-		list:   []string{"drive", "items", "list", "/Documents/Trips"},
-		key:    "name",
-		idKeys: []string{"link_id"},
-		remove: []string{"drive", "items", "delete"},
-		parent: "/Documents/Trips",
-		pins: []pin{{
-			id:     "trail-map.txt",
-			fields: map[string]string{"type": "file"},
-			create: []string{"drive", "items", "upload", filepath.Join(work, "trail-map.txt"), "/Documents/Trips"},
-		}},
-	}, {
-		what:   "event",
-		list:   []string{"calendar", "events", "list", "--start", today(), "--end", inDays(30)},
-		key:    "title",
-		idKeys: []string{"calendar_id", "id"},
-		remove: []string{"calendar", "events", "delete"},
-		pins: []pin{{
-			id: "Dentist",
-			create: []string{"calendar", "events", "create", "--title", "Dentist",
-				"--start", inDays(3) + "T10:00", "--duration", "1h",
-				"--location", "Vienna", "--description", "Six-month check-up"},
-		}, {
-			id: "Standup",
-			create: []string{"calendar", "events", "create", "--title", "Standup",
-				"--start", inDays(3) + "T09:00", "--duration", "15m",
-				"--rrule", "FREQ=WEEKLY;COUNT=5", "--remind", "15m"},
-		}},
-	}}
-}
-
-func today() string       { return time.Now().Format("2006-01-02") }
-func inDays(n int) string { return time.Now().AddDate(0, 0, n).Format("2006-01-02") }
-func inbox() []string     { return []string{"--folder", "inbox"} }
-func attachArg(f string) []string {
-	if f == "" {
-		return nil
-	}
-	return []string{"--attach", f}
-}
-
 // mail brings the panel's three messages to the inbox.
 //
 // Mail is not a collection like the others: it is sent rather than created, it
@@ -200,9 +23,11 @@ func attachArg(f string) []string {
 // message the fixture wants but the inbox lacks is sent; one that is there is
 // left where it is, read or not, because the suite marks messages as part of its
 // own work.
+func inbox() []string { return []string{"--folder", "inbox"} }
+
 func (r *report) mail(profile, address, work string) {
-	for _, m := range panelMail {
-		r.deliver(profile, address, work, fixture.Mail{Subject: m.subject, Body: m.body, Attach: m.attach})
+	for _, m := range fixture.Panel() {
+		r.deliver(profile, address, work, fixture.Mail{Subject: m.Subject, Body: m.Body, Attach: m.Attach})
 	}
 	// What the suite reads. Kept here rather than sent by the suite itself, so a
 	// run spends its sending allowance on the send path it is testing.
@@ -214,7 +39,7 @@ func (r *report) mail(profile, address, work string) {
 // deliver sends one message unless the inbox already holds it.
 func (r *report) deliver(profile, address, work string, m fixture.Mail) {
 	what := "mail: " + m.Subject
-	found, err := rows(profile, append([]string{"mail", "messages", "list",
+	found, err := fixture.Rows(seedRunner, profile, append([]string{"mail", "messages", "list",
 		"--subject", m.Subject, "--page-size", "1"}, inbox()...)...)
 	if err != nil {
 		r.fail(what, err)
@@ -246,12 +71,12 @@ const calendarName = "Default"
 // urgently: a free plan allows three, so a couple of calendars an interrupted run
 // left behind is the difference between the suite working and every test that
 // makes one failing on a limit it has nothing to do with.
-var calendars = collection{
-	what:   "calendar",
-	list:   []string{"calendar", "settings", "calendars", "list"},
-	key:    "name",
-	idKeys: []string{"id"},
-	remove: []string{"calendar", "settings", "calendars", "delete"},
+var calendars = fixture.Collection{
+	What:   "calendar",
+	List:   []string{"calendar", "settings", "calendars", "list"},
+	Key:    "name",
+	IDKeys: []string{"id"},
+	Remove: []string{"calendar", "settings", "calendars", "delete"},
 }
 
 // calendar makes the account's calendar answer to that name.
@@ -261,7 +86,7 @@ var calendars = collection{
 // suite needs to create and delete its own. Renaming the one already there costs
 // nothing.
 func (r *report) calendar(profile string) {
-	list, err := rows(profile, calendars.list...)
+	list, err := fixture.Rows(seedRunner, profile, calendars.List...)
 	if err != nil {
 		r.fail("calendar: "+calendarName, err)
 		return
@@ -271,11 +96,11 @@ func (r *report) calendar(profile string) {
 	r.sweep(profile, calendars, list)
 	var kept []map[string]any
 	for _, row := range list {
-		if !strings.HasPrefix(str(row["name"]), testPrefix) {
+		if !strings.HasPrefix(fixture.Str(row["name"]), fixture.TestPrefix) {
 			kept = append(kept, row)
 		}
 	}
-	if _, ok := find(kept, "name", calendarName); ok {
+	if _, ok := fixture.Find(kept, "name", calendarName); ok {
 		return
 	}
 	if len(kept) == 0 {
@@ -283,7 +108,7 @@ func (r *report) calendar(profile string) {
 		return
 	}
 	r.remake(profile, "calendar: "+calendarName, []string{"calendar", "settings", "calendars",
-		"update", str(kept[0]["id"]), "--name", calendarName})
+		"update", fixture.Str(kept[0]["id"]), "--name", calendarName})
 }
 
 // photoCount is how many photos the library has to hold.
@@ -296,7 +121,7 @@ const photoCount = 3
 // what the tests want: they upload their own and diff the library around it,
 // and a library with nothing in it is the one shape that tells them nothing.
 func (r *report) photos(profile, work string) {
-	list, err := rows(profile, "drive", "photos", "list")
+	list, err := fixture.Rows(seedRunner, profile, "drive", "photos", "list")
 	if err != nil {
 		r.fail("photo", err)
 		return
@@ -343,25 +168,26 @@ func (r *report) stage(profile, address, work string) {
 		r.fail("stage: mark the inbox read", err)
 		return
 	}
-	for _, m := range panelMail {
-		if _, err := run(profile, "--yes", "mail", "messages", "trash", "--subject", m.subject, "--limit", "20"); err != nil {
-			r.fail("stage: clear "+m.subject, err)
+	for _, m := range fixture.Panel() {
+		if _, err := run(profile, "--yes", "mail", "messages", "trash", "--subject", m.Subject, "--limit", "20"); err != nil {
+			r.fail("stage: clear "+m.Subject, err)
 			return
 		}
 	}
 	// Sent oldest first, because an inbox lists newest first and the panel should
 	// read in the order the fixture declares.
-	for i := len(panelMail) - 1; i >= 0; i-- {
-		m := panelMail[i]
-		send := []string{"mail", "messages", "send", "--to", address, "--subject", m.subject, "--body", m.body}
-		if m.attach != "" {
-			send = append(send, attachArg(filepath.Join(work, m.attach))...)
+	panel := fixture.Panel()
+	for i := len(panel) - 1; i >= 0; i-- {
+		m := panel[i]
+		send := []string{"mail", "messages", "send", "--to", address, "--subject", m.Subject, "--body", m.Body}
+		if m.Attach != "" {
+			send = append(send, "--attach", filepath.Join(work, m.Attach))
 		}
 		if _, err := run(profile, send...); err != nil {
-			r.fail("stage: send "+m.subject, err)
+			r.fail("stage: send "+m.Subject, err)
 			return
 		}
-		r.note("+", profile, "mail: "+m.subject)
+		r.note("+", profile, "mail: "+m.Subject)
 	}
 	r.await(profile)
 }
@@ -370,15 +196,15 @@ func (r *report) stage(profile, address, work string) {
 // the send, and a recording follows.
 func (r *report) await(profile string) {
 	deadline := time.Now().Add(2 * time.Minute)
-	for _, m := range panelMail {
+	for _, m := range fixture.Panel() {
 		for {
-			found, err := rows(profile, append([]string{"mail", "messages", "list",
-				"--subject", m.subject, "--page-size", "1"}, inbox()...)...)
+			found, err := fixture.Rows(seedRunner, profile, append([]string{"mail", "messages", "list",
+				"--subject", m.Subject, "--page-size", "1"}, inbox()...)...)
 			if err == nil && len(found) > 0 {
 				break
 			}
 			if time.Now().After(deadline) {
-				r.fail("stage: waiting for "+m.subject, fmt.Errorf("did not arrive"))
+				r.fail("stage: waiting for "+m.Subject, fmt.Errorf("did not arrive"))
 				break
 			}
 			time.Sleep(2 * time.Second)

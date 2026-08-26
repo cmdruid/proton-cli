@@ -104,12 +104,12 @@ snapshot: build
 
 # How many live tests run at once.
 #
-# Two: what limits this is not the client but what the free plan meters. Several
-# tests each need an alias of their own, and Proton allows few per hour, so above
-# this they arrive close enough together to be refused. Raise it one step at a
-# time and only after a full run shows no rate limiting - the suite fails on the
-# first sign of it - and never past eight.
-parallel := "2"
+# One: what limits this is not the client but what the free plan meters, and
+# making an alias is the tightest of them. Several tests need one of their own
+# and Proton allows few per hour, so anything above this has them refused.
+# Raise it one step at a time and only after a full run shows no rate limiting -
+# the suite fails on the first sign of it - and never past eight.
+parallel := "1"
 
 # The timeouts say how long a run may take before something is wrong, not how long
 # it takes: the suite runs in about three minutes and one test in seconds. A
@@ -143,10 +143,6 @@ test-paid: test-fast
 [doc("Every test there is: the free suite, then the paid one")]
 test-all: test
     just test-paid
-
-[doc("The live suite one test at a time, for a run that looks flaky or an account that has been throttled")]
-test-serial: test-fast
-    go test ./tests/ -v -count=1 -timeout 20m -parallel 1
 
 [doc("Unit, golden, conformance and offline tests: no API, no credentials, seconds not minutes")]
 test-fast:

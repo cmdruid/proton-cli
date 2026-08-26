@@ -291,7 +291,7 @@ func TestPassAliasesCreate(t *testing.T) {
 // its mail arrives, whether it is receiving at all, and what it has carried.
 func TestPassAliasesGetShowsTheRoute(t *testing.T) {
 	t.Parallel()
-	ref, _ := makeAlias(t)
+	ref, _ := seededAlias(t)
 
 	got := runJSON(t, "pass", "items", "get", "--", ref)
 	if got["alias_status"] != "enabled" {
@@ -314,7 +314,10 @@ func TestPassAliasesGetShowsTheRoute(t *testing.T) {
 // burns the address, and nothing brings it back.
 func TestPassAliasesDisableAndEnable(t *testing.T) {
 	t.Parallel()
-	ref, address := makeAlias(t)
+	lease(t, sharedAlias)
+	ref, address := seededAlias(t)
+	cleanupRun(t, "Switch the shared alias back on: proton pass aliases enable "+ref,
+		"pass", "aliases", "enable", "--", ref)
 
 	_, stderr := runOKStderr(t, "pass", "aliases", "disable", "--", ref)
 	assertContains(t, stderr, "Disabled alias")
@@ -336,9 +339,13 @@ func TestPassAliasesDisableAndEnable(t *testing.T) {
 // are changed by the same command that changes every other field.
 func TestPassItemsUpdateAliasRoute(t *testing.T) {
 	t.Parallel()
-	ref, _ := makeAlias(t)
+	lease(t, sharedAlias)
+	ref, _ := seededAlias(t)
 	mailbox := runJSON(t, "pass", "items", "get", "--", ref)["alias_mailboxes"].([]interface{})[0].(string)
 	sender := "Jane " + testID()
+	// The display name is the shared alias's, so it goes back to having none.
+	cleanupRun(t, "Clear the shared alias's display name: proton pass items update --display-name \"\" "+ref,
+		"pass", "items", "update", "--display-name", "", "--", ref)
 
 	runOK(t, "pass", "items", "update", "--mailbox", mailbox, "--display-name", sender, "--", ref)
 
@@ -350,18 +357,6 @@ func TestPassItemsUpdateAliasRoute(t *testing.T) {
 	if got["alias_display_name"] != sender {
 		t.Errorf("the alias sends as %v, want %q", got["alias_display_name"], sender)
 	}
-}
-
-// makeAlias creates an alias and hands back its reference and its address.
-func makeAlias(t *testing.T) (ref, address string) {
-	t.Helper()
-	name := testID() + "-alias"
-	prefix := fmt.Sprintf("pcli-%d", time.Now().UnixNano()%1_000_000_000)
-	stdout, stderr := runOKStderr(t, "pass", "aliases", "create", "--prefix", prefix, "--name", name)
-	ref = strings.TrimSpace(stdout)
-	cleanupRun(t, fmt.Sprintf("Delete alias: proton pass items delete %s", name),
-		"pass", "items", "delete", name)
-	return ref, addressIn(t, stderr)
 }
 
 // addressIn picks the email address out of a confirmation line.
@@ -810,7 +805,8 @@ func TestPassAliasMailboxesAndDomains(t *testing.T) {
 // this checks is that Proton hands one back.
 func TestPassAliasContacts(t *testing.T) {
 	t.Parallel()
-	alias, _ := makeAlias(t)
+	lease(t, sharedAlias)
+	alias, _ := seededAlias(t)
 
 	// Listing works on any plan; making one does not. A new alias has none.
 	if rows := runJSONArray(t, "pass", "aliases", "contacts", "list", alias); len(rows) != 0 {

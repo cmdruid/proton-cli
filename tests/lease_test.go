@@ -75,6 +75,11 @@ const (
 	// so two tests changing what a new event inherits would each see the other's
 	// value and put back the wrong one.
 	calendarDefaults = "calendar-defaults"
+	// sharedAlias: making one is what Proton meters hardest, so the suite seeds a
+	// single alias and the tests that need one read it. The ones that change it -
+	// switching it off, pointing it somewhere else, hanging contacts on it - take
+	// turns, and each puts back what it changed.
+	sharedAlias = "shared-alias"
 	// mailTrash: emptying it removes everything in it, including what another
 	// test trashed and means to find again.
 	mailTrash = "mail-trash"
@@ -152,6 +157,9 @@ var touching = []struct {
 	{photos, []string{`photoLinkIDs(t)`}},
 	{driveInvitations, []string{`altInvitationIDs(t)`}},
 	{passLibrary, []string{`passItemRefs(t)`}},
+	{sharedAlias, []string{`seededAlias(t)`, `"aliases", "disable"`}},
+	{sharedAlias, []string{`seededAlias(t)`, `"items", "update"`}},
+	{sharedAlias, []string{`seededAlias(t)`, `"contacts", "create"`}},
 	{pinnedKeys, []string{`"keys", "pin"`, `secondaryEmail()`}},
 	{attachmentThread, []string{`sharedAttachment(t)`, `"forward"`}},
 	{attachmentThread, []string{`findMessageWithAttachment(t)`, `"conversations"`}},
