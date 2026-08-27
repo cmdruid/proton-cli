@@ -1,0 +1,6 @@
+== stdout ==
+{"from_name":"Fastmail Billing","id":"5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv==","subject":"Invoice #2291 is ready"}
+{"from_name":"Trailhead Weekly","id":"9xL4pQrTz2mKd8vBn6cXs1wYf5hJ3gAe7bUi0oQm4nWr2tYv==","subject":"The north trail is open again"}
+{"from_name":"Jane Roe","id":"2mNp7RsVx8kLd4vZn1cQs6wYf9hJ5gAe3bUi0oQm7nWr4tYv==","subject":"Re: Quarterly numbers"}
+== stderr ==
+Watching the inbox and Receipts. Ctrl+C to stop.

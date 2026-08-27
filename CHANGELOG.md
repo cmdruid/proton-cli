@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Adding a version section here is what publishes a release, so this file is the one place a version is decided: see [Releases](CONTRIBUTING.md#releases). Versions that shipped before this file existed are on the [releases page](https://github.com/roman-16/proton-cli/releases).
 
+## [2.7.0] - 2026-08-27
+
+### Added
+
+- `mail messages watch` prints a line the moment a message arrives and stays attached until you stop it. Without `--folder` it covers the inbox and every folder set to notify, and a thread coming back from snooze counts as arriving.
+- `calendar reminders list` says which reminders fall due between two dates, and `calendar reminders watch` prints each one at the second it is due. When a reminder fires is Proton's own answer, so an all-day event reminds at the hour its calendar chose rather than at midnight.
+- `--notify` on `mail settings folders create` and `mail settings folders update` says whether mail landing in a folder is worth being told about. It is what `mail messages watch` covers when you name no folder.
+- A watch's output is a line per thing rather than a collection: under `--output json` each line is one object instead of an envelope with a count, and under `--output yaml` each thing is its own document. Stopping one with Ctrl+C or SIGTERM exits `0`.
+
+### Changed
+
+- `mail settings folders list` shows a `NOTIFY` column, and a folder carries `notify` in JSON. A script reading that text output by column position will shift.
+
 ## [2.6.0] - 2026-08-26
 
 ### Added

@@ -26,6 +26,7 @@ GET /auth/v4/sessions/local/key
 GET /calendar/v1
 GET /calendar/v1/events
 GET /calendar/v1/invitations
+GET /calendar/v1/{id}/alarms
 GET /calendar/v1/{id}/events
 GET /calendar/v1/{id}/events/{id}
 GET /calendar/v1/{id}/invitations
@@ -39,10 +40,12 @@ GET /core/v4/addresses
 GET /core/v4/addresses/canonical
 GET /core/v4/auth/modulus
 GET /core/v4/auth/scopes
+GET /core/v4/events/latest
 GET /core/v4/keys/all
 GET /core/v4/labels
 GET /core/v4/settings
 GET /core/v4/users
+GET /core/v5/events/{id}
 GET /drive/me/settings
 GET /drive/photos/volumes/{id}/albums
 GET /drive/photos/volumes/{id}/albums/{id}/children

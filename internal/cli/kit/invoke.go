@@ -118,6 +118,25 @@ func List[T any](c *Invocation, spec ui.TableSpec[T], items []T, ids func(T) []s
 	return ui.Table(c.UI(), spec, items)
 }
 
+// Watch renders a response with no end: one thing per line, as it happens.
+//
+// It takes the loop rather than being driven by one, because a stream is open
+// for as long as the work lasts and there is no other moment at which the
+// response is finished. run is handed the way to report a thing, and returns
+// when the reader stops watching.
+//
+// IDs are remembered as they go past, exactly as a listing remembers them, so a
+// short ID read off a stream resolves in the next command.
+func Watch[T any](c *Invocation, spec ui.StreamSpec[T], ids func(T) []string, run func(emit func(T) error) error) error {
+	stream := ui.Open(c.UI(), spec)
+	return run(func(item T) error {
+		if ids != nil && c.App.IDCache != nil {
+			_ = c.App.IDCache.Save(ids(item)...)
+		}
+		return stream.Emit(item)
+	})
+}
+
 // Show renders one object.
 func Show(c *Invocation, spec ui.RecordSpec) error { return ui.Record(c.UI(), spec) }
 

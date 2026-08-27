@@ -159,6 +159,9 @@ pg_dump mydb | gzip | proton drive items upload - /Backups/db.sql.gz
 # archive a folder to disk as ordinary .eml files
 proton mail messages export --folder archive --all --output-dir ./mail-backup
 
+# be told when things happen: arrivals and calendar reminders, live
+proton mail messages watch --output json | jq --unbuffered -r '[.from_name,.subject]|@tsv'
+
 # check what a bulk change would touch before it happens
 proton mail messages trash --from newsletter@example.com --older-than 90d --dry-run
 ```

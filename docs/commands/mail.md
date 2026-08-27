@@ -22,6 +22,18 @@ Folders: `inbox`, `sent`, `drafts`, `trash`, `spam`, `archive`, `starred`, `sche
 
 Proton's inbox tabs are folders too: `social`, `promotions`, `updates`, `newsletters`, `transactions`.
 
+### Watch
+
+```bash
+proton mail messages watch
+proton mail messages watch --folder archive --from billing@example.com
+proton mail messages watch --output json | jq -c .
+```
+
+Stays attached and prints a line the moment a message lands, until you stop it. It reports what happens while it is watching, so nothing that arrived beforehand comes up; a thread coming back from snooze counts as landing.
+
+Without `--folder` it covers the inbox plus every folder whose notifications are on, which `settings folders list` shows in its NOTIFY column. Each line carries the time, the message ID, who it is from, and the subject; `--output json` emits one object per line, ready for `jq`. See [Streams](../output.md#streams), and [Desktop notifications](../scripting.md#desktop-notifications-mail-and-calendar-reminders) for turning lines into notifications.
+
 ### Search
 
 Searching is `list` with a predicate, because it is one request to Proton either way. `list` opens on the inbox, so `--folder all` is what widens it to everything.
@@ -304,6 +316,8 @@ proton mail settings labels delete Important        # by name, or by label ID
 Deleting a folder or label names it and asks first; the messages it held are not deleted. See [When it asks first](../language.md#when-it-asks-first).
 
 Colors have to be one of Proton's accent colors; an invalid value prints the whole palette, and is refused before anything is sent.
+
+Folders carry a NOTIFY switch - whether mail landing there is worth telling you about. `folders list` shows it per folder, `folders create --notify=false` and `folders update Receipts --notify` set it, and it decides what `messages watch` covers by default. Proton offers it on folders alone, so labels have neither the flag nor the column.
 
 A message lives in exactly one folder and carries any number of labels. `move --into` takes what `folders list` shows; `label --label` takes what `labels list` shows.
 

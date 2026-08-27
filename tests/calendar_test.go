@@ -1253,3 +1253,86 @@ func TestCalendarEventsImportRefusesAFileWithNoEvents(t *testing.T) {
 		t.Errorf("stderr should say the file holds no events, got: %s", stderr)
 	}
 }
+
+// A reminder is the other side of an event: `reminders list` answers what will
+// interrupt you on those days, where the event itself answers what is on them.
+//
+// A brand-new event's alarm is not served on the alarms endpoint the moment the
+// event is created - the server materialises it shortly after - so the test
+// waits for it rather than asserting on the first read.
+func TestCalendarRemindersListReportsDue(t *testing.T) {
+	t.Parallel()
+	calID := firstCalendarID(t)
+
+	today := time.Now().Format("2006-01-02")
+	start := time.Now().Add(20 * time.Minute).Format("2006-01-02T15:04")
+	title := testID() + "-remindo"
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", title,
+		"--start", start, "--duration", "15m", "--remind", "15m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
+		"calendar", "events", "delete", eventID)
+
+	// The alarm appears only once the server has materialised it; poll until it
+	// does, then assert it reads a reminder. The wording lives in the JSON `says`
+	// field, not in the text columns, so it is asserted there.
+	waitFor(60*time.Second, 2*time.Second, func() bool {
+		return strings.Contains(runOK(t, "calendar", "reminders", "list", "--start", today, "--end", today), title)
+	})
+	got := runJSON(t, "calendar", "reminders", "list", "--start", today, "--end", today)
+	for _, raw := range got["reminders"].([]interface{}) {
+		row := raw.(map[string]interface{})
+		if row["title"] != title {
+			continue
+		}
+		if row["remind"] != "15m" {
+			t.Errorf("remind = %v, want 15m", row["remind"])
+		}
+		says, _ := row["says"].(string)
+		if !strings.Contains(says, "starts") && !strings.Contains(says, "started") {
+			t.Errorf("says = %q, want a starts/started wording", says)
+		}
+		return
+	}
+	t.Fatalf("created event %q never appeared in reminders list", title)
+}
+
+// `watch` sleeps until the moment and prints it, so an event about to remind
+// produces a line at its firing second rather than at the next poll.
+func TestCalendarRemindersWatchRaisesOnTime(t *testing.T) {
+	t.Parallel()
+	calID := firstCalendarID(t)
+
+	// A minute's warning for an event starting two minutes out leaves the
+	// reminder a minute out, and by the time the alarm has materialised and the
+	// watch is up the reminder is still ahead of us.
+	today := time.Now().Format("2006-01-02")
+	start := time.Now().Add(2 * time.Minute).Format("2006-01-02T15:04")
+	title := testID() + "-remindw"
+	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
+		"--calendar", calID, "--title", title,
+		"--start", start, "--duration", "10m", "--remind", "1m"))
+	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
+		"calendar", "events", "delete", eventID)
+
+	// Start the watch only once the alarm exists, so its first read finds it
+	// rather than racing the server materialising it.
+	waitFor(60*time.Second, 2*time.Second, func() bool {
+		return strings.Contains(runOK(t, "calendar", "reminders", "list", "--start", today, "--end", today), title)
+	})
+	w, err := watchAs(primary, "calendar", "reminders", "watch", "--calendar", calID)
+	if err != nil {
+		t.Fatalf("start reminders watch: %v", err)
+	}
+	defer w.stop(t)
+	w.waitReady(t, 10*time.Second)
+
+	line := w.waitForLine(t, 90*time.Second, func(l string) bool {
+		return strings.Contains(l, title)
+	})
+	// The wording is Proton's - "starts at" for one ahead, "started at" for one
+	// already begun - so accept either.
+	if !strings.Contains(line, "starts") && !strings.Contains(line, "started") {
+		t.Fatalf("reminder line %q does not read like a reminder", line)
+	}
+}

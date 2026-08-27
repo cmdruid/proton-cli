@@ -15,7 +15,7 @@ import (
 func messagesCmd() *cobra.Command {
 	c := &cobra.Command{Use: "messages", Short: "Individual messages"}
 	c.AddCommand(
-		listCmd(), getCmd(), sendCmd(), replyCmd(), forwardCmd(), exportCmd(),
+		listCmd(), watchCmd(), getCmd(), sendCmd(), replyCmd(), forwardCmd(), exportCmd(),
 		emptyCmd(), expireCmd(), unsubscribeCmd(),
 		moveCmd(), labelCmd(), unlabelCmd(), starCmd(), unstarCmd(), markCmd(),
 		trashCmd(), deleteCmd(), unscheduleCmd(), attachmentsCmd(),

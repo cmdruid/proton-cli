@@ -27,8 +27,9 @@ const (
 // the one that reads as ordinary English.
 var Verbs = map[string]string{
 	// Reading
-	"list": "enumerate a collection",
-	"get":  "show one thing in full",
+	"list":  "enumerate a collection",
+	"get":   "show one thing in full",
+	"watch": "stay attached and report each thing as it happens",
 
 	// Writing
 	"create": "make a new thing",

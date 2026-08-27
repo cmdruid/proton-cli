@@ -70,6 +70,19 @@ func Quantity(n int, plural string) string {
 	return fmt.Sprintf("%d %s", n, plural)
 }
 
+// Listing writes names out the way a sentence does: "the inbox", "the inbox and
+// Receipts", "the inbox, Receipts and Team". A comma-separated run reads like a
+// field; this reads like something said to a person.
+func Listing(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
 // Singular derives the singular of a collection noun. Collection names in this
 // CLI are ordinary English plurals, so two suffix rules cover all of them:
 // "addresses"/"aliases" lose "es", everything else loses "s".

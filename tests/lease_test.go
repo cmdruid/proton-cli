@@ -218,44 +218,53 @@ func TestEveryTestRunsInParallelUnlessItSaysWhy(t *testing.T) {
 
 // resourceConst is the identifier a lease is written with, from the value it
 // holds, so the error names what to paste.
+// resourceNames is the identifier each resource is written with, so an error
+// names what to paste. It is a map rather than a switch because the guard below
+// has to tell a missing entry from one that happens to read the same as its own
+// value, which `photos` and `sending` both do.
+var resourceNames = map[string]string{
+	accountSettings:  "accountSettings",
+	addressIdentity:  "addressIdentity",
+	attachmentThread: "attachmentThread",
+	autoReplySetting: "autoReplySetting",
+	calendarDefaults: "calendarDefaults",
+	calendarSlot:     "calendarSlot",
+	driveInvitations: "driveInvitations",
+	driveTrash:       "driveTrash",
+	filterSlot:       "filterSlot",
+	folderSlot:       "folderSlot",
+	labelSlot:        "labelSlot",
+	mailSettings:     "mailSettings",
+	mailTrash:        "mailTrash",
+	passLibrary:      "passLibrary",
+	photos:           "photos",
+	pinnedKeys:       "pinnedKeys",
+	sending:          "sending",
+	sharedAlias:      "sharedAlias",
+	vaultSlot:        "vaultSlot",
+}
+
 func resourceConst(resource string) string {
-	switch resource {
-	case accountSettings:
-		return "accountSettings"
-	case mailSettings:
-		return "mailSettings"
-	case addressIdentity:
-		return "addressIdentity"
-	case autoReplySetting:
-		return "autoReplySetting"
-	case photos:
-		return "photos"
-	case driveInvitations:
-		return "driveInvitations"
-	case passLibrary:
-		return "passLibrary"
-	case pinnedKeys:
-		return "pinnedKeys"
-	case driveTrash:
-		return "driveTrash"
-	case mailTrash:
-		return "mailTrash"
-	case attachmentThread:
-		return "attachmentThread"
-	case calendarSlot:
-		return "calendarSlot"
-	case calendarDefaults:
-		return "calendarDefaults"
-	case vaultSlot:
-		return "vaultSlot"
-	case labelSlot:
-		return "labelSlot"
-	case folderSlot:
-		return "folderSlot"
-	case filterSlot:
-		return "filterSlot"
+	if name, ok := resourceNames[resource]; ok {
+		return name
 	}
 	return resource
+}
+
+// Every resource the guard above can report has to have its identifier here.
+// Without one it falls back to the raw value and the guard then looks for
+// `lease(t, shared-alias)` in the source - which nobody would ever write, since
+// the tests say `lease(t, sharedAlias)`. Three correctly leased Pass tests were
+// reported as unleased on every live run until that was spotted, so the mapping
+// is checked rather than remembered.
+func TestEveryTouchedResourceHasItsConstantName(t *testing.T) {
+	t.Parallel()
+	for _, s := range touching {
+		if _, ok := resourceNames[s.resource]; !ok {
+			t.Errorf("resourceNames has no entry for %q, so the guard would tell people to write lease(t, %s)",
+				s.resource, s.resource)
+		}
+	}
 }
 
 func containsAll(body string, phrases []string) bool {

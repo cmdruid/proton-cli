@@ -133,6 +133,29 @@ ID                         DATE        TIME   DURATION  TITLE    LOCATION
 
 `--future` on the first occurrence is refused, because nothing would be left: delete or update the series instead.
 
+## Reminders
+
+An event's reminders are the notifications it raises. `events list` shows which triggers an event carries; `reminders list` answers the other question - when they go off:
+
+```console
+$ proton calendar reminders list --start 2026-08-27 --end 2026-08-28
+ID                         FIRES             REMIND  TITLE    STARTS
+─────────────────────────  ────────────────  ──────  ───────  ────────────────
+7bd3e011                   2026-08-27 06:00  6h      Piano    2026-08-27 all day
+4f2a1b9c@2026-08-27T09:00  2026-08-28 08:45  15m     Standup  2026-08-28 09:00
+```
+
+A reminder is listed on the day it goes off, not the day its event is on: an event with two triggers is two rows, and a recurring one is a row per occurrence. When each reminder fires is Proton's to say - an all-day event's goes off at the calendar's chosen morning hour, whatever trigger produced it, and an event leaning on its calendar's default notifications still appears. Emailed reminders are Proton's to send and are left out.
+
+The same rows live:
+
+```bash
+proton calendar reminders watch
+proton calendar reminders watch --calendar Work --output json | jq -c .
+```
+
+`watch` sleeps until the moment rather than checking every so often, so a line lands on the second the reminder is due, and re-reads your calendars as it goes so an event added or moved meanwhile still reminds you. Each line's last column is the sentence a notification would say (`says` in JSON). See [Desktop notifications](../scripting.md#desktop-notifications-mail-and-calendar-reminders).
+
 ## Time formats
 
 | Flag | Accepts |

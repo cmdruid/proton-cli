@@ -246,6 +246,7 @@ var flagMeanings = map[string]string{
 	"no-quote":               "do not quote the message being answered",
 	"no-remind":              "leave an event with no reminder",
 	"no-signature":           "leave the signature out",
+	"notify":                 "tell you when mail arrives in a folder",
 	"note":                   "free-text note",
 	"number":                 "a payment card number",
 	"older-than":             "select things older than a duration",

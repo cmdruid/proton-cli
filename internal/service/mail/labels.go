@@ -20,6 +20,25 @@ type Label struct {
 	Color string `json:"color"`
 	Type  int    `json:"type"`
 	Path  string `json:"path,omitempty"`
+	// Notify says whether mail landing in a folder is worth telling the reader
+	// about. It is nil for a label, which is not a place mail lands: Proton
+	// offers the switch on folders alone, so reporting one on a label would be
+	// inventing a setting nobody can change.
+	Notify *bool `json:"notify,omitempty"`
+}
+
+// Notifies reports whether this is somewhere a watch should report arrivals.
+func (l Label) Notifies() bool { return l.Notify != nil && *l.Notify }
+
+// LabelSpec is what a label or folder is made of. One type for both writes, so
+// creating and updating cannot disagree about what the fields mean.
+type LabelSpec struct {
+	Name   string
+	Color  string
+	Parent string
+	// Notify is nil when the caller is not saying, which on an update leaves it
+	// as it was.
+	Notify *bool
 }
 
 // rawLabel is a label as Proton keeps it. Updating one replaces the whole
@@ -53,19 +72,27 @@ func (s *Service) labelsOfType(ctx context.Context, t int) ([]Label, error) {
 	}
 	out := make([]Label, 0, len(r.Labels))
 	for _, l := range r.Labels {
-		out = append(out, Label{ID: l.ID, Name: l.Name, Color: l.Color, Type: l.Type, Path: l.Path})
+		row := Label{ID: l.ID, Name: l.Name, Color: l.Color, Type: l.Type, Path: l.Path}
+		if t == labelTypeFolder {
+			notify := l.Notify == 1
+			row.Notify = &notify
+		}
+		out = append(out, row)
 	}
 	return out, nil
 }
 
-func (s *Service) LabelCreate(ctx context.Context, name, color string, isFolder bool, parentID string) (string, error) {
+func (s *Service) LabelCreate(ctx context.Context, spec LabelSpec, isFolder bool) (string, error) {
 	t := labelTypeLabel
 	if isFolder {
 		t = labelTypeFolder
 	}
-	body := map[string]any{"Name": name, "Color": color, "Type": t}
-	if parentID != "" {
-		body["ParentID"] = parentID
+	body := map[string]any{"Name": spec.Name, "Color": spec.Color, "Type": t}
+	if spec.Parent != "" {
+		body["ParentID"] = spec.Parent
+	}
+	if spec.Notify != nil {
+		body["Notify"] = boolInt(*spec.Notify)
 	}
 	var r struct{ Label struct{ ID string } }
 	if err := s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/core/v4/labels", Body: body}, &r); err != nil {
@@ -80,23 +107,34 @@ func (s *Service) LabelCreate(ctx context.Context, name, color string, isFolder 
 // Name is refused - so the current one is read and the changes are laid over it.
 // Everything else travels back unchanged, which is what stops a recolour
 // clearing whether a folder notifies or where it sits.
-func (s *Service) LabelUpdate(ctx context.Context, id, name, color, parentID string) error {
+func (s *Service) LabelUpdate(ctx context.Context, id string, spec LabelSpec) error {
 	cur, err := s.labelByID(ctx, id)
 	if err != nil {
 		return err
 	}
+	notify := cur.Notify
+	if spec.Notify != nil {
+		notify = boolInt(*spec.Notify)
+	}
 	body := map[string]any{
-		"Name":     pick(name, cur.Name),
-		"Color":    pick(color, cur.Color),
-		"Notify":   cur.Notify,
+		"Name":     pick(spec.Name, cur.Name),
+		"Color":    pick(spec.Color, cur.Color),
+		"Notify":   notify,
 		"Sticky":   cur.Sticky,
 		"Expanded": cur.Expanded,
 		"Display":  cur.Display,
 	}
-	if p := pick(parentID, cur.ParentID); p != "" {
+	if p := pick(spec.Parent, cur.ParentID); p != "" {
 		body["ParentID"] = p
 	}
 	return s.C.Decode(ctx, proton.Request{Method: "PUT", Path: "/core/v4/labels/" + id, Body: body}, nil)
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // labelByID finds a label or a folder. They are one resource to Proton, listed

@@ -1,6 +1,6 @@
 # Output
 
-Everything proton prints is one of four things, and each looks the same wherever it appears.
+Everything proton prints is one of five things, and each looks the same wherever it appears.
 
 ## stdout is the answer, stderr is everything else
 
@@ -10,7 +10,7 @@ Data goes to stdout. Progress bars, confirmations, table footers, warnings, prom
 proton drive items download /report.pdf --output - > report.pdf
 ```
 
-## Four kinds of response
+## Four kinds of response that end
 
 ### Collections
 
@@ -100,6 +100,24 @@ When something is created its ID goes to **stdout** and the confirmation to stde
 ```bash
 LABEL=$(proton mail settings labels create --name Work)
 ```
+
+## Streams
+
+A few commands stay attached instead of ending - `mail messages watch`, `calendar reminders watch`. Their response is a line per thing, printed the moment it happens, and it ends when you stop it rather than when the data runs out.
+
+In text, each line carries the time, a reference you can act on, and the rest:
+
+```console
+$ proton mail messages watch
+14:32  5bH2mQxK  Fastmail Billing      Invoice #2291 ready
+14:41  9xL4pQrT  Trailhead             Weekly digest
+```
+
+There is no header rule and no footer: a table measures its columns across every row it holds, and a stream has no every row.
+
+In a machine format there is no envelope either, because an envelope has to be closed. Each line is one object, which is what `jq` reads without `--slurp`; under `--output yaml` each thing is its own document.
+
+Stopping one is not an error: Ctrl+C or a service manager's SIGTERM ends it quietly with exit `0`, so a unit that runs one does not log a failure every time you stop it.
 
 ## Errors
 

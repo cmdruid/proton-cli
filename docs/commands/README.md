@@ -23,6 +23,8 @@ Calendars and events
 | `calendar invitations accept REF...` | Take a calendar somebody offered you |
 | `calendar invitations decline REF...` | Turn down a calendar somebody offered you |
 | `calendar invitations list` | List calendars other people have offered you |
+| `calendar reminders list` | List the reminders due in a date range |
+| `calendar reminders watch` | Print each reminder as it comes due |
 | `calendar settings calendars create` | Create a calendar, or subscribe to one published elsewhere |
 | `calendar settings calendars delete REF...` | Delete calendars, and every event in them |
 | `calendar settings calendars get REF` | Show one calendar, with the defaults it gives new events |
@@ -162,6 +164,7 @@ Read, write and organize mail
 | `mail messages unschedule [REF...]` | Cancel a scheduled send, returning the message to drafts |
 | `mail messages unstar [REF...]` | Remove the star from messages |
 | `mail messages unsubscribe REF...` | Ask a mailing list to stop |
+| `mail messages watch` | Print each message as it arrives |
 | `mail settings addresses get REF` | Show one address, including its signature |
 | `mail settings addresses list` | List the addresses on the account |
 | `mail settings addresses update REF` | Set an address's display name or signature |

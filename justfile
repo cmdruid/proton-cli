@@ -112,11 +112,15 @@ snapshot: build
 parallel := "1"
 
 # The timeouts say how long a run may take before something is wrong, not how long
-# it takes: the suite runs in about three minutes and one test in seconds. A
-# timeout of half an hour would let a hang look like a slow day.
+# it takes, so they are sized to the setting above rather than to an ambition.
+# One at a time, the suite is several hundred tests that each wait on Proton in
+# turn, which is twenty minutes of honest work - a ten-minute limit timed every
+# run out mid-suite and read as a hang. Raising `parallel` is what makes it quick
+# again; until then the limit has to clear the serial cost, and one test still
+# answers in seconds.
 [doc("The live-API suite against the two free test accounts, and everything that needs no account")]
 test: test-fast
-    go test ./tests/ -v -count=1 -timeout 10m -parallel {{ parallel }} -shuffle=on
+    go test ./tests/ -v -count=1 -timeout 30m -parallel {{ parallel }} -shuffle=on
 
 [doc("The tests that need a paid plan, against the account in PROTON_CLI_TEST_PAID_*")]
 test-paid: test-fast
@@ -167,7 +171,7 @@ coverage:
     set -euo pipefail
     trace="${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
     PROTON_CLI_TEST_TRACE="$trace" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
-        go test ./tests/ -count=1 -timeout 10m -parallel {{ parallel }}
+        go test ./tests/ -count=1 -timeout 30m -parallel {{ parallel }}
     # Both suites, because the golden is what every request the CLI can send has
     # to appear in, and some of them only a paid plan can reach. Without a paid
     # account the free half is recorded on its own and the paid endpoints show up

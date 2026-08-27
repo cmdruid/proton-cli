@@ -525,6 +525,14 @@ func TestPassItemTOTPCode(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete item: proton pass items delete %s", ref),
 		"pass", "items", "delete", "--", ref)
 
+	// Under a full run's load Pass does not always have a just-created item ready
+	// to read - it answers 2501 for a moment - so the code is asked for until the
+	// item is there rather than on the first try.
+	waitFor(30*time.Second, 2*time.Second, func() bool {
+		_, _, code := run(t, "pass", "items", "totp", "--", ref)
+		return code == 0
+	})
+
 	got := runJSON(t, "pass", "items", "totp", "--", ref)
 	code, _ := got["code"].(string)
 	if len(code) != 6 {

@@ -81,6 +81,16 @@ var examples = map[string][]string{
 		"proton calendar events list --start 2026-04-15 --end 2026-04-30",
 		"proton calendar events list --calendar Work",
 	},
+	"proton calendar reminders list": {
+		"proton calendar reminders list",
+		"proton calendar reminders list --start 2026-04-20 --end 2026-04-21",
+		"proton calendar reminders list --calendar Work --output json",
+	},
+	"proton calendar reminders watch": {
+		"proton calendar reminders watch",
+		"proton calendar reminders watch --calendar Work",
+		"proton calendar reminders watch --output json",
+	},
 	"proton calendar events get": {
 		"proton calendar events get Dentist",
 		"proton calendar events get 4f2a1b9c@2026-04-22T09:00",
@@ -304,6 +314,12 @@ var examples = map[string][]string{
 		"proton mail messages list --from billing@example.com --folder all",
 		"proton mail messages list --keyword invoice --after 2026-01-01 --folder all",
 	},
+	"proton mail messages watch": {
+		"proton mail messages watch",
+		"proton mail messages watch --folder all",
+		"proton mail messages watch --from billing@example.com",
+		"proton mail messages watch --output json",
+	},
 	"proton mail messages get": {
 		"proton mail messages get 'Invoice #2291'",
 		"proton mail messages get 5bH2mQxK --render html",
@@ -472,9 +488,11 @@ var examples = map[string][]string{
 	"proton mail settings folders create": {
 		"proton mail settings folders create --name Receipts",
 		"proton mail settings folders create --name 2026 --parent Receipts --color olive",
+		"proton mail settings folders create --name Receipts --notify=false",
 	},
 	"proton mail settings folders update": {
 		"proton mail settings folders update Receipts --name Invoices",
+		"proton mail settings folders update Receipts --notify",
 	},
 	"proton mail settings folders delete": {"proton mail settings folders delete Receipts"},
 	"proton mail settings addresses list": {"proton mail settings addresses list"},

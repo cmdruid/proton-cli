@@ -1208,6 +1208,42 @@ func TestMailFoldersCreateDelete(t *testing.T) {
 	assertNotContains(t, runOK(t, "mail", "settings", "labels", "list"), name)
 }
 
+// The NOTIFY column is what `messages watch` leans on for its default, so it
+// has to round-trip: a folder created without telling you, and one turned on.
+func TestMailFoldersNotifyToggles(t *testing.T) {
+	t.Parallel()
+	lease(t, folderSlot)
+	name := testID() + "-quiet"
+
+	notify := func(name string) string {
+		t.Helper()
+		for _, r := range runJSONArray(t, "mail", "settings", "folders", "list") {
+			row, ok := r.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if row["name"] == name {
+				return fmt.Sprint(row["notify"])
+			}
+		}
+		t.Fatalf("folder %q not found in folders list", name)
+		return ""
+	}
+
+	id := strings.TrimSpace(runOK(t, "mail", "settings", "folders", "create",
+		"--name", name, "--color", "#8080FF", "--notify=false"))
+	cleanupRun(t, fmt.Sprintf("Delete folder: proton mail settings folders delete %s", id),
+		"mail", "settings", "folders", "delete", "--", id)
+	if got := notify(name); got != "false" {
+		t.Fatalf("folder created with --notify=false reports %s, want false", got)
+	}
+
+	runOK(t, "mail", "settings", "folders", "update", "--notify", id)
+	if got := notify(name); got != "true" {
+		t.Fatalf("folder updated with --notify reports %s, want true", got)
+	}
+}
+
 // ── filters ──
 
 func TestMailFiltersCRUD(t *testing.T) {

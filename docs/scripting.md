@@ -119,6 +119,77 @@ proton drive items download /report.pdf --output - | gpg --encrypt --recipient m
 
 ## Recipes
 
+### Desktop notifications (mail and calendar reminders)
+
+`mail messages watch` and `calendar reminders watch` stay attached and print a line the moment something happens, so whatever shows notifications on your machine reads from them:
+
+```bash
+# Linux: every arrival becomes a desktop notification
+proton mail messages watch --output json |
+  jq --unbuffered -r '[.from_name, .subject] | @tsv' |
+  while IFS=$'\t' read -r from subject; do notify-send "$from" "$subject"; done
+
+# macOS
+proton mail messages watch --output json |
+  jq --unbuffered -r '[.from_name, .subject] | @tsv' |
+  while IFS=$'\t' read -r from subject; do
+    osascript -e "display notification \"$subject\" with title \"$from\""
+  done
+
+# Windows (PowerShell, with the BurntToast module)
+proton mail messages watch --output json | jq --unbuffered -c . | ForEach-Object {
+  New-BurntToastNotification -Text $_.from_name, $_.subject
+}
+```
+
+Calendar reminders carry a ready-made sentence in `says`, so theirs is shorter:
+
+```bash
+proton calendar reminders watch --output json |
+  jq --unbuffered -r .says |
+  while read -r line; do notify-send "Reminder" "$line"; done
+```
+
+A watcher reports what happens while it is watching; it never replays what arrived before it started. It asks Proton for changes at the same interval its web client does.
+
+### Watching under systemd
+
+```ini
+# ~/.config/systemd/user/proton-mail-watch.service
+[Unit]
+Description=Proton Mail arrivals
+
+[Service]
+Environment=PROTON_NO_INPUT=1
+ExecStart=/bin/sh -c 'proton mail messages watch --quiet --output json \
+  | jq --unbuffered -r "[.from_name, .subject] | @tsv" \
+  | while IFS=$(printf "\t") read -r f s; do notify-send "$f" "$s"; done'
+Restart=always
+
+[Install]
+WantedBy=default.target
+```
+
+```ini
+# ~/.config/systemd/user/proton-reminders-watch.service
+[Unit]
+Description=Proton Calendar reminders
+
+[Service]
+Environment=PROTON_NO_INPUT=1
+ExecStart=/bin/sh -c 'proton calendar reminders watch --quiet --output json \
+  | jq --unbuffered -r .says \
+  | while read -r line; do notify-send Reminder "$line"; done'
+Restart=always
+
+[Install]
+WantedBy=default.target
+```
+
+`systemctl --user enable --now proton-mail-watch proton-reminders-watch` starts both. A watch stops cleanly on SIGTERM, so `systemctl --user stop` is not logged as a failure.
+
+Which folders count as an arrival is a setting of its own: `mail settings folders list` shows it per folder in NOTIFY, and `folders create`/`update` take `--notify`. Without `--folder`, the watch covers the inbox plus every folder marked that way.
+
 ### Nightly backup (cron)
 
 ```cron
