@@ -48,6 +48,11 @@ const (
 	conversationNotFoundCode = 20052
 )
 
+// invalidLoginCode is what Proton answers when the credentials are refused: a
+// wrong password, or a wrong two-factor code. The web clients read the one code
+// for both (PASSWORD_WRONG_ERROR, packages/shared/lib/api/auth.ts).
+const invalidLoginCode = 8002
+
 // succeeded reports whether a Proton code is one of the ways of saying it worked:
 // done, one answer per item, or accepted and being carried out in the background.
 func succeeded(code int) bool {
@@ -110,6 +115,8 @@ func (e *APIError) ExitCode() int {
 	switch e.Code {
 	case invalidIDCode, notFoundCode, conversationNotFoundCode:
 		return 3
+	case invalidLoginCode:
+		return 2
 	}
 	switch e.HTTPStatus {
 	case 401, 403:
@@ -118,6 +125,10 @@ func (e *APIError) ExitCode() int {
 		return 3
 	case 409, 422:
 		return 4
+	case 429:
+		// Proton asking for room is a server problem rather than something the
+		// caller got wrong, and 5 is the code a script waits on.
+		return 5
 	}
 	if e.HTTPStatus >= 500 {
 		return 5
@@ -169,25 +180,30 @@ func classifyErrorBody(status int, body []byte) (*HumanVerificationError, *APIEr
 	return nil, &APIError{HTTPStatus: status, Code: env.Code, Message: msg, RawBody: body}
 }
 
-// parseAuthError converts a Proton auth-flow response body into a typed error.
-// The HTTP request itself succeeded - the failure is application-level - so
-// HTTPStatus is left at zero.
-func parseAuthError(raw []byte, code int) error {
-	var env struct {
-		Error   string
-		Details *hvDetails
-	}
-	_ = json.Unmarshal(raw, &env)
-	if code == 9001 && env.Details != nil {
-		return &HumanVerificationError{
-			Token:   env.Details.HumanVerificationToken,
-			Methods: env.Details.HumanVerificationMethods,
-			WebURL:  env.Details.WebUrl,
+// responseError is the refusal a response carries, or nil when it carries none.
+//
+// Both halves of the answer have a say. Proton names its own reason in a code,
+// and the thousands are the ways of succeeding: 1000 done, 1001 a response per
+// item, 1002 accepted and being carried out in the background (which is how
+// restoring a revision answers, and what the web client's own type says it
+// means). Anything else is a refusal, whatever the status line said. And the
+// status line has the say when there is no code to read at all - an HTML error
+// page from the edge carries none - which is what keeps a bad moment upstream
+// from being reported as unreadable JSON.
+//
+// The status the answer arrived with is kept on the error, because that is what
+// separates Proton failing from Proton refusing, and it is the difference between
+// telling somebody to wait and telling them they are wrong.
+func responseError(resp *Response) error {
+	if resp.Status >= 200 && resp.Status < 300 {
+		var env struct{ Code int }
+		if json.Unmarshal(resp.Body, &env) != nil || env.Code == 0 || succeeded(env.Code) {
+			return nil
 		}
 	}
-	msg := env.Error
-	if msg == "" {
-		msg = fmt.Sprintf("auth code %d", code)
+	hvErr, apiErr := classifyErrorBody(resp.Status, resp.Body)
+	if hvErr != nil {
+		return hvErr
 	}
-	return &APIError{Code: code, Message: msg, RawBody: raw}
+	return apiErr
 }

@@ -74,26 +74,6 @@ func TestRetryAfter(t *testing.T) {
 	}
 }
 
-func TestIsRetryableAPIErr(t *testing.T) {
-	if !isRetryableAPIErr(&proton.NetworkError{Err: errors.New("dial")}) {
-		t.Error("network error should be retryable")
-	}
-	for _, s := range []int{500, 502, 503, http.StatusTooManyRequests} {
-		if !isRetryableAPIErr(&proton.APIError{HTTPStatus: s}) {
-			t.Errorf("HTTP %d should be retryable", s)
-		}
-	}
-	if isRetryableAPIErr(&proton.APIError{HTTPStatus: 404}) {
-		t.Error("HTTP 404 should not be retryable")
-	}
-	if isRetryableAPIErr(errors.New("plain")) {
-		t.Error("plain error should not be retryable")
-	}
-	if isRetryableAPIErr(nil) {
-		t.Error("nil should not be retryable")
-	}
-}
-
 func TestTokenRejected(t *testing.T) {
 	for _, s := range []int{401, 403, 404, 409, 410, 422} {
 		if !tokenRejected(s) {
@@ -349,6 +329,7 @@ func TestXorVerifier(t *testing.T) {
 type seqDoer struct {
 	calls int
 	steps []doerStep
+	seen  []proton.Request
 }
 
 type doerStep struct {
@@ -360,7 +341,8 @@ func (d *seqDoer) Do(context.Context, proton.Request) (*proton.Response, error) 
 	return nil, errors.New("Do unused")
 }
 
-func (d *seqDoer) Decode(_ context.Context, _ proton.Request, out any) error {
+func (d *seqDoer) Decode(_ context.Context, req proton.Request, out any) error {
+	d.seen = append(d.seen, req)
 	s := d.steps[len(d.steps)-1]
 	if d.calls < len(d.steps) {
 		s = d.steps[d.calls]
@@ -375,10 +357,11 @@ func (d *seqDoer) Decode(_ context.Context, _ proton.Request, out any) error {
 	return json.Unmarshal([]byte(s.body), out)
 }
 
-func TestRequestBlockLinksRetriesThenSucceeds(t *testing.T) {
-	shrinkBackoff(t)
+// Asking for links a second time hands back a second set and changes nothing
+// else, so the request says it may be sent again and an upload survives a bad
+// moment mid-file. The asking again itself is the client's, not this service's.
+func TestRequestBlockLinksMayBeAskedAgain(t *testing.T) {
 	d := &seqDoer{steps: []doerStep{
-		{err: &proton.APIError{HTTPStatus: 502}},
 		{body: `{"UploadLinks":[{"Token":"a","BareURL":"http://x/1"},{"Token":"b","BareURL":"http://x/2"}]}`},
 	}}
 	links, err := New(d, testKeys(nil)).requestBlockLinks(context.Background(), "sh", "lk", "rev", "ad",
@@ -389,8 +372,8 @@ func TestRequestBlockLinksRetriesThenSucceeds(t *testing.T) {
 	if len(links) != 2 || links[0].Token != "a" || links[1].Token != "b" {
 		t.Errorf("links = %+v, want tokens a,b", links)
 	}
-	if d.calls != 2 {
-		t.Errorf("Decode calls = %d, want 2 (one retry)", d.calls)
+	if len(d.seen) != 1 || !d.seen[0].Repeatable {
+		t.Errorf("request = %+v, want one marked repeatable", d.seen)
 	}
 }
 

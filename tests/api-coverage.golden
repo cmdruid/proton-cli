@@ -94,6 +94,7 @@ POST /calendar/v1/subscription/validate
 POST /calendar/v1/{id}/keys
 POST /calendar/v1/{id}/members
 POST /contacts/v4/contacts
+POST /core/v4/auth/info
 POST /core/v4/labels
 POST /drive/blocks
 POST /drive/photos/volumes/{id}/albums
@@ -147,6 +148,7 @@ PUT /core/v4/addresses/{id}
 PUT /core/v4/labels/{id}
 PUT /core/v4/settings/weekstart
 PUT /core/v4/users/lock
+PUT /core/v4/users/unlock
 PUT /drive/photos/volumes/{id}/albums/{id}
 PUT /drive/shares/{id}/files/{id}/revisions/{id}
 PUT /drive/shares/{id}/links/{id}/move

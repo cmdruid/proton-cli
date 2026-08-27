@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 
 	"github.com/ProtonMail/go-srp"
 	"github.com/roman-16/proton-cli/internal/errs"
@@ -109,8 +107,53 @@ func (c *Client) Login(ctx context.Context, username string, password []byte, to
 	return nil
 }
 
-// srpCall runs one SRP exchange against path within the current session and
-// validates the server's proof.
+// srpExchange is one SRP exchange: the endpoint that answers it, who is proving
+// what, and what the proof carries alongside itself.
+type srpExchange struct {
+	method string
+	path   string
+
+	username string
+	password []byte
+
+	// scope is the elevation the parameters are asked for, empty when signing in.
+	scope Scope
+	// extra is what the endpoint wants alongside the proof.
+	extra map[string]any
+
+	hvToken string
+	hvType  string
+}
+
+// repeatable reports whether the whole exchange may be run a second time.
+//
+// One carrying a two-factor code may not: a code is single-use, so a second run
+// submits one Proton has already taken and is told it is wrong - which would put
+// the blame on the person for a bad moment upstream.
+func (x srpExchange) repeatable() bool {
+	_, twoFactor := x.extra["TwoFactorCode"]
+	return !twoFactor
+}
+
+// exchange runs an SRP exchange: fresh parameters, then the proof.
+//
+// The pair is the unit that gets another go, because the proof on its own cannot
+// be sent twice - the SRPSession the parameters carried is spent by the first
+// attempt, so a second attempt needs a second set. That is exactly what a person
+// does on seeing the error, and it has the same consequence.
+func (c *Client) exchange(ctx context.Context, x srpExchange) (*Response, error) {
+	return c.retrying(ctx,
+		Request{Method: x.method, Path: x.path, Repeatable: x.repeatable()},
+		func() (*Response, error) {
+			info, err := c.getAuthInfo(ctx, x.username, x.scope)
+			if err != nil {
+				return nil, err
+			}
+			return c.srpCall(ctx, x, info)
+		})
+}
+
+// srpCall proves the password against info and validates the server's proof.
 //
 // It is the single SRP code path: signing in and elevating a scope differ only
 // in which endpoint they call and what they add to the body. Sharing it is what
@@ -119,15 +162,8 @@ func (c *Client) Login(ctx context.Context, username string, password []byte, to
 //
 // Mirrors srpAuth in WebClients (packages/shared/lib/srp.ts), whose
 // callAndValidate rejects an unexpected server proof for every caller.
-func (c *Client) srpCall(
-	ctx context.Context,
-	method, path, username string,
-	password []byte,
-	info *authInfo,
-	extra map[string]any,
-	hvToken, hvType string,
-) ([]byte, error) {
-	auth, err := srp.NewAuth(info.Version, username, password, info.Salt, info.Modulus, info.ServerEphemeral)
+func (c *Client) srpCall(ctx context.Context, x srpExchange, info *authInfo) (*Response, error) {
+	auth, err := srp.NewAuth(info.Version, x.username, x.password, info.Salt, info.Modulus, info.ServerEphemeral)
 	if err != nil {
 		return nil, fmt.Errorf("SRP setup: %w", err)
 	}
@@ -141,27 +177,20 @@ func (c *Client) srpCall(
 		"ClientEphemeral": base64.StdEncoding.EncodeToString(proofs.ClientEphemeral),
 		"SRPSession":      info.SRPSession,
 	}
-	for k, v := range extra {
+	for k, v := range x.extra {
 		payload[k] = v
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
 
-	raw, err := c.rawAuthWithHV(ctx, method, path, body, hvToken, hvType)
+	resp, err := c.authCall(ctx, Request{
+		Method: x.method, Path: x.path, Body: payload,
+		HVToken: x.hvToken, HVType: x.hvType,
+	})
 	if err != nil {
 		return nil, err
 	}
-	var r struct {
-		Code        int
-		ServerProof string
-	}
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("SRP response parse: %w", err)
-	}
-	if r.Code != 1000 {
-		return nil, parseAuthError(raw, r.Code)
+	var r struct{ ServerProof string }
+	if err := readAnswer(resp.Body, &r); err != nil {
+		return nil, err
 	}
 	serverProof, err := base64.StdEncoding.DecodeString(r.ServerProof)
 	if err != nil {
@@ -170,29 +199,24 @@ func (c *Client) srpCall(
 	if !bytes.Equal(serverProof, proofs.ExpectedServerProof) {
 		return nil, fmt.Errorf("server proof verification failed")
 	}
-	return raw, nil
+	return resp, nil
 }
 
 func (c *Client) createSession(ctx context.Context) (*authResp, error) {
-	req, err := http.NewRequestWithContext(ctx, "POST", c.base+"/auth/v4/sessions", bytes.NewReader([]byte("{}")))
+	resp, err := c.authCall(ctx, Request{
+		Method: "POST", Path: "/auth/v4/sessions", Body: []byte("{}"),
+		headers: map[string]string{"x-enforce-unauthsession": "true"},
+		// An unauthenticated session is scratch: one created twice leaves behind a
+		// session nothing holds the tokens to use, which Proton reaps, and failing
+		// the whole sign-in instead is the worse of the two outcomes.
+		Repeatable: true,
+	})
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	c.setClientHeaders(req)
-	req.Header.Set("x-enforce-unauthsession", "true")
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	b, _ := io.ReadAll(resp.Body)
 	var r authResp
-	if err := json.Unmarshal(b, &r); err != nil {
-		return nil, fmt.Errorf("session parse: %w", err)
-	}
-	if r.Code != 1000 {
-		return nil, fmt.Errorf("session creation code %d: %s", r.Code, string(b))
+	if err := readAnswer(resp.Body, &r); err != nil {
+		return nil, err
 	}
 	return &r, nil
 }
@@ -203,6 +227,10 @@ func (c *Client) createSession(ctx context.Context) (*authResp, error) {
 // elevation the following exchange is for; both are what the web clients send
 // (packages/shared/lib/api/auth.ts getInfo). reauthScope is empty for a fresh
 // sign-in.
+//
+// It is not marked repeatable, though asking twice spends nothing: it is only
+// ever one half of an exchange, and the exchange is what gets another go. Two
+// budgets over the same failure would multiply into minutes of waiting.
 func (c *Client) getAuthInfo(ctx context.Context, username string, reauthScope Scope) (*authInfo, error) {
 	payload := map[string]any{"Intent": "Proton"}
 	if username != "" {
@@ -211,86 +239,74 @@ func (c *Client) getAuthInfo(ctx context.Context, username string, reauthScope S
 	if reauthScope != "" {
 		payload["ReauthScope"] = string(reauthScope)
 	}
-	body, _ := json.Marshal(payload)
-	raw, err := c.rawAuth(ctx, "POST", "/core/v4/auth/info", body)
+	resp, err := c.authCall(ctx, Request{Method: "POST", Path: "/core/v4/auth/info", Body: payload})
 	if err != nil {
 		return nil, err
 	}
 	var r authInfo
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("auth info parse: %w", err)
-	}
-	if r.Code != 1000 {
-		return nil, fmt.Errorf("auth info code %d: %s", r.Code, string(raw))
+	if err := readAnswer(resp.Body, &r); err != nil {
+		return nil, err
 	}
 	return &r, nil
 }
 
-// loginSRP runs getAuthInfo + the SRP POST /auth in one shot. When
-// hvToken/hvType are non-empty they're attached as HV headers on the auth POST.
+// loginSRP proves the password to the endpoint that hands out a session.
+// When hvToken/hvType are non-empty they're attached as HV headers on the proof.
 func (c *Client) loginSRP(ctx context.Context, username string, password []byte, hvToken, hvType string) (*authResp, error) {
-	info, err := c.getAuthInfo(ctx, username, "")
-	if err != nil {
-		return nil, err
-	}
-	raw, err := c.srpCall(ctx, "POST", "/core/v4/auth", username, password, info,
-		map[string]any{"Username": username}, hvToken, hvType)
+	resp, err := c.exchange(ctx, srpExchange{
+		method: "POST", path: "/core/v4/auth",
+		username: username, password: password,
+		extra:   map[string]any{"Username": username},
+		hvToken: hvToken, hvType: hvType,
+	})
 	if err != nil {
 		return nil, err
 	}
 	var r authResp
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("auth parse: %w", err)
+	if err := readAnswer(resp.Body, &r); err != nil {
+		return nil, err
 	}
 	return &r, nil
 }
 
 func (c *Client) auth2FA(ctx context.Context, totp string) error {
-	body, _ := json.Marshal(map[string]string{"TwoFactorCode": totp})
-	raw, err := c.rawAuth(ctx, "POST", "/core/v4/auth/2fa", body)
+	// Not repeatable, whatever goes wrong: a code is single-use and lives for
+	// thirty seconds, so by the time a wait is over it is either spent or expired,
+	// and submitting it again is answered with "incorrect code" - a sentence that
+	// blames the person for something Proton did.
+	_, err := c.authCall(ctx, Request{
+		Method: "POST", Path: "/core/v4/auth/2fa",
+		Body: map[string]string{"TwoFactorCode": totp},
+	})
+	return err
+}
+
+// authCall sends one request of the auth flow and returns the answer to it.
+//
+// The flow stands here rather than on Do, one layer up: refreshing a session,
+// elevating a scope and refusing a dry run are all answers about a session, and
+// during a sign-in there is not one yet. What it does share with every other
+// request is the part that matters - the status is read before the body, and a
+// bad moment upstream is waited out rather than parsed.
+func (c *Client) authCall(ctx context.Context, req Request) (*Response, error) {
+	resp, err := c.attempt(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var r struct{ Code int }
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return fmt.Errorf("2FA parse: %w", err)
+	if err := responseError(resp); err != nil {
+		return nil, err
 	}
-	if r.Code != 1000 {
-		return fmt.Errorf("2FA code %d: %s", r.Code, string(raw))
+	return resp, nil
+}
+
+// readAnswer reads an auth-flow answer into out.
+//
+// A body that is not the JSON it should be, with a status that said the request
+// succeeded, is Proton answering something nobody can act on. Saying that beats
+// quoting the parser at somebody who cannot fix it.
+func readAnswer(raw []byte, out any) error {
+	if err := json.Unmarshal(raw, out); err != nil {
+		return fmt.Errorf("unreadable answer from Proton: %w", err)
 	}
 	return nil
-}
-
-// rawAuth sends a request with current session headers and returns the body.
-// Used for auth-flow endpoints that bypass the normal Do retry path.
-func (c *Client) rawAuth(ctx context.Context, method, path string, body []byte) ([]byte, error) {
-	return c.rawAuthWithHV(ctx, method, path, body, "", "")
-}
-
-func (c *Client) rawAuthWithHV(ctx context.Context, method, path string, body []byte, hvToken, hvType string) ([]byte, error) {
-	c.mu.RLock()
-	uid, acc := c.uid, c.acc
-	c.mu.RUnlock()
-	req, err := http.NewRequestWithContext(ctx, method, c.base+path, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	c.setClientHeaders(req)
-	if uid != "" {
-		req.Header.Set("x-pm-uid", uid)
-	}
-	if acc != "" {
-		req.Header.Set("Authorization", "Bearer "+acc)
-	}
-	if hvToken != "" && hvType != "" {
-		req.Header.Set("x-pm-human-verification-token", hvToken)
-		req.Header.Set("x-pm-human-verification-token-type", hvType)
-	}
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	return io.ReadAll(resp.Body)
 }

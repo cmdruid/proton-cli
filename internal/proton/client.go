@@ -25,9 +25,9 @@ const (
 	DefaultAppVersion = "Other"
 	DefaultUserAgent  = "proton-cli/dev"
 
-	// maxRateLimitWait caps how long a single 429 retry will sleep before
-	// giving up and surfacing the error.
-	maxRateLimitWait = 30 * time.Second
+	// maxRetryAfter caps how long a delay the server names is honoured for before
+	// waiting stops being the civil answer and becomes a hang.
+	maxRetryAfter = 30 * time.Second
 
 	// sessionRenewals is how many times one request may have the session renewed
 	// under it. More than one is needed because several commands can share a
@@ -36,18 +36,15 @@ const (
 	// loop when the session is genuinely gone.
 	sessionRenewals = 3
 
-	// rateLimitWaits is how many times a rate-limited request is waited out
-	// before the refusal is reported. Proton throttles a client it considers
-	// demanding, and the only civil answer is to slow down rather than to fail
-	// and be retried by a human immediately.
-	rateLimitWaits = 4
+	// transientWaits is how many times a request is waited out before what it
+	// failed with is reported. Proton throttles a client it considers demanding
+	// and its edge has bad moments, and the only civil answer to either is to slow
+	// down rather than to fail and be retried by a human immediately.
+	transientWaits = 4
 
-	// backoffFloor and backoffCeiling bound the wait when the server names no
-	// Retry-After. The wait doubles between them and carries jitter, so several
-	// requests refused at the same instant do not all come back at the same
-	// instant.
-	backoffFloor   = 500 * time.Millisecond
-	backoffCeiling = 8 * time.Second
+	// notAnswering is what a wait on a server that broke or a connection that
+	// failed is announced as, for the same reason a rate-limit wait is announced.
+	notAnswering = "Proton is not answering; waiting before trying again"
 
 	// maxInFlight bounds how many requests one invocation has outstanding.
 	// Independent requests are made at the same time, which is what keeps a
@@ -55,6 +52,16 @@ const (
 	// that from becoming a way to flood Proton. Uploads already run five blocks
 	// at once, so the bound has to leave room for them.
 	maxInFlight = 8
+)
+
+// backoffFloor and backoffCeiling bound the wait when the server names no
+// Retry-After. The wait doubles between them and carries jitter, so several
+// requests refused at the same instant do not all come back at the same instant.
+//
+// They are vars so tests can shrink them; production keeps a real backoff.
+var (
+	backoffFloor   = 500 * time.Millisecond
+	backoffCeiling = 8 * time.Second
 )
 
 // Doer is the seam domain services depend on. *Client satisfies it; tests
@@ -141,9 +148,9 @@ var ErrDryRun = errors.New("refusing to change anything under --dry-run")
 // true of all of them, including the ones not yet written and including `api`,
 // whose whole purpose is to send a request nothing else models.
 //
-// Signing in and refreshing a session build their requests directly rather than
-// through Do, so they are unaffected: a dry run on an expired session still works,
-// which is the difference between a useful preview and an error.
+// Signing in and refreshing a session do not come through here, so they are
+// unaffected: a dry run on an expired session still works, which is the
+// difference between a useful preview and an error.
 func (c *Client) dryRunRefuses(req Request) error {
 	if !c.dryRun || readOnlyMethod(req.Method) {
 		return nil
@@ -277,9 +284,27 @@ type Request struct {
 	HVToken string
 	HVType  string
 
+	// Repeatable says that sending this twice cannot change what the account ends
+	// up in, so a failure that leaves it unclear whether it arrived is worth
+	// asking about again.
+	//
+	// A method defined to leave the resource alone needs no such claim. Anything
+	// else does, because Proton has no idempotency keys: whether a POST that may
+	// already have been applied is safe to send again is something only the caller
+	// knows.
+	Repeatable bool
+
 	// elevated marks a request already retried after a scope elevation, so a
 	// second refusal cannot restart the cycle.
 	elevated bool
+
+	// headers are the request's own, on top of the ones every request carries.
+	headers map[string]string
+
+	// omitBearer leaves the access token off. The one request that wants this is
+	// the refresh, which authenticates with the refresh token in its body: the
+	// token it is replacing has no business on it.
+	omitBearer bool
 }
 
 type Response struct {
@@ -291,8 +316,9 @@ type Response struct {
 }
 
 // Do sends a request and returns the response. Non-2xx responses return a
-// typed error. It transparently handles 401 (refresh + retry), 429
-// (Retry-After + retry) and 9001 (human verification + retry).
+// typed error. It transparently handles a transient failure (waiting and asking
+// again), 401 (refresh + retry), 429 (Retry-After + retry) and 9001 (human
+// verification + retry).
 func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 	c.mu.RLock()
 	guard := c.sessionGuard
@@ -345,42 +371,112 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 	return resp, apiErr
 }
 
-// send makes the request, renewing a session the server no longer accepts and
-// waiting out a rate limit, and returns the response it settled on.
+// send makes the request, renewing a session the server no longer accepts, and
+// returns the response it settled on.
 func (c *Client) send(ctx context.Context, req Request) (*Response, error) {
-	renewals, waits := 0, 0
-	for {
+	for renewals := 0; ; {
 		c.mu.RLock()
 		used := c.acc
 		c.mu.RUnlock()
 
-		resp, err := c.doOnce(ctx, req)
+		resp, err := c.attempt(ctx, req)
 		if err != nil {
 			return nil, err
 		}
-		switch {
-		case resp.Status == http.StatusUnauthorized && tokenRejected(resp) && renewals < sessionRenewals:
+		if resp.Status == http.StatusUnauthorized && tokenRejected(resp) && renewals < sessionRenewals {
 			renewals++
 			if rerr := c.renewSession(ctx, used); rerr != nil {
 				return resp, ErrUnauthorized
 			}
-		case resp.Status == http.StatusTooManyRequests && waits < rateLimitWaits:
-			waits++
-			delay := rateLimitDelay(resp, waits)
-			// Said out loud rather than logged at debug: waiting is the right thing to
-			// do and the wait can run to seconds, so a person watching a command sit
-			// there deserves to know it is Proton asking for room and not a hang.
-			c.log.Warn("rate limited by Proton; waiting before trying again",
-				"method", req.Method, "path", req.Path, "wait_ms", delay.Milliseconds(), "attempt", waits)
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(delay):
+			continue
+		}
+		return resp, nil
+	}
+}
+
+// attempt sends one request, waiting out what is worth asking about again.
+func (c *Client) attempt(ctx context.Context, req Request) (*Response, error) {
+	return c.retrying(ctx, req, func() (*Response, error) { return c.doOnce(ctx, req) })
+}
+
+// retrying runs one attempt at a time until the request settles: either the
+// answer is one worth returning, or asking again cannot change it.
+//
+// Two things are worth asking about again. A 429 is Proton refusing without
+// having done anything, so it is always waited out. A server that broke or a
+// connection that failed says nothing about whether the request arrived, so it
+// is only sent again when arriving twice would change nothing.
+//
+// req is the request the attempts are trying to get through, which is not always
+// all an attempt sends: an SRP exchange has to ask for fresh parameters each
+// time, because the SRPSession the last set carried is spent. Either way once
+// yields that request's answer, or the failure that stopped the attempt reaching
+// one.
+func (c *Client) retrying(ctx context.Context, req Request, once func() (*Response, error)) (*Response, error) {
+	repeat := repeatable(req)
+	for attempt := 1; ; attempt++ {
+		resp, err := once()
+		// An attempt that reports neither an answer nor a failure has settled,
+		// whatever it did: there is nothing here to weigh and nothing to ask again.
+		if resp == nil && err == nil {
+			return nil, nil
+		}
+		if attempt > transientWaits {
+			return resp, err
+		}
+		var delay time.Duration
+		// Each wait is said out loud rather than logged at debug: waiting is the right
+		// thing to do and it can run to seconds, so a person watching a command sit
+		// there deserves to know what it is waiting for and not read it as a hang.
+		switch {
+		case err != nil:
+			if !repeat || !worthRepeating(err) {
+				return resp, err
 			}
+			delay = retryDelay("", attempt)
+			c.log.Warn(notAnswering, "method", req.Method, "path", req.Path,
+				"err", err, "wait_ms", delay.Milliseconds(), "attempt", attempt)
+		case resp.Status == http.StatusTooManyRequests:
+			delay = retryDelay(resp.retryHeader, attempt)
+			c.log.Warn("rate limited by Proton; waiting before trying again",
+				"method", req.Method, "path", req.Path, "wait_ms", delay.Milliseconds(), "attempt", attempt)
+		case resp.Status >= 500 && repeat:
+			delay = retryDelay(resp.retryHeader, attempt)
+			c.log.Warn(notAnswering, "method", req.Method, "path", req.Path,
+				"status", resp.Status, "wait_ms", delay.Milliseconds(), "attempt", attempt)
 		default:
 			return resp, nil
 		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
 	}
+}
+
+// repeatable reports whether sending req twice could not change what the account
+// ends up in.
+func repeatable(req Request) bool {
+	return req.Repeatable || readOnlyMethod(req.Method)
+}
+
+// worthRepeating reports whether a failure might not happen again.
+//
+// A refused connection, a name that did not resolve, a handshake that failed and
+// a server that broke are the network or Proton having a bad moment. A deadline
+// is not one: the request was given its time and used it, and starting the clock
+// again spends it twice. Cancellation is the user changing their mind.
+func worthRepeating(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	var netErr *NetworkError
+	if errors.As(err, &netErr) {
+		return true
+	}
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.HTTPStatus >= 500
 }
 
 // tokenRejected reports whether a 401 is about the session rather than about what
@@ -431,23 +527,13 @@ func (c *Client) renewSession(ctx context.Context, failed string) error {
 }
 
 // Decode is Do + JSON unmarshal into out (out may be nil for discard).
-//
-// Proton answers every request with a code of its own, and the thousands are the
-// ways of succeeding: 1000 done, 1001 a response per item, 1002 accepted and
-// being done in the background (which is how restoring a revision answers, and
-// what the web client's own type says it means). Anything else with a body is an
-// API error, whatever the status line said.
 func (c *Client) Decode(ctx context.Context, req Request, out any) error {
 	resp, err := c.Do(ctx, req)
 	if err != nil {
 		return err
 	}
-	var env struct {
-		Code  int
-		Error string
-	}
-	if json.Unmarshal(resp.Body, &env) == nil && env.Code != 0 && !succeeded(env.Code) {
-		return &APIError{HTTPStatus: resp.Status, Code: env.Code, Message: env.Error, RawBody: resp.Body}
+	if err := responseError(resp); err != nil {
+		return err
 	}
 	if out == nil {
 		return nil
@@ -502,12 +588,15 @@ func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
 	if uid != "" {
 		r.Header.Set("x-pm-uid", uid)
 	}
-	if acc != "" {
+	if acc != "" && !req.omitBearer {
 		r.Header.Set("Authorization", "Bearer "+acc)
 	}
 	if req.HVToken != "" && req.HVType != "" {
 		r.Header.Set("x-pm-human-verification-token", req.HVToken)
 		r.Header.Set("x-pm-human-verification-token-type", req.HVType)
+	}
+	for name, value := range req.headers {
+		r.Header.Set(name, value)
 	}
 
 	start := time.Now()
@@ -551,13 +640,13 @@ func encodeBody(b any) (io.Reader, error) {
 	}
 }
 
-// rateLimitDelay is how long to wait before asking again.
+// retryDelay is how long to wait before asking again.
 //
 // The server's own Retry-After is the answer when it gives one. Without it the
 // wait doubles from a floor to a ceiling, and half of it is random: requests
 // refused together would otherwise return together and be refused together.
-func rateLimitDelay(resp *Response, attempt int) time.Duration {
-	if d, ok := retryAfter(resp); ok {
+func retryDelay(retryAfter string, attempt int) time.Duration {
+	if d, ok := namedDelay(retryAfter); ok {
 		return d
 	}
 	d := backoffFloor << (attempt - 1)
@@ -567,18 +656,18 @@ func rateLimitDelay(resp *Response, attempt int) time.Duration {
 	return d/2 + time.Duration(rand.Int64N(int64(d/2)+1))
 }
 
-// retryAfter parses the Retry-After header (seconds form) into a bounded delay.
-func retryAfter(resp *Response) (time.Duration, bool) {
-	if resp.retryHeader == "" {
+// namedDelay parses the Retry-After header (seconds form) into a bounded delay.
+func namedDelay(retryAfter string) (time.Duration, bool) {
+	if retryAfter == "" {
 		return 0, false
 	}
-	secs, err := strconv.Atoi(strings.TrimSpace(resp.retryHeader))
+	secs, err := strconv.Atoi(strings.TrimSpace(retryAfter))
 	if err != nil || secs < 0 {
 		return 0, false
 	}
 	d := time.Duration(secs) * time.Second
-	if d > maxRateLimitWait {
-		d = maxRateLimitWait
+	if d > maxRetryAfter {
+		d = maxRetryAfter
 	}
 	return d, true
 }
@@ -587,73 +676,45 @@ func retryAfter(resp *Response) (time.Duration, bool) {
 //
 // A rate-limited refresh is waited out rather than reported: the session is fine,
 // the server is busy, and answering "you are not signed in" to that would be both
-// wrong and the fastest way to make a person try again immediately.
+// wrong and the fastest way to make a person try again immediately. A failure
+// that leaves the outcome unknown is reported, because a refresh token is
+// single-use: asking again with one Proton may already have replaced is asking
+// to be told the session is gone.
 func (c *Client) refreshAuth(ctx context.Context) error {
-	for waits := 0; ; {
-		status, body, err := c.refreshOnce(ctx)
-		if err != nil {
-			return err
-		}
-		if status == http.StatusTooManyRequests && waits < rateLimitWaits {
-			waits++
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(rateLimitDelay(&Response{retryHeader: body.retryHeader}, waits)):
-			}
-			continue
-		}
-		if status != http.StatusOK {
-			return fmt.Errorf("refresh returned %d: %s", status, string(body.Body))
-		}
-		var result struct {
-			AccessToken  string
-			RefreshToken string
-		}
-		if err := json.Unmarshal(body.Body, &result); err != nil {
-			return err
-		}
-		c.mu.Lock()
-		c.acc, c.ref = result.AccessToken, result.RefreshToken
-		c.mu.Unlock()
-		return nil
-	}
-}
-
-func (c *Client) refreshOnce(ctx context.Context) (int, *Response, error) {
 	c.mu.RLock()
 	uid, ref := c.uid, c.ref
 	c.mu.RUnlock()
 
-	reqBody, _ := json.Marshal(map[string]string{
-		"UID":          uid,
-		"RefreshToken": ref,
-		"ResponseType": "token",
-		"GrantType":    "refresh_token",
-		"RedirectURI":  "https://protonmail.ch",
-		"State":        fmt.Sprintf("%d", time.Now().UnixNano()),
+	resp, err := c.attempt(ctx, Request{
+		Method: "POST",
+		Path:   "/auth/v4/refresh",
+		Body: map[string]string{
+			"GrantType":    "refresh_token",
+			"RedirectURI":  "https://protonmail.ch",
+			"RefreshToken": ref,
+			"ResponseType": "token",
+			"State":        strconv.FormatInt(time.Now().UnixNano(), 10),
+			"UID":          uid,
+		},
+		omitBearer: true,
 	})
-
-	r, err := http.NewRequestWithContext(ctx, "POST", c.base+"/auth/v4/refresh", bytes.NewReader(reqBody))
 	if err != nil {
-		return 0, nil, err
+		return err
 	}
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("x-pm-uid", uid)
-	c.setClientHeaders(r)
-
-	resp, err := c.hc.Do(r)
-	if err != nil {
-		return 0, nil, err
+	if resp.Status != http.StatusOK {
+		return fmt.Errorf("refresh returned %d: %s", resp.Status, string(resp.Body))
 	}
-	defer func() { _ = resp.Body.Close() }()
-	buf, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, nil, err
+	var result struct {
+		AccessToken  string
+		RefreshToken string
 	}
-	return resp.StatusCode, &Response{
-		Status: resp.StatusCode, Body: buf, retryHeader: resp.Header.Get("Retry-After"),
-	}, nil
+	if err := json.Unmarshal(resp.Body, &result); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.acc, c.ref = result.AccessToken, result.RefreshToken
+	c.mu.Unlock()
+	return nil
 }
 
 func httpStatusText(status int) string {

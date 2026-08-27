@@ -114,15 +114,15 @@ func isMissingScope(status int, body []byte) bool {
 // directions, and discarding the server's half would throw away the guarantee
 // that we are talking to something which knows the verifier.
 func (c *Client) Elevate(ctx context.Context, s Scope, cr ScopeCredentials) error {
-	info, err := c.getAuthInfo(ctx, cr.Username, s)
-	if err != nil {
-		return fmt.Errorf("elevate to %s scope: %w", s, err)
-	}
 	extra := map[string]any{}
 	if cr.TOTP != "" {
 		extra["TwoFactorCode"] = cr.TOTP
 	}
-	if _, err := c.srpCall(ctx, "PUT", s.endpoint(), cr.Username, cr.Password, info, extra, "", ""); err != nil {
+	if _, err := c.exchange(ctx, srpExchange{
+		method: "PUT", path: s.endpoint(),
+		username: cr.Username, password: cr.Password,
+		scope: s, extra: extra,
+	}); err != nil {
 		return fmt.Errorf("elevate to %s scope: %w", s, err)
 	}
 	return nil

@@ -1303,11 +1303,14 @@ func TestCalendarRemindersWatchRaisesOnTime(t *testing.T) {
 	t.Parallel()
 	calID := firstCalendarID(t)
 
-	// A minute's warning for an event starting two minutes out leaves the
-	// reminder a minute out, and by the time the alarm has materialised and the
-	// watch is up the reminder is still ahead of us.
+	// The reminder has to still be ahead of us when the watch comes up, and the
+	// arithmetic is what guarantees it rather than luck. A start carries minutes,
+	// so four minutes out lands between three and four minutes away once the
+	// seconds are dropped, and a minute's warning puts the reminder at least two
+	// minutes off - more than the minute the alarm is given to materialise and the
+	// ten seconds the watch is given to come up.
 	today := time.Now().Format("2006-01-02")
-	start := time.Now().Add(2 * time.Minute).Format("2006-01-02T15:04")
+	start := time.Now().Add(4 * time.Minute).Format("2006-01-02T15:04")
 	title := testID() + "-remindw"
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
 		"--calendar", calID, "--title", title,
@@ -1316,10 +1319,14 @@ func TestCalendarRemindersWatchRaisesOnTime(t *testing.T) {
 		"calendar", "events", "delete", eventID)
 
 	// Start the watch only once the alarm exists, so its first read finds it
-	// rather than racing the server materialising it.
-	waitFor(60*time.Second, 2*time.Second, func() bool {
+	// rather than racing the server materialising it. A minute is long enough that
+	// running out of it is Proton being slow rather than this being early, and
+	// saying so beats letting the watch look for something that is not there yet.
+	if !waitFor(60*time.Second, 2*time.Second, func() bool {
 		return strings.Contains(runOK(t, "calendar", "reminders", "list", "--start", today, "--end", today), title)
-	})
+	}) {
+		t.Fatalf("the alarm for %q never materialised, so there was nothing to watch for", title)
+	}
 	w, err := watchAs(primary, "calendar", "reminders", "watch", "--calendar", calID)
 	if err != nil {
 		t.Fatalf("start reminders watch: %v", err)
@@ -1327,7 +1334,10 @@ func TestCalendarRemindersWatchRaisesOnTime(t *testing.T) {
 	defer w.stop(t)
 	w.waitReady(t, 10*time.Second)
 
-	line := w.waitForLine(t, 90*time.Second, func(l string) bool {
+	// Long enough for the far end, measured from the near end: the reminder can be
+	// a full three minutes out from when the event was made, and the alarm usually
+	// materialises in a second or two, so almost all of that is spent here.
+	line := w.waitForLine(t, 200*time.Second, func(l string) bool {
 		return strings.Contains(l, title)
 	})
 	// The wording is Proton's - "starts at" for one ahead, "started at" for one

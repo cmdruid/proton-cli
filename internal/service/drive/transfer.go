@@ -3,7 +3,6 @@ package drive
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,20 +86,6 @@ func retryAfter(header string, attempt int) time.Duration {
 		return d
 	}
 	return backoffDelay(attempt)
-}
-
-// isRetryableAPIErr reports whether a proton-client error is worth retrying: a
-// transport failure, or a 5xx / 429 response.
-func isRetryableAPIErr(err error) bool {
-	var ne *proton.NetworkError
-	if errors.As(err, &ne) {
-		return true
-	}
-	var ae *proton.APIError
-	if errors.As(err, &ae) {
-		return ae.HTTPStatus >= 500 || ae.HTTPStatus == http.StatusTooManyRequests
-	}
-	return false
 }
 
 // tokenRejected reports whether a storage response status means the upload
@@ -256,38 +241,35 @@ func downloadBlock(ctx context.Context, url, token string) ([]byte, error) {
 }
 
 // requestBlockLinks asks the API for upload links for a batch of blocks. The
-// returned links are positional (link i belongs to batch[i]); the call retries
-// on transient API failures.
+// returned links are positional (link i belongs to batch[i]).
 func (s *Service) requestBlockLinks(ctx context.Context, shareID, linkID, revisionID, addrID string, batch []*encBlock) ([]uploadLink, error) {
 	blockList := make([]map[string]any, len(batch))
 	for i, b := range batch {
 		blockList[i] = b.listEntry()
 	}
-	body := map[string]any{
-		"AddressID": addrID, "ShareID": shareID,
-		"LinkID": linkID, "RevisionID": revisionID, "BlockList": blockList,
+	var res struct {
+		UploadLinks []struct{ Token, BareURL string }
 	}
-	for attempt := 0; ; attempt++ {
-		var res struct {
-			UploadLinks []struct{ Token, BareURL string }
-		}
-		err := s.C.Decode(ctx, proton.Request{Method: "POST", Path: "/drive/blocks", Body: body}, &res)
-		if err == nil {
-			if len(res.UploadLinks) != len(batch) {
-				return nil, fmt.Errorf("requested %d block links, got %d", len(batch), len(res.UploadLinks))
-			}
-			now := time.Now()
-			links := make([]uploadLink, len(res.UploadLinks))
-			for i, l := range res.UploadLinks {
-				links[i] = uploadLink{Token: l.Token, BareURL: l.BareURL, created: now}
-			}
-			return links, nil
-		}
-		if attempt >= blockMaxRetries || !isRetryableAPIErr(err) {
-			return nil, err
-		}
-		if werr := sleepCtx(ctx, backoffDelay(attempt)); werr != nil {
-			return nil, werr
-		}
+	// Repeatable: asking a second time hands back a second set of links and
+	// changes nothing else, so a request whose answer was lost is worth making
+	// again rather than failing an upload part way through.
+	err := s.C.Decode(ctx, proton.Request{
+		Method: "POST", Path: "/drive/blocks", Repeatable: true,
+		Body: map[string]any{
+			"AddressID": addrID, "ShareID": shareID,
+			"LinkID": linkID, "RevisionID": revisionID, "BlockList": blockList,
+		},
+	}, &res)
+	if err != nil {
+		return nil, err
 	}
+	if len(res.UploadLinks) != len(batch) {
+		return nil, fmt.Errorf("requested %d block links, got %d", len(batch), len(res.UploadLinks))
+	}
+	now := time.Now()
+	links := make([]uploadLink, len(res.UploadLinks))
+	for i, l := range res.UploadLinks {
+		links[i] = uploadLink{Token: l.Token, BareURL: l.BareURL, created: now}
+	}
+	return links, nil
 }

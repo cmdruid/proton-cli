@@ -1,0 +1,289 @@
+package proton
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+// Signing in is what an unattended job does before its real work, at an hour
+// nobody is watching. Proton's edge has bad moments, and a moment is not a
+// reason to lose the run: the requests that spend nothing are asked again.
+func TestSigningInRidesOutAPassingServerFailure(t *testing.T) {
+	shrinkBackoff(t)
+
+	var asked int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		if asked == 1 {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte("<html><head><title>502 Bad Gateway</title></head></html>"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"Code":1000,"UID":"u","AccessToken":"a","RefreshToken":"r"}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+	sess, err := c.createSession(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sess.UID != "u" {
+		t.Errorf("UID = %q, want the session from the second attempt", sess.UID)
+	}
+	if asked != 2 {
+		t.Errorf("the server was asked %d times, want a second attempt", asked)
+	}
+}
+
+// The session a sign-in starts from is asked for by name. Proton answers a
+// request without the header with a cookie session instead, which is not the one
+// the SRP exchange that follows is about to be run against.
+func TestCreatingASessionAsksForAnUnauthenticatedOne(t *testing.T) {
+	srv, received := newHeaderCaptureServer(t)
+
+	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+	if _, err := c.createSession(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(*received) != 1 {
+		t.Fatalf("the server was asked %d times, want once", len(*received))
+	}
+	if got := (*received)[0].Get("x-enforce-unauthsession"); got != "true" {
+		t.Errorf("x-enforce-unauthsession = %q, want true", got)
+	}
+}
+
+// An HTML error page from the edge is Proton failing, and it reads as that: a
+// status, an exit code a script can wait on, and not a sentence about JSON.
+func TestAServerFailureSigningInReadsAsOne(t *testing.T) {
+	shrinkBackoff(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("<html><head><title>502 Bad Gateway</title></head></html>"))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+	_, err := c.createSession(context.Background())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %v, want an API error carrying the status", err)
+	}
+	if apiErr.HTTPStatus != http.StatusBadGateway {
+		t.Errorf("status = %d, want 502", apiErr.HTTPStatus)
+	}
+	if apiErr.ExitCode() != 5 {
+		t.Errorf("exit = %d, want 5 (a server problem)", apiErr.ExitCode())
+	}
+	if got := apiErr.Error(); got != "[HTTP 502] Bad Gateway" {
+		t.Errorf("error = %q, want it to name what Proton answered", got)
+	}
+}
+
+// A connection that never got anywhere is a network failure wherever it happens,
+// including before there is a session. Reporting it as anything else tells a job
+// its arguments were wrong.
+func TestAFailedConnectionSigningInIsANetworkFailure(t *testing.T) {
+	shrinkBackoff(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	dead := srv.URL
+	srv.Close()
+
+	c := New(Options{BaseURL: dead, Logger: slog.New(slog.DiscardHandler)})
+	_, err := c.createSession(context.Background())
+	var netErr *NetworkError
+	if !errors.As(err, &netErr) {
+		t.Fatalf("err = %v, want *NetworkError", err)
+	}
+	if netErr.ExitCode() != 5 {
+		t.Errorf("exit = %d, want 5", netErr.ExitCode())
+	}
+}
+
+// A rate limit while signing in is waited out like every other one, rather than
+// being reported with Proton's JSON quoted at the reader.
+func TestARateLimitSigningInIsWaitedOut(t *testing.T) {
+	shrinkBackoff(t)
+
+	var asked int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		if asked == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"Code":85131,"Error":"Too many requests"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"Code":1000,"UID":"u","AccessToken":"a","RefreshToken":"r"}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+	if _, err := c.createSession(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if asked != 2 {
+		t.Errorf("the server was asked %d times, want a second attempt", asked)
+	}
+}
+
+// A two-factor code is single-use and lives for thirty seconds. Whatever goes
+// wrong, it is never sent twice: by the time a wait is over the code is spent or
+// expired, and Proton answers "incorrect code" - blaming the person for
+// something Proton did.
+func TestATwoFactorCodeIsNeverSentTwice(t *testing.T) {
+	shrinkBackoff(t)
+
+	var asked int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("<html>502</html>"))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+	err := c.auth2FA(context.Background(), "123456")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.HTTPStatus != http.StatusBadGateway {
+		t.Fatalf("err = %v, want the 502 reported as what it is", err)
+	}
+	if asked != 1 {
+		t.Errorf("the code was submitted %d times, want once", asked)
+	}
+}
+
+// The proof cannot be sent again on its own - the SRPSession the parameters
+// carried is spent - so the exchange is the unit that gets another go, asking
+// for a fresh set each time.
+//
+// An exchange sends two requests to land one, and the answer it settles on is
+// the answer to the second. Getting through on the first go is the ordinary
+// outcome and belongs in the table beside the failures: signing in and elevating
+// a scope both pass through here, and a hole here is a hole under both.
+func TestAnSRPExchangeIsRestartedWholeOrNotAtAll(t *testing.T) {
+	shrinkBackoff(t)
+
+	broke := func(times int) []error {
+		out := make([]error, times)
+		for i := range out {
+			out[i] = &APIError{HTTPStatus: 502, Message: "Bad Gateway"}
+		}
+		return out
+	}
+	refused := []error{&APIError{HTTPStatus: 422, Code: invalidLoginCode, Message: "Incorrect login credentials"}}
+	granted := &Response{Status: 200, Body: []byte(`{"Code":1000,"ServerProof":"proof"}`)}
+
+	// answers is what each run of the exchange gets, in order; a run past the end
+	// of the list is granted the scope. runs is how many the loop should make.
+	cases := []struct {
+		name    string
+		extra   map[string]any
+		answers []error
+		runs    int
+	}{
+		{name: "granted at once", runs: 1},
+		{name: "granted after a server that broke", answers: broke(1), runs: 2},
+		{name: "a server that stayed broken", answers: broke(transientWaits + 1), runs: transientWaits + 1},
+		{name: "credentials Proton refused", answers: refused, runs: 1},
+		{
+			name:  "a server that broke, with a two-factor code",
+			extra: map[string]any{"TwoFactorCode": "123456"}, answers: broke(1), runs: 1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := New(Options{Logger: slog.New(slog.DiscardHandler)})
+			x := srpExchange{method: "POST", path: "/core/v4/auth", extra: tc.extra}
+
+			var runs int
+			resp, err := c.retrying(context.Background(),
+				Request{Method: x.method, Path: x.path, Repeatable: x.repeatable()},
+				func() (*Response, error) {
+					runs++
+					if runs <= len(tc.answers) {
+						return nil, tc.answers[runs-1]
+					}
+					return granted, nil
+				})
+			if runs != tc.runs {
+				t.Fatalf("the exchange ran %d times, want %d", runs, tc.runs)
+			}
+			if runs <= len(tc.answers) {
+				if want := tc.answers[runs-1]; !errors.Is(err, want) {
+					t.Fatalf("err = %v, want the failure the last run got (%v)", err, want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resp != granted {
+				t.Errorf("answer = %+v, want the one the proof was granted with", resp)
+			}
+		})
+	}
+}
+
+// Proton answers with a code of its own alongside the status, and either can be
+// the refusal. Reading only one of them is how an HTML error page came to be
+// reported as unreadable JSON.
+func TestTheRefusalAResponseCarries(t *testing.T) {
+	cases := []struct {
+		name string
+		resp Response
+		want error
+	}{
+		{"done", Response{Status: 200, Body: []byte(`{"Code":1000}`)}, nil},
+		{"one answer per item", Response{Status: 200, Body: []byte(`{"Code":1001}`)}, nil},
+		{"being done in the background", Response{Status: 200, Body: []byte(`{"Code":1002}`)}, nil},
+		{"a body with no code at all", Response{Status: 200, Body: []byte(`{"Total":0}`)}, nil},
+		{
+			"Proton's own refusal under a 200",
+			Response{Status: 200, Body: []byte(`{"Code":2001,"Error":"No"}`)},
+			&APIError{HTTPStatus: 200, Code: 2001, Message: "No"},
+		},
+		{
+			"an edge failure with no code to read",
+			Response{Status: 502, Body: []byte("<html>502</html>")},
+			&APIError{HTTPStatus: 502, Message: "Bad Gateway"},
+		},
+		{
+			"human verification",
+			Response{Status: 422, Body: []byte(hvProtonBody)},
+			&HumanVerificationError{Token: "chal-xyz"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := responseError(&tc.resp)
+			switch want := tc.want.(type) {
+			case nil:
+				if got != nil {
+					t.Fatalf("err = %v, want the answer taken as a success", got)
+				}
+			case *HumanVerificationError:
+				var hvErr *HumanVerificationError
+				if !errors.As(got, &hvErr) || hvErr.Token != want.Token {
+					t.Fatalf("err = %v, want the human-verification challenge", got)
+				}
+			case *APIError:
+				var apiErr *APIError
+				if !errors.As(got, &apiErr) {
+					t.Fatalf("err = %v, want an API error", got)
+				}
+				if apiErr.HTTPStatus != want.HTTPStatus || apiErr.Code != want.Code || apiErr.Message != want.Message {
+					t.Errorf("err = %+v, want %+v", apiErr, want)
+				}
+			}
+		})
+	}
+}

@@ -32,6 +32,8 @@ func TestNetworkErrorExitCode(t *testing.T) {
 // that never reaches an HTTP response (here, a closed server = connection
 // refused) surfaces from Client.Do as *NetworkError, so the cli maps it to 5.
 func TestDoTransportFailureIsNetworkError(t *testing.T) {
+	shrinkBackoff(t)
+
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	url := srv.URL
 	srv.Close() // connections to url are now refused
@@ -61,6 +63,8 @@ func TestAPIErrorExitCode(t *testing.T) {
 		{"proton not found under 422", APIError{HTTPStatus: 422, Code: 2501}, 3},
 		{"a real conflict", APIError{HTTPStatus: 409}, 4},
 		{"unprocessable for another reason", APIError{HTTPStatus: 422, Code: 2011}, 4},
+		{"refused credentials", APIError{HTTPStatus: 422, Code: invalidLoginCode}, 2},
+		{"rate limited", APIError{HTTPStatus: 429, Code: 85131}, 5},
 		{"server error", APIError{HTTPStatus: 503}, 5},
 		{"anything else", APIError{HTTPStatus: 400}, 1},
 	} {

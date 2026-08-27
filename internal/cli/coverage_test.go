@@ -51,6 +51,9 @@ var unreachable = map[string]string{
 
 	"GET /core/v4/keys/salts":         "only a first unlock derives the key password, and the suite resumes a session",
 	"PUT /auth/v4/sessions/local/key": "written once, at the first unlock, before the suite runs",
+
+	"POST /auth/v4/sessions": "only a first sign-in creates one, and no test signs out to force another",
+	"POST /core/v4/auth/2fa": "no test account has two-factor enabled, so nothing is ever asked for a code",
 }
 
 // untested are the requests a run could make and does not. Each is a gap somebody
@@ -75,6 +78,12 @@ var untested = map[string]string{
 	"PUT /contacts/v4/contacts/emails/unlabel":       "contact groups; needs a paid test",
 	"POST /mail/v4/messages/{id}/unsubscribe":        "reaching it needs a message from a real mailing list carrying a List-Unsubscribe header, which no seeding can put on these accounts",
 	"GET /calendar/v1/{id}/events/{id}/attendees":    "reaching it needs an event with more attendees than a page holds, which would mean inviting a hundred addresses from these accounts",
+
+	// Renewing a session needs an access token that has expired, which takes a day
+	// the suite does not have. A test could put a bogus token in the session file
+	// and watch the next command renew it and carry on, which is the shape the
+	// missing test has.
+	"POST /auth/v4/refresh": "reaching it needs an expired access token",
 }
 
 func TestEveryRequestTheCLICanSendIsOneTheSuiteSends(t *testing.T) {

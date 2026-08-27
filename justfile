@@ -162,7 +162,7 @@ test-report *pattern=".":
     set -euo pipefail
     trace="${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
     PROTON_CLI_TEST_TRACE="$trace" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
-        go test ./tests/ -count=1 -run '{{ pattern }}' -timeout 20m -parallel {{ parallel }} || true
+        go test ./tests/ -v -count=1 -run '{{ pattern }}' -timeout 20m -parallel {{ parallel }} || true
     go run ./scripts/testreport "$trace"
 
 [doc("Record which of Proton's API the live suite reaches, for the check that no change quietly narrows it")]
@@ -171,7 +171,7 @@ coverage:
     set -euo pipefail
     trace="${PROTON_CLI_TEST_TRACE:-/tmp/proton-cli-trace.jsonl}"
     PROTON_CLI_TEST_TRACE="$trace" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
-        go test ./tests/ -count=1 -timeout 30m -parallel {{ parallel }}
+        go test ./tests/ -v -count=1 -timeout 30m -parallel {{ parallel }}
     # Both suites, because the golden is what every request the CLI can send has
     # to appear in, and some of them only a paid plan can reach. Without a paid
     # account the free half is recorded on its own and the paid endpoints show up
@@ -180,7 +180,7 @@ coverage:
     if [ -n "${PROTON_CLI_TEST_PAID_USER:-}" ]; then
         paid="${trace%.jsonl}-paid.jsonl"
         PROTON_CLI_TEST_TRACE="$paid" PROTON_CLI_TEST_TRACE_REQUESTS=1 \
-            go test ./tests/ -tags=paid -count=1 -timeout 20m -parallel 1 -run Paid
+            go test ./tests/ -tags=paid -v -count=1 -timeout 20m -parallel 1 -run Paid
         traces="$traces $paid"
     else
         echo "no paid account configured; recording the free suite only" >&2

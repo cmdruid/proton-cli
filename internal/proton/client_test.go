@@ -65,19 +65,19 @@ func TestDoIdentityHeadersHonorOverrides(t *testing.T) {
 	}
 }
 
-func TestRateLimitDelayPrefersTheServersAnswer(t *testing.T) {
-	got := rateLimitDelay(&Response{retryHeader: "3"}, 1)
+func TestRetryDelayPrefersTheServersAnswer(t *testing.T) {
+	got := retryDelay("3", 1)
 	if got != 3*time.Second {
 		t.Errorf("delay = %v, want the Retry-After the server named", got)
 	}
 }
 
-func TestRateLimitDelayBacksOffWithJitterWhenTheServerNamesNothing(t *testing.T) {
+func TestRetryDelayBacksOffWithJitterWhenTheServerNamesNothing(t *testing.T) {
 	var last time.Duration
 	for attempt := 1; attempt <= 6; attempt++ {
 		floor := min(backoffFloor<<(attempt-1), backoffCeiling)
 		for range 20 {
-			got := rateLimitDelay(&Response{}, attempt)
+			got := retryDelay("", attempt)
 			if got < floor/2 || got > floor {
 				t.Fatalf("attempt %d delay = %v, want between %v and %v", attempt, got, floor/2, floor)
 			}
@@ -86,6 +86,153 @@ func TestRateLimitDelayBacksOffWithJitterWhenTheServerNamesNothing(t *testing.T)
 	}
 	if last != backoffCeiling {
 		t.Errorf("the wait reached %v, want it capped at %v", last, backoffCeiling)
+	}
+}
+
+// shrinkBackoff makes the waits negligible for the duration of a test, so a test
+// of what gets asked again does not also spend the backoff.
+func shrinkBackoff(t *testing.T) {
+	t.Helper()
+	floor, ceiling := backoffFloor, backoffCeiling
+	backoffFloor, backoffCeiling = time.Millisecond, 2*time.Millisecond
+	t.Cleanup(func() { backoffFloor, backoffCeiling = floor, ceiling })
+}
+
+// A server that broke says nothing about whether the request arrived. Asking
+// again is right for something that changes nothing and wrong for anything else:
+// Proton has no idempotency keys, so a POST it may already have applied would be
+// applied twice.
+func TestAServerThatBrokeIsAskedAgainOnlyForWhatMayArriveTwice(t *testing.T) {
+	shrinkBackoff(t)
+
+	cases := []struct {
+		name     string
+		req      Request
+		attempts int
+	}{
+		{"a read", Request{Method: "GET", Path: "/x"}, transientWaits + 1},
+		{"a write", Request{Method: "POST", Path: "/x"}, 1},
+		{"a write that says it may be repeated", Request{Method: "POST", Path: "/x", Repeatable: true}, transientWaits + 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var asked int
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				asked++
+				w.WriteHeader(http.StatusBadGateway)
+				_, _ = w.Write([]byte("<html>502 Bad Gateway</html>"))
+			}))
+			defer srv.Close()
+
+			c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+			_, err := c.Do(context.Background(), tc.req)
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) || apiErr.HTTPStatus != http.StatusBadGateway {
+				t.Fatalf("err = %v, want the 502 reported as what it is", err)
+			}
+			if apiErr.ExitCode() != 5 {
+				t.Errorf("exit = %d, want 5 (a server problem)", apiErr.ExitCode())
+			}
+			if asked != tc.attempts {
+				t.Errorf("the server was asked %d times, want %d", asked, tc.attempts)
+			}
+		})
+	}
+}
+
+func TestAReadRidesOutAPassingServerFailure(t *testing.T) {
+	shrinkBackoff(t)
+
+	var asked int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		if asked == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("<html>503</html>"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"Code":1000}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+	resp, err := c.Do(context.Background(), Request{Method: "GET", Path: "/x"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Status != http.StatusOK {
+		t.Errorf("status = %d, want the answer after the wait", resp.Status)
+	}
+	if asked != 2 {
+		t.Errorf("the server was asked %d times, want a second attempt", asked)
+	}
+}
+
+// A deadline is not a bad moment: the request was given its time and used it, so
+// starting the clock again would spend it over and over.
+func TestARequestOutOfTimeIsNotAskedAgain(t *testing.T) {
+	shrinkBackoff(t)
+
+	var asked int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		time.Sleep(50 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"Code":1000}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{
+		BaseURL:    srv.URL,
+		HTTPClient: &http.Client{Timeout: 10 * time.Millisecond},
+		Logger:     slog.New(slog.DiscardHandler),
+	})
+	_, err := c.Do(context.Background(), Request{Method: "GET", Path: "/x"})
+	var netErr *NetworkError
+	if !errors.As(err, &netErr) {
+		t.Fatalf("err = %v, want a network failure", err)
+	}
+	if asked != 1 {
+		t.Errorf("the request was made %d times, want once", asked)
+	}
+}
+
+// An attempt is weighed on what it reports, and an attempt that reports nothing
+// at all is over. Reading a status off an answer that is not there is how a
+// successful scope elevation once took the whole command down with it.
+func TestAnAttemptThatReportsNothingIsSettled(t *testing.T) {
+	c := New(Options{Logger: slog.New(slog.DiscardHandler)})
+
+	var runs int
+	resp, err := c.retrying(context.Background(), Request{Method: "POST", Path: "/x", Repeatable: true},
+		func() (*Response, error) {
+			runs++
+			return nil, nil
+		})
+	if resp != nil || err != nil {
+		t.Fatalf("got (%v, %v), want nothing reported either way", resp, err)
+	}
+	if runs != 1 {
+		t.Errorf("the attempt ran %d times, want once", runs)
+	}
+}
+
+func TestAConnectionThatFailedIsAskedAgainForARead(t *testing.T) {
+	shrinkBackoff(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"Code":1000}`))
+	}))
+	dead := srv.URL
+	srv.Close()
+
+	c := New(Options{BaseURL: dead, Logger: slog.New(slog.DiscardHandler)})
+	_, err := c.Do(context.Background(), Request{Method: "GET", Path: "/x"})
+	var netErr *NetworkError
+	if !errors.As(err, &netErr) {
+		t.Fatalf("err = %v, want a network failure", err)
+	}
+	if !worthRepeating(err) {
+		t.Error("a refused connection is worth another go")
 	}
 }
 
