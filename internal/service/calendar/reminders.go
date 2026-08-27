@@ -43,7 +43,9 @@ const (
 	alarmMaxPages = 100
 )
 
-// Reminder is one notification of one occurrence.
+// Reminder is one notification of one occurrence: the event it warns about,
+// reported as `events get` reports it, and the three facts that belong to the
+// warning rather than to the event.
 type Reminder struct {
 	Event
 	// Fires is when it goes off, which the alarms endpoint says exactly.
@@ -187,34 +189,32 @@ func (s *Service) alarms(ctx context.Context, calendarIDs []string, from, until 
 
 // reminderFromAlarm joins one served alarm to its event.
 //
-// Both moments come from Proton: when the alarm rings, and when the occurrence
-// it warns about starts - which for an all-day event is the calendar's chosen
-// morning hour rather than anything derivable from the trigger alone. A
+// The row is the event itself, moved to the occurrence being warned about: what
+// a reminder adds is when it rings and what it says, not a shorter description
+// of the appointment. Both moments come from Proton - when the alarm rings, and
+// when the occurrence starts, which for an all-day event is the calendar's
+// chosen morning hour rather than anything derivable from the trigger alone. A
 // cancelled event keeps no appointment and raises nothing.
 func reminderFromAlarm(al calendarAlarm, event *Event, now time.Time) *Reminder {
 	if event == nil || event.Status == "cancelled" {
 		return nil
 	}
-	fire := time.Unix(al.Occurrence, 0)
 	start := occurrenceStart(al)
-	row := Event{
-		ID:         event.ID,
-		CalendarID: event.CalendarID,
-		Title:      event.Title,
-		Start:      start,
-		AllDay:     event.AllDay,
-		Zone:       event.Zone,
-		Status:     event.Status,
-		Occurrence: start.Format("2006-01-02T15:04"),
-	}
+	// The span moves with the occurrence: how long it runs is the event's, when it
+	// ends is this occurrence's. An event whose end is not after its start has
+	// none to move.
+	var end time.Time
 	if event.End.After(event.Start) {
-		row.End = start.Add(event.End.Sub(event.Start))
+		end = start.Add(event.End.Sub(event.Start))
 	}
+	row := *event
+	row.Start, row.End = start, end
+	row.Occurrence = start.Format("2006-01-02T15:04")
 	return &Reminder{
 		Event:  row,
-		Fires:  fire,
+		Fires:  time.Unix(al.Occurrence, 0),
 		Remind: units.Duration(triggerDuration(al.Trigger)),
-		Says:   says(Event{Title: event.Title, Start: start, AllDay: event.AllDay}, now),
+		Says:   says(row, now),
 	}
 }
 

@@ -25,12 +25,11 @@ func event(id string, action, unread int, flags int64, labels []string, conv str
 		ID: id, Action: action,
 		Message: &rawEventMessage{
 			rawListMessage: rawListMessage{
-				ID: id, Subject: "Subject " + id, Unread: unread,
+				ID: id, ConversationID: conv, Subject: "Subject " + id, Unread: unread,
 				Sender:   struct{ Name, Address string }{Name: "Fastmail", Address: "billing@fastmail.com"},
 				LabelIDs: labels,
 			},
-			ConversationID: conv,
-			Flags:          flags,
+			Flags: flags,
 		},
 	}
 }

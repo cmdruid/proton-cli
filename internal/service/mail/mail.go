@@ -79,6 +79,7 @@ func New(c proton.Doer, k keys.Get) *Service { return &Service{C: c, keys: k} }
 
 type Message struct {
 	ID             string   `json:"id"`
+	ConversationID string   `json:"conversation_id,omitempty"`
 	Subject        string   `json:"subject"`
 	FromName       string   `json:"from_name,omitempty"`
 	FromAddress    string   `json:"from_address"`
@@ -94,18 +95,19 @@ func (m Message) Starred() bool { return hasLabel(m.Labels, labelStarred) }
 
 // Full carries a decrypted body, unlike the raw API envelope.
 type Full struct {
-	ID          string                 `json:"id"`
-	Subject     string                 `json:"subject"`
-	Sender      map[string]any         `json:"from"`
-	ToList      []map[string]any       `json:"to,omitempty"`
-	CCList      []map[string]any       `json:"cc,omitempty"`
-	BCCList     []map[string]any       `json:"bcc,omitempty"`
-	Time        int64                  `json:"time,omitempty"`
-	Body        string                 `json:"body"`
-	MIMEType    string                 `json:"mime_type"`
-	AddressID   string                 `json:"address_id"`
-	Attachments []Attachment           `json:"attachments,omitempty"`
-	Signature   pgphelper.VerifyResult `json:"signature,omitempty"`
+	ID             string                 `json:"id"`
+	ConversationID string                 `json:"conversation_id,omitempty"`
+	Subject        string                 `json:"subject"`
+	Sender         map[string]any         `json:"from"`
+	ToList         []map[string]any       `json:"to,omitempty"`
+	CCList         []map[string]any       `json:"cc,omitempty"`
+	BCCList        []map[string]any       `json:"bcc,omitempty"`
+	Time           int64                  `json:"time,omitempty"`
+	Body           string                 `json:"body"`
+	MIMEType       string                 `json:"mime_type"`
+	AddressID      string                 `json:"address_id"`
+	Attachments    []Attachment           `json:"attachments,omitempty"`
+	Signature      pgphelper.VerifyResult `json:"signature,omitempty"`
 }
 
 type Conversation struct {

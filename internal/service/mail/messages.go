@@ -14,6 +14,7 @@ import (
 
 type rawListMessage struct {
 	ID             string
+	ConversationID string
 	Subject        string
 	Unread         int
 	Time           int64
@@ -24,7 +25,8 @@ type rawListMessage struct {
 
 func toMessage(m rawListMessage) Message {
 	return Message{
-		ID: m.ID, Subject: m.Subject, Unread: m.Unread, Time: m.Time,
+		ID: m.ID, ConversationID: m.ConversationID,
+		Subject: m.Subject, Unread: m.Unread, Time: m.Time,
 		FromName: m.Sender.Name, FromAddress: m.Sender.Address,
 		NumAttachments: m.NumAttachments, Labels: m.LabelIDs,
 	}
@@ -191,7 +193,7 @@ func (s *Service) decryptMessage(ctx context.Context, u *keys.Unlocked, m rawMes
 		})
 	}
 	return Full{
-		ID: m.ID, Subject: m.Subject, Sender: m.Sender,
+		ID: m.ID, ConversationID: m.ConversationID, Subject: m.Subject, Sender: m.Sender,
 		ToList: m.ToList, CCList: m.CCList, BCCList: m.BCCList,
 		Time: m.Time, Body: body, MIMEType: m.MIMEType, AddressID: m.AddressID,
 		Attachments: atts, Signature: sig,

@@ -1267,8 +1267,9 @@ func TestCalendarRemindersListReportsDue(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	start := time.Now().Add(20 * time.Minute).Format("2006-01-02T15:04")
 	title := testID() + "-remindo"
+	location := title + "-room"
 	eventID := strings.TrimSpace(runOK(t, "calendar", "events", "create",
-		"--calendar", calID, "--title", title,
+		"--calendar", calID, "--title", title, "--location", location,
 		"--start", start, "--duration", "15m", "--remind", "15m"))
 	cleanupRun(t, fmt.Sprintf("Delete event: proton calendar events delete %s", eventID),
 		"calendar", "events", "delete", eventID)
@@ -1287,6 +1288,11 @@ func TestCalendarRemindersListReportsDue(t *testing.T) {
 		}
 		if row["remind"] != "15m" {
 			t.Errorf("remind = %v, want 15m", row["remind"])
+		}
+		// A reminder reports the event it warns about, whole, so what the event
+		// says about itself is on the row rather than a lookup away.
+		if row["location"] != location {
+			t.Errorf("location = %v, want %q", row["location"], location)
 		}
 		says, _ := row["says"].(string)
 		if !strings.Contains(says, "starts") && !strings.Contains(says, "started") {

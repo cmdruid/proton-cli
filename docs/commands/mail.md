@@ -32,7 +32,7 @@ proton mail messages watch --output json | jq -c .
 
 Stays attached and prints a line the moment a message lands, until you stop it. It reports what happens while it is watching, so nothing that arrived beforehand comes up; a thread coming back from snooze counts as landing.
 
-Without `--folder` it covers the inbox plus every folder whose notifications are on, which `settings folders list` shows in its NOTIFY column. Each line carries the time, the message ID, who it is from, and the subject; `--output json` emits one object per line, ready for `jq`. See [Streams](../output.md#streams), and [Desktop notifications](../scripting.md#desktop-notifications-mail-and-calendar-reminders) for turning lines into notifications.
+Without `--folder` it covers the inbox plus every folder whose notifications are on, which `settings folders list` shows in its NOTIFY column. Each line carries the time, the message ID, who it is from, and the subject; `--output json` emits one object per line, ready for `jq`, and names the thread the message belongs to in `conversation_id`, so a consumer can act on the whole thread without looking it up. See [Streams](../output.md#streams), and [Desktop notifications](../scripting.md#desktop-notifications-mail-and-calendar-reminders) for turning lines into notifications.
 
 ### Search
 

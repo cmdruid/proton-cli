@@ -187,11 +187,10 @@ type eventBatch struct {
 }
 
 // rawEventMessage is a message as the feed carries it: the same envelope a
-// listing returns, plus the two fields only an arrival asks about.
+// listing returns, plus the one field only an arrival asks about.
 type rawEventMessage struct {
 	rawListMessage
-	ConversationID string
-	Flags          int64
+	Flags int64
 }
 
 // arrivals are the messages in this page worth telling somebody about.

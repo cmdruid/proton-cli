@@ -139,11 +139,13 @@ An event's reminders are the notifications it raises. `events list` shows which 
 
 ```console
 $ proton calendar reminders list --start 2026-08-27 --end 2026-08-28
-ID                         FIRES             REMIND  TITLE    STARTS
-─────────────────────────  ────────────────  ──────  ───────  ────────────────
+ID                         FIRES             REMIND  TITLE    STARTS              LOCATION
+─────────────────────────  ────────────────  ──────  ───────  ──────────────────  ────────
 7bd3e011                   2026-08-27 06:00  6h      Piano    2026-08-27 all day
-4f2a1b9c@2026-08-27T09:00  2026-08-28 08:45  15m     Standup  2026-08-28 09:00
+4f2a1b9c@2026-08-27T09:00  2026-08-28 08:45  15m     Standup  2026-08-28 09:00    Room 3
 ```
+
+A row is the event itself, moved to the occurrence being warned about, so everything `events get` reports about it is here too - `--output json` carries the location, the description, the attendees and the rest, beside the three facts that belong to the warning rather than the event: `fires`, `remind` and `says`.
 
 A reminder is listed on the day it goes off, not the day its event is on: an event with two triggers is two rows, and a recurring one is a row per occurrence. When each reminder fires is Proton's to say - an all-day event's goes off at the calendar's chosen morning hour, whatever trigger produced it, and an event leaning on its calendar's default notifications still appears. Emailed reminders are Proton's to send and are left out.
 

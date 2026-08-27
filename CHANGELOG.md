@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Adding a version section here is what publishes a release, so this file is the one place a version is decided: see [Releases](CONTRIBUTING.md#releases). Versions that shipped before this file existed are on the [releases page](https://github.com/roman-16/proton-cli/releases).
 
+## [2.8.0] - 2026-08-28
+
+### Added
+
+- Messages say which thread they belong to: `conversation_id` is on every message under `--output json` and `--output yaml`, from `mail messages list`, `watch` and `get`. Acting on the whole thread no longer costs a second lookup.
+
+### Changed
+
+- `calendar reminders list` and `calendar reminders watch` report the event a reminder warns about in full - its location, description, attendees and the rest sit on the row beside `fires`, `remind` and `says`. `reminders list` gains a `LOCATION` column, so a script reading that text output by column position will shift.
+
+### Fixed
+
+- Signing in survives a bad moment at Proton's edge: a 502 or a dropped connection is waited out and asked again, instead of coming out as a complaint about JSON and exit `1`. Only what spends nothing is ever asked twice - a two-factor code least of all.
+- A sign-in refused for a wrong password or two-factor code exits `2`, and one that outlasts the waiting - a rate limit included - exits `5`, so a scheduled job can tell "fix the password" from "come back later".
+
 ## [2.7.0] - 2026-08-27
 
 ### Added

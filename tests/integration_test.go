@@ -954,19 +954,20 @@ func messageIDInFolder(folder, subject string) string {
 	return ""
 }
 
-// conversationIDOf returns a message's ConversationID, or "" on failure. t-free.
+// conversationIDOf returns the thread a message belongs to, or "" on failure.
+// t-free.
 func conversationIDOf(msgID string) string {
-	stdout, _, code, err := runArgs(nil, "api", "GET", "/mail/v4/messages/"+msgID)
+	stdout, _, code, err := runArgs(nil, "--output", "json", "mail", "messages", "get", msgID)
 	if err != nil || code != 0 {
 		return ""
 	}
 	var v struct {
-		Message struct{ ConversationID string }
+		ConversationID string `json:"conversation_id"`
 	}
 	if json.Unmarshal([]byte(stdout), &v) != nil {
 		return ""
 	}
-	return v.Message.ConversationID
+	return v.ConversationID
 }
 
 // sendTestMailSecondary sends a message from the second account to the primary
