@@ -336,15 +336,40 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v6
 
-      - name: Download .deb assets from the release
+      # reprepro keeps no database between runs, so the pool is rebuilt from
+      # scratch every release and whatever is not handed to it is dropped. The
+      # releases are where every .deb this project ever published already lives,
+      # immutably, which makes them the thing to rebuild from: the repository
+      # then holds a run of versions rather than only the newest, and `apt
+      # install proton-cli=X.Y.Z` can undo a bad release.
+      #
+      # The tag being released must arrive; the ones behind it are best-effort,
+      # since a tag old enough to predate the .deb packages has none to give.
+      - name: Collect the .deb assets to publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve.outputs.tag }}
         run: |
           mkdir -p debs
-          gh release download "${{ needs.resolve.outputs.tag }}" \
-            --repo "${{ github.repository }}" \
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
             --pattern '*.deb' \
             --dir debs
+
+          # Ten is a deep enough run to roll back through and shallow enough
+          # that the download stays a few seconds rather than growing without
+          # bound as the project ages.
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 10 --json tagName \
+            | jq --raw-output --arg tag "$TAG" '.[] | select(.tagName != $tag) | .tagName' \
+            | while read -r previous; do
+                gh release download "$previous" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --pattern '*.deb' \
+                  --dir debs \
+                  --clobber \
+                  || echo "::notice title=No packages::$previous ships no .deb"
+              done
+
           ls -la debs/
 
       - name: Build signed APT repository
@@ -358,14 +383,6 @@ jobs:
           architectures: amd64 arm64
           signing-key: ${{ secrets.GPG_PRIVATE_KEY }}
           signing-key-passphrase: ${{ secrets.GPG_PRIVATE_KEY_PASSPHRASE }}
-          # reprepro's database is not persisted across workflow runs, so
-          # re-import the already-published packages before rebuilding to
-          # keep older versions available. Allowed to fail on the very
-          # first run, when nothing is published yet.
-          import-from-repo-url: |
-            deb-amd64 https://roman-16.github.io/proton-cli/ stable main
-            deb-arm64 https://roman-16.github.io/proton-cli/ stable main
-          import-from-repo-failure-allow: "true"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

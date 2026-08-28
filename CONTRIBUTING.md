@@ -31,10 +31,19 @@ just test-fast         # unit, golden and conformance tests
 just flake             # build the nix package, after a dependency bump
 just snapshot          # every release artifact, without publishing
 just demo              # regenerate the README demo images
+just web-dev           # serve the documentation site while you edit the pages
 just update            # move every dependency and tool to the latest version
 ```
 
-`just lint` has to pass with no findings, and has to leave the tree clean. It formats Go and Nix, regenerates the command reference, and checks the workflows, the release configuration, the shell scripts and the Go, so a stale generated file fails the same way a lint finding does. CI runs the same recipe.
+`just lint` has to pass with no findings, and has to leave the tree clean. It formats Go and Nix, regenerates the command reference, builds the documentation site, and checks the workflows, the release configuration, the shell scripts and the Go, so a stale generated file fails the same way a lint finding does. CI runs the same recipe.
+
+## The documentation site
+
+[The site](https://proton-cli.lerchster.dev) is `docs/` rendered. The pages stay plain markdown that reads on GitHub, and `web/scripts/import-docs.ts` derives what a site needs from what a page already has: the title from its heading, the description from its lead paragraph, and absolute links from the relative ones. So a page is edited in `docs/` and nowhere else, and a merge to `main` publishes it.
+
+`just web` builds it the way CI does, which type-checks the site and fails on a link that goes nowhere. `just web-dev` serves it while you write.
+
+The site is published from its own repository because GitHub gives a repository one Pages site, and this one's is [the APT repository](https://roman-16.github.io/proton-cli/). Keeping them apart is what stops a documentation change from reaching what `apt update` reads.
 
 ## README demo images
 

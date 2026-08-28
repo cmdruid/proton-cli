@@ -1,0 +1,158 @@
+/*
+ * Proton's own palette, read from WebClients (packages/colors/themes/src):
+ * carbon for dark, snow for light.
+ *
+ * Both themes are a tinted neutral ladder plus a purple accent, which is the
+ * same shape starlight-theme-black builds from - so every rung maps onto a rung
+ * and the theme survives intact with Proton's colours in it. The ladders differ
+ * in temperature on purpose: Proton's light greys are warm and its dark greys
+ * are cool violet, and keeping that is most of what makes this read as Proton
+ * rather than as a purple repaint.
+ *
+ * The theme appends its own stylesheets after this one, so the order is
+ * declared here: a layer named last wins, whatever order the files load in.
+ */
+@layer starlight, black, proton;
+
+@layer proton {
+  :root {
+    --proton-purple: #6d4aff;
+
+    --app-mail: linear-gradient(135deg, #6d4aff, #aa8eff);
+    --app-drive: linear-gradient(135deg, #6d4aff, #ff50c3);
+    --app-calendar: linear-gradient(135deg, #6d4aff, #06b8ff);
+    --app-pass: linear-gradient(135deg, #6d4aff, #ffd580);
+    --app-contacts: linear-gradient(135deg, #7341ff, #b39ffb);
+  }
+
+  :root:root {
+    --sl-font: var(--font-inter);
+  }
+
+  :root[data-theme="dark"] {
+    /* --text-norm */
+    --foreground: #ffffff;
+    --gray-1: #ffffff;
+    /* --text-weak */
+    --gray-2: #a7a4b5;
+    /* --text-hint */
+    --gray-3: #6d697d;
+    /* --field-norm */
+    --gray-4: #5b576b;
+    /* --border-norm */
+    --gray-5: #4a4658;
+    /* --border-weak */
+    --gray-6: #343140;
+    /* --optional-background-elevated */
+    --gray-7: #1e1c26;
+    /* --background-norm */
+    --background: #16141c;
+
+    /* --primary, which carbon lifts off --interaction-norm for contrast */
+    --sl-color-text-accent: #8a6eff;
+
+    --red: #f5385a;
+    --orange: #ff9900;
+    --green: #1ea885;
+    --blue: #239ece;
+    --purple: #8a6eff;
+
+    --signal-mix-low: 16%;
+    --signal-mix-high: 45%;
+    --signal-toward: #ffffff;
+
+    --selection: color-mix(in oklab, var(--proton-purple) 45%, transparent);
+    --selection-foreground: #ffffff;
+  }
+
+  :root[data-theme="light"] {
+    /* --text-norm */
+    --foreground: #0c0c14;
+    --gray-1: #0c0c14;
+    /* --optional-email-item-read-text-color */
+    --gray-2: #3d3c3c;
+    /* --text-weak */
+    --gray-3: #5c5958;
+    /* --text-hint */
+    --gray-4: #8f8d8a;
+    /* --field-norm */
+    --gray-5: #adaba8;
+    /* --border-norm */
+    --gray-6: #d1cfcd;
+    /* --background-weak */
+    --gray-7: #f5f4f2;
+    /* --background-norm */
+    --background: #ffffff;
+
+    /* --primary */
+    --sl-color-text-accent: var(--proton-purple);
+
+    --red: #dc3251;
+    --orange: #ff9900;
+    --green: #1ea885;
+    --blue: #239ece;
+    --purple: var(--proton-purple);
+
+    --signal-mix-low: 8%;
+    --signal-mix-high: 72%;
+    --signal-toward: #000000;
+
+    --selection: var(--proton-purple);
+    --selection-foreground: #ffffff;
+  }
+
+  /*
+   * Proton names one shade per signal and leaves the tint and the shade to the
+   * surface, the way it does in its own themes. Deriving them here keeps the
+   * asides in the same light as the page they sit on.
+   */
+  :root {
+    --red-low: color-mix(in oklab, var(--red) var(--signal-mix-low), var(--background));
+    --red-high: color-mix(in oklab, var(--red) var(--signal-mix-high), var(--signal-toward));
+    --orange-low: color-mix(in oklab, var(--orange) var(--signal-mix-low), var(--background));
+    --orange-high: color-mix(in oklab, var(--orange) var(--signal-mix-high), var(--signal-toward));
+    --green-low: color-mix(in oklab, var(--green) var(--signal-mix-low), var(--background));
+    --green-high: color-mix(in oklab, var(--green) var(--signal-mix-high), var(--signal-toward));
+    --blue-low: color-mix(in oklab, var(--blue) var(--signal-mix-low), var(--background));
+    --blue-high: color-mix(in oklab, var(--blue) var(--signal-mix-high), var(--signal-toward));
+    --purple-low: color-mix(in oklab, var(--purple) var(--signal-mix-low), var(--background));
+    --purple-high: color-mix(in oklab, var(--purple) var(--signal-mix-high), var(--signal-toward));
+
+    /* --focus-outline, which Proton keeps at one shade in both themes */
+    --ring: var(--proton-purple);
+    --sl-color-accent: var(--proton-purple);
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--proton-purple);
+    outline-offset: 2px;
+  }
+
+  /*
+   * A link is purple, the way it is in every Proton client. The theme keeps
+   * prose monochrome and marks a link with an underline alone, which reads well
+   * on its own but says nothing about whose documentation this is.
+   */
+  .sl-markdown-content a:not([class]) {
+    color: var(--sl-color-text-accent);
+    text-decoration-color: color-mix(in oklab, var(--sl-color-text-accent) 40%, transparent);
+  }
+
+  .sl-markdown-content a:not([class]):hover {
+    text-decoration-color: var(--sl-color-text-accent);
+  }
+
+  /* The one call to action on the site is the one Proton colour people know. */
+  .sl-link-button.primary {
+    background: var(--proton-purple);
+    border-color: var(--proton-purple);
+    color: #ffffff;
+  }
+
+  .sl-link-button.primary:hover {
+    background: color-mix(in oklab, var(--proton-purple) 85%, #000000);
+    border-color: color-mix(in oklab, var(--proton-purple) 85%, #000000);
+  }
+}

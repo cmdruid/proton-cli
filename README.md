@@ -10,6 +10,8 @@ _Unofficial, community-built, not affiliated with Proton AG._
 
 [![Release](https://img.shields.io/github/v/release/roman-16/proton-cli?sort=semver&style=flat-square&color=6D4AFF)](https://github.com/roman-16/proton-cli/releases/latest) [![Downloads](https://img.shields.io/github/downloads/roman-16/proton-cli/total?style=flat-square&color=6D4AFF)](https://github.com/roman-16/proton-cli/releases) [![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-6D4AFF?style=flat-square)](docs/installation.md) [![License](https://img.shields.io/github/license/roman-16/proton-cli?style=flat-square&color=6D4AFF)](LICENSE)
 
+**[proton-cli.lerchster.dev](https://proton-cli.lerchster.dev)** - the documentation, searchable.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.svg">
   <img src="assets/demo-light.svg" alt="Listing unread mail, uploading a file to Drive, previewing which files a cleanup would remove, and listing Pass items">
@@ -178,7 +180,7 @@ The saved session keeps your key password encrypted with a key held server-side,
 
 ## Documentation
 
-Everything lives in [`docs/`](docs/README.md):
+Everything is on [the documentation site](https://proton-cli.lerchster.dev), and in [`docs/`](docs/README.md) beside the code:
 
 | Page | What's in it |
 | --- | --- |

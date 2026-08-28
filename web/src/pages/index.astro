@@ -1,0 +1,128 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+
+import Apps from "../components/Apps.astro";
+import Install from "../components/Install.astro";
+import { repo } from "../../site.ts";
+
+const demoAlt =
+  "Listing unread mail, uploading a file to Drive, previewing which files a cleanup would remove, and listing Pass items";
+
+const traits = [
+  {
+    body: "SRP login and the full PGP key hierarchy, handled on your machine with Proton's own go-srp and gopenpgp. No bridge, no proxy, no browser in the middle.",
+    title: "Real end-to-end encryption",
+  },
+  {
+    body: "Mail, Drive, Calendar, Pass and Contacts, in a single static executable on Linux, macOS and Windows.",
+    title: "Five apps, one binary",
+  },
+  {
+    body: "JSON and YAML with one envelope shape for every list, streaming stdin and stdout, exit codes that mean something, and --dry-run on everything that changes state.",
+    title: "Built for pipes and cron",
+  },
+];
+---
+
+<StarlightPage
+  frontmatter={{
+    description:
+      "Read your mail, move files in and out of Drive, and manage calendars, passwords and contacts without opening a browser.",
+    hero: {
+      actions: [
+        { link: "/installation/", text: "Install", variant: "primary" },
+        { link: "/getting-started/", text: "Get started", variant: "secondary" },
+        { link: repo, text: "GitHub", variant: "minimal" },
+      ],
+      tagline:
+        "Read your mail, move files in and out of Drive, and manage calendars, passwords and contacts without opening a browser. Your keys stay on your machine.",
+      title: "Proton, in your terminal.",
+    },
+    showMarkdownActions: false,
+    template: "splash",
+    title: "Proton, in your terminal.",
+  }}
+  hasSidebar={false}
+>
+  <Install />
+
+  <section class="demo">
+    <img alt={demoAlt} class="only-dark" src="/demo-dark.svg" />
+    <img alt={demoAlt} class="only-light" src="/demo-light.svg" />
+  </section>
+
+  <section class="traits">
+    {
+      traits.map(({ body, title }) => (
+        <div class="trait">
+          <h2>{title}</h2>
+          <p>{body}</p>
+        </div>
+      ))
+    }
+  </section>
+
+  <section class="what">
+    <h2>What you can do</h2>
+    <p class="lead">
+      Every command reads the same way, <code>proton &lt;app&gt; &lt;collection&gt; &lt;verb&gt;</code
+      >, and anywhere one wants an ID, a subject, name or URL works too.
+    </p>
+    <Apps />
+  </section>
+</StarlightPage>
+
+<style>
+  .demo {
+    margin-block: 4rem;
+  }
+
+  .demo img {
+    inline-size: 100%;
+    block-size: auto;
+  }
+
+  :global([data-theme="light"]) .only-dark,
+  :global([data-theme="dark"]) .only-light {
+    display: none;
+  }
+
+  .traits {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    margin-block: 4rem;
+  }
+
+  .trait h2 {
+    border: 0;
+    font-size: var(--sl-text-base);
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+    padding: 0;
+  }
+
+  .trait p {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+    margin: 0;
+  }
+
+  .what {
+    margin-block-start: 5rem;
+  }
+
+  .what h2 {
+    border: 0;
+    font-size: var(--sl-text-3xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+    padding: 0;
+  }
+
+  .lead {
+    color: var(--sl-color-gray-3);
+    margin-block: 0.75rem 2rem;
+  }
+</style>

@@ -1,0 +1,60 @@
+name: Web
+
+# The documentation site is built here and published from the repository that
+# owns it, because GitHub gives a repository one Pages site and this one's is the
+# APT repository. Keeping the two apart is what stops a documentation change from
+# ever reaching the tree `apt update` reads.
+#
+# The pages themselves stay in docs/, so a pull request that renames a command
+# regenerates the reference and republishes the site in the same merge.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/web.yml
+      - README.md
+      - assets/**
+      - docs/**
+      - web/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A deploy replaces the whole site, so two of them must not overlap. The newest
+# tree is the one worth publishing, so a queued run gives way to a fresher one.
+concurrency:
+  group: web
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build the site
+        working-directory: web
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run build
+
+      - name: Publish to the site's repository
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          # Written into the published branch on every deploy, so the custom
+          # domain is a fact about this file rather than a setting somebody has
+          # to remember to restore.
+          cname: proton-cli.lerchster.dev
+          commit_message: ${{ github.event.head_commit.message }}
+          deploy_key: ${{ secrets.WEB_DEPLOY_KEY }}
+          external_repository: roman-16/proton-cli-web
+          publish_branch: gh-pages
+          publish_dir: web/dist
+          user_email: github-actions[bot]@users.noreply.github.com
+          user_name: github-actions[bot]

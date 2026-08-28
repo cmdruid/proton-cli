@@ -48,6 +48,7 @@ lint:
     gofmt -w .
     nixfmt flake.nix
     just docs
+    just web
     actionlint
     goreleaser check
     shellcheck scripts/*.sh scripts/terminal-demo/*.sh
@@ -68,6 +69,14 @@ notes:
 [doc("Regenerate openapi.yaml from the WebClients TypeScript source")]
 openapi:
     cd scripts && bun install --frozen-lockfile && bun run generate-openapi
+
+[doc("Build the documentation site, which type-checks it and validates every link")]
+web:
+    cd web && bun install --frozen-lockfile && bun run check && bun run build
+
+[doc("Serve the documentation site, rebuilding as the pages change")]
+web-dev:
+    cd web && bun install --frozen-lockfile && bun run dev
 
 [doc("Regenerate the Pass protobuf bindings")]
 proto:

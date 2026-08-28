@@ -1,0 +1,45 @@
+---
+import { Code, TabItem, Tabs } from "@astrojs/starlight/components";
+
+const raw = "https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts";
+
+const methods = [
+  { code: `curl -fsSL ${raw}/install.sh | sh`, label: "Linux & macOS", lang: "sh" },
+  { code: "brew install --cask roman-16/tap/proton-cli", label: "Homebrew", lang: "sh" },
+  {
+    code: [
+      "sudo install -d -m 0755 /etc/apt/keyrings",
+      "curl -fsSL https://roman-16.github.io/proton-cli/gpg.key | sudo tee /etc/apt/keyrings/proton-cli.asc >/dev/null",
+      'echo "deb [signed-by=/etc/apt/keyrings/proton-cli.asc] https://roman-16.github.io/proton-cli stable main" | sudo tee /etc/apt/sources.list.d/proton-cli.list',
+      "sudo apt update && sudo apt install proton-cli",
+    ].join("\n"),
+    label: "Debian",
+    lang: "sh",
+  },
+  { code: "yay -S proton-cli-bin", label: "Arch", lang: "sh" },
+  { code: `irm ${raw}/install.ps1 | iex`, label: "Windows", lang: "powershell" },
+  { code: "winget install Roman-16.ProtonCLI", label: "winget", lang: "sh" },
+  { code: "npm install -g @roman-16/proton-cli", label: "npm", lang: "sh" },
+  { code: "environment.systemPackages = [ pkgs.proton-cli ];", label: "Nix", lang: "nix" },
+];
+---
+
+<div class="install">
+  <Tabs>
+    {
+      methods.map(({ code, label, lang }) => (
+        <TabItem label={label}>
+          <Code code={code} lang={lang} frame="terminal" />
+        </TabItem>
+      ))
+    }
+  </Tabs>
+</div>
+
+<style>
+  .install {
+    margin-inline: auto;
+    max-width: 46rem;
+    text-align: start;
+  }
+</style>

@@ -20,6 +20,11 @@ const (
 	Alias   = "proton-cli"
 )
 
+// Docs is where the pages this repository carries are published, rendered and
+// searchable. The site is named for the project, so it is spelled from Alias
+// rather than written out again.
+const Docs = "https://" + Alias + ".lerchster.dev"
+
 // Verbs is every word that may end a command path.
 //
 // Each entry is the one word for its idea. Where two words competed, the winner

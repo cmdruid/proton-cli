@@ -1,0 +1,75 @@
+---
+import { getCollection, render } from "astro:content";
+
+const apps = (await getCollection("landing")).sort((a, b) => a.data.order - b.data.order);
+const rendered = await Promise.all(
+  apps.map(async (app) => ({ Content: (await render(app)).Content, ...app.data })),
+);
+---
+
+<div class="apps">
+  {
+    rendered.map(({ Content, gradient, href, summary, title }) => (
+      <article class="app">
+        <a class="name" href={href} style={`--app: ${gradient}`}>
+          <span class="dot" />
+          {title}
+        </a>
+        <p class="summary">{summary}</p>
+        <Content />
+      </article>
+    ))
+  }
+</div>
+
+<style>
+  .apps {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  }
+
+  .app {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+  }
+
+  .name {
+    align-items: center;
+    color: var(--foreground);
+    display: flex;
+    font-size: var(--sl-text-xl);
+    font-weight: 600;
+    gap: 0.625rem;
+    text-decoration: none;
+  }
+
+  .name:hover {
+    color: var(--sl-color-text-accent);
+  }
+
+  .dot {
+    background: var(--app);
+    border-radius: 999px;
+    block-size: 0.75rem;
+    inline-size: 0.75rem;
+  }
+
+  .summary {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+    margin-block: 0.5rem 1rem;
+  }
+
+  .app :global(pre) {
+    margin-block-end: 0;
+  }
+
+  .app :global(.expressive-code) {
+    margin-block-start: auto;
+  }
+</style>

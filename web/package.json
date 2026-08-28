@@ -1,0 +1,19 @@
+{
+  "name": "proton-cli-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run import && astro build",
+    "check": "bun run import && astro check",
+    "dev": "bun run import && astro dev",
+    "import": "bun scripts/import-docs.ts"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.5",
+    "@astrojs/starlight": "^0.41.9",
+    "astro": "^7.2.9",
+    "starlight-links-validator": "^0.25.3",
+    "starlight-theme-black": "^0.7.1",
+    "typescript": "^5.9.3"
+  }
+}

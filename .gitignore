@@ -5,3 +5,8 @@ dist/
 internal/hv/assets/
 .env
 /proton
+web/.astro/
+web/dist/
+web/public/
+web/src/assets/
+web/src/content/docs/

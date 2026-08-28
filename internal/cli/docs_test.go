@@ -26,7 +26,16 @@ import (
 // needs the tree and nothing else: no binary, no session, no network.
 
 // docRoots are the files a reader is expected to follow instructions from.
-var docRoots = []string{"../../docs", "../../README.md", "../../CONTRIBUTING.md"}
+//
+// The site's front page is among them. What each app can do is written there as
+// markdown for exactly this reason: the page most people meet the tool through
+// is the last place a renamed command should survive.
+var docRoots = []string{
+	"../../CONTRIBUTING.md",
+	"../../README.md",
+	"../../docs",
+	"../../web/src/content/landing",
+}
 
 func TestEveryCommandTheDocsShowExists(t *testing.T) {
 	files := markdownFiles(t)
@@ -201,7 +210,9 @@ type invocation struct {
 // belongs to, and guessing would report the wrong thing.
 
 var (
-	fencedBlock = regexp.MustCompile("(?s)```(?:bash|console|sh|shell)\n(.*?)```")
+	// A fence names its language first and may go on to say how it should be
+	// drawn, which is the renderer's business and not this checker's.
+	fencedBlock = regexp.MustCompile("(?s)```(?:bash|console|sh|shell)[^\n]*\n(.*?)```")
 	inlineSpan  = regexp.MustCompile("`([^`\n]+)`")
 	// commandStart finds the program name wherever a line puts it: at the start,
 	// after a prompt, after a pipe, or after environment assignments.

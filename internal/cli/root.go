@@ -64,7 +64,8 @@ func newRoot() *cobra.Command {
 		Use:   kit.Program,
 		Short: "Unofficial CLI for Proton Mail, Drive, Calendar, Pass and Contacts",
 		Long: "Proton, in your terminal.\n\n" +
-			"Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.",
+			"Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.\n\n" +
+			"Documentation: " + kit.Docs,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
