@@ -203,10 +203,8 @@ proton mail settings filters create --name Loud --match any \
 
 A condition reads `FIELD [not] COMPARATOR VALUE`:
 
-| | |
-| --- | --- |
-| Field | `subject`, `sender`, `recipient`, `attachments` |
-| Comparator | `contains`, `is`, `starts`, `ends`, `matches` |
+- **Field** - `subject`, `sender`, `recipient`, `attachments`
+- **Comparator** - `contains`, `is`, `starts`, `ends`, `matches`
 
 `is` wants the whole value, `matches` takes `*` and `?` as wildcards, `not` inverts, and `attachments` takes no value - it asks whether there is one. Every condition has to hold unless you pass `--match any`.
 

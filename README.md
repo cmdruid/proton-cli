@@ -63,14 +63,12 @@ Every command reads the same way - `proton <app> <collection> <verb>` - and anyw
 
 ## What you can do
 
-| | | |
-| --- | --- | --- |
-| **[Mail](docs/apps/mail.md)** | Read, send, search, organize | Threads, attachments, filters, snoozing, block and allow lists, auto-reply |
-| **[Drive](docs/apps/drive.md)** | Files and folders as paths | Revisions, public links, sharing with people, trash, photo albums |
-| **[Calendar](docs/apps/calendar.md)** | Events and reminders | Recurrence occurrence by occurrence, attendees, invitations, .ics in and out |
-| **[Pass](docs/apps/pass.md)** | Logins and secrets | Notes, cards, SSH keys, identities, aliases, two-factor codes, item history |
-| **[Contacts](docs/apps/contacts.md)** | Your address book | Typed addresses and phones, the full vCard field set, duplicate merging |
-| **[Account](docs/apps/account.md)** | Profiles and settings | Sessions, per-app settings, more than one account side by side |
+- **[Mail](docs/apps/mail.md)** - read, send, search and organize. Threads, attachments, filters, snoozing, block and allow lists, auto-reply.
+- **[Drive](docs/apps/drive.md)** - files and folders as paths. Revisions, public links, sharing with people, trash, photo albums.
+- **[Calendar](docs/apps/calendar.md)** - events and reminders. Recurrence occurrence by occurrence, attendees, invitations, .ics in and out.
+- **[Pass](docs/apps/pass.md)** - logins and secrets. Notes, cards, SSH keys, identities, aliases, two-factor codes, item history.
+- **[Contacts](docs/apps/contacts.md)** - your address book. Typed addresses and phones, the full vCard field set, duplicate merging.
+- **[Account](docs/apps/account.md)** - profiles and settings. Sessions, per-app settings, more than one account side by side.
 
 [`proton api`](docs/apps/api.md) reaches any endpoint the commands don't. The [command reference](docs/commands/README.md) has every command, argument and flag.
 
@@ -96,7 +94,7 @@ Data goes to stdout and progress to stderr, so redirects stay clean. Exit codes 
 
 Your password never reaches Proton: login is SRP, and the key password it derives stays local and unlocks your PGP keys in memory. Mail, files, events, contacts, and Pass items are decrypted after they arrive and encrypted before they leave, with the same key hierarchy the web clients use.
 
-The saved session keeps your key password encrypted with a key held server-side, so revoking the session from any Proton app makes a leaked copy of the file useless. proton is unaudited; the storage model is written down in [Security](SECURITY.md) and the mechanics in [How it works](docs/how-it-works.md).
+The saved session keeps your key password encrypted with a key held server-side, so revoking the session from any Proton app makes a leaked copy of the file useless. proton-cli is unaudited; the storage model is written down in [Security](SECURITY.md) and the mechanics in [How it works](docs/how-it-works.md).
 
 ## Documentation
 
@@ -110,7 +108,7 @@ Bug reports, ideas, and pull requests are all welcome. [`CONTRIBUTING.md`](CONTR
 
 ## Disclaimer
 
-proton is an independent, community-built project. It is not endorsed by, affiliated with, or supported by Proton AG. Proton is a trademark of Proton AG. Use it at your own risk, and mind Proton's terms of service.
+proton-cli is an independent, community-built project. It is not endorsed by, affiliated with, or supported by Proton AG. Proton is a trademark of Proton AG. Use it at your own risk, and mind Proton's terms of service.
 
 ## License
 

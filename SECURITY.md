@@ -79,7 +79,7 @@ Caveat: the file still contains the session refresh token, so it is **not** safe
 
 ## Hardening recommendations for users
 
-`proton` is unaudited. To reduce risk while using it:
+proton-cli is unaudited. To reduce risk while using it:
 
 - Treat the binary as you would any third-party CLI handling secrets - run it as your normal user, not as root.
 - Keep `proton` and its dependencies (Go runtime, OS) up to date.

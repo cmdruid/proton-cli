@@ -1,6 +1,6 @@
 # Limitations
 
-proton aims for parity with what the Proton web clients let you do. Some things it will never do, because Proton's platform doesn't allow it; others aren't built yet.
+proton-cli aims for parity with what the Proton web clients let you do. Some things it will never do, because Proton's platform doesn't allow it; others aren't built yet.
 
 ## Platform constraints
 
@@ -32,7 +32,7 @@ Proton answers some unrelated refusals with the same code. So one of these may a
 
 Each has an equivalent in a web client, and each is unbuilt for a stated reason rather than an oversight.
 
-| | Why |
+| What's missing | Why |
 | --- | --- |
 | Drive computers and shared bookmarks | Neither exists until you use a desktop client or open somebody's link, so neither can be tested |
 | Mail forwarding itself to another address | Needs an OpenPGP forwarding primitive the Go libraries don't implement |
@@ -41,7 +41,7 @@ Each has an equivalent in a web client, and each is unbuilt for a stated reason 
 
 ## Out of scope
 
-proton mirrors the Proton web clients for Mail, Drive, Calendar, Pass and Contacts. Other Proton products - VPN, Wallet, Docs, Meet, Lumo, Authenticator - are not covered, and neither are endpoints that exist in the API but have no equivalent action in a web client.
+proton-cli mirrors the Proton web clients for Mail, Drive, Calendar, Pass and Contacts. Other Proton products - VPN, Wallet, Docs, Meet, Lumo, Authenticator - are not covered, and neither are endpoints that exist in the API but have no equivalent action in a web client.
 
 Some things a web client does are out of reach from a terminal and stay that way: creating a passkey needs WebAuthn, adding a Zoom or Google Meet link needs that provider's OAuth, and importing from Gmail or IMAP needs the same. Drive's search builds its index in the browser rather than on the server, so `drive items list --pattern --recursive` walks the tree instead.
 

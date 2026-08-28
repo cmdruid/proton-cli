@@ -4,7 +4,7 @@ proton is a single self-contained binary. Pick the line that matches your system
 
 The command is `proton`. Every install also puts `proton-cli` beside it as a second name, so a line written either way runs.
 
-| | |
+| Platform | Install |
 | --- | --- |
 | **Linux, macOS** | `curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh \| sh` |
 | **Windows** | `irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 \| iex` |
