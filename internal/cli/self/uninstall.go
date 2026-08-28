@@ -25,15 +25,14 @@ func UninstallCmd() *cobra.Command {
 		Use:         "uninstall",
 		Annotations: map[string]string{kit.OnThisMachine: "yes"},
 		Short:       "Remove a curl/PowerShell-installed " + kit.Program,
-		Long: `Remove a proton binary that was installed with the curl or PowerShell
-installer (or downloaded manually).
+		Long: `Remove a proton binary installed with the curl or PowerShell installer,
+or downloaded by hand.
 
-It refuses to touch a package-managed install (apt, dnf, apk, AUR,
-Homebrew, winget, npm, Nix) and tells you the right command instead.
+A package-managed install (apt, dnf, apk, AUR, Homebrew, winget, npm, Nix)
+is refused, with the right command to use instead.
 
-Only the command is removed by default - both names it answers to. Pass
---purge to also delete local data (saved sessions and the ID cache)
-under your config directory.`,
+Only the binary goes, under both names it answers to. --purge also deletes
+your saved sessions and the ID cache.`,
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			return runUninstall(c, purge)

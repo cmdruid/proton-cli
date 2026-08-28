@@ -45,11 +45,10 @@ func shareAddCmd() *cobra.Command {
 		Use:   "add REF EMAIL",
 		Short: "Give somebody a calendar",
 		Long: "Give somebody a calendar.\n\n" +
-			"They are sent an invitation and see nothing until they accept it. What is\n" +
-			"sent is the key that opens the calendar, encrypted to their key and signed\n" +
-			"with yours - so it has to be another Proton account, because an address\n" +
-			"Proton holds no keys for has nothing to encrypt to.\n\n" +
-			"They can see the calendar; --edit lets them change it too.",
+			"They are sent an invitation and see nothing until they accept. What travels\n" +
+			"is the key that opens the calendar, encrypted to their key - so it has to be\n" +
+			"another Proton account.\n\n" +
+			"They can read the calendar; --edit lets them change it too.",
 		Args: cobra.ExactArgs(2),
 		RunE: kit.Run([]kit.Step{kit.StepExpand}, func(c *kit.Invocation) error {
 			cal, err := calendarList(c).Find(c.Ctx, c.Args[0])

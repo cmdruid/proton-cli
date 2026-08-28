@@ -120,14 +120,11 @@ func loginCmd() *cobra.Command {
 		Use:   "login",
 		Short: "Sign in and save the session for this profile",
 		Long: "Sign in and save the session for this profile.\n\n" +
-			"This is how an account reaches the CLI, and the only way: it is attached to\n" +
-			"a profile here, and every later command acts as whichever profile it names.\n" +
-			"Signing in also unlocks your keys, so the password is needed once per machine\n" +
-			"and not again.\n\n" +
-			"Anything not already set by a flag is asked for, as long as this is a\n" +
-			"terminal. Signing in again as the same account changes nothing, so an\n" +
-			"unattended job can run this ahead of its real work and recover on its own\n" +
-			"from a session that expired or was revoked.",
+			"Signing in also unlocks your keys, so your password is needed once per\n" +
+			"machine and not again. Anything a flag has not set is asked for, as long\n" +
+			"as this is a terminal.\n\n" +
+			"Signing in again as the same account changes nothing, so an unattended job\n" +
+			"can run it first and recover from a session that expired.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if err := reauth.Supply(c); err != nil {

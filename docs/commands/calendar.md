@@ -1,186 +1,116 @@
-# Calendar
+# proton calendar
 
-Calendars and events, encrypted with your calendar key and signed with your address key.
+Calendars and events.
 
-`proton calendar` is the calendar itself; the calendars you keep events in are managed under [`calendar settings`](#settings), matching where Proton puts them.
+Every command under `proton calendar`, with the arguments and flags it takes. For these commands in use, see [the guide](../apps/calendar.md).
 
-## Events
+Holds `events`, `invitations`, `reminders` and `settings`.
 
-### List and read
+## `events`
 
-```bash
-proton calendar events list
-proton calendar events list --calendar Work --start 2026-04-15 --end 2026-04-30
-proton calendar events get CALENDAR_ID/EVENT_ID
-proton calendar events get "Team sync"           # by title
+Events in your calendars.
+
+Holds `create`, `delete`, `export`, `get`, `import`, `list`, `respond` and `update`.
+
+### `events create`
+
+Create an event.
+
 ```
-
-Every calendar is included unless `--calendar` narrows it to one, by name or ID. `--start` and `--end` are the first and last **whole** days to include, read in your own time zone, and nothing outside them is listed. Without them the next 30 days are listed.
-
-An event is on a day when it touches any part of it, so a query for one day inside a three-day event returns it. An event that merely ends at midnight belongs to the day before, and an all-day event belongs to the dates it names whatever zone you read it in.
-
-A recurring event is listed on each day it happens, with a reference that names that occurrence:
-
-```console
-$ proton calendar events list --start 2026-04-20 --end 2026-04-27
-ID                         DATE        TIME     DURATION  TITLE           LOCATION
-─────────────────────────  ──────────  ───────  ────────  ──────────────  ────────
-4f2a1b9c@2026-04-20T09:00  2026-04-20  09:00    15m       Standup         Meet
-7bd3e011                   2026-04-21  all day  1d        Public holiday
-4f2a1b9c@2026-04-22T10:30  2026-04-22  10:30    30m       Standup (long)  Meet
-4f2a1b9c@2026-04-27T09:00  2026-04-27  09:00    15m       Standup         Meet
+proton calendar events create
 ```
-
-### Create
 
 ```bash
 proton calendar events create --title Dentist --start 2026-04-16T14:00 --duration 1h
-proton calendar events create --title Dentist --start 2026-04-16T14:00 --end 2026-04-16T15:00
-proton calendar events create --title Conference --start 2026-04-20 --all-day --duration 3d
-proton calendar events create --calendar Work --title "Quarterly sync" --start 2026-04-16T14:00 --duration 90m --location "Vienna HQ" --description "Numbers and roadmap"
-```
-
-Recurrence and reminders:
-
-```bash
-proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule "FREQ=WEEKLY;COUNT=10" --remind 15m --remind 1h
+proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m --rrule 'FREQ=WEEKLY;COUNT=10' --remind 15m
+proton calendar events create --title Holiday --start 2026-07-01 --all-day --calendar Personal
+proton calendar events create --title 'Design review' --start 2026-04-20T10:00 --end 2026-04-20T10:45 --attendee jane@example.com --location 'Room 3'
 proton calendar events create --title Renewal --start 2026-09-01T09:00 --remind 1d:email
 ```
 
-`--rrule` takes an iCal recurrence rule.
-
-`--remind` is repeatable and takes a duration before the start. A bare duration is a device notification; add `:email` for an emailed reminder, as Proton's own composer offers both. A listing prints them back in the same spelling.
-
-How long an event lasts is said **once**, with either `--end` or `--duration`. Both together is refused, and so is either without `--start`.
-
-`--status` says whether the event is going ahead: `confirmed` (the default), `tentative` or `cancelled`. Cancelling this way keeps the event and its history, which is what the web client does and what `delete` does not.
-
-`--attendee` marks someone optional the same way: `--attendee jane@example.com:optional`. A bare address is required, which is what inviting someone ordinarily means.
-
-`--all-day` makes an event with no time of day, which is measured in days: it lasts one day unless `--duration` says otherwise, and `--duration 3d` covers three. Such an event ends at the midnight after its last day, which is how iCalendar and every other calendar client write it.
-
-`--zone` anchors the event to an IANA time zone, defaulting to your system zone. It matters for a recurring event: a series anchored to `Europe/Vienna` stays at 09:00 when the clocks change, where one stored as a plain UTC instant would slide to 08:00.
-
-```bash
-proton calendar events create --title Standup --start 2026-04-16T09:00 --duration 15m \
-  --rrule "FREQ=WEEKLY" --zone Europe/Vienna
-```
-
-Attendees:
-
-```bash
-proton calendar events create --title Review --start 2026-04-16T14:00 --attendee alice@proton.me --attendee bob@example.com
-```
-
-Proton users are added directly; external addresses get an emailed invitation.
-
-### Update, respond, delete
-
-```bash
-proton calendar events update CALENDAR_ID/EVENT_ID --title "New title"
-proton calendar events update CALENDAR_ID/EVENT_ID --start 2026-04-17T10:00 --duration 2h
-proton calendar events update CALENDAR_ID/EVENT_ID --rrule "FREQ=WEEKLY;BYDAY=MO,TH"
-proton calendar events update CALENDAR_ID/EVENT_ID --remind 30m --remind 1h
-proton calendar events update CALENDAR_ID/EVENT_ID --no-remind
-proton calendar events respond CALENDAR_ID/EVENT_ID --answer accept
-proton calendar events respond "Team sync" --answer decline    # emails the organizer
-proton calendar events delete CALENDAR_ID/EVENT_ID
-proton calendar events delete "Dentist"
-```
-
-Anything you do not mention is left alone, including the reminders, the recurrence and the occurrences you have cancelled.
-
-`--status` is `accept`, `tentative`, or `decline`, and applies to the whole invitation rather than to one occurrence.
-
-## Recurring events
-
-The reference says which occurrences a change reaches, and `--future` widens one occurrence to it and everything after.
-
-| Command | Changes |
+| Flag | Description |
 | --- | --- |
-| `update 4f2a1b9c@2026-04-22T09:00 …` | that occurrence only |
-| `update 4f2a1b9c@2026-04-22T09:00 --future …` | that occurrence and every later one |
-| `update 4f2a1b9c …` | the whole series |
-| `delete 4f2a1b9c@2026-04-22T09:00` | that occurrence only |
-| `delete 4f2a1b9c@2026-04-22T09:00 --future` | that occurrence and every later one |
-| `delete 4f2a1b9c` | the whole series |
+| `--all-day` | An event with no time of day |
+| `--attendee stringArray` | Invite someone, as EMAIL or EMAIL:optional; Proton users are added directly, others are emailed (repeatable) |
+| `--calendar string` | Which calendar, by name or ID (default: your first) |
+| `--description string` | Set the description |
+| `--duration string` | Set how long it lasts (e.g. 15m, 1h, 2h30m, 3d) |
+| `--end string` | Set the end (RFC 3339, or YYYY-MM-DDTHH:MM) |
+| `--location string` | Set where it is |
+| `--remind stringArray` | Remind this long before the start, as DURATION or DURATION:email (repeatable) |
+| `--rrule string` | Set the recurrence rule, e.g. FREQ=WEEKLY;COUNT=10 |
+| `--start string` | Set the start (RFC 3339, or YYYY-MM-DDTHH:MM) |
+| `--status string` | Set whether it is going ahead: confirmed, tentative, cancelled |
+| `--title string` | Set the title |
+| `--zone string` | IANA time zone the event is anchored to (default: your system zone) |
+
+### `events delete`
+
+Delete events.
+
+A reference that names one occurrence of a recurring event deletes only that occurrence. Add --future to delete it and every later one, or drop the @ part of the reference to delete the whole series.
+
+```
+proton calendar events delete REF...
+```
 
 ```bash
-# move one standup, leaving the series alone
-proton calendar events update 4f2a1b9c@2026-04-22T09:00 --start 2026-04-22T10:30 --duration 30m
-
-# cancel one standup
-proton calendar events delete 4f2a1b9c@2026-04-22T09:00
-
-# from May the 4th on, it moves half an hour later
-proton calendar events update 4f2a1b9c@2026-05-04T09:00 --start 2026-05-04T09:30 --future
-
-# end the series there
+proton calendar events delete Dentist
 proton calendar events delete 4f2a1b9c@2026-05-04T09:00 --future
 ```
 
-Deleting a series removes every occurrence, so it says how many and shows them first:
-
-```console
-$ proton calendar events delete 4f2a1b9c --dry-run
-Dry run - would delete 12 events:
-
-ID                         DATE        TIME   DURATION  TITLE    LOCATION
-─────────────────────────  ──────────  ─────  ────────  ───────  ────────
-4f2a1b9c@2026-04-06T09:00  2026-04-06  09:00  15m       Standup  Meet
-…
-```
-
-`--future` on the first occurrence is refused, because nothing would be left: delete or update the series instead.
-
-## Reminders
-
-An event's reminders are the notifications it raises. `events list` shows which triggers an event carries; `reminders list` answers the other question - when they go off:
-
-```console
-$ proton calendar reminders list --start 2026-08-27 --end 2026-08-28
-ID                         FIRES             REMIND  TITLE    STARTS              LOCATION
-─────────────────────────  ────────────────  ──────  ───────  ──────────────────  ────────
-7bd3e011                   2026-08-27 06:00  6h      Piano    2026-08-27 all day
-4f2a1b9c@2026-08-27T09:00  2026-08-28 08:45  15m     Standup  2026-08-28 09:00    Room 3
-```
-
-A row is the event itself, moved to the occurrence being warned about, so everything `events get` reports about it is here too - `--output json` carries the location, the description, the attendees and the rest, beside the three facts that belong to the warning rather than the event: `fires`, `remind` and `says`.
-
-A reminder is listed on the day it goes off, not the day its event is on: an event with two triggers is two rows, and a recurring one is a row per occurrence. When each reminder fires is Proton's to say - an all-day event's goes off at the calendar's chosen morning hour, whatever trigger produced it, and an event leaning on its calendar's default notifications still appears. Emailed reminders are Proton's to send and are left out.
-
-The same rows live:
-
-```bash
-proton calendar reminders watch
-proton calendar reminders watch --calendar Work --output json | jq -c .
-```
-
-`watch` sleeps until the moment rather than checking every so often, so a line lands on the second the reminder is due, and re-reads your calendars as it goes so an event added or moved meanwhile still reminds you. Each line's last column is the sentence a notification would say (`says` in JSON). See [Desktop notifications](../scripting.md#desktop-notifications-mail-and-calendar-reminders).
-
-## Time formats
-
-| Flag | Accepts |
+| Flag | Description |
 | --- | --- |
-| `--start` | `2026-04-16T14:00`, `2026-04-16 14:00`, `2026-04-16`, or full RFC 3339, in your system timezone |
-| `--duration` | `15m`, `90m`, `1h`, `2h30m` |
-| `--remind` | `15m`, `1h`, `1d` (repeatable) |
-| `--start` / `--end` on `list` | `YYYY-MM-DD`, both days included |
-| `--zone` | an IANA zone name, e.g. `Europe/Vienna` |
-| an occurrence in a `REF` | the occurrence's own start, as `list` printed it |
+| `--future` | Also delete every later occurrence of the series |
 
-## Export
+### `events export`
+
+Write events out as an .ics file.
+
+--start and --end are whole days in your own zone, both included. A recurring series is written once with its rule, so another client can read it back as the same series.
+
+```
+proton calendar events export
+```
 
 ```bash
 proton calendar events export --start 2026-01-01 --end 2026-12-31 --output year.ics
-proton calendar events export --calendar Work --output -          # to stdout
+proton calendar events export --calendar Work --output - > work.ics
 ```
 
-Writes an `.ics` file, the format every other calendar reads and the one Proton's own settings page offers. A recurring series is written **once** with its rule, not expanded into its occurrences, so another client reads it back as the same series. Reminders travel as `VALARM` components, and a cancelled event stays cancelled.
+| Flag | Description |
+| --- | --- |
+| `--calendar string` | Which calendar, by name or ID (default: all of them) |
+| `--end string` | Last day to include (YYYY-MM-DD) |
+| `--force` | Overwrite a file that already exists |
+| `--output string` | Write to this path, or - for stdout |
+| `--output-dir string` | Write into this directory, keeping each item's own name |
+| `--start string` | First day to include (YYYY-MM-DD) |
 
-An event whose content cannot be decrypted is left out rather than written as a stub, because a file is something another client will trust.
+### `events get`
 
-## Import
+Show one event, decrypted.
+
+```
+proton calendar events get REF
+```
+
+```bash
+proton calendar events get Dentist
+proton calendar events get 4f2a1b9c@2026-04-22T09:00
+```
+
+### `events import`
+
+Read events in from an .ics file, or from stdin with -.
+
+An event is addressed by its UID, so reading a file back changes that event rather than making a second one.
+
+Participants are left out: an imported event is a record, not an invitation being reissued.
+
+```
+proton calendar events import PATH
+```
 
 ```bash
 proton calendar events import holidays.ics
@@ -188,93 +118,376 @@ proton calendar events import --calendar Work team.ics
 curl -s https://example.com/team.ics | proton calendar events import -
 ```
 
-**An import is addressed by UID.** An event carries the UID of the event it is, so reading a file back changes that event rather than making a second one: export, edit the file, import, and the calendar says what the file says. The replacement is a new event with a new ID, so a reference held from before an import no longer resolves. `--dry-run` lists what the file holds before any of it lands.
-
-**Participants are left out.** An imported event is a record of something, not an invitation being reissued, and writing the guests back would make your account the organizer of a meeting it did not call - which, for an event with external addresses, means email going out.
-
-An event with no start time is skipped and named; the rest still land.
-
-## Settings
-
-One subcommand per page of Proton's calendar settings.
-
-```bash
-proton calendar settings          # time zones, layout, invitations
-proton calendar settings set      # the writable keys
-```
-
-```bash
-proton calendar settings set view week
-proton calendar settings set primary-timezone Europe/Vienna
-proton calendar settings set week-numbers on
-proton calendar settings set auto-import-invite on
-```
-
-| Key | Values |
+| Flag | Description |
 | --- | --- |
-| `view` | `day`, `week`, `month`, `year`, `planning` |
-| `week-numbers` | `off`, `on` |
-| `primary-timezone` | an IANA zone, e.g. `Europe/Vienna` |
-| `auto-detect-timezone` | `off`, `on` |
-| `secondary-timezone` | an IANA zone |
-| `show-secondary-timezone` | `off`, `on` |
-| `auto-import-invite` | `off`, `on` |
-| `invite-locale` | a language, e.g. `en_US` |
-| `default-calendar` | a calendar ID |
+| `--calendar string` | Which calendar to import into, by name or ID (default: your first) |
 
-### Calendars
+### `events list`
 
-Each calendar carries its own defaults for the events made in it:
+List what is on your calendars between two dates.
+
+--start and --end are whole days in your own zone, both included, and nothing outside them is reported. A recurring event is stored once and happens many times, so each occurrence is listed on its own day with a reference that names it. Every calendar is included unless --calendar narrows it to one.
+
+```
+proton calendar events list
+```
+
+```bash
+proton calendar events list
+proton calendar events list --start 2026-04-15 --end 2026-04-30
+proton calendar events list --calendar Work
+```
+
+| Flag | Description |
+| --- | --- |
+| `--calendar string` | Which calendar, by name or ID (default: all of them) |
+| `--end string` | Last day to include (YYYY-MM-DD) |
+| `--start string` | First day to include (YYYY-MM-DD) |
+
+### `events respond`
+
+Answer an invitation, telling the organizer.
+
+```
+proton calendar events respond REF
+```
+
+```bash
+proton calendar events respond 'Team sync' --answer accept
+proton calendar events respond 'Team sync' --answer decline
+```
+
+| Flag | Description |
+| --- | --- |
+| `--answer string` | Your reply to the invitation: accept, tentative, decline |
+
+### `events update`
+
+Change an event.
+
+Anything you do not mention is left alone, including the reminders and the recurrence.
+
+A reference that names one occurrence of a recurring event changes only that occurrence. Add --future to change it and every later one, or drop the @ part of the reference to change the whole series.
+
+```
+proton calendar events update REF
+```
+
+```bash
+proton calendar events update Dentist --start 2026-04-16T15:30
+proton calendar events update 4f2a1b9c@2026-04-22T09:00 --location 'Room 3'
+proton calendar events update 4f2a1b9c@2026-04-22T09:00 --title Standup --future
+```
+
+| Flag | Description |
+| --- | --- |
+| `--all-day` | Turn it into an event with no time of day |
+| `--description string` | Replace the description |
+| `--duration string` | Replace how long it lasts (e.g. 15m, 1h, 2h30m, 3d) |
+| `--end string` | Replace the end (RFC 3339, or YYYY-MM-DDTHH:MM) |
+| `--future` | Also change every later occurrence of the series |
+| `--location string` | Replace where it is |
+| `--no-remind` | Remove the reminders |
+| `--remind stringArray` | Remind this long before the start, as DURATION or DURATION:email (repeatable) |
+| `--rrule string` | Replace the recurrence rule, e.g. FREQ=WEEKLY;COUNT=10 |
+| `--start string` | Replace the start (RFC 3339, or YYYY-MM-DDTHH:MM) |
+| `--status string` | Replace whether it is going ahead: confirmed, tentative, cancelled |
+| `--title string` | Replace the title |
+| `--zone string` | IANA time zone the event is anchored to (default: your system zone) |
+
+## `invitations`
+
+Calendars other people have offered you.
+
+Holds `accept`, `decline` and `list`.
+
+### `invitations accept`
+
+Take a calendar somebody offered you.
+
+The invitation carries the calendar's key, encrypted to the address it was sent to. Accepting opens it and signs it back, and the calendar then reads like any other one of yours.
+
+```
+proton calendar invitations accept REF...
+```
+
+```bash
+proton calendar invitations accept Work
+```
+
+### `invitations decline`
+
+Turn down a calendar somebody offered you.
+
+```
+proton calendar invitations decline REF...
+```
+
+```bash
+proton calendar invitations decline Work
+```
+
+### `invitations list`
+
+List calendars other people have offered you.
+
+```
+proton calendar invitations list
+```
+
+```bash
+proton calendar invitations list
+```
+
+## `reminders`
+
+The notifications your events will raise.
+
+Holds `list` and `watch`.
+
+### `reminders list`
+
+List every reminder your events will raise between two dates.
+
+A reminder is listed on the day it goes off, not the day its event is on, so an event with two reminders is two rows and a recurring one is a row per occurrence.
+
+Emailed reminders are Proton's to send and are left out.
+
+```
+proton calendar reminders list
+```
+
+```bash
+proton calendar reminders list
+proton calendar reminders list --start 2026-04-20 --end 2026-04-21
+proton calendar reminders list --calendar Work --output json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--calendar string` | Which calendar, by name or ID (default: all of them) |
+| `--end string` | Last day to include (YYYY-MM-DD) |
+| `--start string` | First day to include (YYYY-MM-DD) |
+
+### `reminders watch`
+
+Print each reminder as it comes due, until you stop it.
+
+It sleeps until the moment rather than polling, so a reminder lands on the second, and re-reads your calendars as it goes so an event added meanwhile still reminds you.
+
+Each line says what a notification would say.
+
+```
+proton calendar reminders watch
+```
+
+```bash
+proton calendar reminders watch
+proton calendar reminders watch --calendar Work
+proton calendar reminders watch --output json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--calendar string` | Which calendar, by name or ID (default: all of them) |
+
+## `settings`
+
+How Calendar behaves.
+
+Holds `calendars`, `get`, `list` and `set`.
+
+### `settings calendars`
+
+The calendars you keep events in.
+
+Holds `create`, `delete`, `get`, `list`, `share` and `update`.
+
+### `settings calendars create`
+
+Create a calendar, or subscribe to one published elsewhere.
+
+--url takes the address of an .ics file. Proton fetches it on a schedule and fills the calendar from it, so those events are read-only. An address Proton cannot read is refused before the calendar is made.
+
+```
+proton calendar settings calendars create
+```
+
+```bash
+proton calendar settings calendars create --name Work
+proton calendar settings calendars create --name Personal --color pacific
+proton calendar settings calendars create --name Timetable --url https://example.com/team.ics
+```
+
+| Flag | Description |
+| --- | --- |
+| `--color string` | Accent color, by name (purple) or hex (#8080FF) (default `#8080FF`) |
+| `--name string` | Name for the new calendar |
+| `--url string` | Subscribe to the calendar published at this address instead of making an empty one |
+
+### `settings calendars delete`
+
+Delete calendars, and every event in them.
+
+Proton guards this behind an elevated session, so it asks for your password even when a saved session already exists. With no terminal to ask, pass --password-file or --password-stdin.
+
+```
+proton calendar settings calendars delete REF...
+```
+
+```bash
+proton calendar settings calendars delete Work
+```
+
+| Flag | Description |
+| --- | --- |
+| `--password-file string` | Read the account password from a file |
+| `--password-stdin` | Read the account password from stdin |
+| `--totp string` | Two-factor code |
+
+### `settings calendars get`
+
+Show one calendar, with the defaults it gives new events.
+
+```
+proton calendar settings calendars get REF
+```
 
 ```bash
 proton calendar settings calendars get Work
-proton calendar settings calendars update Work --default-duration 30m --remind 15m
-proton calendar settings calendars update Personal --busy off
 ```
 
-`--busy` says whether events there make you look busy to people who check your availability. `--remind-all-day` sets the default for events with no time of day, and `--no-remind` gives new events none.
+### `settings calendars list`
 
+List your calendars.
+
+```
+proton calendar settings calendars list
+```
 
 ```bash
 proton calendar settings calendars list
-proton calendar settings calendars create --name Work --color "#8080FF"
-proton calendar settings calendars update CALENDAR_ID --name Personal --color "#DB60D6"
-proton calendar settings calendars delete Work        # by name, or by calendar ID
 ```
 
-Colors have to be Proton accent colors; an invalid value prints the allowed list. Deleting a calendar is a password-scoped operation, so it asks for your password even when a session already exists. With no terminal to ask, it takes `--password-file` or `--password-stdin`.
+### `settings calendars share`
 
-### Sharing a calendar
+Who else can see a calendar.
+
+Holds `add`, `list` and `remove`.
+
+### `settings calendars share add`
+
+Give somebody a calendar.
+
+They are sent an invitation and see nothing until they accept. What travels is the key that opens the calendar, encrypted to their key - so it has to be another Proton account.
+
+They can read the calendar; --edit lets them change it too.
+
+```
+proton calendar settings calendars share add REF EMAIL
+```
 
 ```bash
 proton calendar settings calendars share add Work jane@proton.me
 proton calendar settings calendars share add Work jane@proton.me --edit
+```
+
+| Flag | Description |
+| --- | --- |
+| `--edit` | Let them change the calendar, not just see it |
+
+### `settings calendars share list`
+
+List who has a calendar.
+
+Somebody who has not answered yet is listed as pending: they were sent an invitation and cannot see anything until they take it.
+
+```
+proton calendar settings calendars share list REF
+```
+
+```bash
 proton calendar settings calendars share list Work
+```
+
+### `settings calendars share remove`
+
+Take somebody's access to a calendar away.
+
+It works whether they accepted or not: an invitation nobody answered is withdrawn, and a membership somebody is using is ended.
+
+```
+proton calendar settings calendars share remove REF EMAIL
+```
+
+```bash
 proton calendar settings calendars share remove Work jane@proton.me
 ```
 
-A calendar is opened by a passphrase, and every member holds that passphrase encrypted to their own key. So sharing is not a permission Proton grants - it is handing somebody the key that opens the calendar, **encrypted so only they can read it and signed so they can tell it came from you**. Proton passes it along without being able to read it.
+### `settings calendars update`
 
-That is also why it only works with another Proton account: an address Proton holds no keys for has nothing to encrypt to, and the command says so rather than sending an invitation nobody can take.
+Rename or recolor a calendar, or change what it gives new events.
 
-They see nothing until they accept, and until then `share list` shows them as `pending`. `share remove` works either way - an unanswered invitation is withdrawn, a membership somebody is using is ended.
+The defaults are per-calendar because that is where Proton keeps them: a work calendar can open half-hour meetings with a reminder while a personal one does not.
 
-### A calendar somebody gave you
-
-```bash
-proton calendar invitations list
-proton calendar invitations accept Work
-proton calendar invitations decline Work
+```
+proton calendar settings calendars update REF
 ```
 
-Until you accept, you see the calendar's name and who sent it and nothing that is on it. Accepting opens the key the invitation carries and signs it back with the address it was sent to, which is how Proton knows the offer reached somebody who could read it. Afterwards the calendar reads like any other of yours.
-
-### Subscribing to a calendar published elsewhere
-
 ```bash
-proton calendar settings calendars create --name Timetable --url https://example.com/team.ics
+proton calendar settings calendars update Work --name Office
+proton calendar settings calendars update Work --color enzian
+proton calendar settings calendars update Work --default-duration 30m --remind 15m
+proton calendar settings calendars update Personal --busy off
 ```
 
-`--url` takes the address of an `.ics` file - a timetable, a team's shared calendar, a holiday feed. Proton fetches it on a schedule and fills the calendar from it, so the events are **read-only**: they belong to whoever publishes them. A listing says which calendars are which, under `KIND`.
+| Flag | Description |
+| --- | --- |
+| `--busy string` | Whether events here make you look busy to others: on, off |
+| `--color string` | New accent color, as a hex value |
+| `--default-duration string` | How long a new event lasts unless it says otherwise (e.g. 30m, 1h) |
+| `--name string` | New name |
+| `--no-remind` | Give new events no reminder by default |
+| `--remind stringArray` | Default reminder for a new event, as DURATION or DURATION:email (repeatable) |
+| `--remind-all-day stringArray` | Default reminder for a new all-day event (repeatable) |
 
-Proton is asked whether it can read the address before the calendar is made, so a wrong one is refused rather than leaving you with a calendar that never fills - and the refusal carries Proton's own account of it, down to the HTTP status.
+### `settings get`
+
+Show the calendar settings now in effect.
+
+```
+proton calendar settings get
+```
+
+```bash
+proton calendar settings get
+```
+
+### `settings list`
+
+List the calendar settings that can be changed.
+
+```
+proton calendar settings list
+```
+
+```bash
+proton calendar settings list
+```
+
+### `settings set`
+
+Change one calendar setting.
+
+```
+proton calendar settings set KEY VALUE
+```
+
+```bash
+proton calendar settings set week-start monday
+proton calendar settings set default-duration 30
+```
+
+---
+
+Every command also takes the [flags that work everywhere](README.md#flags-that-work-on-every-command).

@@ -1,0 +1,53 @@
+---
+import { repo } from "../../site.ts";
+
+const links = [
+  { href: `${repo}`, label: "GitHub" },
+  { href: `${repo}/releases`, label: "Releases" },
+  { href: `${repo}/blob/main/CHANGELOG.md`, label: "Changelog" },
+  { href: `${repo}/blob/main/SECURITY.md`, label: "Security" },
+  { href: `${repo}/blob/main/CONTRIBUTING.md`, label: "Contributing" },
+];
+---
+
+<footer>
+  <nav>
+    {links.map(({ href, label }) => <a href={href}>{label}</a>)}
+  </nav>
+  <p>
+    An independent, community-built project under the <a href={`${repo}/blob/main/LICENSE`}>MIT licence</a>.
+    Not endorsed by, affiliated with, or supported by Proton AG. Proton is a trademark of Proton AG.
+  </p>
+</footer>
+
+<style>
+  footer {
+    border-block-start: 1px solid var(--border);
+    margin-block-start: 6rem;
+    padding-block: 2rem 1rem;
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-block-end: 1rem;
+  }
+
+  nav a {
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+  }
+
+  nav a:hover {
+    color: var(--sl-color-text-accent);
+  }
+
+  p {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-xs);
+    margin: 0;
+    max-inline-size: 46rem;
+  }
+</style>

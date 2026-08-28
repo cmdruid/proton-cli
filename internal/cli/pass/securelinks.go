@@ -83,12 +83,10 @@ func linksCreateCmd() *cobra.Command {
 		Use:   "create REF",
 		Short: "Make a link that shows one item",
 		Long: "Make a link that shows one item to somebody with no Proton account.\n\n" +
-			"The item stays encrypted: a key made for the link is what opens it, and\n" +
-			"that key travels in the URL after the '#', which a browser never sends to\n" +
-			"Proton. So the URL is the secret - anyone who has it can read the item\n" +
-			"until the link expires or is revoked.\n\n" +
-			"--expires is required, because a link nobody remembered to revoke is the\n" +
-			"way one of these goes wrong.",
+			"The key that opens it travels in the URL after the '#', which a browser\n" +
+			"never sends to Proton. So the URL is the secret: anyone holding the whole\n" +
+			"of it can read the item until the link expires or is revoked.\n\n" +
+			"--expires is required.",
 		Args: cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepExpand, func(*kit.Invocation) error {
 			if expires == "" {

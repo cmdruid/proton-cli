@@ -40,7 +40,7 @@ Unlocking happens lazily, and alongside everything else: a command that only lis
 | Pass items | AES-256-GCM item key | symmetric, no signature |
 | Pass vaults | AES-256-GCM vault key | symmetric, no signature |
 
-Reading works the other way around: content arrives encrypted, gets decrypted locally, and signatures are verified against the sender's key. `mail messages get` reports the verdict on a `Sig:` line.
+Reading works the other way around: content arrives encrypted, gets decrypted locally, and signatures are verified against the sender's key. `mail messages get` reports the verdict on a `Signature:` line.
 
 ## What leaves your machine
 

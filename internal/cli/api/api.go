@@ -27,12 +27,7 @@ func New() *cobra.Command {
 		Long: `Send a raw authenticated request to the Proton API.
 
 The response is passed through as the API returned it, so this is where to reach
-anything the commands do not cover.
-
-Examples:
-  proton api GET /calendar/v1
-  proton api GET /mail/v4/messages --query Page=0 --query PageSize=10
-  proton api POST /core/v4/labels --body '{"Name":"Work","Color":"#8080FF","Type":1}'`,
+anything the commands do not cover.`,
 		Args: cobra.ExactArgs(2),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			method := strings.ToUpper(c.Args[0])

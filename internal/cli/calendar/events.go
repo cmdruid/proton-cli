@@ -746,12 +746,10 @@ func eventsImportCmd() *cobra.Command {
 		Use:   "import PATH",
 		Short: "Read events in from an .ics file",
 		Long: "Read events in from an .ics file, or from stdin with -.\n\n" +
-			"Each event keeps its own identity, so importing the same file twice makes\n" +
-			"duplicates rather than merging: nothing here can tell two events that share\n" +
-			"an identifier apart from a file somebody edited.\n\n" +
-			"Participants are left out. An imported event is a record of something, not\n" +
-			"an invitation being reissued, and writing the guests back would make this\n" +
-			"account the organizer of a meeting it did not call.",
+			"An event is addressed by its UID, so reading a file back changes that event\n" +
+			"rather than making a second one.\n\n" +
+			"Participants are left out: an imported event is a record, not an invitation\n" +
+			"being reissued.",
 		Args: cobra.ExactArgs(1),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			text, err := kit.ReadTextArg(c, c.Args[0], "PATH")

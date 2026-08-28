@@ -1,0 +1,31 @@
+Compose and send a message
+
+Usage:
+  proton mail messages send [flags]
+
+Examples:
+  proton mail messages send --to jane@example.com --subject Report --body 'See attached.' --attach ./report.pdf
+  proton mail messages send --to team@example.com --subject Standup --body -
+  proton mail messages send --to jane@example.com --subject Reminder --send-at 2026-04-16T09:00
+  proton mail messages send --eml ./draft.eml
+
+Flags:
+      --attach stringArray          File to attach (repeatable)
+      --attach-inline stringArray   Image to embed in the HTML body by Content-ID (repeatable; needs --html)
+      --bcc stringArray             Blind-carbon-copy recipient (repeatable)
+      --body string                 Message body (- reads stdin)
+      --cc stringArray              Carbon-copy recipient (repeatable)
+      --eml string                  Build the message from an RFC 822 file; other flags override what it says
+      --eo-password string          Password-protect the message for recipients outside Proton (expires after 28 days)
+      --eo-password-hint string     Hint shown to password-protected recipients
+      --expires string              Self-destruct after DURATION (e.g. 7d, 24h)
+      --from string                 Address to send from, by email or ID (default: your primary)
+  -h, --help                        help for send
+      --html                        Treat the body as HTML rather than plain text
+      --no-signature                Leave out this address's signature and Proton's footer
+      --send-at string              Schedule delivery (RFC 3339, or YYYY-MM-DDTHH:MM in the system timezone)
+      --subject string              Subject line
+      --to stringArray              Recipient (repeatable; accepts "Name <addr>")
+
+Global flags:    proton --help
+Full reference:  https://proton-cli.lerchster.dev/commands/mail/#messages-send

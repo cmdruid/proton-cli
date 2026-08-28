@@ -181,11 +181,9 @@ func calendarsCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a calendar, or subscribe to one published elsewhere",
 		Long: "Create a calendar, or subscribe to one published elsewhere.\n\n" +
-			"--url takes the address of an .ics file - a timetable, a team's shared\n" +
-			"calendar, a holiday feed. Proton fetches it on a schedule and fills the\n" +
-			"calendar from it, so its events are read-only: they belong to whoever\n" +
-			"publishes them. Proton is asked whether it can read the address before\n" +
-			"the calendar is made, so a wrong one is refused rather than left empty.",
+			"--url takes the address of an .ics file. Proton fetches it on a schedule\n" +
+			"and fills the calendar from it, so those events are read-only. An address\n" +
+			"Proton cannot read is refused before the calendar is made.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if name == "" {

@@ -728,12 +728,11 @@ var examples = map[string][]string{
 func attachExamples(root *cobra.Command) {
 	var walk func(*cobra.Command)
 	walk = func(c *cobra.Command) {
+		// Stored as the command lines they are. Whoever shows them decides how
+		// they are laid out: a help screen indents them, a reference page fences
+		// them, and neither wants the other's whitespace baked in.
 		if lines, ok := examples[c.CommandPath()]; ok {
-			indented := make([]string, len(lines))
-			for i, l := range lines {
-				indented[i] = "  " + l
-			}
-			c.Example = strings.Join(indented, "\n")
+			c.Example = strings.Join(lines, "\n")
 		}
 		for _, sub := range c.Commands() {
 			walk(sub)

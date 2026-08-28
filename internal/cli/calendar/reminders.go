@@ -45,11 +45,10 @@ func remindersListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List the reminders due in a date range",
 		Long: "List every reminder your events will raise between two dates.\n\n" +
-			"--start and --end are whole days in your own zone, both included. An\n" +
-			"event with two reminders is two rows, a recurring one is a row per\n" +
-			"occurrence, and a reminder is listed on the day it goes off rather than\n" +
-			"the day its event is on. Emailed reminders are Proton's to send and are\n" +
-			"left out. Every calendar is included unless --calendar narrows it to one.",
+			"A reminder is listed on the day it goes off, not the day its event is on,\n" +
+			"so an event with two reminders is two rows and a recurring one is a row\n" +
+			"per occurrence.\n\n" +
+			"Emailed reminders are Proton's to send and are left out.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			calIDs, err := listedCalendars(c, calendar)
@@ -78,11 +77,10 @@ func remindersWatchCmd() *cobra.Command {
 		Use:   "watch",
 		Short: "Print each reminder as it comes due",
 		Long: "Print each reminder as it comes due, until you stop it.\n\n" +
-			"It sleeps until the moment rather than checking every so often, so a\n" +
-			"reminder lands on the second it is set for, and re-reads your calendars\n" +
-			"as it goes so an event added or moved meanwhile still reminds you.\n\n" +
-			"Each line says what a notification would say, so piping it into whatever\n" +
-			"shows notifications on this machine is the whole of the setup.",
+			"It sleeps until the moment rather than polling, so a reminder lands on the\n" +
+			"second, and re-reads your calendars as it goes so an event added meanwhile\n" +
+			"still reminds you.\n\n" +
+			"Each line says what a notification would say.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			calIDs, err := listedCalendars(c, calendar)

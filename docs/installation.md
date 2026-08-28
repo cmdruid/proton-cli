@@ -1,30 +1,38 @@
 # Installation
 
-proton is a single self-contained binary. Pick whichever line matches your system.
+proton is a single self-contained binary. Pick the line that matches your system.
 
 The command is `proton`. Every install also puts `proton-cli` beside it as a second name, so a line written either way runs.
 
-## Linux
+| | |
+| --- | --- |
+| **Linux, macOS** | `curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh \| sh` |
+| **Windows** | `irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 \| iex` |
+| **Homebrew** | `brew install --cask roman-16/tap/proton-cli` |
+| **winget** | `winget install Roman-16.ProtonCLI` |
+| **Arch** | `yay -S proton-cli-bin` |
+| **Fedora, RHEL** | `sudo dnf install ./proton-cli_*.rpm` |
+| **Alpine** | `sudo apk add --allow-untrusted ./proton-cli_*.apk` |
+| **Nix** | `environment.systemPackages = [ pkgs.proton-cli ];` |
+| **npm** | `npm install -g @roman-16/proton-cli` |
+| **Go** | `go install github.com/roman-16/proton-cli/cmd/proton@latest` |
 
-**Any distribution** (installs to `~/.local/bin`):
+The install scripts drop the binary in `~/.local/bin` (Linux, macOS) or `%LOCALAPPDATA%\Programs\proton-cli` (Windows). Both take a version and a directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
+curl -fsSL …/install.sh | sh -s -- --install-dir /usr/local/bin --version 2.5.0
 ```
 
-The script takes `--version X.Y.Z` and `--install-dir DIR` (or the `PROTON_CLI_VERSION` and `PROTON_CLI_INSTALL_DIR` environment variables):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh -s -- --install-dir /usr/local/bin
+```powershell
+& ([scriptblock]::Create((irm …/install.ps1))) -InstallDir "C:\tools\proton-cli"
 ```
 
-**Arch Linux** (AUR):
+> [!NOTE]
+> `go install` builds don't embed the CAPTCHA helper that release binaries carry. If Proton asks for human verification at login, use a release binary instead. See [Human verification](human-verification.md).
 
-```bash
-yay -S proton-cli-bin      # or: paru -S proton-cli-bin
-```
+## Debian, Ubuntu, Linux Mint
 
-**Debian, Ubuntu, Linux Mint** (APT repository, gets updates with the rest of your system):
+The APT repository updates proton with the rest of your system:
 
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings
@@ -33,118 +41,40 @@ echo "deb [signed-by=/etc/apt/keyrings/proton-cli.asc] https://roman-16.github.i
 sudo apt update && sudo apt install proton-cli
 ```
 
-**Fedora, RHEL, Alpine** - download the package from the [latest release](https://github.com/roman-16/proton-cli/releases/latest) and install it:
+## Nix flake
 
-```bash
-sudo dnf install ./proton-cli_*.rpm                  # Fedora, RHEL
-sudo apk add --allow-untrusted ./proton-cli_*.apk    # Alpine
-```
-
-**Nix** - the [`proton-cli`](https://search.nixos.org/packages?query=proton-cli) package is in nixpkgs:
+To track the latest release rather than your nixpkgs channel:
 
 ```nix
-environment.systemPackages = [ pkgs.proton-cli ];
-```
-
-To track the latest release instead of your nixpkgs channel, use the flake:
-
-```nix
-inputs = {
-  proton = {
-    url = "github:roman-16/proton-cli";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
+inputs.proton = {
+  url = "github:roman-16/proton-cli";
+  inputs.nixpkgs.follows = "nixpkgs";
 };
 
-# in a NixOS module
 environment.systemPackages = [
   proton.packages.${pkgs.stdenv.hostPlatform.system}.default
 ];
 ```
 
-## macOS
+## Downloading a binary
 
-```bash
-brew install --cask roman-16/tap/proton-cli
-```
-
-Or the install script, which puts the binary in `~/.local/bin`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
-```
-
-## Windows
-
-```powershell
-winget install Roman-16.ProtonCLI
-```
-
-Or the PowerShell installer, which installs to `%LOCALAPPDATA%\Programs\proton-cli`:
-
-```powershell
-irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 | iex
-```
-
-It accepts `-Version` and `-InstallDir`:
-
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1))) -InstallDir "C:\tools\proton-cli"
-```
-
-## Cross-platform
-
-**npm** - handy if you already manage tooling with Node:
-
-```bash
-npm install -g @roman-16/proton-cli
-```
-
-**Go** - builds from source:
-
-```bash
-go install github.com/roman-16/proton-cli/cmd/proton@latest
-```
-
-> [!NOTE]
-> `go install` builds don't embed the CAPTCHA helper that release binaries carry. If Proton asks for human verification at login, use a release binary instead. See [Human verification](human-verification.md).
-
-## Manual download
-
-Every release ships raw binaries and archives on the [releases page](https://github.com/roman-16/proton-cli/releases/latest).
-
-| Platform | Binary |
-| --- | --- |
-| Linux x86_64 | `proton-cli_linux_amd64` |
-| Linux ARM64 | `proton-cli_linux_arm64` |
-| macOS Apple Silicon | `proton-cli_darwin_arm64` |
-| macOS Intel | `proton-cli_darwin_amd64` |
-| Windows x86_64 | `proton-cli_windows_amd64.exe` |
-| Windows ARM64 | `proton-cli_windows_arm64.exe` |
+Every release ships raw binaries, archives and `checksums.txt` on the [releases page](https://github.com/roman-16/proton-cli/releases/latest), named `proton-cli_<os>_<arch>` for `linux`, `darwin` and `windows` on `amd64` and `arm64`.
 
 ```bash
 curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/proton-cli_linux_amd64
+curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/checksums.txt
+sha256sum --check --ignore-missing checksums.txt
 chmod +x proton-cli_linux_amd64
 sudo mv proton-cli_linux_amd64 /usr/local/bin/proton
-sudo ln -s proton /usr/local/bin/proton-cli    # the second name, if you want it
 ```
 
 On Windows, download the `.exe`, rename it to `proton.exe`, and put its folder on your `PATH`.
 
-The `proton-cli_<version>_<os>_<arch>.tar.gz` / `.zip` archives bundle the binary, the licence, and shell completions for bash, zsh, and fish. The `.zip` also carries `proton-cli.exe`, a small launcher for `proton.exe`: an archive cannot hold a link, so on Windows the second name travels as a file of its own.
-
-### Verifying a download
-
-Each release includes `checksums.txt`:
-
-```bash
-curl -LO https://github.com/roman-16/proton-cli/releases/latest/download/checksums.txt
-sha256sum --check --ignore-missing checksums.txt
-```
+The `.tar.gz` / `.zip` archives also bundle the licence and shell completions. The `.zip` carries `proton-cli.exe` as a real file, since an archive cannot hold a link.
 
 ## Shell completions
 
-Package installs (APT, AUR, Homebrew, RPM, APK) wire completions up for you. For a manual install, generate them yourself:
+Package installs wire these up for you. For a manual install:
 
 ```bash
 proton completion bash > /etc/bash_completion.d/proton
@@ -152,7 +82,7 @@ proton completion zsh  > "${fpath[1]}/_proton"
 proton completion fish > ~/.config/fish/completions/proton.fish
 ```
 
-One script covers both names. Fish is the exception: it looks for a file named after the command being typed, so the second name needs one of its own.
+One script covers both names, except in fish, which looks for a file named after the command being typed:
 
 ```bash
 echo 'complete -c proton-cli -w proton' > ~/.config/fish/completions/proton-cli.fish
@@ -160,20 +90,15 @@ echo 'complete -c proton-cli -w proton' > ~/.config/fish/completions/proton-cli.
 
 ## Updating
 
-If you used a package manager, update with it (`apt upgrade`, `brew upgrade`, `winget upgrade`, `yay -Syu`, …).
-
-If you used the install script or a manual download, proton updates itself:
+Installed with a package manager? Update with it. Otherwise proton updates itself:
 
 ```bash
 proton update             # install the latest release
 proton update --check     # only report whether an update exists
-proton update 1.9.13      # install a specific version
-proton update --reinstall # install again even if already current
+proton update 2.5.0       # install a specific version
 ```
 
-### The update notice
-
-An install that no package manager owns has nothing to tell it a release happened, so proton says so itself:
+An install that no package manager owns has nothing to tell it a release happened, so proton says so itself, **once a day**, after the command has finished:
 
 ```console
 $ proton mail messages list
@@ -183,35 +108,21 @@ proton 2.4.1 → 2.5.0 available.
 Run `proton update` to install it, or `proton changelog 2.5.0` for what changed.
 ```
 
-It looks **once a day**, after the command has finished and printed everything, and it remembers when it last looked in `~/.config/proton-cli/update-check.json`. Every other command that day costs nothing, and the one that does costs a couple of hundred milliseconds after your answer is already on the screen.
+It stays quiet when a package manager owns this copy, when stderr is not a terminal, and under `--quiet`. `PROTON_NO_UPDATE_CHECK=1` ends it for good.
 
-It stays quiet when a package manager owns this copy (it would only be telling you to run a command that refuses), when stderr is not a terminal, and under `--quiet`. `PROTON_NO_UPDATE_CHECK=1` ends it for good.
-
-## What a release changed
-
-```bash
-proton changelog                             # every release, newest first
-proton changelog 2.4.1                       # one release
-proton changelog --since 2.3.0               # everything after 2.3.0
-proton changelog --since 2.3.0 --until 2.4.0 # and stopping at 2.4.0
-```
-
-`--since` names the version you are on and is not included; `--until` names where to stop and is. The changelog reads the published `CHANGELOG.md`, so it can answer for a release you have not installed yet - and only back to where the file starts. Older releases are on the [releases page](https://github.com/roman-16/proton-cli/releases).
+`proton changelog` prints what each release changed - the whole file, one version, or `--since 2.3.0 --until 2.4.0` for a range.
 
 ## Uninstalling
 
-Package installs go out the way they came in (`apt remove proton-cli`, `brew uninstall --cask proton-cli`, …).
-
-Script and manual installs can remove themselves:
+Package installs go out the way they came in. Script and manual installs remove themselves:
 
 ```bash
 proton uninstall --dry-run       # show what would be removed
-proton uninstall                 # ask, then remove the binary
-proton uninstall --yes           # remove it without asking
+proton uninstall --yes           # remove the binary without asking
 proton uninstall --yes --purge   # also delete saved sessions and the ID cache
 ```
 
-Uninstalling cannot be undone from here, so it asks first, like every other removal ([why](language.md#when-it-asks-first)). `--yes` is the answer given in advance.
+Uninstalling cannot be undone from here, so it asks first, like every other permanent removal.
 
 ## Building from source
 
@@ -219,8 +130,8 @@ Needs Go 1.26 or newer:
 
 ```bash
 git clone https://github.com/roman-16/proton-cli.git
-cd proton
-go build .
+cd proton-cli
+go build ./cmd/proton
 ```
 
 That plain build has no CAPTCHA helper. For a release-shaped binary, see [Contributing](../CONTRIBUTING.md).

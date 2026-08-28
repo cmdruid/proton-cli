@@ -103,6 +103,8 @@ esac
 
 ## Streaming instead of temporary files
 
+A single `-` means stdin for an input and stdout for an output:
+
 ```bash
 # back up a database straight into Drive
 pg_dump mydb | gzip | proton drive items upload - /Backups/db.sql.gz
@@ -268,7 +270,7 @@ alias newsletter-xyz
 
 - **Credentials**: an account is attached to a profile by `account login`. Hand the password over with `--password-file`, from a path only your user can read - systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all give you one.
 - **2FA**: `--totp` is only consulted during a fresh login. For unattended jobs, sign in once interactively so the session file exists, then let the job reuse it.
-- **Elevation**: Proton asks for the password again before `calendar settings calendars delete` and `mail settings autoreply set`. A session cannot answer for it, so those commands take `--password-file` and `--password-stdin` of their own.
+- **Elevation**: Proton asks for the password again before `calendar settings calendars delete`, `mail messages expire` and `mail settings autoreply set`. A session cannot answer for it, so those commands take `--password-file` and `--password-stdin` of their own.
 - **CAPTCHA**: a login on a headless machine can hit human verification, which needs a desktop. Log in on a desktop first and copy the session, or run the job somewhere with a display. See [Human verification](human-verification.md).
 - **`--quiet`** silences the `✓` lines and progress bars, useful in cron.
 - **Bad moments upstream**: a 502 from Proton's edge or a connection that fails is waited out and asked again - for anything that only reads, and for signing in. Nothing that changes something is ever sent twice. A failure that outlasts the waiting exits 5, so a job can tell "Proton is having trouble, come back later" from "the password is wrong" (exit 2).

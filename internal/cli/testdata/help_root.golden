@@ -1,0 +1,39 @@
+Proton, in your terminal.
+
+Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.
+
+Usage:
+  proton <app> <collection> <verb> [TARGET...] [--flags]
+
+Apps:
+  calendar    Calendars and events
+  contacts    Contacts, their groups and their pinned keys
+  drive       Files and folders in Drive
+  mail        Read, write and organize mail
+  pass        Vaults, logins and secrets
+
+Account:
+  account     Your Proton account, its settings and your session
+  api         Send a raw authenticated request to the Proton API
+
+proton itself:
+  changelog   Print what each release changed
+  completion  Generate a shell completion script
+  uninstall   Remove a curl/PowerShell-installed proton
+  update      Update proton to the latest release
+  version     Print the version and build information
+
+Flags:
+  -n, --dry-run            Preview mutations without applying them
+      --full-ids           Show full IDs in interactive output (default: shortened to 8 chars on TTY)
+  -h, --help               help for proton
+      --log-level string   Logging verbosity: debug, info, warn, error (env: PROTON_LOG_LEVEL)
+      --no-color           Disable colored output (env: NO_COLOR)
+      --no-input           Never prompt; a missing credential becomes an error (env: PROTON_NO_INPUT)
+  -o, --output string      Output format: text, json, yaml (default "text")
+  -p, --profile string     Profile to act as (env: PROTON_PROFILE; default: default)
+  -q, --quiet              Suppress non-essential stderr output
+  -y, --yes                Answer confirmation prompts with yes
+
+Per-command help:  proton <command> --help
+Full reference:    https://proton-cli.lerchster.dev/commands/

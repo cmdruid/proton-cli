@@ -44,14 +44,6 @@ type globalFlags struct {
 	noInput  bool
 }
 
-// Command groups on the root, so `--help` reads as a map of the product rather
-// than an alphabetical list.
-const (
-	groupApps    = "apps"
-	groupAccount = "account"
-	groupSelf    = "self"
-)
-
 // newRoot assembles the whole command tree and returns it.
 //
 // Building the tree rather than mutating a package variable is what lets the
@@ -64,8 +56,7 @@ func newRoot() *cobra.Command {
 		Use:   kit.Program,
 		Short: "Unofficial CLI for Proton Mail, Drive, Calendar, Pass and Contacts",
 		Long: "Proton, in your terminal.\n\n" +
-			"Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.\n\n" +
-			"Documentation: " + kit.Docs,
+			"Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -146,10 +137,13 @@ func newRoot() *cobra.Command {
 		return nil
 	}
 
+	// The groups make `--help` read as a map of the product rather than as an
+	// alphabetical list, and they decide which page of the reference a command is
+	// published on, which is why they are named in kit.
 	root.AddGroup(
-		&cobra.Group{ID: groupApps, Title: "Apps:"},
-		&cobra.Group{ID: groupAccount, Title: "Account:"},
-		&cobra.Group{ID: groupSelf, Title: kit.Program + " itself:"},
+		&cobra.Group{ID: kit.GroupApps, Title: "Apps:"},
+		&cobra.Group{ID: kit.GroupAccount, Title: "Account:"},
+		&cobra.Group{ID: kit.GroupSelf, Title: kit.Program + " itself:"},
 	)
 
 	add := func(group string, cmds ...*cobra.Command) {
@@ -158,12 +152,13 @@ func newRoot() *cobra.Command {
 			root.AddCommand(c)
 		}
 	}
-	add(groupApps, mailcmd.New(), drivecmd.New(), calendarcmd.New(), contactscmd.New(), passcmd.New())
-	add(groupAccount, accountcmd.New(), apicmd.New())
-	add(groupSelf, selfcmd.ChangelogCmd(), selfcmd.UpdateCmd(version), selfcmd.UninstallCmd(),
+	add(kit.GroupApps, mailcmd.New(), drivecmd.New(), calendarcmd.New(), contactscmd.New(), passcmd.New())
+	add(kit.GroupAccount, accountcmd.New(), apicmd.New())
+	add(kit.GroupSelf, selfcmd.ChangelogCmd(), selfcmd.UpdateCmd(version), selfcmd.UninstallCmd(),
 		selfcmd.VersionCmd(version), completionCmd(root))
 
 	attachExamples(root)
+	installHelp(root)
 
 	return root
 }

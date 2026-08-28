@@ -158,7 +158,7 @@ func filtersCreateCmd() *cobra.Command {
 			"  comparator  contains, is, starts, ends, matches\n\n" +
 			"`is` wants the whole value; `matches` takes * and ? as wildcards. An\n" +
 			"attachments condition takes no value - it asks whether there is one.\n\n" +
-			"--sieve is the other way in, for a script you have written yourself.",
+			"--sieve takes a script you wrote yourself instead.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run([]kit.Step{func(*kit.Invocation) error {
 			return checkRule(sieve, conditions, moveTo, labels, markRead, star)
@@ -321,11 +321,8 @@ func filtersUpdateCmd() *cobra.Command {
 		Use:   "update REF",
 		Short: "Change what a filter is called, matches, or does",
 		Long: "Change what a filter is called, matches, or does.\n\n" +
-			"--if and the actions beside it replace the whole rule rather than adding\n" +
-			"to it, for the same reason `reorder` takes every filter: half a rule is\n" +
-			"not one, and a filter that matches mail and does nothing with it is not\n" +
-			"something to leave behind. `get` shows the rule as it stands.\n\n" +
-			"The filter keeps its place in the order and whether it is running.",
+			"--if and the actions beside it replace the whole rule rather than adding to\n" +
+			"it. The filter keeps its place in the order and whether it is running.",
 		Args: cobra.ExactArgs(1),
 		RunE: kit.Run([]kit.Step{kit.StepExpand, func(*kit.Invocation) error {
 			if len(conditions) == 0 && sieve == "" {

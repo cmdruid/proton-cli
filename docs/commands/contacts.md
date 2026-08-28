@@ -1,116 +1,354 @@
-# Contacts
+# proton contacts
 
-Contacts, their pinned encryption keys, and groups. Contact cards are encrypted and signed with your user key.
+Contacts, their groups and their pinned keys.
 
-`REF` is a contact ID, a name, or an email address.
+Every command under `proton contacts`, with the arguments and flags it takes. For these commands in use, see [the guide](../apps/contacts.md).
 
-## Contacts
+Holds `create`, `delete`, `export`, `get`, `groups`, `import`, `keys`, `list`, `merge` and `update`.
+
+## `create`
+
+Create a contact.
+
+```
+proton contacts create
+```
 
 ```bash
-proton contacts list
-proton contacts list --keyword jane --sort email
-proton contacts get jane
-proton contacts create --name "Jane Roe" --email jane@example.com --phone "+43 1 234567"
-proton contacts create --name "John Doe" --email john@example.com --email john@work.example --job-title CTO --organization "Example GmbH" --birthday 1990-01-31 --address "Stephansplatz 1, 1010 Vienna" --website https://example.com --note "Met at conference"
-proton contacts update jane --email jane@newdomain.com
+proton contacts create --name 'Jane Roe' --email jane@example.com
+proton contacts create --name 'Jane Roe' --email work:jane@acme.com --phone cell:+43123456 --anniversary 2015-06-20
+proton contacts create --name 'Jane Roe' --email jane@example.com --phone '+43 660 1234567' --organization Acme
+```
+
+| Flag | Description |
+| --- | --- |
+| `--address stringArray` | Set a postal address, as ADDRESS or KIND:ADDRESS (repeatable) |
+| `--anniversary string` | Set the anniversary (e.g. 2015-06-20) |
+| `--birthday string` | Set the birthday (e.g. 1990-01-31) |
+| `--email stringArray` | Set an email address, as ADDRESS or KIND:ADDRESS (repeatable) |
+| `--first-name string` | Set the given name |
+| `--gender string` | Set the gender |
+| `--job-title string` | Set the job title |
+| `--language string` | Set the preferred language (e.g. de-AT) |
+| `--last-name string` | Set the family name |
+| `--name string` | Set the name shown in listings |
+| `--nickname string` | Set the nickname |
+| `--note string` | Set the note |
+| `--organization string` | Set the organization |
+| `--phone stringArray` | Set a phone number, as NUMBER or KIND:NUMBER (repeatable) |
+| `--role string` | Set the role played in the organization |
+| `--timezone string` | Set the time zone (e.g. Europe/Vienna) |
+| `--website stringArray` | Set a website, as URL or KIND:URL (repeatable) |
+
+## `delete`
+
+Delete contacts.
+
+```
+proton contacts delete REF...
+```
+
+```bash
 proton contacts delete jane
 ```
 
-`--email` and `--phone` are repeatable. On `update` they replace the existing values rather than adding to them.
+## `export`
 
-## Pinned keys
+Write contacts out as .vcf files, or as one stream with --output -.
 
-Pinning a public key to a contact means mail to that address is encrypted to the key *you* trust, not just whatever the server hands back.
+Named contacts are written; with none named, the whole address book is, narrowed by --keyword. Properties this tool has no flag for travel too, since the stored card goes out whole.
 
-```bash
-proton contacts keys pin jane --key jane-pubkey.asc
-proton contacts keys pin jane --email jane@example.com --key -    # armored key on stdin
-proton contacts keys pin jane --key jane.asc --no-encrypt         # pin for verification only
-proton contacts keys pin jane --key jane.asc --scheme pgp-inline  # default: pgp-mime
-proton contacts keys unpin jane
-proton contacts keys unpin jane --email jane@example.com
+```
+proton contacts export [REF...]
 ```
 
-`--email` picks which of the contact's addresses the key applies to when there are several.
+```bash
+proton contacts export --output-dir ./address-book
+proton contacts export jane --output jane.vcf
+proton contacts export --output - > contacts.vcf
+```
 
-## Groups
+| Flag | Description |
+| --- | --- |
+| `--force` | Overwrite a file that already exists |
+| `--keyword string` | Match text in the name or the address |
+| `--output string` | Write to this path, or - for stdout |
+| `--output-dir string` | Write into this directory, keeping each item's own name |
+
+## `get`
+
+Show one contact in full.
+
+```
+proton contacts get REF
+```
+
+```bash
+proton contacts get jane@example.com
+proton contacts get 'Jane Roe'
+```
+
+## `groups`
+
+Contact groups.
+
+Holds `add`, `create`, `delete`, `get`, `list`, `remove` and `update`.
+
+### `groups add`
+
+Add contacts to a group.
+
+Proton groups addresses rather than people, so a colleague's work address can be in a group while their personal one is not. Naming a contact means all of their addresses; --email narrows it to the ones you name, and then exactly one contact may be named.
+
+```
+proton contacts groups add REF CONTACT_REF...
+```
+
+```bash
+proton contacts groups add Team jane
+```
+
+| Flag | Description |
+| --- | --- |
+| `--email stringArray` | Act on this address only, rather than all of the contact's (repeatable) |
+
+### `groups create`
+
+Create a contact group.
+
+```
+proton contacts groups create
+```
+
+```bash
+proton contacts groups create --name Team
+proton contacts groups create --name Family --color strawberry
+```
+
+| Flag | Description |
+| --- | --- |
+| `--color string` | Accent color, by name (purple) or hex (#8080FF) (default `#8080FF`) |
+| `--name string` | Group name |
+
+### `groups delete`
+
+Delete contact groups.
+
+```
+proton contacts groups delete REF...
+```
+
+```bash
+proton contacts groups delete Team
+```
+
+### `groups get`
+
+Show one group and the addresses in it.
+
+```
+proton contacts groups get REF
+```
+
+```bash
+proton contacts groups get Team
+```
+
+### `groups list`
+
+List contact groups.
+
+```
+proton contacts groups list
+```
 
 ```bash
 proton contacts groups list
-proton contacts groups get Team                   # and who is in it
-proton contacts groups create --name Team --color "#8080FF"
-proton contacts groups add Team jane john
+```
+
+### `groups remove`
+
+Remove contacts from a group.
+
+Proton groups addresses rather than people, so a colleague's work address can be in a group while their personal one is not. Naming a contact means all of their addresses; --email narrows it to the ones you name, and then exactly one contact may be named.
+
+```
+proton contacts groups remove REF CONTACT_REF...
+```
+
+```bash
 proton contacts groups remove Team jane
-proton contacts groups delete Team                # by name, or by group ID
 ```
 
-Group colors have to be Proton accent colors; an invalid value prints the allowed list.
+| Flag | Description |
+| --- | --- |
+| `--email stringArray` | Act on this address only, rather than all of the contact's (repeatable) |
 
-A listing of groups cannot say who is in one: Proton keeps membership on the address rather than on the group, so `get` is what asks the addresses.
+### `groups update`
 
-## Merge duplicates
+Rename or recolor a contact group.
 
-```bash
-proton contacts merge --dry-run    # what it would fold, and into what
-proton contacts merge
+```
+proton contacts groups update REF
 ```
 
-Two entries reachable at the **same address** are one person; two merely sharing a name are not, since people are routinely called the same thing. Addresses are compared case-insensitively.
+```bash
+proton contacts groups update Team --name Engineering
+proton contacts groups update Team --color reef
+```
 
-The oldest of each set is kept, so a group or a pinned key that refers to it still does afterwards. Everything the others had that it did not is added, and nothing it already had is overwritten.
+| Flag | Description |
+| --- | --- |
+| `--color string` | New accent color, as a hex value |
+| `--name string` | New group name |
 
-## Export and import
+## `import`
+
+Read contacts in from a .vcf file, or from stdin with -.
+
+Each card goes in whole, so a property this tool has no flag for survives the trip. A card with no name and no address is skipped and named, since there would be nothing to file it under.
+
+Nothing is merged: importing the same file twice makes duplicates, because nothing here can tell a re-import from a file somebody edited.
+
+```
+proton contacts import PATH
+```
 
 ```bash
-proton contacts export --output-dir ./address-book     # one .vcf per contact
-proton contacts export --output - > contacts.vcf       # one file, all of them
-proton contacts export jane --output jane.vcf
 proton contacts import contacts.vcf
 proton contacts import - < exported.vcf
 ```
 
-A contact is stored as several cards - a signed one carrying the identity, an encrypted one carrying everything else - and a file has to be one card with all of them, so export merges them. Import splits them the same way on the way back in.
+## `keys`
 
-**A property this tool has no flag for still travels.** The stored card goes out and in whole, so an anniversary, a photo or a second postal address survives a round trip even though no flag sets one.
+Public keys pinned to a contact.
 
-**An import is addressed by UID.** A card carries the UID of the contact it is, so reading a file back changes that contact rather than making a second one: export, edit the file, import, and the address book says what the file says. A card with no name and no address is skipped and named; the rest still land.
+Pinning a key means mail to that address is encrypted to the key you trust, rather than to whatever the server hands back.
 
-## Fields
+Holds `list`, `pin` and `unpin`.
 
-Every field takes the same flag on `create` and `update`:
+### `keys list`
 
-```bash
-proton contacts create --name "Jane Roe" \
-  --first-name Jane --last-name Roe --nickname Janey \
-  --email work:jane@acme.com --email home:jane@example.com \
-  --phone cell:+43123456 --address home:"1 Example St, Vienna" \
-  --website work:https://acme.com \
-  --organization Acme --job-title Engineer --role "Team lead" \
-  --birthday 1990-01-31 --anniversary 2015-06-20 \
-  --gender female --language de-AT --timezone Europe/Vienna \
-  --note "Likes tea"
+List the keys pinned to a contact.
+
+```
+proton contacts keys list REF
 ```
 
-`--email`, `--phone`, `--address` and `--website` are repeatable and may say what kind they are, the way Proton's own editor offers one on each. A bare value states no kind, which vCard distinguishes from `other`.
+```bash
+proton contacts keys list jane
+```
 
-| Field | Kinds |
+### `keys pin`
+
+Pin a public key so mail to a contact is encrypted to it.
+
+```
+proton contacts keys pin REF
+```
+
+```bash
+proton contacts keys pin jane --key jane-pubkey.asc
+proton contacts keys pin jane --email jane@example.com --key - --no-encrypt
+```
+
+| Flag | Description |
 | --- | --- |
-| `--email` | `home`, `work`, `other` |
-| `--phone` | `home`, `work`, `other`, `cell`, `main`, `fax`, `pager` |
-| `--address` | `home`, `work`, `other` |
-| `--website` | `home`, `work`, `other` |
+| `--email string` | Which of the contact's addresses the key applies to |
+| `--key string` | Armoured public key file (- for stdin) |
+| `--no-encrypt` | Store the key for verification only, leaving encryption off |
+| `--scheme string` | PGP scheme for recipients outside Proton: pgp-mime, pgp-inline |
 
-A word before the colon that is not one of these is part of the value, so `--website https://example.com` keeps its scheme.
+### `keys unpin`
 
-## Groups act on addresses
+Remove the keys pinned to a contact.
 
-Proton groups **addresses**, not people, so a colleague's work address can be in the team group while their personal one is not.
-
-```bash
-proton contacts groups add Team jane                          # all of Jane's addresses
-proton contacts groups add Team jane --email jane@acme.com    # only that one
+```
+proton contacts keys unpin REF
 ```
 
-With `--email`, exactly one contact may be named - which address belongs to whom is a question only one contact can answer.
+```bash
+proton contacts keys unpin jane
+proton contacts keys unpin jane --email jane@example.com
+```
 
-Naming a contact really does mean all of their addresses. Proton has an endpoint that takes contacts rather than addresses, but it labels one address per contact, so this resolves them and groups every one.
+| Flag | Description |
+| --- | --- |
+| `--email string` | Which of the contact's addresses to unpin |
+
+## `list`
+
+List contacts.
+
+```
+proton contacts list
+```
+
+```bash
+proton contacts list
+proton contacts list --output json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--desc` | Reverse the order |
+| `--keyword string` | Match text in the name or the address |
+| `--page int` | Which page of results, counting from zero |
+| `--page-size int` | How many contacts per page (default `50`) |
+| `--sort string` | Order by: name, email (default `name`) |
+
+## `merge`
+
+Fold duplicate contacts into one.
+
+A shared address decides, compared case-insensitively; two entries merely sharing a name are not duplicates.
+
+The oldest of each set is kept, so a group or a pinned key referring to it still does. Everything the others had is added, and nothing is overwritten.
+
+```
+proton contacts merge
+```
+
+```bash
+proton contacts merge --dry-run
+proton contacts merge
+```
+
+## `update`
+
+Change a contact's details.
+
+Only what you pass is replaced. --email and --phone replace the whole list rather than adding to it, so pass every address you want the contact to keep.
+
+```
+proton contacts update REF
+```
+
+```bash
+proton contacts update jane --job-title 'Head of Design'
+proton contacts update jane --email jane.roe@work.example --birthday 1990-04-16
+```
+
+| Flag | Description |
+| --- | --- |
+| `--address stringArray` | Replace a postal address, as ADDRESS or KIND:ADDRESS (repeatable) |
+| `--anniversary string` | Replace the anniversary (e.g. 2015-06-20) |
+| `--birthday string` | Replace the birthday (e.g. 1990-01-31) |
+| `--email stringArray` | Replace an email address, as ADDRESS or KIND:ADDRESS (repeatable) |
+| `--first-name string` | Replace the given name |
+| `--gender string` | Replace the gender |
+| `--job-title string` | Replace the job title |
+| `--language string` | Replace the preferred language (e.g. de-AT) |
+| `--last-name string` | Replace the family name |
+| `--name string` | Replace the name shown in listings |
+| `--nickname string` | Replace the nickname |
+| `--note string` | Replace the note |
+| `--organization string` | Replace the organization |
+| `--phone stringArray` | Replace a phone number, as NUMBER or KIND:NUMBER (repeatable) |
+| `--role string` | Replace the role played in the organization |
+| `--timezone string` | Replace the time zone (e.g. Europe/Vienna) |
+| `--website stringArray` | Replace a website, as URL or KIND:URL (repeatable) |
+
+---
+
+Every command also takes the [flags that work everywhere](README.md#flags-that-work-on-every-command).

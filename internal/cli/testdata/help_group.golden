@@ -1,0 +1,29 @@
+Individual messages
+
+Usage:
+  proton mail messages <command>
+
+Commands:
+  attachments  Files attached to a message
+  delete       Delete messages permanently
+  empty        Delete everything in a folder, permanently
+  expire       Make messages delete themselves after a while
+  export       Write messages out as .eml or mbox files
+  forward      Forward a message
+  get          Show one message, decrypted
+  label        Attach a label to messages
+  list         List messages in a folder
+  mark         Set whether messages count as read
+  move         Move messages to a folder
+  reply        Reply to a message
+  send         Compose and send a message
+  star         Star messages
+  trash        Move messages to the trash
+  unlabel      Detach a label from messages
+  unschedule   Cancel a scheduled send, returning the message to drafts
+  unstar       Remove the star from messages
+  unsubscribe  Ask a mailing list to stop
+  watch        Print each message as it arrives
+
+Global flags:    proton --help
+Full reference:  https://proton-cli.lerchster.dev/commands/mail/#messages

@@ -1,6 +1,6 @@
 # The language
 
-proton has one grammar. Learn the grammar and you can guess the rest.
+proton has one grammar. Learn it once and you can guess the rest.
 
 ```
 proton <app> <collection> <verb> [TARGET…] [--flags]
@@ -8,12 +8,12 @@ proton <app> <collection> <verb> [TARGET…] [--flags]
 
 ```bash
 proton mail messages list
-proton mail settings labels create --name Work
 proton drive items move /report.pdf --into /Archive
-proton pass vaults update SHARE_ID --name Personal
+proton pass items get github.com
+proton calendar events create --title Standup --start 2026-04-16T09:00
 ```
 
-A **group** never does anything itself - it only holds other commands. So `proton mail settings` prints help, and `proton mail settings get` shows your settings. Every command that acts is named by a verb.
+A **group** never does anything itself - `proton mail settings` prints help, `proton mail settings get` shows your settings. Every command that acts is named by a verb.
 
 ## Verbs
 
@@ -21,72 +21,21 @@ One word per idea, everywhere it appears.
 
 | Verb | Means |
 | --- | --- |
-| `list` | enumerate a collection |
-| `get` | show one thing in full |
-| `list --keyword` | ask Proton's index (mail only) |
-| `create` | make a new thing |
-| `update` | change fields of an existing thing |
-| `delete` | remove permanently |
-| `trash` | remove reversibly |
-| `restore` | undo a removal |
-| `empty` | clear out a trash |
-| `move --into` | put into another container |
-| `copy --into` | duplicate into another container |
-| `upload` / `download` | move bytes to or from your disk |
-| `export` | write documents to disk |
-| `send` / `reply` / `forward` | mail going out |
-| `label` / `unlabel` | attach or detach a label |
-| `star` / `unstar` | add to or remove from Starred |
-| `mark read` / `mark unread` | whether something counts as read |
-| `enable` / `disable` | turn a thing on or off |
-| `link` / `unlink` | a public share link |
-| `add` / `remove` | put a member into a container, or take one out |
-| `accept` / `decline` | answer an invitation |
+| `list` · `get` | show a collection, or one thing in full |
+| `create` · `update` · `delete` | the usual three |
+| `trash` · `restore` · `empty` | remove reversibly, put back, clear out |
+| `move --into` · `copy --into` | put into another container |
+| `upload` · `download` | move bytes to or from your disk |
+| `export` · `import` | documents to or from disk |
+| `send` · `reply` · `forward` | mail going out |
+| `label` · `unlabel` · `star` · `unstar` | attach or detach |
+| `enable` · `disable` | turn a thing on or off |
+| `add` · `remove` | put a member into a container, or take one out |
+| `accept` · `decline` | answer an invitation |
 | `set` | write one setting |
-| `login` / `logout` | your session |
+| `login` · `logout` | your session |
 
-To rename something, use `update --name`:
-
-```bash
-proton drive items update /old.txt --name new.txt
-proton pass vaults update SHARE_ID --name Personal
-```
-
-## Targets
-
-Wherever a command shows **`REF`**, four things work:
-
-```bash
-proton mail messages get 5bH2mQxKT9wLpN4v…    # the full ID
-proton mail messages get 5bH2mQxK             # the short ID a list printed
-proton mail messages get "Invoice #2291"      # the subject
-proton contacts get jane                      # a name or an address
-```
-
-A Pass item and a calendar event each need two IDs, written as **one** slash-separated token. Lists print them in this form, and you paste them back the same way:
-
-```bash
-proton pass items get SHARE_ID/ITEM_ID
-proton calendar events get CALENDAR_ID/EVENT_ID
-```
-
-A **recurring** event is stored once and happens many times, so one more thing is needed to name a single occurrence: its own start, after an `@`. `calendar events list` prints exactly what you paste back.
-
-```bash
-proton calendar events get 4f2a1b9c@2026-04-16T09:00   # one occurrence
-proton calendar events get 4f2a1b9c                    # the whole series
-```
-
-So the reference decides how far a change reaches: keep the `@` part and you act on that occurrence, drop it and you act on the series. `--future` widens one occurrence to it and every later one.
-
-**Drive is different.** Files and folders are named by their `PATH`. Trashed items, photos and albums have no path, so they are named by `REF`, the ID their list showed.
-
-```bash
-proton drive items get /Documents/report.pdf
-proton drive trash restore 7Kd91mQx
-```
-
-If nothing matches a reference the command exits `3`. If several things match, it lists them and exits `4`.
+To rename anything, use `update --name`. The [command reference](commands/README.md) has the full list.
 
 ## Saying which ones
 
@@ -101,33 +50,21 @@ proton mail messages trash 5bH2mQxK --unread --folder spam
 | Filter | Means |
 | --- | --- |
 | `--folder` · `--scope` · `--vault` | where to look |
-| `--pattern` | match the name against a glob (Drive) |
 | `--older-than` · `--newer-than` | by age |
-| `--larger-than` · `--smaller-than` | by size (Drive) |
-| `--type` | by kind |
-| `--unread` · `--starred` | by state (Mail) |
-| `--recursive` | descend into subfolders (Drive) |
+| `--larger-than` · `--smaller-than` | by size |
+| `--pattern` | match the name against a glob |
+| `--unread` · `--starred` · `--type` | by state or kind |
+| `--all` | everything in scope, rather than a subset |
 | `--limit` | cap how many a bulk verb affects |
-| `--sort` · `--desc` · `--page` · `--page-size` | how a listing is ordered and walked |
-| `--all` | act on everything in scope, rather than a subset |
 
-### Try it with `list` first
-
-`list` takes the same filters as the verbs beside it, so a selection can be read before it is acted on:
+`list` takes the same filters as the verbs beside it, so you can see a selection before acting on it:
 
 ```bash
 proton drive items list /Build --pattern "*.tmp" --recursive   # see what matches
 proton drive items trash --scope /Build --pattern "*.tmp" --recursive
 ```
 
-What `list` says with its `PATH` argument, a bulk verb says with `--scope`, because it uses its arguments to name things instead. `list` needs no `--all` - showing everything is what it is for - and pages instead of capping with `--limit`.
-
-When a filter matches nothing, a listing says so rather than looking like an empty account:
-
-```console
-$ proton drive items list --pattern "*.tmp"
-No items match.
-```
+What `list` says with its `PATH` argument, a bulk verb says with `--scope`, because it uses its arguments to name things instead.
 
 A command needs at least one reference or filter:
 
@@ -141,8 +78,6 @@ Try:   pass a REF, or a filter such as --unread, --starred, --from or --older-th
 ## When it asks first
 
 proton asks before it removes something it cannot put back, and before it removes things you did not name. Nothing else ever stops to ask.
-
-Those are the two ways a removal surprises you: the wrong verb, and the wrong filter.
 
 | | you named it | a filter found it |
 | --- | --- | --- |
@@ -165,13 +100,9 @@ zC7bX1yE  Example News  November round-up    2025-11-08 06:00
 This cannot be undone. Continue? [y/N]
 ```
 
-Only a permanent removal says *This cannot be undone*, because only a permanent removal cannot be. Trashing is recoverable, so it asks the shorter question and `restore` puts things back.
+Anything but a plain `y` means no, including pressing enter. ([Why these two cases](design-notes.md#why-it-asks-before-some-removals-and-not-others).)
 
-Anything but a plain `y` means no, including pressing enter.
-
-### In a script
-
-A script has nobody to ask, so the question becomes an error and nothing is removed:
+**In a script** there is nobody to ask, so the question becomes an error and nothing is removed. `--yes` is the answer given in advance:
 
 ```console
 $ proton mail messages delete --folder spam --older-than 30d
@@ -179,15 +110,9 @@ Error: Would delete 112 messages. This cannot be undone.
 Try:   --yes to confirm, or --dry-run to see what it would touch.
 ```
 
-`--yes` is the answer given in advance:
-
-```bash
-proton mail messages delete --folder spam --older-than 30d --yes
-```
-
 ## Dry runs
 
-Every command that changes something takes `--dry-run`. It resolves references, applies filters, and shows you **the things themselves** - not a count:
+Every command that changes something takes `--dry-run`. It resolves references, applies filters, and shows you the things themselves:
 
 ```console
 $ proton mail messages trash --from newsletter@example.com --older-than 90d --dry-run
@@ -202,52 +127,13 @@ zC7bX1yE  Example News  November round-up    2025-11-08 06:00
 
 Dry-run output goes to stderr, so it still appears if you redirect stdout.
 
-## Flags mean one thing
-
-Each flag name means the same thing everywhere. `--to` is always an email recipient, and `--into` is always a destination container:
-
-```bash
-proton mail messages send --to alice@proton.me       # a recipient
-proton mail messages list --to alice@proton.me       # matching a recipient
-proton mail messages move REF --into archive         # a destination
-```
-
-`--force` only ever means "overwrite a local file". `--all` only ever means "everything in scope".
-
-## Folders and labels are not the same
-
-A message lives in exactly one **folder** and carries any number of **labels**.
-
-```bash
-proton mail messages move REF --into archive     # it leaves where it was
-proton mail messages label REF --label Work      # it stays where it is
-```
-
-Passing a label to `move` is an error, not a silent relabel:
-
-```console
-$ proton mail messages move REF --into Work
-Error: "Work" is a label, not a folder - moving needs a folder.
-Try:   to attach the label instead, use `label --label Work`.
-       To see the folders, run `proton mail settings folders list`.
-```
-
-## Streaming with `-`
-
-A single `-` means stdin for an input and stdout for an output:
-
-```bash
-echo "Deployed." | proton mail messages send --to me@proton.me --subject Deploy --body -
-pg_dump mydb | proton drive items upload - /Backups/db.sql
-proton drive items download /Backups/db.sql --output - | psql mydb
-```
-
 ## Getting help
 
-Every command documents itself, and shell completion knows the whole tree - including which values each constrained flag accepts.
+Every command documents itself, and completion knows the whole tree - including which values each constrained flag accepts.
 
 ```bash
 proton --help
 proton mail messages send --help
-proton completion zsh > "${fpath[1]}/_proton"
 ```
+
+Next: [naming the thing you want](references.md), and [what comes back](output.md).

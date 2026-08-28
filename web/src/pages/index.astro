@@ -2,6 +2,7 @@
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 
 import Apps from "../components/Apps.astro";
+import Footer from "../components/Footer.astro";
 import Install from "../components/Install.astro";
 import { repo } from "../../site.ts";
 
@@ -38,7 +39,6 @@ const traits = [
         "Read your mail, move files in and out of Drive, and manage calendars, passwords and contacts without opening a browser. Your keys stay on your machine.",
       title: "Proton, in your terminal.",
     },
-    showMarkdownActions: false,
     template: "splash",
     title: "Proton, in your terminal.",
   }}
@@ -70,6 +70,8 @@ const traits = [
     </p>
     <Apps />
   </section>
+
+  <Footer />
 </StarlightPage>
 
 <style>
@@ -87,24 +89,40 @@ const traits = [
     display: none;
   }
 
+  /*
+   * The three reasons to use this rather than a browser. They were set smaller
+   * than the prose around them, which put the argument in the quietest type on
+   * the page.
+   */
   .traits {
     display: grid;
-    gap: 2rem;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-    margin-block: 4rem;
+    gap: 2.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    margin-block: 5rem;
   }
 
   .trait h2 {
     border: 0;
-    font-size: var(--sl-text-base);
+    font-size: var(--sl-text-lg);
     font-weight: 600;
-    margin: 0 0 0.5rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.625rem;
     padding: 0;
   }
 
+  .trait h2::before {
+    background: var(--sl-color-text-accent);
+    block-size: 1.25rem;
+    content: "";
+    display: block;
+    inline-size: 2px;
+    margin-block-end: 0.875rem;
+  }
+
   .trait p {
-    color: var(--sl-color-gray-3);
-    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-base);
+    line-height: 1.6;
     margin: 0;
   }
 

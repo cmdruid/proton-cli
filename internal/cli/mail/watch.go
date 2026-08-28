@@ -22,12 +22,9 @@ func watchCmd() *cobra.Command {
 		Short: "Print each message as it arrives",
 		Long: "Print each message as it arrives, until you stop it.\n\n" +
 			"It reports what happens while it is watching, so nothing that arrived\n" +
-			"beforehand is repeated. Without --folder it watches the inbox together\n" +
-			"with every folder whose notifications are on, which is what `settings\n" +
-			"folders list` shows in its NOTIFY column, and a thread coming back from\n" +
-			"snooze counts as arriving.\n\n" +
-			"Each line is one message, so piping it into whatever shows notifications\n" +
-			"on this machine is the whole of the setup.",
+			"beforehand comes up. A thread returning from snooze counts as arriving.\n\n" +
+			"Without --folder it covers the inbox plus every folder whose notifications\n" +
+			"are on, which `settings folders list` shows under NOTIFY.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			in, err := c.App.Mail.WatchedIn(c.Ctx, folder)

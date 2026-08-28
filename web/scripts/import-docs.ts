@@ -27,8 +27,8 @@ const statics = join(root, "web/public");
 // docs/README.md is a table of contents, and the sidebar already is one.
 const skipped = new Set(["README.md"]);
 
-// The command reference is the index of the commands section rather than a page
-// inside it, so the per-app pages are the only thing under commands/.
+// Each section's index is the section itself rather than a page inside it, so
+// what stays under a directory is only what the section is made of.
 const renamed = new Map([["commands/README.md", "commands.md"]]);
 
 const alerts = new Map([

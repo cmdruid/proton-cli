@@ -8,7 +8,7 @@ Everything the maintainer or CI runs, in whatever language suits it: shell insta
 | `build-hv-helpers.sh` | Builds the CAPTCHA webview helpers that get embedded (`just build`) |
 | `gen-completions.sh` | Emits the shell completions shipped in releases (a goreleaser `before` hook) |
 | `changelog/` | Reads `CHANGELOG.md`: the version to release and the notes to publish (`just notes`) |
-| `gendocs/` | Generates `docs/commands/README.md` from the command tree (`just docs`) |
+| `gendocs/` | Generates `docs/commands/` from the command tree (`just docs`) |
 | `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source (`just openapi`) |
 | `terminal-demo/` | Records the README panel against the primary account (`just demo`) |
 | `publish-npm.mjs` | Publishes the npm package on release |
@@ -16,13 +16,19 @@ Everything the maintainer or CI runs, in whatever language suits it: shell insta
 
 ## Command Reference Generator
 
-Writes `docs/commands/README.md` - every command in the tree, one row each - by walking the assembled Cobra tree rather than by reading the source or the prose.
+Writes `docs/commands/` - an index and one page per app - by walking the assembled Cobra tree rather than by reading the source or the prose.
 
 ```bash
 just docs
 ```
 
-The prose pages beside it are hand-written; only the index is generated. That split is deliberate: generated per-command pages read badly, but an index is exactly the thing that goes stale silently when a command is renamed. CI regenerates it and fails on a diff, so a command that exists is a command that is listed, under its current name.
+Every command gets its whole entry: what it does, how it is invoked, what it holds, the flags it takes and the examples it already carries. All of that is on the command already, checked by conformance, and the generator is what stops it living only in a terminal - a flag nobody can search for is a flag nobody finds.
+
+The guides in `docs/apps/` are hand-written and stay that way, in files of their own. A page that is half generated cannot be regenerated, so the split is by file rather than by section.
+
+Where a command is published is `kit.ReferencePage`'s answer, and a help screen prints the URL from the same function. A heading here and a link there cannot disagree, and `internal/cli/help_test.go` fails if a screen points at a page this does not write.
+
+CI regenerates the whole directory and fails on a diff, so a command that exists is a command that is documented, under its current name and with its current flags.
 
 It shares the tree with `internal/cli/conformance_test.go`, which checks the same commands against the rules the interface is meant to obey. Both call `cli.Root()`.
 

@@ -1,33 +1,26 @@
-# Raw API
+# proton api
 
-`proton api` sends an authenticated request to any Proton endpoint, using the session you already have. It's the escape hatch for anything the high-level commands don't cover.
+Send a raw authenticated request to the Proton API.
 
-```bash
-proton api GET /drive/volumes
-proton api GET /calendar/v1
-proton api GET /mail/v4/messages --query Page=0 --query PageSize=10
-proton api POST /calendar/v1 --body '{"Name":"Work","Color":"#7272a7","Display":1,"AddressID":"..."}'
-proton api PUT /mail/v4/settings/viewmode --body '{"ViewMode":1}'
-proton api DELETE /mail/v4/labels/LABEL_ID
+The response is passed through as the API returned it, so this is where to reach anything the commands do not cover.
+
+Every command under `proton api`, with the arguments and flags it takes. For these commands in use, see [the guide](../apps/api.md).
+
+```
+proton api METHOD ENDPOINT
 ```
 
-| Flag | Purpose |
+```bash
+proton api GET /core/v4/users
+proton api GET /mail/v4/messages --query 'PageSize=5'
+proton api POST /mail/v4/labels --body '{"Name":"Work","Color":"#8080FF","Type":1}'
+```
+
+| Flag | Description |
 | --- | --- |
-| `--body JSON` | Request body |
-| `--query key=value` | Query parameter, repeatable |
+| `--body string` | JSON request body |
+| `--query stringArray` | Query parameter as key=value (repeatable) |
 
-Combine it with `jq` like any other command:
+---
 
-```bash
-proton api GET /calendar/v1 --output json | jq -r '.Calendars[].ID'
-```
-
-## Caveats
-
-Responses come back as the API returns them, in Proton's `PascalCase`, and encrypted fields stay encrypted: this command does no key handling. If you want decrypted content, use the service commands.
-
-## Endpoint reference
-
-[`openapi.yaml`](../../openapi.yaml) in the repository root documents roughly 740 endpoints, generated from Proton's own web client source. It covers paths, methods, request and response schemas, and query parameters.
-
-The generator lives in [`scripts/`](../../scripts/README.md) and a weekly workflow keeps the spec in sync with upstream.
+Every command also takes the [flags that work everywhere](README.md#flags-that-work-on-every-command).

@@ -420,13 +420,10 @@ func mergeCmd() *cobra.Command {
 		Use:   "merge",
 		Short: "Fold duplicate contacts into one",
 		Long: "Fold duplicate contacts into one.\n\n" +
-			"Two entries reachable at the same address are one person; two merely\n" +
-			"sharing a name are not, so a shared address is what decides. Addresses are\n" +
-			"compared case-insensitively, so the same mailbox written two ways counts\n" +
-			"once.\n\n" +
-			"The oldest of each set is kept, so anything referring to it - a group, a\n" +
-			"pinned key - still does afterwards. Everything the others had that it did\n" +
-			"not is added, and nothing it already had is overwritten.",
+			"A shared address decides, compared case-insensitively; two entries merely\n" +
+			"sharing a name are not duplicates.\n\n" +
+			"The oldest of each set is kept, so a group or a pinned key referring to it\n" +
+			"still does. Everything the others had is added, and nothing is overwritten.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			all, err := c.App.Contacts.List(c.Ctx)

@@ -1,129 +1,181 @@
-# Account
+# proton account
 
-Signing in and out, account settings, and the sessions Proton holds for you.
+Your Proton account, its settings and your session.
 
-## Where you stand
+Every command under `proton account`, with the arguments and flags it takes. For these commands in use, see [the guide](../apps/account.md).
 
-```console
-$ proton account get
-Email:       you@proton.me
-Name:        Roman
-Storage:     128.4 GB of 500 GB (26%)
-Max Upload:  5.0 GB
-Profile:     default
-Session:     valid
-Unlocked:    yes
-ID:          Kd91mQxT…
+Holds `get`, `login`, `logout`, `profiles`, `sessions` and `settings`.
+
+## `get`
+
+Show the account, its storage and this machine's session.
+
+```
+proton account get
 ```
 
-`Session: valid` and `Unlocked: yes` together mean this machine can act as the account right now.
+```bash
+proton account get
+proton account get --output json
+```
 
-## Signing in and out
+## `login`
+
+Sign in and save the session for this profile.
+
+Signing in also unlocks your keys, so your password is needed once per machine and not again. Anything a flag has not set is asked for, as long as this is a terminal.
+
+Signing in again as the same account changes nothing, so an unattended job can run it first and recover from a session that expired.
+
+```
+proton account login
+```
 
 ```bash
 proton account login
+proton account login --profile work
+proton account login --user me@proton.me --password-file /run/secrets/proton
+proton account login --user me@proton.me --password-stdin --totp 123456
+```
+
+| Flag | Description |
+| --- | --- |
+| `--password-file string` | Read the account password from a file |
+| `--password-stdin` | Read the account password from stdin |
+| `--totp string` | Two-factor code |
+| `--user string` | Proton account email to sign in as |
+
+## `logout`
+
+Discard the saved session for this profile.
+
+The sealed key password on disk is useless without the session, so removing the file is enough to make it unreadable. --revoke additionally invalidates the session at Proton, which is what signing out in a Proton app does.
+
+```
 proton account logout
-proton account logout --revoke     # also invalidate it at Proton
-proton account logout --all        # every profile on this machine
-```
-
-`login` asks for whatever a flag has not already supplied, as long as it is running in a terminal. Without one, name the account with `--user` and hand the password over with `--password-file` or `--password-stdin`. It also unlocks your keys, so your password is needed **once** per machine and not again - later commands read and write encrypted content without it.
-
-Signing in again as the same account changes nothing, so an unattended job can run it ahead of its real work and recover on its own from a session that expired or was revoked.
-
-Security keys are not supported: they need a browser. If your account uses one, add an authenticator app in Proton's settings and sign in with that code.
-
-```bash
-proton account login --no-input    # fail instead of asking
-```
-
-## Profiles
-
-A profile is a named session slot on this machine. An account gets into one by signing in:
-
-```console
-$ proton --profile work account login
-Email:     you@company.com
-Password:
-✓ Signed in as you@company.com (profile "work").
-
-$ proton account profiles list
-PROFILE   EMAIL             UNLOCKED  SAVED             ACTIVE
-────────  ────────────────  ────────  ────────────────  ──────
-default   you@proton.me     yes       2026-04-15 14:31  ✓
-work      you@company.com   yes       2026-04-15 15:02
-
-$ proton account profiles delete old
-✓ Deleted profile "old".
-```
-
-`profiles list` works offline.
-
-## Sessions
-
-The sessions Proton holds for your account, across every device. This is the "Sessions" section of Proton's account settings.
-
-```console
-$ proton account sessions list
-ID        CLIENT     CREATED           CURRENT
-────────  ─────────  ────────────────  ───────
-7Kd91mQx  web-mail   2026-04-15 14:31  ✓
-3Ns8pT2v  ios-mail   2026-03-02 08:11
-9xL4pQrT  web-drive  2026-01-20 19:44
-
-3 sessions.
 ```
 
 ```bash
-proton account sessions revoke 3Ns8pT2v
-proton account sessions revoke --others     # everything but this one
+proton account logout
+proton account logout --revoke
+proton account logout --all
 ```
 
-Revoking a session also makes the credentials saved on that machine useless, even if someone already has a copy of the file. If you lose a device, revoke its session.
+| Flag | Description |
+| --- | --- |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--revoke` | Also invalidate the session at Proton |
 
-## Settings
+## `profiles`
+
+Accounts signed in on this machine.
+
+Holds `delete` and `list`.
+
+### `profiles delete`
+
+Remove saved sessions by profile name.
+
+```
+proton account profiles delete REF...
+```
 
 ```bash
-proton account settings get     # the values now in effect
-proton account settings list    # the keys you can change
+proton account profiles delete work
+```
+
+### `profiles list`
+
+List the profiles with a saved session.
+
+```
+proton account profiles list
+```
+
+```bash
+proton account profiles list
+```
+
+## `sessions`
+
+Sessions Proton holds for this account.
+
+Holds `list` and `revoke`.
+
+### `sessions list`
+
+List every signed-in session.
+
+```
+proton account sessions list
+```
+
+```bash
+proton account sessions list
+```
+
+### `sessions revoke`
+
+Invalidate sessions at Proton.
+
+A revoked session cannot decrypt the key password sealed into its saved file, so revoking is what makes a leaked session file worthless.
+
+```
+proton account sessions revoke [REF...]
+```
+
+```bash
+proton account sessions revoke 5bH2mQxK
+proton account sessions revoke --others
+```
+
+| Flag | Description |
+| --- | --- |
+| `--others` | Revoke every session except this one |
+
+## `settings`
+
+Account-wide preferences.
+
+Holds `get`, `list` and `set`.
+
+### `settings get`
+
+Show the account settings now in effect.
+
+```
+proton account settings get
+```
+
+```bash
+proton account settings get
+```
+
+### `settings list`
+
+List the account settings that can be changed.
+
+```
+proton account settings list
+```
+
+```bash
+proton account settings list
+```
+
+### `settings set`
+
+Change one account setting.
+
+```
+proton account settings set KEY VALUE
+```
+
+```bash
 proton account settings set locale de_AT
+proton account settings set news off
 ```
 
-```console
-$ proton account settings list
-KEY            VALUES                                      PAGE                  DESCRIPTION
-─────────────  ──────────────────────────────────────────  ────────────────────  ──────────────────────────────
-date-format    locale, dd/mm/yyyy, mm/dd/yyyy, yyyy-mm-dd  Language and time     How dates are written
-locale         any text                                    Language and time     Interface language, e.g. de_AT
-time-format    locale, 24h, 12h                            Language and time     Clock format
-week-start     locale, monday … sunday                     Language and time     First day of the week
-crash-reports  off, on                                     Security and privacy  Send crash reports to Proton
-telemetry      off, on                                     Security and privacy  Send anonymous usage data
+---
 
-6 settings.
-```
-
-Values can be given by name or by Proton's own number. Mistakes are caught before anything is sent:
-
-```console
-$ proton account settings set week-start funday
-Error: week-start accepts: locale, monday, tuesday, wednesday, thursday, friday, saturday, sunday.
-
-$ proton account settings set nope on
-Error: There is no account setting called "nope".
-Try:   proton account settings list
-```
-
-`get` shows more than `set` can change. Proton Sentinel, two-factor state and recovery addresses are readable here but can only be changed at [account.proton.me](https://account.proton.me), along with your password, recovery secrets, billing, and account deletion.
-
-## Product settings
-
-Mail, Calendar and Drive each have their own settings:
-
-```bash
-proton mail settings get
-proton calendar settings get
-proton drive settings get
-```
-
-Pass and Contacts have no settings of their own.
+Every command also takes the [flags that work everywhere](README.md#flags-that-work-on-every-command).

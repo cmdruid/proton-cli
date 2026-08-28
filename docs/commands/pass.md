@@ -1,293 +1,234 @@
-# Pass
+# proton pass
 
-Vaults, logins, secrets, and aliases. Items are decrypted locally with the vault and item keys.
+Vaults, logins and secrets.
 
-An item takes two IDs to address, written as one token: `SHARE_ID/ITEM_ID`. A name or URL works instead.
+Every command under `proton pass`, with the arguments and flags it takes. For these commands in use, see [the guide](../apps/pass.md).
 
-## Items
+Holds `aliases`, `breaches`, `export`, `generate`, `import`, `invitations`, `items`, `links`, `settings`, `trash` and `vaults`.
 
-### Find and read
+## `aliases`
 
-```bash
-proton pass items list
-proton pass items list --vault Work
-proton pass items list --type login --older-than 1y
-proton pass items get github.com                # search by name or URL
-proton pass items get SHARE_ID/ITEM_ID
-```
+Hide-my-email addresses that forward to you.
 
-`get` prints the item's fields, including the password and TOTP secret, to stdout.
+Holds `contacts`, `create`, `disable`, `enable`, `list` and `options`.
 
-### Create
+### `aliases contacts`
 
-Every type takes `--name`, optional `--vault`, `--note`, `--field NAME=VALUE`, and `--hidden NAME=VALUE`.
+Addresses an alias can write to.
 
-```bash
-# Login (the default type)
-proton pass items create --name GitHub --username roman --password "$(openssl rand -base64 24)" --url github.com --totp-uri "otpauth://totp/GitHub?secret=..."
+Holds `allow`, `block`, `create`, `delete` and `list`.
 
-# Note
-proton pass items create --type note --name "Door codes" --note "Front: 1234"
+### `aliases contacts allow`
 
-# Credit card
-proton pass items create --type credit-card --name Visa --holder "Roman L" --number 4111111111111111 --expiry 2028-12 --cvv 123 --pin 4321
-
-# Wi-Fi
-proton pass items create --type wifi --name Home --ssid MyNetwork --password pw --security WPA2
-
-# SSH key
-proton pass items create --type ssh-key --name laptop --public-key "$(cat ~/.ssh/id_ed25519.pub)" --private-key "$(cat ~/.ssh/id_ed25519)"
-
-# Identity - Pass stores thirty-one fields; these are a few
-proton pass items create --type identity --name Me --full-name "Jane Roe" --email jane@example.com --phone "+43 1 234567" --city Vienna --country Austria
-proton pass items create --type identity --name Work --company Acme --work-email jane@acme.com --job-title Engineer --linkedin janeroe
-
-# Custom
-proton pass items create --type custom --name "Staging server" --field "Host=10.0.0.5" --hidden "Root password=secret"
-```
-
-Custom fields work on any type:
-
-```bash
-proton pass items create --name GitHub --field "Recovery codes=abc-def"
-```
-
-### Sections
-
-A field can name the heading it sits under, and states it in the same token, so the flags can be given in any order and read back exactly as they were written:
-
-```bash
-proton pass items create --type custom --name Router \
-  --field "Network/SSID=home" --hidden "Network/Key=hunter2" \
-  --field "Admin/URL=http://192.168.0.1" --hidden "Admin/Password=secret"
-
-proton pass items update Router --hidden "Network/Key=hunter3"
-```
-
-`update` names one field and leaves the rest alone, and a field is identified by its section and its name together - so `Network/Password` and `Admin/Password` are two fields, not one.
-
-A custom field can hold a two-factor secret as well as text or a hidden value, and [`pass items totp`](#two-factor-codes) reads one:
-
-```bash
-proton pass items update GitHub --totp-field "Backup=otpauth://totp/GitHub?secret=JBSWY3DPEHPK3PXP"
-```
-
-The flag is `--totp-field` rather than `--totp`, which is the two-factor code a re-authentication asks for. A secret no code can come out of is refused before anything is sent.
-
-Only the types whose Pass editor offers headings can carry them: `custom`, `ssh-key`, `wifi` and `identity`. Giving one to any other type is refused before anything is sent.
-
-Types: `login`, `note`, `credit-card`, `wifi`, `ssh-key`, `identity`, `alias`, `custom`. Wi-Fi security: `WPA`, `WPA2`, `WPA3`, `WEP`.
-
-An alias is made by [`pass aliases create`](#aliases), because Proton and not you decides its address; `items create --type alias` is how one is listed and edited.
-
-### Edit
-
-```bash
-proton pass items update github.com --password "new-secret"
-proton pass items update github.com --totp-uri "otpauth://totp/..."
-proton pass items update "Staging server" --name "Staging server (eu-1)"
-```
-
-`update` takes the same field flags as `create`.
-
-### Trash, restore, delete
-
-```bash
-proton pass items trash github.com
-proton pass items delete github.com      # permanent
-proton pass trash list                   # what is there to restore
-proton pass trash restore github.com
-proton pass trash empty                  # permanent, all of it
-```
-
-With filters:
-
-```bash
-proton pass items trash --vault Old --type login
-proton pass items trash --older-than 1y --type login
-proton pass items delete --vault Temporary --all
-```
-
-Filters: `--vault`, `--type`, `--older-than`, `--newer-than`, `--all`. Add `--dry-run` to check first.
-
-`delete` and `trash empty` are permanent, so they show what would go and ask. So does a filtered `trash`, since the filter chose them rather than you. See [When it asks first](../language.md#when-it-asks-first).
-
-## Vaults
-
-```bash
-proton pass vaults list
-proton pass vaults create --name Work
-proton pass vaults update SHARE_ID --name Personal
-proton pass vaults delete Work            # by name, or by share ID
-```
-
-Deleting a vault takes everything in it, so it names the vault and asks first.
-
-## Aliases
-
-Hide-my-email aliases that forward to your own mailboxes.
-
-```bash
-proton pass aliases options                              # available suffixes and mailboxes
-proton pass aliases create --prefix shop --mailbox me@proton.me
-proton pass aliases create --prefix shop --suffix passinbox.com --mailbox me@proton.me --mailbox work@proton.me --name "Online shops" --vault Personal
-```
-
-Proton makes the address from the prefix you choose, a word of its own, and the suffix. `--suffix` takes the domain: the word in front of it is Proton's to pick, it picks a new one every time it is asked, and it only settles when the alias is made. So creating one says which address it made:
+Let a contact's mail reach you again.
 
 ```
-✓ Created alias "shop" as shop.jasmine329@passinbox.com.
-```
-
-An alias is an item, so it is read and edited like one:
-
-```console
-$ proton pass items get shop
-Type            alias
-Name            shop
-Alias           shop.jasmine329@passinbox.com
-Status          enabled
-Forwards To     me@proton.me
-Display Name    Jane R
-Activity        12 forwarded, 0 replied, 3 blocked (last 14 days)
-ID              Aq7…/9Kd…
+proton pass aliases contacts allow REF CONTACT_REF...
 ```
 
 ```bash
-proton pass items update shop --mailbox work@proton.me    # where its mail arrives
-proton pass items update shop --display-name "Jane R"     # what recipients see it sent as
-proton pass items update shop --name "Online shops"       # the item's own name
-```
-
-### Writing as an alias
-
-An alias forwards mail to you, but a reply would leave from your real address and give it away. A contact is the answer: Proton mints a second address standing for one correspondent, and mail you send there reaches them as though the alias had written it.
-
-```bash
-proton pass aliases contacts create shopping seller@example.com --name "The seller"
-proton pass aliases contacts list shopping
-proton pass aliases contacts block shopping seller@example.com   # stop their mail reaching you
 proton pass aliases contacts allow shopping seller@example.com
+```
+
+### `aliases contacts block`
+
+Stop a contact's mail reaching you.
+
+```
+proton pass aliases contacts block REF CONTACT_REF...
+```
+
+```bash
+proton pass aliases contacts block shopping seller@example.com
+```
+
+### `aliases contacts create`
+
+Make an address that writes to somebody as the alias.
+
+Proton answers with a second address standing for that one person. Mail you send there reaches them as though the alias had written it, so a reply never shows the address behind it.
+
+```
+proton pass aliases contacts create REF EMAIL
+```
+
+```bash
+proton pass aliases contacts create shopping seller@example.com
+proton pass aliases contacts create shopping seller@example.com --name "The seller"
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name string` | A name for them |
+
+### `aliases contacts delete`
+
+Remove an address an alias can write to.
+
+```
+proton pass aliases contacts delete REF CONTACT_REF...
+```
+
+```bash
 proton pass aliases contacts delete shopping seller@example.com
 ```
 
-Creating one says which address to write to. `list` shows it under `WRITE TO`, beside how much each contact has sent.
+### `aliases contacts list`
 
-### Where aliases arrive
+List the addresses an alias can write to.
 
-```bash
-proton pass settings mailboxes list
-proton pass settings mailboxes create me@example.com
-proton pass settings mailboxes verify me@example.com --code 123456
-proton pass settings mailboxes resend me@example.com
-proton pass settings mailboxes update me@example.com --default
-proton pass settings mailboxes delete me@example.com --transfer-to other@example.com
-proton pass settings domains list
+```
+proton pass aliases contacts list REF
 ```
 
-A new mailbox receives nothing until it answers: Proton emails it a code, and `verify` is where that code goes back. `resend` sends another, which retires the one before it.
+```bash
+proton pass aliases contacts list shopping
+```
 
-Deleting a mailbox needs somewhere for its aliases to go, which is what `--transfer-to` names. Without it, a mailbox that still has aliases is refused rather than quietly leaving them receiving nothing.
+### `aliases create`
 
-When an address starts attracting spam, switch it off rather than delete it - a disabled alias keeps its address and stops receiving, while deleting it burns the address for good:
+Create an alias.
+
+The address is a prefix you choose plus a suffix Proton offers; mail sent to it arrives in the mailboxes you name. `aliases options` lists both.
+
+```
+proton pass aliases create
+```
+
+```bash
+proton pass aliases create --prefix shop --mailbox me@proton.me
+proton pass aliases create --prefix news --mailbox me@proton.me --vault Work --name 'Newsletter alias'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--mailbox stringArray` | Where mail to the alias should arrive (repeatable) |
+| `--name string` | Name for the alias item |
+| `--prefix string` | The part before the @ |
+| `--suffix string` | The part from the @ onwards (default: the first Proton offers) |
+| `--vault string` | Which vault to keep it in, by name or ID |
+
+### `aliases disable`
+
+Stop receiving mail sent to an alias.
+
+```
+proton pass aliases disable REF
+```
 
 ```bash
 proton pass aliases disable shop
+```
+
+### `aliases enable`
+
+Start receiving mail sent to an alias.
+
+```
+proton pass aliases enable REF
+```
+
+```bash
 proton pass aliases enable shop
-proton pass aliases list                                  # STATUS says which are off
 ```
 
-`--output json` carries the address as `alias` and the rest as `alias_status`, `alias_mailboxes`, `alias_display_name` and `alias_activity`.
+### `aliases list`
 
-## Vaults
+List your aliases.
 
-```bash
-proton pass vaults get Work
-proton pass vaults update Work --description "Shared team logins" --icon 7 --color 3
+```
+proton pass aliases list
 ```
 
-Pass shows its icons and colours as a grid with no names, so the numbers are what there is: `--icon 7`, `--color 3`. Anything not mentioned is left alone, including a description written in the Pass app.
-
-## Backups
-
 ```bash
-proton pass export --output pass-backup.zip --passphrase-file ~/.backup-passphrase
-proton pass import pass-backup.zip --passphrase-file ~/.backup-passphrase
+proton pass aliases list
+proton pass aliases list --vault Work
 ```
 
-The archive is the one **Proton Pass itself writes**, so the app can open what this writes and this can open what the app wrote. Inside is a single JSON document with every vault and every item, each item's contents in the encoding Pass stores them in.
+| Flag | Description |
+| --- | --- |
+| `--vault string` | Show only this vault, by name or ID |
 
-**Without a passphrase the archive holds every password in plain text**, and the command says so as it writes. With one, the document is encrypted to it and stored as `data.pgp` - which is what Proton's own importer looks for first. The passphrase is read from a file, from stdin with `--passphrase-stdin`, or typed at a prompt; never from a flag value, since anything on the command line is visible to every user on the machine.
+### `aliases options`
 
-Reading a file back **adds** its items. Nothing in an export says which existing item it was, so importing the same file twice puts the items in twice. A vault the file names lands in the vault of that name, and one that is not there yet is made - `--dry-run` lists what would land, and where, before any of it does.
+List the suffixes and mailboxes an alias can use.
 
-Aliases are the exception: an alias address belongs to the account Proton gave it to, so it cannot be recreated elsewhere. Each one is named and skipped, and everything else still lands.
+A suffix is the domain an address is made on, and what --suffix takes. Proton puts a word of its own in front of it and only settles on one when the alias is created.
 
-## Sharing a vault
-
-```bash
-proton pass vaults share add Work jane@proton.me
-proton pass vaults share add Work jane@proton.me --access editor
-proton pass vaults share list Work
-proton pass vaults share remove Work jane@proton.me
+```
+proton pass aliases options
 ```
 
-A vault is opened by its share key, and every item in it is sealed under that key. So sharing means handing over the key itself - **every rotation of it**, because an item made before the last rotation is still sealed under an older one, and somebody given only the newest would see a vault half of which will not open. It goes out encrypted to their key and signed with yours.
-
-That is why it only works with another Proton account: an address Proton holds no keys for has nothing to encrypt to. `--access` is `viewer`, `editor` or `manager`.
-
-### A vault somebody gave you
-
 ```bash
-proton pass invitations list
-proton pass invitations accept Work
-proton pass invitations decline Work
+proton pass aliases options
 ```
 
-The vault's name and how many items it holds are readable before you take it - the invitation carries the key that opens that much, encrypted to you. What is *in* the vault is not, until you accept.
+## `breaches`
 
-Accepting moves the keys onto your own key, which is what makes the vault open like any other of yours afterwards.
+Addresses that have appeared in a data breach.
 
-## Secure links
+Holds `get` and `list`.
 
-```bash
-proton pass links create github.com --expires 7d
-proton pass links create github.com --expires 24h --views 1
-proton pass links list
-proton pass links revoke 5bH2mQxK
+### `breaches get`
+
+Show the breaches one address has appeared in.
+
+```
+proton pass breaches get REF
 ```
 
-A link that shows one item to somebody with no Proton account. The item stays encrypted: a key made for the link is what opens it, and **that key travels in the URL after the `#`**, which a browser never sends to the server. So the URL is the secret - anyone who has the whole thing can read the item until the link expires or is revoked.
-
-`--expires` is required. A link nobody remembered to revoke is how one of these goes wrong, and there is no sensible default for how long a secret should outlive the reason it was shared. `--views` stops it after a number of openings.
-
-`create` writes the URL to stdout and the warning to stderr, so `LINK=$(proton pass links create … --expires 7d)` captures the link and nothing else.
-
-`list` shows the whole URL, key and all: Proton stores that key sealed under the item's own, so a link you mislaid is read back rather than revoked and made again.
-
-## Breaches
-
 ```bash
-proton pass breaches list
 proton pass breaches get jane@proton.me
 ```
 
-Which of your addresses have turned up in somebody else's data breach - Proton calls it Pass Monitor. `list` puts the worst first, because the reason to run it is to find what to deal with. `get` names the breaches one address appeared in, when each happened, what it exposed, and the last few characters of the password if one leaked in the clear - which is what tells you which password to change.
+### `breaches list`
 
-Nothing here writes: it reports what somebody else already leaked.
+List the addresses Proton watches, and how many breaches each is in.
 
-## Two-factor codes
+Worst first, because the reason to run this is to find what to deal with. `breaches get` on one of them says which breaches, and what they exposed.
 
-```bash
-proton pass items totp github.com
-proton pass items totp github.com --output json    # then read .code
+```
+proton pass breaches list
 ```
 
-Pass stores the **secret**, not the code, so every client works the code out for itself. `items get` prints the secret because that is what is stored; this prints what it currently stands for.
+```bash
+proton pass breaches list
+```
 
-How long the code has left is reported beside it, because a code about to expire is one worth waiting out. A second factor kept in a custom field is found too.
+## `export`
 
-## Making a password
+Write every vault out as a Proton Pass archive, or to stdout with --output -.
+
+The file is the one Proton Pass itself writes, so it can be read back by the app as well as by this tool. Give a passphrase and the contents are encrypted to it; without one the archive holds every password in the clear.
+
+```
+proton pass export
+```
+
+```bash
+proton pass export --output pass-backup.zip --passphrase-file ~/.backup-passphrase
+proton pass export --output pass-backup.zip
+```
+
+| Flag | Description |
+| --- | --- |
+| `--force` | Overwrite a file that already exists |
+| `--output string` | Write to this path, or - for stdout |
+| `--output-dir string` | Write into this directory, keeping each item's own name |
+| `--passphrase-file string` | Read the passphrase that locks the file from a file |
+| `--passphrase-stdin` | Read the passphrase that locks the file from stdin |
+
+## `generate`
+
+Make a password, without storing it anywhere.
+
+It reaches no account and needs no session. The alphabet is Proton's own, which leaves out i, o, l and their capitals - the characters people misread - unless letters are all the password has.
+
+Every kind asked for is guaranteed to appear, so a password that has to contain a digit does.
+
+```
+proton pass generate
+```
 
 ```bash
 proton pass generate
@@ -295,28 +236,725 @@ proton pass generate --length 32
 proton pass generate --no-symbols --length 24
 ```
 
-This reaches no account and needs no session: a password is made on this machine and may never leave it.
+| Flag | Description |
+| --- | --- |
+| `--length int` | How many characters (default `20`) |
+| `--no-digits` | Leave the digits out |
+| `--no-symbols` | Leave the symbols out |
+| `--no-uppercase` | Leave the capitals out |
 
-The alphabet is Proton's own, which leaves out `i`, `o`, `l` and their capitals - the characters people misread - unless letters are all the password has, since narrowing a 20-character password's alphabet for no reason would only weaken it.
+## `import`
 
-Every kind asked for is **guaranteed** to appear, so a password that has to contain a digit does. A length too short to hold one of each is refused rather than silently dropping a kind.
+Read a Proton Pass archive back in, or one on stdin with -.
 
-## History
+A vault in the file lands in the vault of that name, and one that is not there yet is made. Items are added rather than matched: nothing in a file says which existing item it was, so reading the same file twice puts the items in twice.
+
+```
+proton pass import PATH
+```
+
+```bash
+proton pass import pass-backup.zip --passphrase-file ~/.backup-passphrase
+proton pass import --dry-run pass-backup.zip
+```
+
+| Flag | Description |
+| --- | --- |
+| `--passphrase-file string` | Read the passphrase that locks the file from a file |
+| `--passphrase-stdin` | Read the passphrase that locks the file from stdin |
+
+## `invitations`
+
+Vaults other people have offered you.
+
+Holds `accept`, `decline` and `list`.
+
+### `invitations accept`
+
+Take a vault somebody offered you.
+
+The keys arrive encrypted to the address the offer was sent to and are moved onto your own key, which is what makes the vault open like any other of yours afterwards.
+
+```
+proton pass invitations accept REF...
+```
+
+```bash
+proton pass invitations accept Work
+```
+
+### `invitations decline`
+
+Turn down a vault somebody offered you.
+
+```
+proton pass invitations decline REF...
+```
+
+```bash
+proton pass invitations decline Work
+```
+
+### `invitations list`
+
+List vaults other people have offered you.
+
+The vault's name and how much is in it are readable before you take it: the invitation carries the key that opens them, encrypted to you. What is in the vault is not, until you accept.
+
+```
+proton pass invitations list
+```
+
+```bash
+proton pass invitations list
+```
+
+## `items`
+
+Logins, notes, cards and the rest.
+
+Holds `create`, `delete`, `get`, `list`, `pin`, `revisions`, `totp`, `trash`, `unpin` and `update`.
+
+### `items create`
+
+Create an item.
+
+```
+proton pass items create
+```
+
+```bash
+proton pass items create --name GitHub --username roman --password hunter2 --url github.com
+proton pass items create --type note --name 'Door codes' --note 'Front: 1234'
+proton pass items create --type credit-card --name 'Travel card' --holder 'Roman' --number 4111111111111111 --expiry 2030-04
+proton pass items create --type custom --name Router --field 'Network/SSID=home' --hidden 'Network/Key=hunter2'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--address string` | Set the address (identity) |
+| `--birthdate string` | Set the birthdate (identity) |
+| `--city string` | Set the city (identity) |
+| `--company string` | Set the company (identity) |
+| `--country string` | Set the country (identity) |
+| `--county string` | Set the county (identity) |
+| `--cvv string` | Set the card's CVV (credit-card) |
+| `--email string` | Set the email address (login) |
+| `--expiry string` | Set the card expiry, YYYY-MM (credit-card) |
+| `--facebook string` | Set the facebook (identity) |
+| `--field stringArray` | Set a custom field, as NAME=VALUE or SECTION/NAME=VALUE (repeatable) |
+| `--first-name string` | Set the first name (identity) |
+| `--floor string` | Set the floor (identity) |
+| `--full-name string` | Set the full name (identity) |
+| `--gender string` | Set the gender (identity) |
+| `--hidden stringArray` | Set a hidden custom field, as NAME=VALUE or SECTION/NAME=VALUE (repeatable) |
+| `--holder string` | Set the cardholder's name (credit-card) |
+| `--instagram string` | Set the instagram (identity) |
+| `--job-title string` | Set the job title (identity) |
+| `--last-name string` | Set the last name (identity) |
+| `--license-number string` | Set the license number (identity) |
+| `--linkedin string` | Set the linkedin (identity) |
+| `--middle-name string` | Set the middle name (identity) |
+| `--name string` | Set the item's name |
+| `--note string` | Set the note |
+| `--number string` | Set the card number (credit-card) |
+| `--organization string` | Set the organization (identity) |
+| `--passport-number string` | Set the passport number (identity) |
+| `--password string` | Set the password (login, wifi) |
+| `--personal-website string` | Set the personal website (identity) |
+| `--phone string` | Set the phone (identity) |
+| `--pin string` | Set the card's PIN (credit-card) |
+| `--postal-code string` | Set the postal code (identity) |
+| `--private-key string` | Set the private key (ssh-key) |
+| `--public-key string` | Set the public key (ssh-key) |
+| `--reddit string` | Set the reddit (identity) |
+| `--second-phone string` | Set the second phone (identity) |
+| `--security string` | Wi-Fi security (wifi): WPA, WPA2, WPA3, WEP |
+| `--social-security-number string` | Set the social security number (identity) |
+| `--ssid string` | Set the network name (wifi) |
+| `--state string` | Set the state (identity) |
+| `--totp-field stringArray` | Set a custom field holding a two-factor secret, as NAME=URI (repeatable) |
+| `--totp-uri string` | Set the TOTP URI or secret (login) |
+| `--type string` | What kind of item: login, note, credit-card, wifi, ssh-key, identity, alias, custom (default `login`) |
+| `--url string` | Set the URL (login) |
+| `--username string` | Set the username (login) |
+| `--vault string` | Which vault, by name or ID (default: your first) |
+| `--website string` | Set the website (identity) |
+| `--work-email string` | Set the work email (identity) |
+| `--work-phone string` | Set the work phone (identity) |
+| `--x-handle string` | Set the x handle (identity) |
+| `--yahoo string` | Set the yahoo (identity) |
+
+### `items delete`
+
+Delete items permanently.
+
+```
+proton pass items delete [REF...]
+```
+
+```bash
+proton pass items delete GitHub
+proton pass items delete --vault Work --all --yes
+```
+
+| Flag | Description |
+| --- | --- |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--newer-than string` | Match items newer than DURATION |
+| `--older-than string` | Match items older than DURATION (e.g. 30d, 2w, 1h) |
+| `--type string` | Match only this kind of item: login, note, credit-card, wifi, ssh-key, identity, alias, custom |
+| `--vault string` | Match only this vault, by name or ID |
+
+### `items get`
+
+Show one item, decrypted.
+
+Passwords, TOTP secrets and private keys are printed in full: this is the command for reading a secret, so it does not hide one.
+
+```
+proton pass items get REF
+```
+
+```bash
+proton pass items get github.com
+proton pass items get GitHub --output json
+```
+
+### `items list`
+
+List items across your vaults.
+
+The filters are the same ones trash and delete take, so a selection can be worked out here before it is handed to a verb that acts on it.
+
+```
+proton pass items list
+```
+
+```bash
+proton pass items list
+proton pass items list --vault Work
+proton pass items list --type login
+```
+
+| Flag | Description |
+| --- | --- |
+| `--desc` | Reverse the order |
+| `--newer-than string` | Match items newer than DURATION |
+| `--older-than string` | Match items older than DURATION (e.g. 30d, 2w, 1h) |
+| `--page int` | Which page of results, counting from zero |
+| `--page-size int` | How many items per page (default `50`) |
+| `--sort string` | Order by: name, type, modified, created (default `name`) |
+| `--type string` | Match only this kind of item: login, note, credit-card, wifi, ssh-key, identity, alias, custom |
+| `--vault string` | Match only this vault, by name or ID |
+
+### `items pin`
+
+Keep items at the top of the list.
+
+```
+proton pass items pin REF...
+```
+
+```bash
+proton pass items pin github.com
+```
+
+### `items revisions`
+
+Earlier versions of an item.
+
+Holds `list`.
+
+### `items revisions list`
+
+Show what an item used to be.
+
+Pass keeps every edit, so a password changed by mistake can be read back. Newest first. Use --output json for the full contents of each revision.
+
+```
+proton pass items revisions list REF
+```
 
 ```bash
 proton pass items revisions list github.com
 proton pass items revisions list github.com --output json
 ```
 
-Pass keeps every edit, so a password changed by mistake can be read back. Newest first; `--output json` carries the full contents of each revision.
+### `items totp`
 
-A revision written under a key this account no longer holds is still listed, by its number - knowing it existed is worth more than hiding it.
+Print the current two-factor code for an item.
 
-## Pinning
+How long the code has left is reported beside it, because a code about to expire is one worth waiting out.
+
+For a script: --output json, then read .code.
+
+```
+proton pass items totp REF
+```
 
 ```bash
-proton pass items pin github.com
+proton pass items totp github.com
+proton pass items totp github.com --output json
+```
+
+### `items trash`
+
+Move items to the trash.
+
+```
+proton pass items trash [REF...]
+```
+
+```bash
+proton pass items trash GitHub
+proton pass items trash --vault Work --older-than 1y
+```
+
+| Flag | Description |
+| --- | --- |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--newer-than string` | Match items newer than DURATION |
+| `--older-than string` | Match items older than DURATION (e.g. 30d, 2w, 1h) |
+| `--type string` | Match only this kind of item: login, note, credit-card, wifi, ssh-key, identity, alias, custom |
+| `--vault string` | Match only this vault, by name or ID |
+
+### `items unpin`
+
+Stop keeping items at the top.
+
+```
+proton pass items unpin REF...
+```
+
+```bash
 proton pass items unpin github.com
 ```
 
-Pinning keeps an item at the top of the list. It carries no content, so nothing is encrypted or re-encrypted.
+### `items update`
+
+Change an item's fields.
+
+```
+proton pass items update REF
+```
+
+```bash
+proton pass items update GitHub --password hunter3
+proton pass items update GitHub --username roman-16 --url github.com
+proton pass items update Router --hidden 'Network/Key=hunter3'
+proton pass items update GitHub --totp-field 'Backup=otpauth://totp/GitHub?secret=JBSWY3DPEHPK3PXP'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--address string` | Replace the address (identity) |
+| `--birthdate string` | Replace the birthdate (identity) |
+| `--city string` | Replace the city (identity) |
+| `--company string` | Replace the company (identity) |
+| `--country string` | Replace the country (identity) |
+| `--county string` | Replace the county (identity) |
+| `--cvv string` | Replace the card's CVV (credit-card) |
+| `--display-name string` | Replace the name recipients see on mail from it (alias) |
+| `--email string` | Replace the email address (login) |
+| `--expiry string` | Replace the card expiry, YYYY-MM (credit-card) |
+| `--facebook string` | Replace the facebook (identity) |
+| `--field stringArray` | Replace a custom field, as NAME=VALUE or SECTION/NAME=VALUE (repeatable) |
+| `--first-name string` | Replace the first name (identity) |
+| `--floor string` | Replace the floor (identity) |
+| `--full-name string` | Replace the full name (identity) |
+| `--gender string` | Replace the gender (identity) |
+| `--hidden stringArray` | Replace a hidden custom field, as NAME=VALUE or SECTION/NAME=VALUE (repeatable) |
+| `--holder string` | Replace the cardholder's name (credit-card) |
+| `--instagram string` | Replace the instagram (identity) |
+| `--job-title string` | Replace the job title (identity) |
+| `--last-name string` | Replace the last name (identity) |
+| `--license-number string` | Replace the license number (identity) |
+| `--linkedin string` | Replace the linkedin (identity) |
+| `--mailbox stringArray` | Replace where mail to it arrives (alias, repeatable) |
+| `--middle-name string` | Replace the middle name (identity) |
+| `--name string` | Replace the item's name |
+| `--note string` | Replace the note |
+| `--number string` | Replace the card number (credit-card) |
+| `--organization string` | Replace the organization (identity) |
+| `--passport-number string` | Replace the passport number (identity) |
+| `--password string` | Replace the password (login, wifi) |
+| `--personal-website string` | Replace the personal website (identity) |
+| `--phone string` | Replace the phone (identity) |
+| `--pin string` | Replace the card's PIN (credit-card) |
+| `--postal-code string` | Replace the postal code (identity) |
+| `--private-key string` | Replace the private key (ssh-key) |
+| `--public-key string` | Replace the public key (ssh-key) |
+| `--reddit string` | Replace the reddit (identity) |
+| `--second-phone string` | Replace the second phone (identity) |
+| `--security string` | Wi-Fi security (wifi): WPA, WPA2, WPA3, WEP |
+| `--social-security-number string` | Replace the social security number (identity) |
+| `--ssid string` | Replace the network name (wifi) |
+| `--state string` | Replace the state (identity) |
+| `--totp-field stringArray` | Replace a custom field holding a two-factor secret, as NAME=URI (repeatable) |
+| `--totp-uri string` | Replace the TOTP URI or secret (login) |
+| `--url string` | Replace the URL (login) |
+| `--username string` | Replace the username (login) |
+| `--website string` | Replace the website (identity) |
+| `--work-email string` | Replace the work email (identity) |
+| `--work-phone string` | Replace the work phone (identity) |
+| `--x-handle string` | Replace the x handle (identity) |
+| `--yahoo string` | Replace the yahoo (identity) |
+
+## `links`
+
+Links that show an item to somebody without an account.
+
+Holds `create`, `list` and `revoke`.
+
+### `links create`
+
+Make a link that shows one item to somebody with no Proton account.
+
+The key that opens it travels in the URL after the '#', which a browser never sends to Proton. So the URL is the secret: anyone holding the whole of it can read the item until the link expires or is revoked.
+
+--expires is required.
+
+```
+proton pass links create REF
+```
+
+```bash
+proton pass links create github.com --expires 7d
+proton pass links create github.com --expires 24h --views 1
+```
+
+| Flag | Description |
+| --- | --- |
+| `--expires string` | How long the link lasts (e.g. 7d, 24h) |
+| `--views int` | Stop working after this many openings |
+
+### `links list`
+
+List the links you have made.
+
+The whole URL is shown, key and all: Proton stores that key sealed under the item's own, so a link you mislaid can be read back here rather than having to be revoked and made again.
+
+```
+proton pass links list
+```
+
+```bash
+proton pass links list
+```
+
+### `links revoke`
+
+Stop a link working.
+
+The item is untouched; only the link is withdrawn. Anyone who already read it has already read it.
+
+```
+proton pass links revoke REF...
+```
+
+```bash
+proton pass links revoke 5bH2mQxK
+```
+
+## `settings`
+
+Pass settings.
+
+Holds `domains` and `mailboxes`.
+
+### `settings domains`
+
+The domains an alias can be made on.
+
+Holds `list`.
+
+### `settings domains list`
+
+List the domains an alias can be made on.
+
+These are the part after the @ that `proton pass aliases create --suffix` chooses between.
+
+```
+proton pass settings domains list
+```
+
+```bash
+proton pass settings domains list
+```
+
+### `settings mailboxes`
+
+The addresses your aliases forward to.
+
+Holds `create`, `delete`, `list`, `resend`, `update` and `verify`.
+
+### `settings mailboxes create`
+
+Add an address for aliases to forward to.
+
+Proton emails the address a code, and it receives nothing until the code is handed back with `mailboxes verify`.
+
+```
+proton pass settings mailboxes create EMAIL
+```
+
+```bash
+proton pass settings mailboxes create me@example.com
+```
+
+### `settings mailboxes delete`
+
+Remove an address aliases forward to.
+
+Aliases arriving in it have to go somewhere: --transfer-to names the mailbox they move to. Without it they stop receiving, which is why it is asked for rather than assumed.
+
+```
+proton pass settings mailboxes delete REF
+```
+
+```bash
+proton pass settings mailboxes delete me@example.com --transfer-to other@example.com
+```
+
+| Flag | Description |
+| --- | --- |
+| `--transfer-to string` | Move the aliases arriving here to this mailbox |
+
+### `settings mailboxes list`
+
+List the addresses your aliases forward to.
+
+An alias is a route rather than a mailbox of its own: mail sent to it arrives in one of these. `proton pass items update REF --mailbox` is what points an alias at one.
+
+```
+proton pass settings mailboxes list
+```
+
+```bash
+proton pass settings mailboxes list
+```
+
+### `settings mailboxes resend`
+
+Send the confirmation code again.
+
+```
+proton pass settings mailboxes resend REF
+```
+
+```bash
+proton pass settings mailboxes resend me@example.com
+```
+
+### `settings mailboxes update`
+
+Change a mailbox.
+
+```
+proton pass settings mailboxes update REF
+```
+
+```bash
+proton pass settings mailboxes update me@example.com --default
+```
+
+| Flag | Description |
+| --- | --- |
+| `--default` | Make new aliases arrive here |
+
+### `settings mailboxes verify`
+
+Confirm an address with the code Proton emailed it.
+
+```
+proton pass settings mailboxes verify REF
+```
+
+```bash
+proton pass settings mailboxes verify me@example.com --code 123456
+```
+
+| Flag | Description |
+| --- | --- |
+| `--code string` | The code Proton emailed the address |
+
+## `trash`
+
+Items you have removed but not yet deleted.
+
+Holds `empty`, `list` and `restore`.
+
+### `trash empty`
+
+Delete everything in the trash, permanently.
+
+```
+proton pass trash empty
+```
+
+```bash
+proton pass trash empty
+```
+
+### `trash list`
+
+List what is in the trash.
+
+```
+proton pass trash list
+```
+
+```bash
+proton pass trash list
+```
+
+### `trash restore`
+
+Put items back where they came from.
+
+```
+proton pass trash restore [REF...]
+```
+
+```bash
+proton pass trash restore GitHub
+proton pass trash restore --all
+```
+
+| Flag | Description |
+| --- | --- |
+| `--all` | Act on everything in scope, rather than a subset |
+
+## `vaults`
+
+The vaults your items live in.
+
+Holds `create`, `delete`, `get`, `list`, `share` and `update`.
+
+### `vaults create`
+
+Create a vault.
+
+```
+proton pass vaults create
+```
+
+```bash
+proton pass vaults create --name Work
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name string` | Name for the new vault |
+
+### `vaults delete`
+
+Delete vaults, and everything in them.
+
+```
+proton pass vaults delete REF...
+```
+
+```bash
+proton pass vaults delete Work
+```
+
+### `vaults get`
+
+Show one vault in full.
+
+```
+proton pass vaults get REF
+```
+
+```bash
+proton pass vaults get Work
+```
+
+### `vaults list`
+
+List your vaults.
+
+```
+proton pass vaults list
+```
+
+```bash
+proton pass vaults list
+```
+
+### `vaults share`
+
+Who else can open a vault.
+
+Holds `add`, `list` and `remove`.
+
+### `vaults share add`
+
+Offer a vault to somebody.
+
+They are sent an invitation and see nothing until they take it. What is sent is the key that opens the vault, encrypted to their key and signed with yours - so it has to be another Proton account, because an address Proton holds no keys for has nothing to encrypt to.
+
+```
+proton pass vaults share add REF EMAIL
+```
+
+```bash
+proton pass vaults share add Work jane@proton.me
+proton pass vaults share add Work jane@proton.me --access editor
+```
+
+| Flag | Description |
+| --- | --- |
+| `--access string` | What they may do with it: viewer, editor, manager (default `viewer`) |
+
+### `vaults share list`
+
+List who has been offered a vault.
+
+```
+proton pass vaults share list REF
+```
+
+```bash
+proton pass vaults share list Work
+```
+
+### `vaults share remove`
+
+Withdraw an offer nobody has taken.
+
+```
+proton pass vaults share remove REF EMAIL
+```
+
+```bash
+proton pass vaults share remove Work jane@proton.me
+```
+
+### `vaults update`
+
+Rename a vault, or change how it looks.
+
+Pass shows its icons and colors as a grid with no names, so the numbers are what there is: --icon 7, --color 3. Anything not mentioned is left alone, including a description written in the Pass app.
+
+```
+proton pass vaults update REF
+```
+
+```bash
+proton pass vaults update Work --name Office
+proton pass vaults update Work --description 'Shared team logins' --icon 7 --color 3
+```
+
+| Flag | Description |
+| --- | --- |
+| `--color string` | Which of Pass's vault colors it takes: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 |
+| `--description string` | What the vault is for |
+| `--icon string` | Which of Pass's icons represents it: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30 |
+| `--name string` | New name |
+
+---
+
+Every command also takes the [flags that work everywhere](README.md#flags-that-work-on-every-command).

@@ -1,426 +1,1809 @@
-# Mail
+# proton mail
 
-Read, write, send, search, and organize mail. Bodies are decrypted locally and outgoing mail is encrypted and signed with your address key, exactly like the web client.
+Read, write and organize mail.
 
-`proton mail` is the mailbox. Everything you configure lives under [`mail settings`](#settings), one subcommand per page of Proton's own mail settings.
+Every command under `proton mail`, with the arguments and flags it takes. For these commands in use, see [the guide](../apps/mail.md).
 
-Anywhere a command takes `REF`, a subject or sender works as well as an ID. See [The language](../language.md).
+Holds `conversations`, `drafts`, `messages` and `settings`.
 
-## Messages
+## `conversations`
 
-### List
+Whole threads.
 
-```bash
-proton mail messages list
-proton mail messages list --folder archive
-proton mail messages list --unread
-proton mail messages list --page 1 --page-size 50
-proton mail messages list --folder scheduled     # queued scheduled sends
+Holds `attachments`, `delete`, `export`, `forward`, `get`, `label`, `list`, `mark`, `move`, `reply`, `snooze`, `star`, `trash`, `unlabel`, `unsnooze` and `unstar`.
+
+### `conversations attachments`
+
+Files attached anywhere in a thread.
+
+Holds `download` and `list`.
+
+### `conversations attachments download`
+
+Download and decrypt attachments from a thread.
+
+```
+proton mail conversations attachments download REF [ATTACHMENT_REF]
 ```
 
-Folders: `inbox`, `sent`, `drafts`, `trash`, `spam`, `archive`, `starred`, `scheduled`, `snoozed`, `all`, or any label ID.
-
-Proton's inbox tabs are folders too: `social`, `promotions`, `updates`, `newsletters`, `transactions`.
-
-### Watch
-
 ```bash
-proton mail messages watch
-proton mail messages watch --folder archive --from billing@example.com
-proton mail messages watch --output json | jq -c .
+proton mail conversations attachments download 'Quarterly numbers' --output-dir .
 ```
 
-Stays attached and prints a line the moment a message lands, until you stop it. It reports what happens while it is watching, so nothing that arrived beforehand comes up; a thread coming back from snooze counts as landing.
+| Flag | Description |
+| --- | --- |
+| `--force` | Overwrite a file that already exists |
+| `--include-inline` | Include inline attachments |
+| `--output string` | Write to this path, or - for stdout |
+| `--output-dir string` | Write into this directory, keeping each item's own name |
 
-Without `--folder` it covers the inbox plus every folder whose notifications are on, which `settings folders list` shows in its NOTIFY column. Each line carries the time, the message ID, who it is from, and the subject; `--output json` emits one object per line, ready for `jq`, and names the thread the message belongs to in `conversation_id`, so a consumer can act on the whole thread without looking it up. See [Streams](../output.md#streams), and [Desktop notifications](../scripting.md#desktop-notifications-mail-and-calendar-reminders) for turning lines into notifications.
+### `conversations attachments list`
 
-### Search
+List every attachment in a thread.
 
-Searching is `list` with a predicate, because it is one request to Proton either way. `list` opens on the inbox, so `--folder all` is what widens it to everything.
-
-```bash
-proton mail messages list --keyword invoice --folder all
-proton mail messages list --from billing@example.com --after 2026-01-01 --folder all
-proton mail messages list --subject "Q1 report" --folder archive
-proton mail messages list --to alice@proton.me --before 2026-04-01 --page-size 100
+```
+proton mail conversations attachments list REF
 ```
 
-`--from` and `--to` match addresses; use `--keyword` to match display names and body text too.
-
-The same flags narrow every organising verb, so a selection can be read before it is acted on:
-
 ```bash
-proton mail messages list --from newsletter@example.com --older-than 90d --folder all
-proton mail messages trash --from newsletter@example.com --older-than 90d
+proton mail conversations attachments list 'Quarterly numbers'
 ```
 
-### Read
+| Flag | Description |
+| --- | --- |
+| `--include-inline` | Include inline attachments |
 
-```bash
-proton mail messages get REF                       # headers, body, attachment list
-proton mail messages get --render html REF         # original HTML
-proton mail messages get --render raw REF          # untouched body
-proton mail messages get --body-only REF > body.txt
-proton mail messages get --strip-quotes REF        # drop quoted reply blocks
-proton mail messages get --include-inline REF      # list inline images too
+### `conversations delete`
+
+Delete threads permanently.
+
+```
+proton mail conversations delete [REF...]
 ```
 
-Text output includes a `Sig:` line with the verdict of the signature check on the sender's key.
-
-### Send
-
 ```bash
-proton mail messages send --to alice@proton.me --subject Hi --body "Hello there"
-proton mail messages send --to "Alice <alice@proton.me>" --cc b@example.com --bcc c@example.com --subject Hi --body Hello
-proton mail messages send --to alice@proton.me --subject Hi --body "<b>Hi</b>" --html
-proton mail messages send --to alice@proton.me --subject Report --body "See attached." --attach ./report.pdf --attach ./annex.xlsx
-proton mail messages send --to alice@proton.me --subject Hi --body "<img src=cid:logo.png>" --html --attach-inline ./logo.png
-echo "Deployed." | proton mail messages send --to me@proton.me --subject Deploy --body -
+proton mail conversations delete 5bH2mQxK
 ```
 
-On an account with several addresses, `--from` chooses which one it leaves from:
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
 
-```bash
-proton mail messages send --from work@example.com --to alice@proton.me --subject Hi --body Hello
-proton mail messages send --from me+shop@proton.me ...     # plus aliases work too
+### `conversations export`
+
+Write a whole thread out as .eml files or one mbox.
+
+```
+proton mail conversations export REF
 ```
 
-Scheduling, expiry, and password-protected mail for recipients outside Proton:
-
 ```bash
-proton mail messages send --to alice@proton.me --subject Standup --body Hi --send-at 2026-05-01T09:00                 # local time; confirms the resolved time
-proton mail messages send --to alice@proton.me --subject Secret --body Hi --expires 7d
-proton mail messages send --to bob@gmail.com --subject Secret --body "..." --eo-password hunter2 --eo-password-hint "our usual"
+proton mail conversations export 'Quarterly numbers' --output-dir ./backup
 ```
 
-`send` prints the new message ID on stdout, so `ID=$(proton mail messages send ...)` works.
+| Flag | Description |
+| --- | --- |
+| `--force` | Overwrite a file that already exists |
+| `--format string` | How to lay the thread down: eml, mbox (default `mbox`) |
+| `--no-attachments` | Skip attachments |
+| `--output string` | Write to this path, or - for stdout |
+| `--output-dir string` | Write into this directory, keeping each item's own name |
 
-### Reply and forward
+### `conversations forward`
 
-```bash
-proton mail messages reply REF --body "Thanks, paid today."
-proton mail messages reply REF --everyone --body "Looping in the team."
-proton mail messages forward REF --to alice@proton.me --body "FYI"
-proton mail conversations reply REF --body "Works for me."   # newest message in a thread
+Forward the newest message in a thread.
+
+```
+proton mail conversations forward REF
 ```
 
-The original is quoted below your text, the subject gains `Re:` or `Fw:` (never twice), and the thread stays a thread. A reply leaves from the address the original arrived on; a forward carries the original's attachments without re-uploading them.
-
 ```bash
-proton mail messages reply REF --body Hi --no-quote          # your text only
-proton mail messages forward REF --to a@b.c --no-attachments # leave them behind
-proton mail messages reply REF --body Hi --draft             # stop before sending
+proton mail conversations forward 'Quarterly numbers' --to jane@example.com
 ```
 
-`--draft` prints the new draft's ID so you can pick it up with `mail drafts update`, the same as clicking Reply in the web client and leaving the composer open. Reply and forward also take `--to/--cc/--bcc`, `--attach`, `--attach-inline`, `--html`, `--from`, `--no-signature`, `--send-at`, `--expires` and the `--eo-password` pair.
+| Flag | Description |
+| --- | --- |
+| `--attach stringArray` | File to attach (repeatable) |
+| `--attach-inline stringArray` | Image to embed in the HTML body by Content-ID (repeatable; needs --html) |
+| `--bcc stringArray` | Blind-carbon-copy recipient (repeatable) |
+| `--body string` | Your text, placed above the quoted original (- reads stdin) |
+| `--cc stringArray` | Carbon-copy recipient (repeatable) |
+| `--draft` | Save as a draft instead of sending |
+| `--eo-password string` | Password-protect the message for recipients outside Proton (expires after 28 days) |
+| `--eo-password-hint string` | Hint shown to password-protected recipients |
+| `--expires string` | Self-destruct after DURATION (e.g. 7d, 24h) |
+| `--from string` | Address to send from, by email or ID (default: your primary) |
+| `--html` | Compose in HTML (default: match the original) |
+| `--no-attachments` | Leave the original's attachments behind |
+| `--no-quote` | Do not quote the original message |
+| `--no-signature` | Leave out this address's signature and Proton's footer |
+| `--send-at string` | Schedule delivery (RFC 3339, or YYYY-MM-DDTHH:MM in the system timezone) |
+| `--to stringArray` | Recipient (repeatable; accepts "Name <addr>") |
 
-### Export
+### `conversations get`
 
-```bash
-proton mail messages export REF --output invoice.eml
-proton mail messages export REF --output -                  # to stdout
-proton mail messages export --folder archive --older-than 1y --output-dir ./backup
-proton mail messages export --folder inbox --format mbox --output inbox.mbox
-proton mail conversations export REF --output thread.mbox
+Show a whole thread, decrypted.
+
+```
+proton mail conversations get REF
 ```
 
-Standalone RFC 822 documents you can open in any mail client, grep, or hand to other tools. Export takes the same filters as `trash` and `move`, so archiving a whole folder is one command. `--format eml` writes one file per message named `<date> <subject>.eml`; `--format mbox` concatenates everything into one file or stream. `--no-attachments` skips attachment downloads, which is much faster for a large archive.
-
-**Exported files are not encrypted**, and their original DKIM signatures no longer verify. The web client's export behaves the same way.
-
-### Import
-
 ```bash
-proton mail messages send --eml ./message.eml
-proton mail drafts create --eml ./message.eml
-proton mail messages send --eml ./message.eml --to someone-else@proton.me
+proton mail conversations get 'Quarterly numbers'
+proton mail conversations get 5bH2mQxK --summary
 ```
 
-`--eml` reads an RFC 822 file - recipients, subject, body, and attachments - and any flag you also pass overrides what the file says. Because the file is already a finished message, no signature is appended to it.
+| Flag | Description |
+| --- | --- |
+| `--body-only` | Emit only the bodies, with no headers or dividers |
+| `--include-inline` | List inline attachments too |
+| `--render string` | Which representation of the body to print: text, html, raw (default `text`) |
+| `--strip-quotes` | Drop quoted reply blocks from each body |
+| `--summary` | One line per message instead of the full thread |
 
-There is no way to place an old message into your archive: Proton exposes no endpoint that ingests one, for any client. Migrating a mailbox from another provider is Easy Switch, which is [not covered](../limitations.md).
+### `conversations label`
 
-### Unschedule
+Attach a label to threads.
 
-```bash
-proton mail messages list --folder scheduled
-proton mail messages unschedule REF     # back to Drafts
-proton mail messages unschedule --all
+```
+proton mail conversations label [REF...]
 ```
 
-### Organize
-
 ```bash
-proton mail messages trash REF...
-proton mail messages delete REF...               # permanent
-proton mail messages move REF... --into archive  # it leaves where it was
-proton mail messages label REF... --label Work   # it stays where it is
-proton mail messages unlabel REF... --label Work
-proton mail messages mark read REF...
-proton mail messages mark unread REF...
-proton mail messages star REF...
-proton mail messages unstar REF...
+proton mail conversations label 'Quarterly numbers' --label Accounting
 ```
 
-Each of those also takes filters instead of references, and acts on everything that matches:
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--label string` | The label to attach or detach, by name or ID |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
 
-```bash
-proton mail messages trash --unread --older-than 30d
-proton mail messages move --into archive --from newsletter@example.com --older-than 7d
-proton mail messages delete --folder spam --all
-proton mail messages mark read --folder inbox --all
+### `conversations list`
+
+List threads in a folder.
+
+The filters are the ones every organising verb takes, so a selection can be read here and then handed to one of them. Text predicates go through Proton's index, which lags a change by a few seconds.
+
+It looks in the inbox unless told otherwise; --folder all searches everything.
+
+```
+proton mail conversations list
 ```
 
-Filters: `--folder`, `--from`, `--to`, `--subject`, `--keyword`, `--unread`, `--starred`, `--older-than`, `--newer-than`, `--limit` (default 150, Proton's per-page cap), `--all`. Add `--dry-run` to see the list first.
-
-## Drafts
-
-A draft is a message, so `mail messages get`, `move` and the rest already work on one. This tree holds what only makes sense before a message goes out.
-
 ```bash
-proton mail drafts create --to alice@proton.me --subject Report --body "Draft one."
-proton mail drafts list
-proton mail drafts update REF --body "Draft two."
-proton mail drafts update REF --subject "Q1 report" --to alice@proton.me --cc bob@proton.me
-proton mail drafts update REF --attach ./report.pdf --detach old-annex.xlsx
-proton mail drafts send REF
-proton mail drafts send REF --send-at 2026-05-01T09:00
-proton mail drafts delete REF
+proton mail conversations list
+proton mail conversations list --unread --folder inbox
+proton mail conversations list --from jane@example.com --folder all
 ```
 
-`edit` replaces only what you pass. `--to`, `--cc` and `--bcc` replace the whole list; `--attach` adds a file and `--detach` removes one by name or ID. `REF` resolves within Drafts only, so editing "Report" can never reach a message you already sent.
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: inbox) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--page int` | Which page of results, counting from zero |
+| `--page-size int` | How many threads per page (default `25`) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
 
-Sending a draft delivers it exactly as stored, including whatever signature it was created with.
+### `conversations mark`
 
-## Emptying, expiring, unsubscribing
+Set whether threads count as read.
 
-```bash
-proton mail messages empty --folder trash
-proton mail messages empty --folder spam
-proton mail messages expire 5bH2mQxK --in 7d
-proton mail messages expire --from newsletter@example.com --in 30d
-proton mail messages expire 5bH2mQxK --never
-proton mail messages unsubscribe 5bH2mQxK
+Holds `read` and `unread`.
+
+### `conversations mark read`
+
+Mark threads as read.
+
+```
+proton mail conversations mark read [REF...]
 ```
 
-`empty` is **not** `delete --all`. A filtered delete enumerates what it will touch and shows you; `empty` asks Proton to clear the folder without ever naming its contents. That is why it takes no filter and always asks.
+```bash
+proton mail conversations mark read 'Quarterly numbers'
+proton mail conversations mark read --folder inbox --all
+```
 
-`expire` makes messages delete themselves. Proton stores the moment rather than the duration, so a message already counting down reports *when*. `--never` stops it. Passing both `--in` and `--never` is refused before anything is sent.
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
 
-`unsubscribe` asks a mailing list to stop, using whatever the message offered - a `List-Unsubscribe` header, or the one-click form behind it. Proton does the asking, because Proton is the party the list already knows.
+### `conversations mark unread`
 
-## Snooze
+Mark threads as unread.
+
+```
+proton mail conversations mark unread [REF...]
+```
+
+```bash
+proton mail conversations mark unread 'Quarterly numbers'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `conversations move`
+
+Move threads to a folder.
+
+```
+proton mail conversations move [REF...]
+```
+
+```bash
+proton mail conversations move 'Quarterly numbers' --into archive
+proton mail conversations move --older-than 90d --folder inbox --into archive
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--into string` | Destination folder, by name or ID |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `conversations reply`
+
+Reply to the newest message in a thread.
+
+```
+proton mail conversations reply REF
+```
+
+```bash
+proton mail conversations reply 'Quarterly numbers' --body 'Looks right to me.'
+proton mail conversations reply 'Quarterly numbers' --everyone --body Agreed.
+```
+
+| Flag | Description |
+| --- | --- |
+| `--attach stringArray` | File to attach (repeatable) |
+| `--attach-inline stringArray` | Image to embed in the HTML body by Content-ID (repeatable; needs --html) |
+| `--bcc stringArray` | Blind-carbon-copy recipient (repeatable) |
+| `--body string` | Your text, placed above the quoted original (- reads stdin) |
+| `--cc stringArray` | Carbon-copy recipient (repeatable) |
+| `--draft` | Save as a draft instead of sending |
+| `--eo-password string` | Password-protect the message for recipients outside Proton (expires after 28 days) |
+| `--eo-password-hint string` | Hint shown to password-protected recipients |
+| `--everyone` | Reply to everyone who was on the message, not just the sender |
+| `--expires string` | Self-destruct after DURATION (e.g. 7d, 24h) |
+| `--from string` | Address to send from, by email or ID (default: your primary) |
+| `--html` | Compose in HTML (default: match the original) |
+| `--no-quote` | Do not quote the original message |
+| `--no-signature` | Leave out this address's signature and Proton's footer |
+| `--send-at string` | Schedule delivery (RFC 3339, or YYYY-MM-DDTHH:MM in the system timezone) |
+| `--to stringArray` | Recipient (repeatable; accepts "Name <addr>") |
+
+### `conversations snooze`
+
+Take threads out of the inbox until later.
+
+--until takes a duration from now, such as 3d, or a moment written out in full, such as 2026-04-17T09:00. The thread returns to the inbox then, unread.
+
+```
+proton mail conversations snooze [REF...]
+```
 
 ```bash
 proton mail conversations snooze 5bH2mQxK --until 3d
 proton mail conversations snooze --unread --until 2026-04-17T09:00
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+| `--until string` | When they come back (e.g. 3d, or 2026-04-17T09:00) |
+
+### `conversations star`
+
+Star threads.
+
+```
+proton mail conversations star [REF...]
+```
+
+```bash
+proton mail conversations star 'Quarterly numbers'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `conversations trash`
+
+Move threads to the trash.
+
+```
+proton mail conversations trash [REF...]
+```
+
+```bash
+proton mail conversations trash 'Quarterly numbers'
+proton mail conversations trash --from newsletter@example.com --older-than 90d
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `conversations unlabel`
+
+Detach a label from threads.
+
+```
+proton mail conversations unlabel [REF...]
+```
+
+```bash
+proton mail conversations unlabel 'Quarterly numbers' --label Accounting
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--label string` | The label to attach or detach, by name or ID |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `conversations unsnooze`
+
+Bring snoozed threads back to the inbox now.
+
+```
+proton mail conversations unsnooze [REF...]
+```
+
+```bash
 proton mail conversations unsnooze 5bH2mQxK
 ```
 
-`--until` takes a duration from now or a moment. Snooze is on **threads**, not messages, because that is what Proton snoozes: a conversation leaves the inbox as a whole and returns as a whole. A moment in the past is refused.
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
 
-## Conversations
+### `conversations unstar`
 
-Conversations are whole threads, with the same verbs as messages.
+Remove the star from threads.
+
+```
+proton mail conversations unstar [REF...]
+```
 
 ```bash
-proton mail conversations list --folder inbox --unread
-proton mail conversations list --keyword invoice --folder all
-proton mail conversations get REF            # every message, chronological
-proton mail conversations get --summary REF  # one line per message
-proton mail conversations get --strip-quotes REF
-proton mail conversations reply REF --body "Works for me."
-proton mail conversations export REF --output thread.mbox
-proton mail conversations trash REF...
-proton mail conversations move --into archive REF...
-proton mail conversations mark read REF...
-proton mail conversations star REF...
+proton mail conversations unstar 'Quarterly numbers'
 ```
 
-## Attachments
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+## `drafts`
+
+Messages not yet sent.
+
+Holds `create`, `delete`, `list`, `send` and `update`.
+
+### `drafts create`
+
+Save a draft without sending it.
+
+```
+proton mail drafts create
+```
 
 ```bash
-proton mail messages attachments list MESSAGE_ID
-proton mail messages attachments list --include-inline MESSAGE_ID
-proton mail messages attachments download MESSAGE_ID ATTACHMENT_ID --output ./file.pdf
-proton mail messages attachments download MESSAGE_ID --output-dir ./attachments/
-proton mail messages attachments download MESSAGE_ID ATTACHMENT_ID --output - | less
+proton mail drafts create --to team@example.com --subject Standup --body 'Notes to follow.'
+proton mail drafts create --to jane@example.com --subject Report --attach ./report.pdf
 ```
 
-Existing files are never overwritten silently: names collide into `file (2).pdf`, or pass `--force`.
+| Flag | Description |
+| --- | --- |
+| `--attach stringArray` | File to attach (repeatable) |
+| `--attach-inline stringArray` | Image to embed in the HTML body by Content-ID (repeatable; needs --html) |
+| `--bcc stringArray` | Blind-carbon-copy recipient (repeatable) |
+| `--body string` | Message body (- reads stdin) |
+| `--cc stringArray` | Carbon-copy recipient (repeatable) |
+| `--eml string` | Build the message from an RFC 822 file; other flags override what it says |
+| `--from string` | Address to send from, by email or ID (default: your primary) |
+| `--html` | Treat the body as HTML rather than plain text |
+| `--no-signature` | Leave out this address's signature and Proton's footer |
+| `--subject string` | Subject line |
+| `--to stringArray` | Recipient (repeatable; accepts "Name <addr>") |
 
-The same commands work across a whole thread:
+### `drafts delete`
+
+Delete drafts.
+
+```
+proton mail drafts delete REF...
+```
 
 ```bash
-proton mail conversations attachments list CONVERSATION_ID
-proton mail conversations attachments download CONVERSATION_ID --output-dir ./thread/
+proton mail drafts delete 5bH2mQxK
 ```
 
-## Settings
+### `drafts list`
 
-One subcommand per page of Proton's mail settings.
+List drafts.
+
+```
+proton mail drafts list
+```
 
 ```bash
-proton mail settings              # everything, at a glance
-proton mail settings set          # the writable keys, grouped by page
+proton mail drafts list
 ```
 
-### Preferences
+| Flag | Description |
+| --- | --- |
+| `--page int` | Which page of results, counting from zero |
+| `--page-size int` | How many drafts per page (default `25`) |
+
+### `drafts send`
+
+Send a draft as it stands.
+
+Its body already contains whatever signature it was created with, so nothing is appended.
+
+```
+proton mail drafts send REF
+```
 
 ```bash
-proton mail settings set view-mode conversations
-proton mail settings set page-size 100
-proton mail settings set draft-type text/html
-proton mail settings set hide-remote-images on
-proton mail settings set delay-send 10
-proton mail settings set pm-signature off
+proton mail drafts send 5bH2mQxK
+proton mail drafts send 5bH2mQxK --send-at 2026-04-16T09:00
 ```
 
-Every key has a fixed set of values, checked before anything is sent. Values can be given by name or by Proton's own number:
+| Flag | Description |
+| --- | --- |
+| `--eo-password string` | Password-protect the message for recipients outside Proton (expires after 28 days) |
+| `--eo-password-hint string` | Hint shown to password-protected recipients |
+| `--expires string` | Self-destruct after DURATION (e.g. 7d, 24h) |
+| `--send-at string` | Schedule delivery (RFC 3339, or YYYY-MM-DDTHH:MM in the system timezone) |
 
-```console
-$ proton mail settings set view-mode threads
-Error: view-mode accepts: conversations, messages
-$ proton mail settings set delay-send 999
-Error: delay-send accepts 0-20 (seconds)
+### `drafts update`
+
+Change a draft. Only what you pass is replaced; everything else is kept.
+
+--to, --cc and --bcc replace the whole list rather than adding to it. --attach adds files and --detach removes one by name or ID.
+
+```
+proton mail drafts update REF
 ```
 
-### Identity and addresses
+```bash
+proton mail drafts update 5bH2mQxK --body 'Notes attached.'
+proton mail drafts update 5bH2mQxK --detach report.pdf
+```
+
+| Flag | Description |
+| --- | --- |
+| `--attach stringArray` | File to attach (repeatable) |
+| `--attach-inline stringArray` | Image to embed in the HTML body by Content-ID (repeatable; needs --html) |
+| `--bcc stringArray` | Blind-carbon-copy recipient (repeatable) |
+| `--body string` | Message body (- reads stdin) |
+| `--cc stringArray` | Carbon-copy recipient (repeatable) |
+| `--detach stringArray` | Remove an attachment by name or ID (repeatable) |
+| `--from string` | Address to send from, by email or ID (default: your primary) |
+| `--html` | Switch the draft to text/html |
+| `--no-signature` | Leave out this address's signature and Proton's footer |
+| `--plain` | Switch the draft to text/plain |
+| `--subject string` | Subject line |
+| `--to stringArray` | Recipient (repeatable; accepts "Name <addr>") |
+
+## `messages`
+
+Individual messages.
+
+Holds `attachments`, `delete`, `empty`, `expire`, `export`, `forward`, `get`, `label`, `list`, `mark`, `move`, `reply`, `send`, `star`, `trash`, `unlabel`, `unschedule`, `unstar`, `unsubscribe` and `watch`.
+
+### `messages attachments`
+
+Files attached to a message.
+
+Holds `download` and `list`.
+
+### `messages attachments download`
+
+Download and decrypt attachments.
+
+Naming an attachment downloads that one; naming none downloads them all. Existing files are never overwritten silently: a collision becomes "file (2).pdf" unless --force says otherwise.
+
+```
+proton mail messages attachments download REF [ATTACHMENT_REF]
+```
+
+```bash
+proton mail messages attachments download 'Invoice #2291' --output-dir .
+proton mail messages attachments download 5bH2mQxK kQ81mDx4 --output invoice.pdf
+```
+
+| Flag | Description |
+| --- | --- |
+| `--force` | Overwrite a file that already exists |
+| `--include-inline` | Include inline attachments when downloading them all |
+| `--output string` | Write to this path, or - for stdout |
+| `--output-dir string` | Write into this directory, keeping each item's own name |
+
+### `messages attachments list`
+
+List a message's attachments.
+
+```
+proton mail messages attachments list REF
+```
+
+```bash
+proton mail messages attachments list 'Invoice #2291'
+proton mail messages attachments list 5bH2mQxK --include-inline
+```
+
+| Flag | Description |
+| --- | --- |
+| `--include-inline` | Include inline attachments, such as signature graphics |
+
+### `messages delete`
+
+Delete messages permanently.
+
+```
+proton mail messages delete [REF...]
+```
+
+```bash
+proton mail messages delete 5bH2mQxK
+proton mail messages delete --folder spam --all --yes
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages empty`
+
+Delete everything in a folder, permanently.
+
+Nothing is listed first: Proton clears the folder without naming what was in it, which is why this cannot be narrowed and why it always asks.
+
+```
+proton mail messages empty
+```
+
+```bash
+proton mail messages empty --folder trash
+proton mail messages empty --folder spam
+```
+
+| Flag | Description |
+| --- | --- |
+| `--folder string` | Folder or label to look in |
+
+### `messages expire`
+
+Make messages delete themselves after a while, or stop them.
+
+--in takes a duration and Proton stores the moment it lands on, so a message already counting down reports when rather than how long.
+
+```
+proton mail messages expire [REF...]
+```
+
+```bash
+proton mail messages expire 5bH2mQxK --in 7d
+proton mail messages expire --from newsletter@example.com --in 30d
+proton mail messages expire 5bH2mQxK --never
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--in string` | Delete them after DURATION (e.g. 7d, 24h) |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--never` | Stop them expiring |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--password-file string` | Read the account password from a file |
+| `--password-stdin` | Read the account password from stdin |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--totp string` | Two-factor code |
+| `--unread` | Match unread messages |
+
+### `messages export`
+
+Write messages out as standalone RFC 822 documents, readable by any mail client, grep, or anything else.
+
+eml writes one file per message; mbox concatenates everything into one stream. Skipping attachments with --no-attachments is much faster for a large archive.
+
+Exported files are not encrypted - that is what exporting means. The original DKIM signatures will not verify against the rebuilt body either, exactly as with the web client's own export.
+
+```
+proton mail messages export [REF...]
+```
+
+```bash
+proton mail messages export 'Invoice #2291' --output-dir ./backup
+proton mail messages export --folder archive --all --output-dir ./mail-backup
+proton mail messages export --folder archive --older-than 1y --format mbox --output archive.mbox
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--force` | Overwrite a file that already exists |
+| `--format string` | How to lay the messages down: eml, mbox (default `eml`) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--no-attachments` | Skip attachments, which is much faster |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--output string` | Write to this path, or - for stdout |
+| `--output-dir string` | Write into this directory, keeping each item's own name |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages forward`
+
+Forward a message.
+
+The original is quoted below your text with its own headers, the subject gains "Fw:", and its attachments come along without being re-uploaded.
+
+```
+proton mail messages forward REF
+```
+
+```bash
+proton mail messages forward 'Invoice #2291' --to jane@example.com
+proton mail messages forward 'Invoice #2291' --to jane@example.com --no-attachments
+```
+
+| Flag | Description |
+| --- | --- |
+| `--attach stringArray` | File to attach (repeatable) |
+| `--attach-inline stringArray` | Image to embed in the HTML body by Content-ID (repeatable; needs --html) |
+| `--bcc stringArray` | Blind-carbon-copy recipient (repeatable) |
+| `--body string` | Your text, placed above the quoted original (- reads stdin) |
+| `--cc stringArray` | Carbon-copy recipient (repeatable) |
+| `--draft` | Save as a draft instead of sending |
+| `--eo-password string` | Password-protect the message for recipients outside Proton (expires after 28 days) |
+| `--eo-password-hint string` | Hint shown to password-protected recipients |
+| `--expires string` | Self-destruct after DURATION (e.g. 7d, 24h) |
+| `--from string` | Address to send from, by email or ID (default: your primary) |
+| `--html` | Compose in HTML (default: match the original) |
+| `--no-attachments` | Leave the original's attachments behind |
+| `--no-quote` | Do not quote the original message |
+| `--no-signature` | Leave out this address's signature and Proton's footer |
+| `--send-at string` | Schedule delivery (RFC 3339, or YYYY-MM-DDTHH:MM in the system timezone) |
+| `--to stringArray` | Recipient (repeatable; accepts "Name <addr>") |
+
+### `messages get`
+
+Show one message, decrypted.
+
+```
+proton mail messages get REF
+```
+
+```bash
+proton mail messages get 'Invoice #2291'
+proton mail messages get 5bH2mQxK --render html
+proton mail messages get 5bH2mQxK --body-only --strip-quotes
+```
+
+| Flag | Description |
+| --- | --- |
+| `--body-only` | Emit only the body, with no headers or attachment list |
+| `--include-inline` | List inline attachments too, such as signature graphics |
+| `--render string` | Which representation of the body to print: text, html, raw (default `text`) |
+| `--strip-quotes` | Drop quoted reply blocks from the body |
+
+### `messages label`
+
+Attach a label to messages.
+
+```
+proton mail messages label [REF...]
+```
+
+```bash
+proton mail messages label 'Invoice #2291' --label Accounting
+proton mail messages label --from billing@example.com --label Accounting
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--label string` | The label to attach or detach, by name or ID |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages list`
+
+List messages in a folder.
+
+The filters are the ones every organising verb takes, so a selection can be read here and then handed to trash, move, label or export. Text predicates go through Proton's index, which lags a change by a few seconds.
+
+It looks in the inbox unless told otherwise; --folder all searches everything.
+
+```
+proton mail messages list
+```
+
+```bash
+proton mail messages list
+proton mail messages list --unread
+proton mail messages list --folder archive --page-size 50
+proton mail messages list --starred --output json
+proton mail messages list --from billing@example.com --folder all
+proton mail messages list --keyword invoice --after 2026-01-01 --folder all
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: inbox) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--page int` | Which page of results, counting from zero |
+| `--page-size int` | How many messages per page (default `25`) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages mark`
+
+Set whether messages count as read.
+
+Holds `read` and `unread`.
+
+### `messages mark read`
+
+Mark messages as read.
+
+```
+proton mail messages mark read [REF...]
+```
+
+```bash
+proton mail messages mark read 'Invoice #2291'
+proton mail messages mark read --folder inbox --all
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages mark unread`
+
+Mark messages as unread.
+
+```
+proton mail messages mark unread [REF...]
+```
+
+```bash
+proton mail messages mark unread 'Invoice #2291'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages move`
+
+Move messages to a folder.
+
+A folder is somewhere a message lives, so moving takes it out of wherever it was. To add a tag while leaving it in place, use `label` instead.
+
+```
+proton mail messages move [REF...]
+```
+
+```bash
+proton mail messages move 'Invoice #2291' --into archive
+proton mail messages move --from newsletter@example.com --older-than 90d --into archive
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--into string` | Destination folder, by name or ID |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages reply`
+
+Reply to a message.
+
+The original is quoted below your text, the subject gains "Re:", and the reply leaves from the address the original arrived on.
+
+--all includes everyone who was on the message. --draft stops before sending, so you can edit it with `mail drafts update`.
+
+```
+proton mail messages reply REF
+```
+
+```bash
+proton mail messages reply 'Invoice #2291' --body 'Thanks, paid today.'
+proton mail messages reply 'Invoice #2291' --everyone --body 'Noted.'
+proton mail messages reply 'Invoice #2291' --body 'Draft first.' --draft
+```
+
+| Flag | Description |
+| --- | --- |
+| `--attach stringArray` | File to attach (repeatable) |
+| `--attach-inline stringArray` | Image to embed in the HTML body by Content-ID (repeatable; needs --html) |
+| `--bcc stringArray` | Blind-carbon-copy recipient (repeatable) |
+| `--body string` | Your text, placed above the quoted original (- reads stdin) |
+| `--cc stringArray` | Carbon-copy recipient (repeatable) |
+| `--draft` | Save as a draft instead of sending |
+| `--eo-password string` | Password-protect the message for recipients outside Proton (expires after 28 days) |
+| `--eo-password-hint string` | Hint shown to password-protected recipients |
+| `--everyone` | Reply to everyone who was on the message, not just the sender |
+| `--expires string` | Self-destruct after DURATION (e.g. 7d, 24h) |
+| `--from string` | Address to send from, by email or ID (default: your primary) |
+| `--html` | Compose in HTML (default: match the original) |
+| `--no-quote` | Do not quote the original message |
+| `--no-signature` | Leave out this address's signature and Proton's footer |
+| `--send-at string` | Schedule delivery (RFC 3339, or YYYY-MM-DDTHH:MM in the system timezone) |
+| `--to stringArray` | Recipient (repeatable; accepts "Name <addr>") |
+
+### `messages send`
+
+Compose and send a message.
+
+```
+proton mail messages send
+```
+
+```bash
+proton mail messages send --to jane@example.com --subject Report --body 'See attached.' --attach ./report.pdf
+proton mail messages send --to team@example.com --subject Standup --body -
+proton mail messages send --to jane@example.com --subject Reminder --send-at 2026-04-16T09:00
+proton mail messages send --eml ./draft.eml
+```
+
+| Flag | Description |
+| --- | --- |
+| `--attach stringArray` | File to attach (repeatable) |
+| `--attach-inline stringArray` | Image to embed in the HTML body by Content-ID (repeatable; needs --html) |
+| `--bcc stringArray` | Blind-carbon-copy recipient (repeatable) |
+| `--body string` | Message body (- reads stdin) |
+| `--cc stringArray` | Carbon-copy recipient (repeatable) |
+| `--eml string` | Build the message from an RFC 822 file; other flags override what it says |
+| `--eo-password string` | Password-protect the message for recipients outside Proton (expires after 28 days) |
+| `--eo-password-hint string` | Hint shown to password-protected recipients |
+| `--expires string` | Self-destruct after DURATION (e.g. 7d, 24h) |
+| `--from string` | Address to send from, by email or ID (default: your primary) |
+| `--html` | Treat the body as HTML rather than plain text |
+| `--no-signature` | Leave out this address's signature and Proton's footer |
+| `--send-at string` | Schedule delivery (RFC 3339, or YYYY-MM-DDTHH:MM in the system timezone) |
+| `--subject string` | Subject line |
+| `--to stringArray` | Recipient (repeatable; accepts "Name <addr>") |
+
+### `messages star`
+
+Star messages.
+
+```
+proton mail messages star [REF...]
+```
+
+```bash
+proton mail messages star 'Invoice #2291'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages trash`
+
+Move messages to the trash.
+
+```
+proton mail messages trash [REF...]
+```
+
+```bash
+proton mail messages trash 'Invoice #2291'
+proton mail messages trash --unread --older-than 30d
+proton mail messages trash --from newsletter@example.com --older-than 90d --dry-run
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages unlabel`
+
+Detach a label from messages.
+
+```
+proton mail messages unlabel [REF...]
+```
+
+```bash
+proton mail messages unlabel 'Invoice #2291' --label Accounting
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--label string` | The label to attach or detach, by name or ID |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages unschedule`
+
+Cancel a scheduled send.
+
+The message leaves the queue and returns to Drafts, keeping its ID - the same thing the web client's "Edit and reschedule" does. To change the time, cancel it and send again with --send-at.
+
+```
+proton mail messages unschedule [REF...]
+```
+
+```bash
+proton mail messages unschedule 5bH2mQxK
+proton mail messages unschedule --all
+```
+
+| Flag | Description |
+| --- | --- |
+| `--all` | Act on everything in scope, rather than a subset |
+
+### `messages unstar`
+
+Remove the star from messages.
+
+```
+proton mail messages unstar [REF...]
+```
+
+```bash
+proton mail messages unstar 'Invoice #2291'
+```
+
+| Flag | Description |
+| --- | --- |
+| `--after string` | Match messages after this date (YYYY-MM-DD) |
+| `--all` | Act on everything in scope, rather than a subset |
+| `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--folder string` | Folder or label to look in (default: all) |
+| `--from string` | Match the sender's address |
+| `--keyword string` | Match text anywhere, including display names and bodies |
+| `--limit int` | Most messages to affect (Proton pages at 150) (default `150`) |
+| `--newer-than string` | Match messages newer than DURATION |
+| `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
+| `--starred` | Match starred messages |
+| `--subject string` | Match text in the subject |
+| `--to string` | Match a recipient's address |
+| `--unread` | Match unread messages |
+
+### `messages unsubscribe`
+
+Ask a mailing list to stop.
+
+Proton does the asking, using whatever the message offered - a List-Unsubscribe header, or the one-click form behind it - because Proton is the party the list already knows.
+
+```
+proton mail messages unsubscribe REF...
+```
+
+```bash
+proton mail messages unsubscribe 5bH2mQxK
+```
+
+### `messages watch`
+
+Print each message as it arrives, until you stop it.
+
+It reports what happens while it is watching, so nothing that arrived beforehand comes up. A thread returning from snooze counts as arriving.
+
+Without --folder it covers the inbox plus every folder whose notifications are on, which `settings folders list` shows under NOTIFY.
+
+```
+proton mail messages watch
+```
+
+```bash
+proton mail messages watch
+proton mail messages watch --folder all
+proton mail messages watch --from billing@example.com
+proton mail messages watch --output json
+```
+
+| Flag | Description |
+| --- | --- |
+| `--folder string` | Folder or label to look in (default: the ones that notify) |
+| `--from string` | Match the sender's address |
+| `--subject string` | Match text in the subject |
+
+## `settings`
+
+How Mail behaves.
+
+Holds `addresses`, `autoreply`, `filters`, `folders`, `get`, `labels`, `list`, `senders` and `set`.
+
+### `settings addresses`
+
+Your addresses, display names and signatures.
+
+Holds `get`, `list` and `update`.
+
+### `settings addresses get`
+
+Show one address, including its signature.
+
+```
+proton mail settings addresses get REF
+```
+
+```bash
+proton mail settings addresses get me@proton.me
+```
+
+### `settings addresses list`
+
+List the addresses on the account.
+
+```
+proton mail settings addresses list
+```
 
 ```bash
 proton mail settings addresses list
-proton mail settings addresses get me@proton.me
-proton mail settings addresses update me@proton.me --display-name "Roman L."
-proton mail settings addresses update me@proton.me --signature "Roman | Vienna"
-proton mail settings addresses update me@proton.me --signature - < signature.html --html
+```
+
+### `settings addresses update`
+
+Set the display name recipients see and the signature appended to mail sent from this address.
+
+Proton stores signatures as HTML. Plain text is escaped and its newlines become line breaks; --html passes markup through untouched.
+
+```
+proton mail settings addresses update REF
+```
+
+```bash
+proton mail settings addresses update me@proton.me --display-name 'Roman'
+proton mail settings addresses update me@proton.me --signature - --html
 proton mail settings addresses update me@proton.me --clear-signature
 ```
 
-**Your signature is applied to outgoing mail automatically**, as in the web client: the address's own signature, plus Proton's *"Sent with Proton Mail secure email."* footer when your account has it enabled. Free accounts have that footer forced on and cannot switch it off.
-
-Pass `--no-signature` on any sending command to leave both out, or turn the footer off account-wide with `proton mail settings set pm-signature off`. `--eml` and `mail drafts send` never append anything, since in both cases the body is already final.
-
-Proton stores signatures as HTML. Plain text is escaped and its newlines become line breaks; `--html` passes markup through untouched.
-
-### Folders and labels
-
-```bash
-proton mail settings labels list
-proton mail settings labels create --name Important --color "#8080FF"
-proton mail settings folders create --name Projects
-proton mail settings folders create --name Clients --parent PARENT_FOLDER_ID
-proton mail settings labels update LABEL_ID --name Renamed --color "#DB60D6"
-proton mail settings labels delete Important        # by name, or by label ID
-```
-
-Deleting a folder or label names it and asks first; the messages it held are not deleted. See [When it asks first](../language.md#when-it-asks-first).
-
-Colors have to be one of Proton's accent colors; an invalid value prints the whole palette, and is refused before anything is sent.
-
-Folders carry a NOTIFY switch - whether mail landing there is worth telling you about. `folders list` shows it per folder, `folders create --notify=false` and `folders update Receipts --notify` set it, and it decides what `messages watch` covers by default. Proton offers it on folders alone, so labels have neither the flag nor the column.
-
-A message lives in exactly one folder and carries any number of labels. `move --into` takes what `folders list` shows; `label --label` takes what `labels list` shows.
-
-### Filters
-
-Server-side filters, the same ones the web client creates.
-
-```bash
-proton mail settings filters list
-proton mail settings filters get "Archive invoices"       # what it matches and does
-proton mail settings filters create --name "Archive invoices" --if "subject contains invoice" --move-to Archive
-proton mail settings filters update "Archive invoices" --name "New name"
-proton mail settings filters disable "Archive invoices"   # by name, or by filter ID
-proton mail settings filters enable "Archive invoices"
-proton mail settings filters delete "Archive invoices"
-```
-
-Describe a filter with `--if` and Proton writes the [Sieve](https://en.wikipedia.org/wiki/Sieve_(mail_filtering_language)) - the same script the web client's builder produces, so a filter made here opens in it.
-
-A condition reads `FIELD [not] COMPARATOR VALUE`:
-
-| | |
+| Flag | Description |
 | --- | --- |
-| Field | `subject`, `sender`, `recipient`, `attachments` |
-| Comparator | `contains`, `is`, `starts`, `ends`, `matches` |
+| `--clear-signature` | Remove the signature |
+| `--display-name string` | Name recipients see next to the address |
+| `--html` | Treat the signature as HTML rather than escaping it |
+| `--signature string` | Signature appended to mail from this address (- reads stdin) |
 
-`is` wants the whole value, `matches` takes `*` and `?` as wildcards, and `not` before the comparator inverts the condition. An `attachments` condition takes no value - it asks whether there is one.
+### `settings autoreply`
 
-```bash
-proton mail settings filters create --name Receipts \
-  --if "sender contains billing@" --if "subject not contains draft" \
-  --label Receipts --mark-read
+The automatic reply and its schedule.
 
-proton mail settings filters create --name Loud --match any \
-  --if "subject starts [ALERT]" --if "attachments contains" --star
+Holds `disable`, `enable`, `get` and `set`.
+
+### `settings autoreply disable`
+
+Turn the auto-reply off, keeping its schedule.
+
 ```
-
-Every condition has to hold unless you pass `--match any`. The actions are `--move-to` (one folder: `archive`, `inbox`, `spam`, `trash`, or one of yours), `--label` (repeatable), `--mark-read` and `--star`; a filter needs at least one of them, and every filter skips mail Proton has already called spam.
-
-`update` takes the same flags, and rewrites the rule in place:
-
-```bash
-proton mail settings filters update Receipts --if "sender contains billing@" --label Receipts --mark-read
-```
-
-It replaces the whole rule rather than adding to it, for the same reason `reorder` takes every filter: half a rule is not one, and a filter that matches mail and does nothing with it is not worth leaving behind. `get` shows the rule as it stands, in the words `--if` takes. The filter keeps its place in the order and whether it is running, which is what makes this different from deleting it and making a new one.
-
-For a script you would rather write yourself, `--sieve` takes one:
-
-```bash
-proton mail settings filters create --name Big --sieve - < filter.sieve
-```
-
-`get` shows a script it cannot describe as the script itself, rather than as words that would not rebuild it.
-
-A filter is not recoverable once deleted, so `delete` names it and asks first.
-
-### Auto-reply
-
-```bash
-proton mail settings autoreply get                    # current schedule and message
-proton mail settings autoreply set --repeat fixed --start 2026-07-01T09:00 --end 2026-07-14T18:00 --message "I'm away until the 14th."
 proton mail settings autoreply disable
+```
+
+```bash
+proton mail settings autoreply disable
+```
+
+### `settings autoreply enable`
+
+Turn the auto-reply on, keeping its schedule.
+
+```
 proton mail settings autoreply enable
 ```
 
-`--start` and `--end` are written in the grammar the repeat mode dictates:
+```bash
+proton mail settings autoreply enable
+```
 
-| `--repeat` | `--start` / `--end` | Also takes |
-| --- | --- | --- |
-| `fixed` | `2026-07-01T09:00` - a date and time | `--zone` |
-| `daily` | `09:00` - a time of day | `--days mon,tue,wed`, `--zone` |
-| `weekly` | `mon:09:00` - a weekday and time | `--zone` |
-| `monthly` | `1:09:00` - a day of the month and time | `--zone` |
-| `permanent` | *not used* | |
+### `settings autoreply get`
 
-`--zone` is any IANA name and defaults to your system's. `--message` takes `-` for stdin and is stored as HTML, so plain text is escaped with its newlines turned into line breaks unless you pass `--html`.
+Show the auto-reply and its schedule.
 
-Saving a schedule turns the auto-reply on; `disable` switches it off and keeps the schedule for later. Proton sends every auto-reply with the subject `Auto` and offers no way to change it, so neither does proton. Auto-reply is a paid feature.
-
-## Running filters over old mail
+```
+proton mail settings autoreply get
+```
 
 ```bash
-proton mail settings filters apply                       # every enabled filter
-proton mail settings filters apply Newsletters           # just this one
+proton mail settings autoreply get
+```
+
+### `settings autoreply set`
+
+Configure the auto-reply and turn it on.
+
+--start and --end are written in the grammar the repeat mode dictates: fixed      2026-07-01T09:00   a date and time in --zone daily      09:00              a time of day, with --days weekly     mon:09:00          a weekday and time monthly    1:09:00            a day of the month and time permanent  -                  no bounds
+
+Proton sends every auto-reply with the subject "Auto" and offers no way to change it. Auto-reply is a paid feature.
+
+```
+proton mail settings autoreply set
+```
+
+```bash
+proton mail settings autoreply set --message 'Away until Monday.'
+proton mail settings autoreply set --message 'On holiday.' --start 2026-07-01 --end 2026-07-14
+```
+
+| Flag | Description |
+| --- | --- |
+| `--days stringSlice` | Days it is active, for a daily schedule, e.g. mon,tue,wed |
+| `--end string` | End of the window (grammar depends on --repeat) |
+| `--html` | Treat the message as HTML rather than escaping it |
+| `--message string` | Reply body (- reads stdin) |
+| `--password-file string` | Read the account password from a file |
+| `--password-stdin` | Read the account password from stdin |
+| `--repeat string` | How the schedule repeats: fixed, daily, weekly, monthly, permanent (default `fixed`) |
+| `--start string` | Start of the window (grammar depends on --repeat) |
+| `--totp string` | Two-factor code |
+| `--zone string` | IANA time zone the schedule is read in (default: the system zone) |
+
+### `settings filters`
+
+Server-side Sieve filters.
+
+Holds `apply`, `create`, `delete`, `disable`, `enable`, `get`, `list`, `reorder` and `update`.
+
+### `settings filters apply`
+
+Run filters over mail that is already in the mailbox.
+
+A filter ordinarily acts once, as mail arrives, so a rule written today does nothing about what came yesterday.
+
+With no filter named, every enabled filter runs.
+
+```
+proton mail settings filters apply [REF...]
+```
+
+```bash
+proton mail settings filters apply
+proton mail settings filters apply Newsletters
+```
+
+### `settings filters create`
+
+Create a filter.
+
+Describe it with --if and the actions below, and Proton writes the Sieve. A condition reads FIELD [not] COMPARATOR VALUE:
+
+  field       subject, sender, recipient, attachments
+  comparator  contains, is, starts, ends, matches
+
+`is` wants the whole value; `matches` takes * and ? as wildcards. An attachments condition takes no value - it asks whether there is one.
+
+--sieve takes a script you wrote yourself instead.
+
+```
+proton mail settings filters create
+```
+
+```bash
+proton mail settings filters create --name Receipts --if "sender contains billing@" --label Receipts
+proton mail settings filters create --name Big --sieve ./big.sieve
+```
+
+| Flag | Description |
+| --- | --- |
+| `--disabled` | Create it without turning it on |
+| `--if stringArray` | A condition matching mail must meet, as FIELD [not] COMPARATOR VALUE (repeatable) |
+| `--label stringArray` | Apply this label to matching mail (repeatable) |
+| `--mark-read` | Mark matching mail as read |
+| `--match string` | Whether every condition must hold, or any one of them: all, any (default `all`) |
+| `--move-to string` | Move matching mail into this folder (archive, inbox, spam, trash, or one of yours) |
+| `--name string` | Name for the new filter |
+| `--sieve string` | Sieve script (- reads stdin) |
+| `--star` | Star matching mail |
+
+### `settings filters delete`
+
+Delete filters.
+
+```
+proton mail settings filters delete REF...
+```
+
+```bash
+proton mail settings filters delete Receipts
+```
+
+### `settings filters disable`
+
+Disable filters.
+
+```
+proton mail settings filters disable REF...
+```
+
+```bash
+proton mail settings filters disable Receipts
+```
+
+### `settings filters enable`
+
+Enable filters.
+
+```
+proton mail settings filters enable REF...
+```
+
+```bash
+proton mail settings filters enable Receipts
+```
+
+### `settings filters get`
+
+Show what a filter matches and does.
+
+```
+proton mail settings filters get REF
+```
+
+```bash
+proton mail settings filters get Receipts
+```
+
+### `settings filters list`
+
+List your filters.
+
+```
+proton mail settings filters list
+```
+
+```bash
+proton mail settings filters list
+```
+
+### `settings filters reorder`
+
+Set the order filters run in.
+
+The first rule to file a message wins, so the order decides where mail lands. Name every filter, in the order you want them: this replaces the whole order rather than nudging one entry, because a half-stated order is one nobody can predict.
+
+```
+proton mail settings filters reorder REF...
+```
+
+```bash
 proton mail settings filters reorder Newsletters Receipts Archive
 ```
 
-A filter ordinarily acts once, as mail arrives, so a rule written today does nothing about what came yesterday. `apply` is the catching-up.
+### `settings filters update`
 
-Order decides the outcome - the first rule to file a message wins - so `reorder` replaces the **whole** order and refuses a partial one. A half-stated order is one nobody can predict.
+Change what a filter is called, matches, or does.
 
-## Who reaches the inbox
+--if and the actions beside it replace the whole rule rather than adding to it. The filter keeps its place in the order and whether it is running.
 
-Proton's settings page shows three lists - spam, block, allow - but they are one record with a destination on it, so this is one collection and `list` shows all three:
+```
+proton mail settings filters update REF
+```
 
 ```bash
-proton mail settings senders list
-proton mail settings senders block spammer@example.com
-proton mail settings senders block @example.com          # a whole domain
-proton mail settings senders spam newsletter@example.com
+proton mail settings filters update Receipts --sieve ./receipts.sieve
+```
+
+| Flag | Description |
+| --- | --- |
+| `--if stringArray` | A condition matching mail must meet, as FIELD [not] COMPARATOR VALUE (repeatable) |
+| `--label stringArray` | Apply this label to matching mail (repeatable) |
+| `--mark-read` | Mark matching mail as read |
+| `--match string` | Whether every condition must hold, or any one of them: all, any (default `all`) |
+| `--move-to string` | Move matching mail into this folder (archive, inbox, spam, trash, or one of yours) |
+| `--name string` | New name |
+| `--sieve string` | New Sieve script (- reads stdin) |
+| `--star` | Star matching mail |
+
+### `settings folders`
+
+Folders, which a message lives in.
+
+Holds `create`, `delete`, `list` and `update`.
+
+### `settings folders create`
+
+Create a folder.
+
+```
+proton mail settings folders create
+```
+
+```bash
+proton mail settings folders create --name Receipts
+proton mail settings folders create --name 2026 --parent Receipts --color olive
+proton mail settings folders create --name Receipts --notify=false
+```
+
+| Flag | Description |
+| --- | --- |
+| `--color string` | Accent color, by name (purple) or hex (#8080FF) (default `#8080FF`) |
+| `--name string` | Name for the new folder |
+| `--notify` | Tell you when mail arrives here (default `true`) |
+| `--parent string` | Put it inside this folder, by ID |
+
+### `settings folders delete`
+
+Delete folders.
+
+```
+proton mail settings folders delete REF...
+```
+
+```bash
+proton mail settings folders delete Receipts
+```
+
+### `settings folders list`
+
+List your folders.
+
+```
+proton mail settings folders list
+```
+
+```bash
+proton mail settings folders list
+```
+
+### `settings folders update`
+
+Rename or recolor a folder.
+
+```
+proton mail settings folders update REF
+```
+
+```bash
+proton mail settings folders update Receipts --name Invoices
+proton mail settings folders update Receipts --notify
+```
+
+| Flag | Description |
+| --- | --- |
+| `--color string` | New accent color, as a hex value |
+| `--name string` | New name |
+| `--notify` | Tell you when mail arrives here (default `true`) |
+| `--parent string` | Move it inside this folder, by ID |
+
+### `settings get`
+
+Show the mail settings now in effect.
+
+```
+proton mail settings get
+```
+
+```bash
+proton mail settings get
+```
+
+### `settings labels`
+
+Labels, which a message carries.
+
+Holds `create`, `delete`, `list` and `update`.
+
+### `settings labels create`
+
+Create a label.
+
+```
+proton mail settings labels create
+```
+
+```bash
+proton mail settings labels create --name Work
+proton mail settings labels create --name Accounting --color pacific
+```
+
+| Flag | Description |
+| --- | --- |
+| `--color string` | Accent color, by name (purple) or hex (#8080FF) (default `#8080FF`) |
+| `--name string` | Name for the new label |
+
+### `settings labels delete`
+
+Delete labels.
+
+```
+proton mail settings labels delete REF...
+```
+
+```bash
+proton mail settings labels delete Work
+```
+
+### `settings labels list`
+
+List your labels.
+
+```
+proton mail settings labels list
+```
+
+```bash
+proton mail settings labels list
+```
+
+### `settings labels update`
+
+Rename or recolor a label.
+
+```
+proton mail settings labels update REF
+```
+
+```bash
+proton mail settings labels update Work --name Office
+proton mail settings labels update Work --color enzian
+```
+
+| Flag | Description |
+| --- | --- |
+| `--color string` | New accent color, as a hex value |
+| `--name string` | New name |
+
+### `settings list`
+
+List the mail settings that can be changed.
+
+```
+proton mail settings list
+```
+
+```bash
+proton mail settings list
+```
+
+### `settings senders`
+
+Who always reaches the inbox, and who never does.
+
+Holds `allow`, `block`, `forget`, `list` and `spam`.
+
+### `settings senders allow`
+
+Always let someone reach the inbox.
+
+A whole domain works too, written with the @: `@example.com`.
+
+Deciding again about the same sender replaces the earlier decision rather than colliding with it.
+
+```
+proton mail settings senders allow EMAIL...
+```
+
+```bash
 proton mail settings senders allow billing@example.com
+```
+
+### `settings senders block`
+
+Send someone's mail straight to blocked.
+
+A whole domain works too, written with the @: `@example.com`.
+
+Deciding again about the same sender replaces the earlier decision rather than colliding with it.
+
+```
+proton mail settings senders block EMAIL...
+```
+
+```bash
+proton mail settings senders block spammer@example.com
+proton mail settings senders block @example.com
+```
+
+### `settings senders forget`
+
+Drop a standing decision, letting the spam filter decide again.
+
+```
+proton mail settings senders forget EMAIL...
+```
+
+```bash
 proton mail settings senders forget billing@example.com
 ```
 
-A decision applies before the spam filter forms an opinion. Deciding again about the same sender **replaces** the earlier decision rather than colliding with it. `forget` drops the decision and lets the filter decide again.
+### `settings senders list`
+
+List every standing decision about a sender.
+
+```
+proton mail settings senders list
+```
+
+```bash
+proton mail settings senders list
+```
+
+### `settings senders spam`
+
+Send someone's mail straight to spam.
+
+A whole domain works too, written with the @: `@example.com`.
+
+Deciding again about the same sender replaces the earlier decision rather than colliding with it.
+
+```
+proton mail settings senders spam EMAIL...
+```
+
+```bash
+proton mail settings senders spam newsletter@example.com
+```
+
+### `settings set`
+
+Change one mail setting.
+
+```
+proton mail settings set KEY VALUE
+```
+
+```bash
+proton mail settings set signature off
+proton mail settings set view-mode conversation
+```
+
+---
+
+Every command also takes the [flags that work everywhere](README.md#flags-that-work-on-every-command).

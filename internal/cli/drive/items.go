@@ -176,17 +176,13 @@ func itemsUploadCmd() *cobra.Command {
 		Use:   "upload SRC [DEST]",
 		Short: "Upload a file or directory",
 		Long: "Upload a file or directory.\n\n" +
-			"SRC of - reads standard input, which needs DEST to name the file, since a\n" +
-			"stream has no name of its own.\n\n" +
 			"A name already taken is refused, so nothing is overwritten by accident.\n" +
-			"--if-exists answers the question instead:\n\n" +
-			"  replace  write the bytes as a new revision, so the file keeps its\n" +
-			"           history and `items revisions list` shows both\n" +
-			"  rename   keep both, adding a number to the name being uploaded\n" +
-			"  skip     leave what is there alone and upload nothing\n\n" +
-			"With --recursive the answer is about the folder the tree lands in:\n" +
-			"replace puts the files into the folder already there, rename puts the\n" +
-			"whole tree beside it under a numbered name, and skip writes none of it.",
+			"--if-exists answers instead:\n\n" +
+			"  replace  a new revision, keeping the file's history\n" +
+			"  rename   keep both, numbering the one being uploaded\n" +
+			"  skip     leave what is there alone\n\n" +
+			"With --recursive that answer is about the folder the tree lands in.\n\n" +
+			"SRC of - reads standard input, and then DEST has to name the file.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			dc, err := context(c)

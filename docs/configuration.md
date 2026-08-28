@@ -14,7 +14,7 @@ Your password never leaves your machine: it derives the keys that decrypt your d
 
 ### Handing over the password without a terminal
 
-A password is read from a pipe or a file, never from a flag value: argv is readable by every user on the machine through `ps`, and it survives in shell history and in unit files.
+A password is read from a pipe or a file, [never from a flag value](design-notes.md#why-a-password-is-never-a-flag-value).
 
 ```bash
 # a pipe
@@ -24,13 +24,11 @@ printf '%s' "$PW" | proton account login --user alice@proton.me --password-stdin
 proton account login --user alice@proton.me --password-file /run/secrets/proton
 ```
 
-`account login` performs the exchange that attaches an account to a profile. The others reach an endpoint Proton guards behind an elevated session, which it grants only for another one - today `calendar settings calendars delete` and `mail settings autoreply set`:
+`account login` performs the exchange that attaches an account to a profile. The others reach an endpoint Proton guards behind an elevated session, which it grants only for another one - today `calendar settings calendars delete`, `mail messages expire` and `mail settings autoreply set`:
 
 ```bash
 printf '%s' "$PW" | proton calendar settings calendars delete Work --password-stdin
 ```
-
-`--password-file` is usually the one to reach for on a machine, since systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all hand you a path already.
 
 `--password-stdin` takes standard input for the password and nothing else, so it cannot be combined with a `-` argument that wants the same stream:
 
@@ -55,7 +53,7 @@ Signing in also unlocks your keys and seals the key password into that file, enc
 
 Two exceptions:
 
-- Proton guards a few destructive endpoints behind an elevated session, and asks for your password at the moment you hit one. Deleting a calendar is the one the CLI reaches today. It prompts, or reads `--password-file` / `--password-stdin`, and drops the elevation again immediately. The sealed key password cannot stand in: it is a one-way derivation, and Proton re-authenticates against the password itself.
+- Proton guards a few destructive endpoints behind an elevated session, and asks for your password at the moment you hit one. It prompts, or reads `--password-file` / `--password-stdin`, and drops the elevation again immediately. The sealed key password cannot stand in: it is a one-way derivation, and Proton re-authenticates against the password itself.
 - A session revoked or expired elsewhere means signing in again.
 
 ```bash
@@ -112,10 +110,10 @@ Eight, and none of them can name an account.
 | `PROTON_PROFILE` | Active profile (default: `default`) |
 | `PROTON_API_URL` | API base URL (default: `https://mail.proton.me/api`) |
 | `NO_COLOR` | Set to any value, even empty, to turn colored output off ([no-color.org](https://no-color.org)) |
-| `COLORTERM` | `truecolor` or `24bit` if your terminal takes 24-bit color and does not advertise it; only affects how exactly a color swatch is drawn ([why](output.md#colour)) |
+| `COLORTERM` | `truecolor` or `24bit` if your terminal takes 24-bit color and does not advertise it; only affects how exactly a color swatch is drawn ([why](design-notes.md#why-colour-is-asked-for-by-name)) |
 | `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
 | `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
-| `PROTON_NO_UPDATE_CHECK` | Set to any value, even empty, to never look for a new release ([what that is](installation.md#the-update-notice)) |
+| `PROTON_NO_UPDATE_CHECK` | Set to any value, even empty, to never look for a new release ([what that is](installation.md#updating)) |
 | `PROTON_HV_HELPER` | An executable to open a CAPTCHA with, instead of the embedded one ([why](human-verification.md#bringing-your-own-helper)) |
 
 ## Files on disk
@@ -123,8 +121,8 @@ Eight, and none of them can name an account.
 | Path | Contents |
 | --- | --- |
 | `~/.config/proton-cli/sessions/<profile>.json` | Session tokens and the encrypted key password (mode `0600`) |
-| `~/.config/proton-cli/idcache/<profile>.json` | Short-ID lookup table (see [The language](language.md)) |
-| `~/.config/proton-cli/update-check.json` | When proton last looked for a new release ([why](installation.md#the-update-notice)) |
+| `~/.config/proton-cli/idcache/<profile>.json` | Short-ID lookup table (see [Naming things](references.md)) |
+| `~/.config/proton-cli/update-check.json` | When proton last looked for a new release ([why](installation.md#updating)) |
 
 Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton-cli/` and Windows uses `%APPDATA%\proton-cli\`. Nothing else is written; there is no config file to maintain.
 
@@ -142,6 +140,6 @@ Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton
 | `--log-level debug\|info\|warn\|error` | Logging verbosity (env: `PROTON_LOG_LEVEL`) |
 | `--no-input` | Never prompt; a missing credential becomes an error (env: `PROTON_NO_INPUT`) |
 
-Five flags have a single-letter form, and they are the five you type most: `-p`, `-o`, `-n`, `-q`, `-y`. They cluster, so `-qn` is a quiet dry run. The letters are global and no subcommand may take one, so `-p` is the profile everywhere and never something else.
+The five you type most have a single-letter form, and they cluster - so `-qn` is a quiet dry run ([why only five](design-notes.md#why-one-flag-name-means-one-thing)).
 
 `--api-url URL` points the CLI at a different API host. It works but is hidden from `--help`, because it is for developing proton rather than for using it.

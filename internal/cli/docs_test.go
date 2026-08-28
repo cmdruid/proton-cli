@@ -10,6 +10,7 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Every command the documentation shows is a command that exists.
@@ -35,6 +36,93 @@ var docRoots = []string{
 	"../../README.md",
 	"../../docs",
 	"../../web/src/content/landing",
+}
+
+// ── the facts a page states as a whole list ──
+
+// enumeration is a fact a page states as a complete list, and the tree question
+// that settles it.
+//
+// A page promising "these are the ones" makes a claim the tree can answer, and
+// the way such a claim rots is silent: a fifth command joins the set and the
+// sentence listing four still reads perfectly. Three pages named the commands
+// Proton asks for a password again on; conformance pinned three of them and two
+// of the pages said two.
+type enumeration struct {
+	// what the list is, for the failure message.
+	what string
+	// pages that promise it in full. A page mentioning one member in passing is
+	// not making the claim; these are the ones that enumerate.
+	pages []string
+	// members, from the tree.
+	members func(*cobra.Command) []string
+}
+
+var enumerations = []enumeration{{
+	what: "the commands Proton makes you prove yourself for again",
+	pages: []string{
+		"../../docs/configuration.md",
+		"../../docs/limitations.md",
+		"../../docs/scripting.md",
+	},
+	members: func(root *cobra.Command) []string {
+		var out []string
+		walkTree(root, func(c *cobra.Command) {
+			// Signing in is where a password is expected; these pages are about
+			// the commands that ask for it when you are already signed in.
+			if c.Name() == "login" || c.Flags().Lookup("password-file") == nil {
+				return
+			}
+			out = append(out, strings.TrimPrefix(c.CommandPath(), kit.Program+" "))
+		})
+		return out
+	},
+}, {
+	what:  "the flags that work on every command",
+	pages: []string{"../../docs/configuration.md"},
+	members: func(root *cobra.Command) []string {
+		var out []string
+		root.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+			if !f.Hidden {
+				out = append(out, "--"+f.Name)
+			}
+		})
+		return out
+	},
+}}
+
+func TestPagesThatPromiseAWholeListHaveTheWholeList(t *testing.T) {
+	root := newRoot()
+	for _, e := range enumerations {
+		members := e.members(root)
+		if len(members) == 0 {
+			t.Fatalf("%s: the tree answers with nothing; the question is broken", e.what)
+		}
+		for _, page := range e.pages {
+			src, err := os.ReadFile(page)
+			if err != nil {
+				t.Fatalf("read %s: %v", page, err)
+			}
+			for _, member := range members {
+				if !strings.Contains(string(src), member) {
+					t.Errorf("%s lists %s but never names `%s`",
+						filepath.Base(page), e.what, member)
+				}
+			}
+		}
+	}
+}
+
+func walkTree(c *cobra.Command, visit func(*cobra.Command)) {
+	if c.Hidden || c.Name() == "help" {
+		return
+	}
+	if c.Runnable() {
+		visit(c)
+	}
+	for _, sub := range c.Commands() {
+		walkTree(sub, visit)
+	}
 }
 
 func TestEveryCommandTheDocsShowExists(t *testing.T) {

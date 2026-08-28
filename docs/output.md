@@ -1,16 +1,8 @@
 # Output
 
-Everything proton prints is one of five things, and each looks the same wherever it appears.
+Data goes to **stdout**. Progress bars, confirmations, footers, warnings, prompts and errors go to **stderr**. So a redirect gives you clean data and you still see what happened.
 
-## stdout is the answer, stderr is everything else
-
-Data goes to stdout. Progress bars, confirmations, table footers, warnings, prompts and errors go to stderr. So a redirect gives you clean data and you still see what happened:
-
-```bash
-proton drive items download /report.pdf --output - > report.pdf
-```
-
-## Four kinds of response that end
+## The five shapes
 
 ### Collections
 
@@ -25,28 +17,11 @@ ID        FROM              SUBJECT                DATE              FLAGS
 3 of 47 messages. Next page: --page 1
 ```
 
-The `ID` column is always first and always called `ID`. Dates use one format. The `FLAGS` column reads `●` unread, `★` starred, and a number for how many files are attached.
+`ID` is always first. `FLAGS` reads `●` unread, `★` starred, and a number for attachments.
 
-An empty collection prints **nothing** on stdout - just `No messages.` on stderr - so a redirect yields an empty file rather than a stray header. When a filter was applied it reads `No messages match.` instead, so an unmatched search never looks like an empty account.
+An empty collection prints nothing on stdout, so a redirect yields an empty file rather than a stray header. It says `No messages.` on stderr, or `No messages match.` when a filter was applied.
 
-### Paging and ordering
-
-Every `list` takes `--page` and `--page-size`, and the footer says where you are:
-
-```console
-$ proton contacts list --page-size 50
-50 of 3000 contacts. Next page: --page 1
-```
-
-Everything except mail is also ordered locally with `--sort` and `--desc`, because the whole collection is decrypted here before it can be shown. Each listing offers only the keys it has, and says so when given another:
-
-```console
-$ proton drive items list --sort size --desc
-$ proton contacts list --sort nope
-Error: --sort accepts: name, email.
-```
-
-Mail is Proton's to order, so `mail messages list` and `mail conversations list` come back newest first and take no `--sort`.
+Every `list` takes `--page` and `--page-size`. Everything except mail also takes `--sort` and `--desc`; each listing offers only the keys it has and says so when given another. Mail comes back newest first, ordered by Proton.
 
 ### Records
 
@@ -63,17 +38,14 @@ Shared:     yes
 ID:         7Kd91mQx
 ```
 
-Every field is spelled out, so a record can be read without knowing the API's field names.
-
 ### Documents
 
-Decrypted content meant to be read: a header block, a blank line, the body, and whatever trails it.
+Decrypted content meant to be read: a header block, a blank line, the body, and whatever trails it. `--body-only` gives you exactly the body.
 
 ```console
 $ proton mail messages get 5bH2mQxK
 Subject:    Invoice #2291 is ready
 From:       Fastmail Billing <billing@fastmail.com>
-To:         me@proton.me
 Date:       2026-04-15 14:32
 Signature:  verified
 ID:         5bH2mQxK
@@ -86,8 +58,6 @@ ID        NAME              SIZE
 kQ81mDx4  invoice-2291.pdf  84.2 KB
 ```
 
-`--body-only` gives you exactly the body and nothing else.
-
 ### Mutations
 
 ```console
@@ -95,17 +65,15 @@ $ proton mail messages trash --unread --older-than 30d
 ✓ Moved 12 messages to trash.
 ```
 
-When something is created its ID goes to **stdout** and the confirmation to stderr, so capturing the ID is a plain assignment:
+When something is created, its ID goes to **stdout** and the confirmation to stderr, so capturing it is a plain assignment:
 
 ```bash
 LABEL=$(proton mail settings labels create --name Work)
 ```
 
-## Streams
+### Streams
 
-A few commands stay attached instead of ending - `mail messages watch`, `calendar reminders watch`. Their response is a line per thing, printed the moment it happens, and it ends when you stop it rather than when the data runs out.
-
-In text, each line carries the time, a reference you can act on, and the rest:
+`mail messages watch` and `calendar reminders watch` stay attached and print a line the moment something happens.
 
 ```console
 $ proton mail messages watch
@@ -113,11 +81,7 @@ $ proton mail messages watch
 14:41  9xL4pQrT  Trailhead             Weekly digest
 ```
 
-There is no header rule and no footer: a table measures its columns across every row it holds, and a stream has no every row.
-
-In a machine format there is no envelope either, because an envelope has to be closed. Each line is one object, which is what `jq` reads without `--slurp`; under `--output yaml` each thing is its own document.
-
-Stopping one is not an error: Ctrl+C or a service manager's SIGTERM ends it quietly with exit `0`, so a unit that runs one does not log a failure every time you stop it.
+In JSON, each line is one object - what `jq` reads without `--slurp`. There is no envelope and no footer ([why](design-notes.md#why-a-stream-has-no-footer)). Ctrl+C or SIGTERM ends a watch quietly with exit `0`, so a service manager doesn't log a failure every time you stop it.
 
 ## Errors
 
@@ -126,15 +90,9 @@ One line for the problem, an indented `Try:` block for the fix.
 ```console
 $ proton mail messages get 5bH2mQxK --render htm
 Error: --render accepts: text, html, raw.
-
-$ proton contacts get jane
-Error: "jane" matches 2 contacts.
-Try:   narrow the term, or use one of:
-         7Kd91mQx  jane@example.com
-         3Ns8pT2v  jane.roe@work.example
 ```
 
-Mistakes that can be spotted in your command line - a misspelled setting key, an impossible `--render`, a colour outside Proton's palette - are reported immediately, without signing in or contacting Proton.
+Anything judgeable from your command line alone - a misspelled setting key, an impossible `--render`, a colour outside Proton's palette - is caught before signing in or contacting Proton.
 
 ## Exit codes
 
@@ -155,9 +113,7 @@ proton mail messages list --output json
 proton mail messages list --output yaml
 ```
 
-Three rules, and they hold for every command.
-
-**One envelope for every collection**, keyed by the collection's plural name:
+**Every collection is one envelope**, keyed by its plural name:
 
 ```json
 {
@@ -170,92 +126,42 @@ Three rules, and they hold for every command.
 }
 ```
 
-`count` is always there. `total`, `page`, `page_size` and `has_more` appear when the request involved them - so a consumer can tell "page 0" from "not paginated".
+`count` is always there. `total`, `page`, `page_size` and `has_more` appear when the request involved them, so a consumer can tell "page 0" from "not paginated".
 
-**Names, not numbers.** JSON uses the same vocabulary as the text output and as `set`:
+**Names, not numbers**, matching the text output and `set`: `{ "type": "file", "state": "active", "unread": true }`. Keys are `snake_case`, timestamps are `<verb>_time` in Unix seconds, sizes are `size` in bytes, and IDs are always complete.
 
-```json
-{ "type": "file", "state": "active", "date_format": "yyyy-mm-dd", "unread": true }
-```
-
-Timestamps are `<verb>_time` in Unix seconds; sizes are `size` in bytes.
-
-**Times are rendered in your own zone.** A calendar event's `start` and `end` are RFC 3339 with your offset, so the day and the clock read off the string are the ones the text output shows, and the instant is exact either way. What the event is anchored to is its own field:
+**Times come back in your own zone.** An event's `start` and `end` are RFC 3339 with your offset, and what it is anchored to is its own field:
 
 ```json
 { "start": "2026-04-16T16:00:00+02:00", "end": "2026-04-16T17:00:00+02:00", "zone": "Europe/Vienna" }
 ```
 
-An event with no time of day has `"all_day": true`, begins at midnight on the date it names, and ends at the midnight after its last day - so `end` is never part of the event, and `end - start` is how long it lasts.
+An all-day event has `"all_day": true`, begins at midnight on the date it names, and ends at the midnight after its last day - so `end - start` is how long it lasts.
 
-**`--output json` always emits JSON**, mutations included:
+Mutations emit JSON too:
 
 ```console
 $ proton mail settings labels create --name Work --output json
-{
-  "action": "created",
-  "count": 1,
-  "dry_run": false,
-  "ids": ["kQ81mDx4T9…"],
-  "kind": "label",
-  "name": "Work"
-}
+{ "action": "created", "count": 1, "dry_run": false, "ids": ["kQ81mDx4T9…"], "kind": "label", "name": "Work" }
 ```
 
-IDs in machine output are always complete, never shortened.
+The one exception is [`proton api`](apps/api.md), which passes Proton's response through unchanged.
 
-The one exception is [`proton api`](commands/api.md), which passes Proton's own response through unchanged.
+## Colour, width and quiet
 
-## Colour
+Colour marks the parts that carry a verdict: `✓` green, `!` yellow, `Error:` red, IDs magenta, `●` unread, `★` starred, and the signature line green, yellow or red. A `■` beside a label, folder, calendar or group is the exact colour Proton stores for it. Everything else stays plain.
 
-Colour is used for one thing: making the parts that carry a verdict, or a colour of their own, worth stopping on. Everything else stays plain, so what is coloured means something.
+Shades come from your terminal's theme, not from proton ([why](design-notes.md#why-colour-is-asked-for-by-name)). Colour is off whenever output is piped or redirected, under `--output json` or `yaml`, and with `--no-color` or `NO_COLOR`. It never changes the layout and never carries meaning on its own - every verdict is spelled out.
 
-**The shades are your terminal's, not proton's.** The CLI asks for a colour by name - the same eight names ANSI has had since 1976 - and your terminal decides what each one looks like. So Proton's purple comes out as whatever purple your theme uses, and the CLI stays legible on a light background without ever having to guess you are on one.
+On a terminal, a table too wide to fit gives up room from its widest flexible column, never from a date or an ID. Piped output is never truncated, and widths are measured in terminal cells, so a subject in Japanese or a filename with an emoji stays aligned.
 
-| What | Colour |
-| --- | --- |
-| Headers, footers, field labels | Dimmed |
-| IDs | Magenta - Proton's purple |
-| `✓` a change that succeeded | Green |
-| `!` a caveat worth knowing | Yellow |
-| `Error:` | Red |
-| `●` unread | Magenta |
-| `★` starred | Yellow, standing in for the orange Proton Mail uses |
-| `Signature:` | Green verified, yellow unverified, red invalid |
-| `■` beside a label, folder, calendar or group | The exact colour Proton stores for it |
-
-The swatch is the one exception, and it is not the CLI picking a colour: the hex is the value you gave that label, folder, calendar or group, so redrawing it from your theme would misreport a field rather than respect a preference. It is the only place proton writes an exact colour, and how faithfully it lands depends on whether your terminal takes 24-bit colour - set `COLORTERM=truecolor` if it does and does not say so.
-
-Colour is off whenever output is piped or redirected, whenever `--output json` or `yaml` is used, and when you say so:
-
-```bash
-proton mail messages list --no-color
-NO_COLOR=1 proton mail messages list
-```
-
-Colour never changes the layout, and never carries meaning on its own: with it on or off, a script receives identical bytes and a reader gets the same words. Every verdict is spelled out - `invalid`, `unverified` - so nothing depends on being able to see the difference between green and red.
-
-Widths are measured in terminal cells rather than characters, so a table stays aligned for a subject written in Japanese or a filename with an emoji in it.
-
-## Widths
-
-On a terminal, a table too wide to fit gives up room from its widest flexible column - never from a date or an ID.
-
-Piped or redirected output is **never** truncated.
-
-## Quiet
-
-`--quiet` silences confirmations, notes, footers and progress. It never silences the answer: a script that passes `--quiet` still gets its data.
+`--quiet` silences confirmations, notes, footers and progress. It never silences the answer.
 
 ## Prompts
 
-Only `account login` and commands that need your password again ever ask a question, and only when standard input is a terminal. Everything else fails with a message instead of waiting, so a scheduled job never hangs.
-
-Prompts are written to stderr, so redirecting the answer never captures the question.
+Only `account login` and the commands that need your password again ever ask a question, and only when standard input is a terminal. Everything else fails with a message rather than waiting, so a scheduled job never hangs. Prompts go to stderr.
 
 ```bash
 proton account login --no-input     # fail instead of asking
 PROTON_NO_INPUT=1 proton account login
 ```
-
-As with `NO_COLOR`, `PROTON_NO_INPUT` counts as set whatever its value, even empty.

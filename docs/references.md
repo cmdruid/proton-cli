@@ -1,19 +1,15 @@
-# References
+# Naming things
 
-How you name the thing you want.
-
-## Names instead of IDs
-
-Wherever a command's usage shows `REF`, you can pass something human and proton will find it:
+Wherever a command's usage shows `REF`, four things work.
 
 ```bash
-proton mail messages get "Invoice #2291"
-proton contacts get jane
-proton pass items get github.com
-proton calendar events get "Team sync"
+proton mail messages get 5bH2mQxKT9wLpN4v…    # the full ID
+proton mail messages get 5bH2mQxK             # the short ID a list printed
+proton mail messages get "Invoice #2291"      # the subject
+proton contacts get jane                      # a name or an address
 ```
 
-If nothing matches, the command exits `3`. If more than one thing matches, it prints the candidates and exits `4`, so you can narrow the term or use an ID:
+If nothing matches, the command exits `3`. If more than one thing matches, it prints the candidates and exits `4`:
 
 ```console
 $ proton contacts get jane
@@ -25,33 +21,29 @@ Try:   narrow the term, or use one of:
 
 ## Short IDs
 
-On a terminal, lists shorten Proton's IDs to their first eight characters and remember what they showed you. Paste one straight back:
+On a terminal, lists shorten Proton's IDs to eight characters and remember what they showed you, so you can paste one straight back. They carry no ellipsis, so they copy cleanly out of a table.
 
-```console
-$ proton mail messages list
-ID        FROM              SUBJECT                 DATE
-────────  ────────────────  ──────────────────────  ────────────────
-5bH2mQxK  Fastmail Billing  Invoice #2291 is ready  2026-04-15 14:32
+Pipes, redirects and `--output json` always emit **full** IDs, so no script ever sees a truncated value. `--full-ids` switches shortening off interactively too.
 
-$ proton mail messages get 5bH2mQxK
-```
+A short ID only resolves on the machine that printed it - the lookup table lives in `~/.config/proton-cli/idcache/<profile>.json`. Copied one from elsewhere? Run the matching `list` here first, or use the full ID.
 
-Short IDs carry no ellipsis, so they can be copied straight out of a table.
+## Two IDs in one
 
-The moment output stops being a terminal, IDs go back to full length - pipes, redirects and `--output json` always emit complete IDs, so no script ever sees a truncated value. `--full-ids` switches shortening off interactively too.
-
-The cache lives in `~/.config/proton-cli/idcache/<profile>.json`. A short ID only resolves if it is in there: copied one from another machine? Run the matching list command there first, or use the full ID. If two cached IDs share the same eight characters, the command shows both and exits `4`.
-
-## Compound references
-
-A Pass item and a calendar event each need two IDs, written as one slash-separated token. Lists print them in this form, and you paste them back the same way:
+A Pass item and a calendar event each need two IDs, written as one slash-separated token. Lists print them this way and you paste them back the same way. Short IDs work on both halves at once.
 
 ```bash
 proton pass items get SHARE_ID/ITEM_ID
 proton calendar events get CALENDAR_ID/EVENT_ID
 ```
 
-Short IDs work here too, on both halves at once: `5bH2mQxK/9xL4pQrT`.
+A **recurring** event is stored once and happens many times, so naming a single occurrence takes one more part: its own start, after an `@`.
+
+```bash
+proton calendar events get 4f2a1b9c@2026-04-16T09:00   # one occurrence
+proton calendar events get 4f2a1b9c                    # the whole series
+```
+
+Keep the `@` part and you act on that occurrence; drop it and you act on the series. `--future` widens one occurrence to it and every later one.
 
 ## Drive is addressed by path
 
@@ -71,25 +63,11 @@ proton drive photos download 3Ns8pT2v --output-dir ./photos
 
 ## IDs that start with a dash
 
-Proton's IDs are base64 and `-` is one of its sixty-four characters, so about one ID in sixty-four begins with a dash and looks like a flag.
-
-proton handles it. Before parsing, it protects a leading-dash reference that the command it was given could not read as flags - and this CLI defines three shorthands in total (`-h`, `-v`, `-o`), so a reference is never mistaken for one. It works for a full ID, for a shortened one, and for the compound `SHARE/ITEM` form the listings print:
+They just work. Paste them like any other reference:
 
 ```bash
 proton pass items get -x76EpiV/_fb26gvM
 proton drive photos download -Qt-s7R_
 ```
 
-An ID passed as a **flag's value** needs nothing at all, because a value is read as a value whatever it starts with:
-
-```bash
-proton drive photos list --album -Qt-s7R_oGCru5u3Kv6Y8Q
-```
-
-If you ever do hit an odd parse error, you can separate arguments from flags yourself:
-
-```bash
-proton mail messages get -- -bH2mQxKT9wLpN4v…
-```
-
-Put flags **before** such an ID, since everything after `--` is positional.
+If you ever hit an odd parse error, put `--` before the ID and your flags before that.

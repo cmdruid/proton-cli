@@ -39,9 +39,9 @@ flake:
     cd "$work"
     nix build --print-build-logs
 
-[doc("Update the golden files that pin every response's exact bytes")]
+[doc("Update the golden files that pin every response's and every help screen's exact bytes")]
 golden:
-    go test ./internal/ui/ -update -count=1
+    go test ./internal/ui/ ./internal/cli/ -update -count=1
 
 [doc("Fix and format everything fixable, then lint with no findings allowed")]
 lint:

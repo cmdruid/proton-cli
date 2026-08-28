@@ -150,10 +150,9 @@ func aliasesOptionsCmd() *cobra.Command {
 		Use:   "options",
 		Short: "List the suffixes and mailboxes an alias can use",
 		Long: "List the suffixes and mailboxes an alias can use.\n\n" +
-			"A suffix is the domain an address can be made on. Proton puts a word of\n" +
-			"its own in front of it, picks a new one every time it is asked, and only\n" +
-			"settles on one when the alias is created - so what is listed here is the\n" +
-			"part that lasts, and the part `--suffix` takes.",
+			"A suffix is the domain an address is made on, and what --suffix takes.\n" +
+			"Proton puts a word of its own in front of it and only settles on one when\n" +
+			"the alias is created.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			shareID, err := resolveVault(c, "")
