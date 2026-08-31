@@ -34,6 +34,7 @@ var examples = map[string][]string{
 		"proton account login --profile work",
 		"proton account login --user me@proton.me --password-file /run/secrets/proton",
 		"proton account login --user me@proton.me --password-stdin --totp 123456",
+		"proton account login --user me@proton.me --password-file /run/secrets/proton --second-password-file /run/secrets/proton-second",
 	},
 	"proton account logout": {
 		"proton account logout",

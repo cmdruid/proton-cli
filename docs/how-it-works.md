@@ -6,7 +6,7 @@ proton talks to the same API as the Proton web apps, with the same authenticatio
 
 1. **Session** - an unauthenticated session is created via `POST /auth/v4/sessions`.
 2. **SRP** - login runs [Secure Remote Password](https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol) through Proton's own [go-srp](https://github.com/ProtonMail/go-srp), so your password is never sent to the server, not even hashed. Two-factor codes are handled in the same exchange.
-3. **Key password** - the salted password derived during login is what unlocks your PGP keys. It stays on your machine.
+3. **Key password** - your password, stretched with the salt Proton holds for your primary key, is what unlocks your PGP keys. It stays on your machine. An account in [two-password mode](https://proton.me/support/switch-two-password-mode) stretches its **second** password instead: that mode's whole point is that the secret which proves who you are is not the one that opens your data, and Proton's account settings say which mode you are in.
 4. **Session file** - tokens plus the key password (encrypted with a random client key held server-side) are written to `~/.config/proton-cli/sessions/<profile>.json` with mode `0600`, so later commands don't re-authenticate. [Security](../SECURITY.md) documents this storage model in full.
 5. **Refresh** - expired access tokens are refreshed automatically.
 
@@ -48,7 +48,7 @@ Reading works the other way around: content arrives encrypted, gets decrypted lo
 - Encrypted payloads you asked to create: an encrypted message, an encrypted file block, an encrypted event.
 - The SRP proof during login, which does not reveal your password.
 
-What never leaves: your password, your key password, and your private keys.
+What never leaves: your password, your second password if you have one, your key password, and your private keys.
 
 ## Where the API definitions come from
 

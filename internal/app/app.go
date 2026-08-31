@@ -263,8 +263,15 @@ func (a *App) Login(ctx context.Context, user string) error {
 		if err := a.refuseRepoint(user); err != nil {
 			return err
 		}
-		if a.resume(ctx) {
-			return nil
+		if _, err := a.Account.Get(ctx); err == nil {
+			// The session works, so the only question left is whether the keys
+			// open - and signing in again cannot change that answer. Reporting
+			// why they did not beats a second SRP exchange that fails the same
+			// way, having asked for a password to do it.
+			if _, err := a.Unlock(ctx); err != nil {
+				return err
+			}
+			return a.saveSession()
 		}
 		// The saved session no longer works, so sign in again over the top of it.
 	}
@@ -301,27 +308,15 @@ func (a *App) refuseRepoint(wanted string) error {
 		Hint(fmt.Sprintf("proton account logout --profile %s", a.Profile)).Exit(4)
 }
 
-// resume reports whether the saved session still works, unlocking it so the
-// caller is left in the state a fresh sign-in would have produced.
-func (a *App) resume(ctx context.Context) bool {
-	if _, err := a.Account.Get(ctx); err != nil {
-		return false
-	}
-	if _, err := a.Unlock(ctx); err != nil {
-		return false
-	}
-	return a.saveSession() == nil
-}
-
 // Unlock returns the decrypted key hierarchy, memoised for the invocation.
 //
 // It is what every service that decrypts holds as its keys.Get, so the hierarchy
 // is fetched once, on the first command that reaches a decryption, and not at all
 // by a command that reaches none.
 //
-// The password is requested lazily, and only on the path that actually needs it:
-// once the session file carries the sealed key password, unlocking asks for
-// nothing at all.
+// The secret that opens the keys is requested lazily, and only on the path that
+// actually needs it: once the session file carries the sealed key password,
+// unlocking asks for nothing at all.
 func (a *App) Unlock(ctx context.Context) (*keys.Unlocked, error) {
 	// There are no keys to unlock for an account nobody is signed in to, and
 	// asking for a password to open them would be asking the wrong question.
@@ -333,9 +328,7 @@ func (a *App) Unlock(ctx context.Context) (*keys.Unlocked, error) {
 	if a.cache != nil {
 		return a.cache, nil
 	}
-	u, err := keys.Unlock(ctx, a.API, func() (string, error) {
-		return a.Creds.Password("unlock your keys")
-	})
+	u, err := keys.Unlock(ctx, a.API, a.Creds.KeyPassword)
 	if err != nil {
 		return nil, err
 	}

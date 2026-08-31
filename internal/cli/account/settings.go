@@ -3,6 +3,7 @@ package account
 import (
 	"encoding/json"
 
+	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ui"
@@ -65,16 +66,17 @@ var specs = map[string]kit.Setting{
 // snake_case like every other command's, and so numeric settings arrive as the
 // names `set` accepts instead of as bare integers.
 type settingsView struct {
-	Locale        string `json:"locale"`
-	DateFormat    string `json:"date_format"`
-	TimeFormat    string `json:"time_format"`
-	WeekStart     string `json:"week_start"`
-	RecoveryEmail string `json:"recovery_email,omitempty"`
-	RecoveryPhone string `json:"recovery_phone,omitempty"`
-	Telemetry     string `json:"telemetry"`
-	CrashReports  string `json:"crash_reports"`
-	Sentinel      string `json:"sentinel"`
-	TwoFactor     string `json:"two_factor"`
+	Locale          string `json:"locale"`
+	DateFormat      string `json:"date_format"`
+	TimeFormat      string `json:"time_format"`
+	WeekStart       string `json:"week_start"`
+	RecoveryEmail   string `json:"recovery_email,omitempty"`
+	RecoveryPhone   string `json:"recovery_phone,omitempty"`
+	Telemetry       string `json:"telemetry"`
+	CrashReports    string `json:"crash_reports"`
+	Sentinel        string `json:"sentinel"`
+	TwoPasswordMode string `json:"two_password_mode"`
+	TwoFactor       string `json:"two_factor"`
 }
 
 func settingsCmd() *cobra.Command {
@@ -94,6 +96,9 @@ func settingsCmd() *cobra.Command {
 				Telemetry    any
 				CrashReports any
 				HighSecurity struct{ Value any }
+				// Mode is 2 when the account keeps the password that signs it in
+				// apart from the one that opens its keys.
+				Password struct{ Mode any }
 				// Proton still answers with a scalar TwoFactor beside this, and an
 				// untagged field would bind to that one and fail to decode.
 				TwoFactor struct{ Enabled any } `json:"2FA"`
@@ -105,16 +110,17 @@ func settingsCmd() *cobra.Command {
 		s := env.UserSettings
 
 		view := settingsView{
-			Locale:        s.Locale,
-			DateFormat:    specs["date-format"].Name(s.DateFormat),
-			TimeFormat:    specs["time-format"].Name(s.TimeFormat),
-			WeekStart:     specs["week-start"].Name(s.WeekStart),
-			RecoveryEmail: s.Email.Value,
-			RecoveryPhone: s.Phone.Value,
-			Telemetry:     kit.OnOffText(kit.IntOf(s.Telemetry)),
-			CrashReports:  kit.OnOffText(kit.IntOf(s.CrashReports)),
-			Sentinel:      kit.OnOffText(kit.IntOf(s.HighSecurity.Value)),
-			TwoFactor:     twoFactorText(kit.IntOf(s.TwoFactor.Enabled)),
+			Locale:          s.Locale,
+			DateFormat:      specs["date-format"].Name(s.DateFormat),
+			TimeFormat:      specs["time-format"].Name(s.TimeFormat),
+			WeekStart:       specs["week-start"].Name(s.WeekStart),
+			RecoveryEmail:   s.Email.Value,
+			RecoveryPhone:   s.Phone.Value,
+			Telemetry:       kit.OnOffText(kit.IntOf(s.Telemetry)),
+			CrashReports:    kit.OnOffText(kit.IntOf(s.CrashReports)),
+			Sentinel:        kit.OnOffText(kit.IntOf(s.HighSecurity.Value)),
+			TwoPasswordMode: kit.OnOffText(twoPasswordOn(kit.IntOf(s.Password.Mode))),
+			TwoFactor:       twoFactorText(kit.IntOf(s.TwoFactor.Enabled)),
 		}
 
 		return kit.Show(c, ui.RecordSpec{
@@ -129,10 +135,21 @@ func settingsCmd() *cobra.Command {
 				{Label: "Telemetry", Value: view.Telemetry, Always: true},
 				{Label: "Crash Reports", Value: view.CrashReports, Always: true},
 				{Label: "Sentinel", Value: view.Sentinel, Always: true},
+				{Label: "Two-Password Mode", Value: view.TwoPasswordMode, Always: true},
 				{Label: "Two-Factor", Value: view.TwoFactor, Always: true},
 			},
 		})
 	})
+}
+
+// twoPasswordOn turns Proton's numbered password mode into the on and off this
+// row is read among. Reporting "one" and "two" would make it the only line in
+// the block whose value has to be read twice.
+func twoPasswordOn(mode int) int {
+	if mode == keys.PasswordModeTwo {
+		return 1
+	}
+	return 0
 }
 
 // twoFactorText names the two-factor methods in effect. Proton reports them as a

@@ -79,6 +79,12 @@ func (c *Client) Login(ctx context.Context, username string, password []byte, to
 	}
 	c.mu.Lock()
 	c.uid, c.acc, c.ref = auth.UID, auth.AccessToken, auth.RefreshToken
+	// A sealed key password belongs to the session it was wrapped for, and this is
+	// a different session: Proton holds no client key for it, so the blob a
+	// previous sign-in left behind can never be opened again. Dropping it here is
+	// what keeps `account get` from reporting a profile as unlocked on the strength
+	// of a blob nothing can read.
+	c.encKeyBlob = ""
 	c.mu.Unlock()
 
 	switch {

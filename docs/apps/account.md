@@ -33,6 +33,8 @@ proton account logout --all        # every profile on this machine
 
 It also unlocks your keys, so your password is needed **once** per machine and not again. Signing in again as the same account changes nothing, so an unattended job can run it ahead of its real work and recover on its own from a session that expired.
 
+An account in [two-password mode](https://proton.me/support/switch-two-password-mode) is asked for its second password once it has signed in - that is the one its keys are locked with - or reads it from `--second-password-file` / `--second-password-stdin`. Standard input has one reader, so at most one of the two secrets can come down a pipe.
+
 Security keys are not supported: they need a browser. If your account uses one, add an authenticator app in Proton's settings and sign in with that code.
 
 ## Profiles
@@ -90,6 +92,6 @@ proton account settings set locale de_AT
 
 Values can be given by name or by Proton's own number, and mistakes are caught before anything is sent.
 
-`get` shows more than `set` can change. Proton Sentinel, two-factor state and recovery addresses are readable here but can only be changed at [account.proton.me](https://account.proton.me), along with your password, recovery secrets, billing and account deletion.
+`get` shows more than `set` can change. Proton Sentinel, two-factor state, whether the account is in two-password mode and recovery addresses are readable here but can only be changed at [account.proton.me](https://account.proton.me), along with your password, recovery secrets, billing and account deletion.
 
 Mail, Calendar and Drive each have settings of their own - `proton mail settings`, and so on. Pass and Contacts have none.

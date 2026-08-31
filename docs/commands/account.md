@@ -25,6 +25,8 @@ Sign in and save the session for this profile.
 
 Signing in also unlocks your keys, so your password is needed once per machine and not again. Anything a flag has not set is asked for, as long as this is a terminal.
 
+An account in two-password mode is asked for its second password once it has signed in, because that is the secret its keys are locked with rather than the one that proves who it is. A one-password account is never asked for it.
+
 Signing in again as the same account changes nothing, so an unattended job can run it first and recover from a session that expired.
 
 ```
@@ -36,12 +38,15 @@ proton account login
 proton account login --profile work
 proton account login --user me@proton.me --password-file /run/secrets/proton
 proton account login --user me@proton.me --password-stdin --totp 123456
+proton account login --user me@proton.me --password-file /run/secrets/proton --second-password-file /run/secrets/proton-second
 ```
 
 | Flag | Description |
 | --- | --- |
 | `--password-file string` | Read the account password from a file |
 | `--password-stdin` | Read the account password from stdin |
+| `--second-password-file string` | Read the second password (two-password mode) from a file |
+| `--second-password-stdin` | Read the second password (two-password mode) from stdin |
 | `--totp string` | Two-factor code |
 | `--user string` | Proton account email to sign in as |
 

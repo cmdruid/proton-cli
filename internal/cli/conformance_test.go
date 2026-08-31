@@ -361,23 +361,27 @@ func TestSharedFlagNamesShareOneMeaning(t *testing.T) {
 // different meaning has to pick a different name, because this fails on any
 // command that declares one of them itself.
 var kitOwnedFlags = map[string]string{
-	"all":              "kit.All",
-	"passphrase-file":  "kit.Passphrase",
-	"passphrase-stdin": "kit.Passphrase",
-	"password-file":    "kit.Reauth",
-	"password-stdin":   "kit.Reauth",
-	"totp":             "kit.Reauth",
+	"all":                   "kit.All",
+	"passphrase-file":       "kit.Passphrase",
+	"passphrase-stdin":      "kit.Passphrase",
+	"password-file":         "kit.Reauth",
+	"password-stdin":        "kit.Reauth",
+	"second-password-file":  "kit.SecondPassword",
+	"second-password-stdin": "kit.SecondPassword",
+	"totp":                  "kit.Reauth",
 }
 
 // kitFlagUsage is what kit itself registers each of those with, so the guard
 // below can tell kit's own registration from a command redeclaring the name.
 var kitFlagUsage = map[string]string{
-	"all":              kit.AllUsage,
-	"passphrase-file":  kit.PassphraseFileUsage,
-	"passphrase-stdin": kit.PassphraseStdinUsage,
-	"password-file":    kit.PasswordFileUsage,
-	"password-stdin":   kit.PasswordStdinUsage,
-	"totp":             kit.TOTPUsage,
+	"all":                   kit.AllUsage,
+	"passphrase-file":       kit.PassphraseFileUsage,
+	"passphrase-stdin":      kit.PassphraseStdinUsage,
+	"password-file":         kit.PasswordFileUsage,
+	"password-stdin":        kit.PasswordStdinUsage,
+	"second-password-file":  kit.SecondPasswordFileUsage,
+	"second-password-stdin": kit.SecondPasswordStdinUsage,
+	"totp":                  kit.TOTPUsage,
 }
 
 // A flag name that names a fixed set of values names the same set everywhere.
@@ -652,14 +656,14 @@ func TestNoEnvironmentVariableCarriesACredential(t *testing.T) {
 
 // ── rule 14: standard input has one owner ──
 
-// Two things want stdin: --password-stdin for the account password, and `-` for
-// a body, a key, or a file to upload. Whichever read it second would find an
-// empty stream and fail somewhere further along with a puzzle.
+// Several things want stdin: --password-stdin for the account password,
+// --second-password-stdin for the secret that opens the keys, and `-` for a
+// body, a key, or a file to upload. Whichever read it second would find an empty
+// stream and fail somewhere further along with a puzzle.
 //
 // So every reader goes through App.Stdin, which hands it out once and names both
-// claimants when they collide. That is what lets --password-stdin be a global
-// flag rather than a privilege one command holds: any command can be the one
-// Proton asks to re-authenticate, and none of them has to know which.
+// claimants when they collide - which is the only reason a command may declare
+// one of these flags beside an argument that reads the same stream.
 func TestStandardInputHasOneOwner(t *testing.T) {
 	// internal/ui owns the process streams (rule 7) and supplies the reader that
 	// App.Stdin hands out.
@@ -697,6 +701,28 @@ func TestReauthCommandsAreDeclared(t *testing.T) {
 	sort.Strings(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("commands carrying the credential flags are:\n  %s\nwant:\n  %s",
+			strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// The second password belongs to signing in and to nothing else.
+//
+// It is not what Proton asks for when it wants a session proved: that is the
+// password, over SRP. It is what opens the keys, which every other command finds
+// already sealed into its session - so a second command offering the flag would
+// be offering one that almost never does anything.
+func TestOnlySigningInTakesTheSecondPassword(t *testing.T) {
+	want := []string{"proton account login"}
+	leaves, _ := partition(t)
+	var got []string
+	for _, c := range leaves {
+		if c.Flags().Lookup("second-password-file") != nil {
+			got = append(got, cmdPath(c))
+		}
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("commands carrying the second-password flags are:\n  %s\nwant:\n  %s",
 			strings.Join(got, "\n  "), strings.Join(want, "\n  "))
 	}
 }

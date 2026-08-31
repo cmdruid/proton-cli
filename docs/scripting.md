@@ -268,7 +268,7 @@ alias newsletter-xyz
 
 ## Automation notes
 
-- **Credentials**: an account is attached to a profile by `account login`. Hand the password over with `--password-file`, from a path only your user can read - systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all give you one.
+- **Credentials**: an account is attached to a profile by `account login`. Hand the password over with `--password-file`, from a path only your user can read - systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all give you one. An account in [two-password mode](configuration.md#two-password-mode) needs `--second-password-file` beside it, from a second such path.
 - **2FA**: `--totp` is only consulted during a fresh login. For unattended jobs, sign in once interactively so the session file exists, then let the job reuse it.
 - **Elevation**: Proton asks for the password again before `calendar settings calendars delete`, `mail messages expire` and `mail settings autoreply set`. A session cannot answer for it, so those commands take `--password-file` and `--password-stdin` of their own.
 - **CAPTCHA**: a login on a headless machine can hit human verification, which needs a desktop. Log in on a desktop first and copy the session, or run the job somewhere with a display. See [Human verification](human-verification.md).

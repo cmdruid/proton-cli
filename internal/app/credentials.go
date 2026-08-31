@@ -9,9 +9,9 @@ import (
 	"github.com/roman-16/proton-cli/internal/ui"
 )
 
-// passwordSource says where the account password may be read from. A file path
-// is the channel secret delivery already speaks - systemd's LoadCredential,
-// Kubernetes secrets and Docker secrets all hand one over.
+// passwordSource says where a secret may be read from. A file path is the
+// channel secret delivery already speaks - systemd's LoadCredential, Kubernetes
+// secrets and Docker secrets all hand one over.
 type passwordSource struct {
 	// file is read whole, with surrounding whitespace stripped.
 	file string
@@ -19,6 +19,22 @@ type passwordSource struct {
 	// than when a password turns out to be wanted: a `-` argument would otherwise
 	// read the stream first and quietly send the password wherever it pointed.
 	stdin io.Reader
+	// declared says the running command offers the flags this secret arrives
+	// through, which is what decides how a missing one is answered.
+	declared bool
+}
+
+// hint says how to supply this secret without a terminal.
+//
+// Few commands declare the flags a secret arrives through, and any command at all
+// can find the session's key password missing - so pointing one of those at a
+// flag it would reject is worse than saying nothing. Signing in is what puts the
+// key password back, so that is what it says instead.
+func (s passwordSource) hint(flag string) []string {
+	if s.declared {
+		return []string{"pass " + flag + ", or run this in a terminal"}
+	}
+	return []string{"proton account login", "or run this in a terminal"}
 }
 
 // Credentials resolves the values that identify and unlock an account.
@@ -31,6 +47,7 @@ type passwordSource struct {
 //
 //	email     the account this profile is signed in as, else a prompt
 //	password  --password-file, else --password-stdin, else a prompt
+//	second    --second-password-file, else --second-password-stdin, else a prompt
 //	code      --totp, else a prompt
 //
 // Only `account login` names an account, and it does so with its own --user.
@@ -52,11 +69,19 @@ type Credentials struct {
 		value  string
 		have   bool
 	}
+	// second is the account's second password, which two-password mode locks the
+	// keys with. It is not the password that signs in, so it has a source and a
+	// memory of its own too.
+	second struct {
+		source passwordSource
+		value  string
+		have   bool
+	}
 	// stdinOwner is set once the App exists, so Supply can claim standard input.
 	stdinOwner func(claim string) (io.Reader, error)
 
-	// prompter is built once and reused, so the three questions share one reader
-	// and one label column: a value typed ahead of its question survives, and the
+	// prompter is built once and reused, so every question shares one reader and
+	// one label column: a value typed ahead of its question survives, and the
 	// answers line up under each other.
 	prompter *ui.Prompter
 
@@ -70,7 +95,11 @@ type Credentials struct {
 const (
 	labelEmail    = "Email"
 	labelPassword = "Password"
-	labelTOTP     = "Two-factor code"
+	// labelSecondPassword is the secret that opens the keys of an account in
+	// two-password mode. Proton's own sign-in calls it that, and it is the name
+	// somebody has stored it under.
+	labelSecondPassword = "Second password"
+	labelTOTP           = "Two-factor code"
 	// labelPassphrase is the secret that locks a file rather than the account.
 	// It is never the account password, and calling it something else is what
 	// keeps somebody from typing one where the other was meant.
@@ -121,6 +150,7 @@ func (c *Credentials) Passphrase(reason string) (string, error) {
 // input is claimed for a password.
 func (c *Credentials) Supply(passwordFile string, passwordStdin bool, totp string) error {
 	c.source.file = passwordFile
+	c.source.declared = true
 	c.flagTOTP = totp
 	if !passwordStdin {
 		return nil
@@ -130,6 +160,23 @@ func (c *Credentials) Supply(passwordFile string, passwordStdin bool, totp strin
 		return err
 	}
 	c.source.stdin = r
+	return nil
+}
+
+// SupplySecondPassword records where the account's second password may be read
+// from. Only signing in declares it: every other command proves who it is with
+// the password, which is a different secret.
+func (c *Credentials) SupplySecondPassword(file string, stdin bool) error {
+	c.second.source.file = file
+	c.second.source.declared = true
+	if !stdin {
+		return nil
+	}
+	r, err := c.stdinOwner("--second-password-stdin")
+	if err != nil {
+		return err
+	}
+	c.second.source.stdin = r
 	return nil
 }
 
@@ -174,7 +221,35 @@ func (c *Credentials) Password(reason string) (string, error) {
 func (c *Credentials) readPassword(reason string) (string, error) {
 	return c.read(c.source, labelPassword,
 		errs.Problemf("Your password is required to %s.", reason).
-			Hint("pass --password-file, or run this in a terminal"))
+			Hint(c.source.hint("--password-file")...))
+}
+
+// KeyPassword returns the secret the account's keys are locked with.
+//
+// Two-password mode keeps that secret apart from the one that signs in, so which
+// of the two is asked for is the account's to decide - it is answered by Proton
+// rather than by the command, and reaches here as twoPassword.
+func (c *Credentials) KeyPassword(twoPassword bool) (string, error) {
+	if twoPassword {
+		return c.secondPassword()
+	}
+	return c.Password("unlock your keys")
+}
+
+// secondPassword returns the account's second password, asking for it if there
+// is somebody to ask.
+func (c *Credentials) secondPassword() (string, error) {
+	if c.second.have {
+		return c.second.value, nil
+	}
+	v, err := c.read(c.second.source, labelSecondPassword,
+		errs.Problemf("This account uses two-password mode, so your second password is required.").
+			Hint(c.second.source.hint("--second-password-file")...))
+	if err != nil {
+		return "", err
+	}
+	c.second.value, c.second.have = v, true
+	return v, nil
 }
 
 // read takes a secret from wherever it was told to look, and asks for it only
@@ -241,7 +316,7 @@ func (c *Credentials) ask(label string, secret bool, missing error) (string, err
 		return "", missing
 	}
 	if c.prompter == nil {
-		c.prompter = c.ui.Ask(labelEmail, labelPassword, labelTOTP, labelPassphrase)
+		c.prompter = c.ui.Ask(labelEmail, labelPassword, labelSecondPassword, labelTOTP, labelPassphrase)
 	}
 	p := c.prompter
 	var (

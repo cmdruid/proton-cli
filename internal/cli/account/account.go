@@ -113,8 +113,9 @@ func yesNo(b bool) string {
 
 func loginCmd() *cobra.Command {
 	var (
-		user   string
 		reauth kit.Reauth
+		second kit.SecondPassword
+		user   string
 	)
 	c := &cobra.Command{
 		Use:   "login",
@@ -123,11 +124,17 @@ func loginCmd() *cobra.Command {
 			"Signing in also unlocks your keys, so your password is needed once per\n" +
 			"machine and not again. Anything a flag has not set is asked for, as long\n" +
 			"as this is a terminal.\n\n" +
+			"An account in two-password mode is asked for its second password once it has\n" +
+			"signed in, because that is the secret its keys are locked with rather than\n" +
+			"the one that proves who it is. A one-password account is never asked for it.\n\n" +
 			"Signing in again as the same account changes nothing, so an unattended job\n" +
 			"can run it first and recover from a session that expired.",
 		Args: cobra.NoArgs,
 		RunE: kit.Run(nil, func(c *kit.Invocation) error {
 			if err := reauth.Supply(c); err != nil {
+				return err
+			}
+			if err := second.Supply(c); err != nil {
 				return err
 			}
 			if err := c.App.Login(c.Ctx, user); err != nil {
@@ -151,6 +158,7 @@ func loginCmd() *cobra.Command {
 	// profile it was given, and already knows the address from its session.
 	c.Flags().StringVar(&user, "user", "", "Proton account email to sign in as")
 	reauth.Declare(c)
+	second.Declare(c)
 	return c
 }
 

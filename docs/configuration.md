@@ -12,6 +12,20 @@ It asks for your email, password and two-factor code, attaches the account to a 
 
 Your password never leaves your machine: it derives the keys that decrypt your data locally. See [How it works](how-it-works.md).
 
+### Two-password mode
+
+Proton can keep the password that proves who you are apart from the one that opens your data. If your account is in [two-password mode](https://proton.me/support/switch-two-password-mode), `login` asks for the second password once it has signed in, exactly where Proton's own sign-in asks for it:
+
+```console
+$ proton account login
+Email:            alice@proton.me
+Password:
+Second password:
+✓ Signed in as alice@proton.me (profile "default").
+```
+
+It is the second one that seals into the session, so afterwards nothing is asked again. `proton account settings get` reports which mode the account is in.
+
 ### Handing over the password without a terminal
 
 A password is read from a pipe or a file, [never from a flag value](design-notes.md#why-a-password-is-never-a-flag-value).
@@ -22,6 +36,14 @@ printf '%s' "$PW" | proton account login --user alice@proton.me --password-stdin
 
 # a file
 proton account login --user alice@proton.me --password-file /run/secrets/proton
+```
+
+A second password is read the same way, through flags of its own. Standard input has one reader, so an account in two-password mode takes at most one of its two secrets from a pipe:
+
+```bash
+proton account login --user alice@proton.me \
+    --password-file /run/secrets/proton \
+    --second-password-file /run/secrets/proton-second
 ```
 
 `account login` performs the exchange that attaches an account to a profile. The others reach an endpoint Proton guards behind an elevated session, which it grants only for another one - today `calendar settings calendars delete`, `mail messages expire` and `mail settings autoreply set`:

@@ -110,9 +110,12 @@ const (
 var workDir string
 
 type testAccount struct {
-	profile      string
-	userVar      string
-	passwordVar  string
+	profile     string
+	userVar     string
+	passwordVar string
+	// secondVar names the account's second password, set for the account that is
+	// in Proton's two-password mode and empty for the rest.
+	secondVar    string
 	passwordFile string
 }
 
@@ -122,10 +125,14 @@ var accounts = map[string]*testAccount{
 		userVar:     "PROTON_CLI_TEST_PRIMARY_USER",
 		passwordVar: "PROTON_CLI_TEST_PRIMARY_PASSWORD",
 	},
+	// The secondary account is in two-password mode, which is the only way this
+	// suite reaches the mode at all: the secret that opens its keys is not the
+	// one that signs it in, so every run signs an account in through that path.
 	secondary: {
 		profile:     secondary,
 		userVar:     "PROTON_CLI_TEST_SECONDARY_USER",
 		passwordVar: "PROTON_CLI_TEST_SECONDARY_PASSWORD",
+		secondVar:   "PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD",
 	},
 	paid: {
 		profile:     paid,
@@ -161,7 +168,11 @@ func requireCredentials() {
 	var missing []string
 	for _, name := range required {
 		a := accounts[name]
-		for _, v := range []string{a.userVar, a.passwordVar} {
+		wanted := []string{a.userVar, a.passwordVar}
+		if a.secondVar != "" {
+			wanted = append(wanted, a.secondVar)
+		}
+		for _, v := range wanted {
 			if os.Getenv(v) == "" {
 				missing = append(missing, v)
 			}

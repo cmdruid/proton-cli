@@ -27,15 +27,17 @@ just test-report                      # where the time went, and how deep each r
 
 `just login` and `just seed` sign the accounts in and fill them, for working with them by hand.
 
-The suite requires all four of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`. `PROTON_CLI_TEST_PAID_USER` and `PROTON_CLI_TEST_PAID_PASSWORD` are optional - see [The paid account](#the-paid-account). `.env.example` lists all of them.
+The suite requires all five of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER`, `PROTON_CLI_TEST_SECONDARY_PASSWORD` and `PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD`. `PROTON_CLI_TEST_PAID_USER` and `PROTON_CLI_TEST_PAID_PASSWORD` are optional - see [The paid account](#the-paid-account). `.env.example` lists all of them.
 
 ## The two accounts
 
 The suite creates, mutates and deletes real data, so it runs on two accounts kept for that and nothing else. Most tests act as **`primary`**; the handful that genuinely need two Proton users bring in **`secondary`**.
 
+The **secondary account is in Proton's two-password mode**, which is the only way the suite reaches that mode at all: the secret that opens its keys is not the one that signs it in, so `PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD` is as required as its password, and every run signs an account in through that path. `TestAccountSettingsReportTwoPasswordMode` fails if the account is ever switched back, because the coverage would then be gone with nothing saying so.
+
 These are the harness's own variables, not the CLI's: proton takes an account from a signed-in profile, which `TestMain` establishes. The `PROTON_CLI_TEST_` prefix keeps them clear of anything the binary reads.
 
-`TestMain` signs both profiles in before any test runs, over stdin, and writes each password to a `0600` file for the rest of the run. The file is needed because a session cannot carry elevation: Proton re-authenticates over SRP for its guarded operations, `calendar settings calendars delete` among them, and that needs the password itself - the key blob sealed at login is a one-way derivation of it. `account login` is idempotent, so a run that reuses an existing session pays nothing.
+`TestMain` signs both profiles in before any test runs, over stdin - the secondary's second password goes in a `0600` file beside it, because standard input has one reader - and writes each account password to a `0600` file for the rest of the run. The file is needed because a session cannot carry elevation: Proton re-authenticates over SRP for its guarded operations, `calendar settings calendars delete` among them, and that needs the password itself - the key blob sealed at login is a one-way derivation of it. `account login` is idempotent, so a run that reuses an existing session pays nothing.
 
 `runAs` builds the child environment from an **allowlist** rather than inheriting one. It is the single place a target account is chosen, so it is the single place the choice can be enforced: whatever you happen to have exported, the binary under test sees a stated environment and can act only as the profile named there.
 

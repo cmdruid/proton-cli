@@ -130,6 +130,23 @@ func TestAccountSettingsGetAndList(t *testing.T) {
 	}
 }
 
+// The two accounts are in the two password modes, and `get` says which.
+//
+// This is the suite's only check on two-password mode, and it is a check on the
+// accounts as much as on the command: the secondary is signed in through the
+// second password every run, so an account switched back to one password would
+// take that coverage away without anything failing. This is what fails.
+func TestAccountSettingsReportTwoPasswordMode(t *testing.T) {
+	t.Parallel()
+	if mode := runJSON(t, "account", "settings", "get")["two_password_mode"]; mode != "off" {
+		t.Errorf("the primary account's two_password_mode = %v, want off", mode)
+	}
+	if mode := runJSONSecondary(t, "account", "settings", "get")["two_password_mode"]; mode != "on" {
+		t.Errorf("the secondary account's two_password_mode = %v, want on - the suite covers"+
+			" two-password mode by signing that account in, so it has to stay in it", mode)
+	}
+}
+
 // Reads and writes speak the same vocabulary: what `get` shows is what `set` takes.
 func TestAccountSettingsRoundTripsNames(t *testing.T) {
 	t.Parallel()
