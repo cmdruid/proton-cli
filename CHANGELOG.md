@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Adding a version section here is what publishes a release, so this file is the one place a version is decided: see [Releases](CONTRIBUTING.md#releases). Versions that shipped before this file existed are on the [releases page](https://github.com/roman-16/proton-cli/releases).
 
+## [2.9.0] - 2026-08-31
+
+### Added
+
+- Accounts in Proton's two-password mode can be used at all: `account login` asks for the second password once the sign-in is through, or reads it from `--second-password-file` or `--second-password-stdin`. Such an account used to sign in and then fail on every key it tried to open.
+- `account settings get` says whether an account keeps the password that signs it in apart from the one that opens its data, as a `Two-Password Mode` row and as `two_password_mode`.
+- Every command, argument and flag has a reference page at [proton-cli.lerchster.dev](https://proton-cli.lerchster.dev), generated from the same command tree `--help` prints from.
+
+### Changed
+
+- A `--help` screen ends with a link to that command's page instead of repeating the global flags, which are listed on `proton --help` alone.
+- A short ID starts after the dash an ID may begin with, so nothing a listing shortens can be read as a flag when it is pasted back. About one ID in sixty-four begins with one, and a short ID copied for such a thing before this release needs listing again.
+- Keys that do not open name the secret that was refused - `Incorrect second password.` in two-password mode - rather than coming out as a decryption failure.
+- An ambiguous reference lists its candidates as short IDs, unless shortening them would print the same token twice.
+
+### Fixed
+
+- Installing an older version from the APT repository works again: it carries the last ten releases rather than only the newest, so `apt install proton-cli=2.8.0` and a rollback find something to install.
+- The key password kept with a session is a cache: one that has stopped opening the keys is worked out again instead of leaving a profile that decrypts nothing, which is what a password changed elsewhere used to leave behind. Signing in drops the one a previous session left, so `account get` no longer calls such a profile unlocked.
+- A command that needs your password but takes no `--password-file` points at `proton account login`, instead of naming a flag it would reject.
+
 ## [2.8.0] - 2026-08-28
 
 ### Added
