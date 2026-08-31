@@ -1,6 +1,6 @@
-# Contacts
+# Proton Contacts from the command line
 
-Contacts, their groups and their pinned encryption keys. Cards are encrypted and signed with your user key.
+Your Proton address book from the terminal: typed addresses and phones, the full vCard field set, groups, duplicate merging, and import and export. Cards are encrypted and signed with your user key.
 
 Every command and flag is in the [`proton contacts` reference](../commands/contacts.md). This page is the things people actually do.
 

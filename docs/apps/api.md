@@ -1,6 +1,6 @@
-# Raw API
+# The raw Proton API
 
-`proton api` sends an authenticated request to any Proton endpoint, using the session you already have. It is the escape hatch for anything the commands don't cover.
+The `proton api` command sends an authenticated request to any Proton endpoint, using the session you already have. It is the escape hatch for anything the commands don't cover.
 
 Every flag is in the [`proton api` reference](../commands/api.md).
 

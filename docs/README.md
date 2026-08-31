@@ -6,9 +6,9 @@ Rendered and searchable at **[proton-cli.lerchster.dev](https://proton-cli.lerch
 
 | Page | What's in it |
 | --- | --- |
-| [Installation](installation.md) | Every platform, updating, uninstalling |
-| [Getting started](getting-started.md) | Signing in, your first commands, completion |
-| [The language](language.md) | The grammar: verbs, filters, dry runs, what asks first |
+| [Install](installation.md) | Every platform, updating, uninstalling |
+| [Quickstart](quickstart.md) | Signing in, your first commands, completion |
+| [How commands read](language.md) | The grammar: verbs, naming a thing, filters, dry runs, what asks first |
 
 ## The apps
 
@@ -21,7 +21,7 @@ One page each, task by task, with the commands in use.
 | [Calendar](apps/calendar.md) | Events, recurrence, reminders, invitations, .ics |
 | [Pass](apps/pass.md) | Items, vaults, aliases, secure links, two-factor codes |
 | [Contacts](apps/contacts.md) | Contacts, groups, pinned keys, vCard import and export |
-| [Account](apps/account.md) | Your account, profiles, sessions, settings |
+| [Account](apps/account.md) | Signing in, sessions, several accounts side by side, settings |
 | [Raw API](apps/api.md) | Reaching an endpoint the commands don't cover |
 
 ## Automating it
@@ -29,7 +29,7 @@ One page each, task by task, with the commands in use.
 | Page | What's in it |
 | --- | --- |
 | [Scripting](scripting.md) | Pipelines, `jq`, cron and systemd |
-| [Configuration](configuration.md) | Profiles, sessions, environment variables, files on disk, global flags |
+| [Configuration](configuration.md) | Environment variables, files on disk, global flags |
 
 ## Reference
 
@@ -37,14 +37,13 @@ One page each, task by task, with the commands in use.
 | --- | --- |
 | [Command reference](commands/README.md) | Every command, argument and flag (generated from the tree) |
 | [Output](output.md) | The five response shapes, JSON, colour, exit codes |
-| [Naming things](references.md) | Names, short IDs, paths, compound IDs |
-| [Limitations](limitations.md) | What it can't do, and why |
+| [Limits](limitations.md) | What it can't do, and why |
 
-## Why it works this way
+## Answers
 
 | Page | What's in it |
 | --- | --- |
-| [How it works](how-it-works.md) | Sign-in, keys, what is encrypted with what |
+| [FAQ](faq.md) | Is this official? How does it differ from Bridge? Is my password safe? |
+| [Troubleshooting](troubleshooting.md) | CAPTCHAs, headless machines, expired sessions, rate limits |
+| [Security and encryption](how-it-works.md) | Sign-in, keys, what is encrypted with what, what is on disk |
 | [Design notes](design-notes.md) | The choices behind the interface |
-| [Human verification](human-verification.md) | When Proton asks for a CAPTCHA |
-| [Security](../SECURITY.md) | How credentials are stored, and how to report a vulnerability |

@@ -55,7 +55,7 @@ A help screen and a reference page agree about where a command is documented bec
 
 The site is published from its own repository because GitHub gives a repository one Pages site, and this one's is [the APT repository](https://roman-16.github.io/proton-cli/). Keeping them apart is what stops a documentation change from reaching what `apt update` reads.
 
-## README demo images
+## Images
 
 The terminal panel in the README is a recording of a real session, rendered with [freeze](https://github.com/charmbracelet/freeze). It records as `primary`, the same account the integration tests use, so it needs no credentials of its own:
 
@@ -64,6 +64,8 @@ just demo
 ```
 
 [`scripts/terminal-demo/README.md`](scripts/terminal-demo/README.md) explains the pieces and the rules that keep the recording honest.
+
+The card a link preview shows is `assets/og.svg`, hand-drawn, and `assets/og.png` is what it renders to - the only format the places a link gets pasted will draw. Edit the SVG and run `just og`; the site copies the PNG into place on every build. GitHub's own preview is a repository setting rather than a file, so the same PNG has to be uploaded there by hand.
 
 ## Tests
 

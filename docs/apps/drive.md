@@ -1,6 +1,6 @@
-# Drive
+# Proton Drive from the command line
 
-Your Drive as paths. Files are encrypted before they leave your machine and decrypted after they arrive, block by block, with your keys.
+Upload, download, share and organize Proton Drive as ordinary paths. Files are encrypted before they leave your machine and decrypted after they arrive, block by block, with your keys.
 
 Every command and flag is in the [`proton drive` reference](../commands/drive.md). This page is the things people actually do.
 

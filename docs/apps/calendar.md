@@ -1,6 +1,6 @@
-# Calendar
+# Proton Calendar from the command line
 
-Calendars and events, encrypted with your calendar key and signed with your address key.
+Events, recurrence, reminders and invitations in Proton Calendar, plus .ics in and out. Everything is encrypted with your calendar key and signed with your address key.
 
 Every command and flag is in the [`proton calendar` reference](../commands/calendar.md). This page is the things people actually do.
 

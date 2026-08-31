@@ -66,6 +66,12 @@ notes:
     go run ./scripts/changelog
     go run ./scripts/changelog --notes
 
+[doc("Re-render the social card that a link preview shows, from its SVG source")]
+og:
+    resvg assets/og.svg assets/og.png --width 1200 --height 630 \
+        --use-fonts-dir "$DEVBOX_PACKAGES_DIR/share/fonts" \
+        --font-family "JetBrains Mono" --monospace-family "JetBrains Mono"
+
 [doc("Regenerate openapi.yaml from the WebClients TypeScript source")]
 openapi:
     cd scripts && bun install --frozen-lockfile && bun run generate-openapi

@@ -1,6 +1,6 @@
-# Pass
+# Proton Pass from the command line
 
-Vaults, logins, secrets and aliases. Items are decrypted on your machine with the vault and item keys.
+Logins, notes, cards, SSH keys, identities, aliases and two-factor codes in Proton Pass. Items are decrypted on your machine with the vault and item keys.
 
 Every command and flag is in the [`proton pass` reference](../commands/pass.md). This page is the things people actually do.
 

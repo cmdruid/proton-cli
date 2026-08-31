@@ -1,6 +1,6 @@
-# Mail
+# Proton Mail from the command line
 
-Read, write, send, search and organize mail. Bodies are decrypted on your machine and outgoing mail is encrypted and signed with your address key, exactly like the web client.
+Read, send, search and organize Proton Mail from your terminal. Bodies are decrypted on your machine, and outgoing mail is encrypted and signed with your address key, exactly like the web client.
 
 Every command and flag is in the [`proton mail` reference](../commands/mail.md). This page is the things people actually do.
 

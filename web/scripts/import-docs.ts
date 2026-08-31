@@ -23,6 +23,7 @@ const docs = join(root, "docs");
 const content = join(root, "web/src/content/docs");
 const assets = join(root, "web/src/assets");
 const statics = join(root, "web/public");
+const store = join(root, "web/.astro/data-store.json");
 
 // docs/README.md is a table of contents, and the sidebar already is one.
 const skipped = new Set(["README.md"]);
@@ -139,7 +140,15 @@ const render = (path: string, source: string) => {
   return frontmatter + body.trimStart();
 };
 
+/*
+ * A collection entry is re-rendered when its own file changes, and code blocks
+ * are rendered into it. So a syntax-highlighting option that moves in the
+ * configuration reaches a build but not a running dev server, which then shows
+ * blocks nobody wrote. The cache is dropped instead: it holds five files here,
+ * and being able to trust the page is worth rebuilding them.
+ */
 const importDocs = async () => {
+  await rm(store, { force: true });
   await rm(content, { force: true, recursive: true });
   for (const path of await markdownFiles(docs)) {
     const out = join(content, renamed.get(path) ?? path);
@@ -152,14 +161,15 @@ const importDocs = async () => {
  * The logo is an import, so Starlight can hash and inline it. The demo panels
  * are served as they are: they are drawings of a terminal, already the size they
  * are meant to be shown at, and nothing an image pipeline does to an SVG of a
- * screenshot improves it.
+ * screenshot improves it. The social card is a PNG because that is the only
+ * format the places a link gets pasted will draw.
  */
 const importAssets = async () => {
   await mkdir(assets, { recursive: true });
   await mkdir(statics, { recursive: true });
   await copyFile(join(root, "assets/logo.svg"), join(assets, "logo.svg"));
   await copyFile(join(root, "assets/logo.svg"), join(statics, "favicon.svg"));
-  for (const name of ["demo-dark.svg", "demo-light.svg"]) {
+  for (const name of ["demo-dark.svg", "demo-light.svg", "og.png"]) {
     await copyFile(join(root, "assets", name), join(statics, name));
   }
 };

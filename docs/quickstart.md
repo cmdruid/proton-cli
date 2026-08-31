@@ -1,4 +1,6 @@
-# Getting started
+# Quickstart
+
+Sign in once, then read your mail, move files in and out of Drive, check your calendar and pull a two-factor code, all from the shell. This is the five minutes from a fresh install to a useful command.
 
 ## Sign in
 
@@ -71,20 +73,15 @@ proton completion bash | sudo tee /etc/bash_completion.d/proton
 proton completion fish > ~/.config/fish/completions/proton.fish
 ```
 
-## More than one account
+## Look before you leap
 
-Each profile keeps its own session, so a personal and a work account never mix:
+Every command that changes something takes `--dry-run`, which resolves references, applies filters, and shows you the rows it would touch:
 
-```console
-$ proton --profile work account login
-Email:     you@company.com
-Password:
-✓ Signed in as you@company.com (profile "work").
-
-$ proton --profile work mail messages list
+```bash
+proton mail messages trash --from newsletter@example.com --older-than 90d --dry-run
 ```
 
-`proton account profiles list` shows what is signed in here, and `export PROTON_PROFILE=work` makes one the default for a shell. Profiles, sessions, environment variables and the files on disk are all in [Configuration](configuration.md).
+Anything that removes permanently, or removes what a filter picked out rather than what you named, shows those rows and asks first.
 
 ## Sign out
 
@@ -93,30 +90,15 @@ proton account logout             # forget the session on this machine
 proton account logout --revoke    # and invalidate it at Proton
 ```
 
-Revoking also makes the credentials saved on this machine useless, even to someone who already copied them. See [Security](../SECURITY.md).
-
-## When something goes wrong
-
-Errors say what happened and what to try:
-
-```console
-$ proton mail messages move 5bH2mQxK --into Work
-Error: "Work" is a label, not a folder - moving needs a folder.
-Try:   to attach the label instead, use `label --label Work`.
-       To see the folders, run `proton mail settings folders list`.
-```
-
-Before changing anything in bulk, ask what would happen:
-
-```bash
-proton mail messages trash --from newsletter@example.com --older-than 90d --dry-run
-```
+Revoking also makes the credentials saved on this machine useless, even to someone who already copied them.
 
 ## Where next
 
 | Page | What's in it |
 | --- | --- |
-| [The language](language.md) | The grammar, the verbs, the filters, dry runs |
+| [How commands read](language.md) | The grammar, the verbs, the filters, dry runs, naming a thing |
 | [Mail](apps/mail.md) · [Drive](apps/drive.md) · [Calendar](apps/calendar.md) · [Pass](apps/pass.md) · [Contacts](apps/contacts.md) | One page per app, task by task |
+| [Accounts and sessions](apps/account.md) | Two accounts side by side, unattended sign-in, revoking a device |
 | [Scripting](scripting.md) | Pipelines, `jq`, cron and systemd |
 | [Command reference](commands/README.md) | Every command, argument and flag |
+| [FAQ](faq.md) | Is this official? How does it differ from Bridge? Is my password safe? |

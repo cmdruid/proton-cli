@@ -2,6 +2,8 @@
 
 > **Disclaimer:** This is an unofficial, community-built tool and is not endorsed by or affiliated with Proton AG. Use at your own risk.
 
+How credentials are stored, what is encrypted with what, and how to reduce your risk as a user are documented in [Security and encryption](docs/how-it-works.md). This file is the policy for reporting a problem with any of it.
+
 ## Reporting a vulnerability
 
 **Please do not report security issues via public GitHub issues, pull requests, or discussions.**
@@ -62,26 +64,3 @@ We follow [coordinated disclosure](https://en.wikipedia.org/wiki/Coordinated_vul
 2. A patched release is published.
 3. A security advisory is published on GitHub with credit to the reporter (unless they prefer to remain anonymous).
 4. If a CVE is warranted, one is requested.
-
-## How credentials are stored at rest
-
-`proton` saves a per-profile session file at `~/.config/proton-cli/sessions/<profile>.json` (mode `0600`) so you don't re-authenticate on every command. It contains:
-
-- the session **auth tokens** (UID, access, refresh), and
-- the **salted key password** that unlocks your PGP keys, stored **encrypted** with a random 256-bit AES-GCM *client key*.
-
-That client key is **not** stored on your machine - it is held by Proton's servers and fetched over an authenticated request (`/auth/v4/sessions/local/key`) when a command needs to unlock your keys. Consequences:
-
-- The key password is never written to disk in cleartext, so it can't be lifted from a backup, a synced home directory, a disk image, or with `grep`.
-- **Revoking the session** (from the Proton web/mobile app or its session settings) makes the on-disk blob undecryptable: without a live session the client key can't be fetched, so a leaked copy of the file can no longer be turned back into your key password.
-
-Caveat: the file still contains the session refresh token, so it is **not** safe to share - treat it as a secret. The encryption-at-rest above limits the damage of a *leaked copy* (it can be neutralised by revoking the session); it is not a substitute for protecting the file.
-
-## Hardening recommendations for users
-
-proton-cli is unaudited. To reduce risk while using it:
-
-- Treat the binary as you would any third-party CLI handling secrets - run it as your normal user, not as root.
-- Keep `proton` and its dependencies (Go runtime, OS) up to date.
-- Verify release artifact checksums against the [GitHub Releases page](https://github.com/roman-16/proton-cli/releases) before installing.
-- Be aware that running `proton` against a Proton account may, depending on your usage pattern, trigger Proton's automated abuse detection. This is an account-safety consideration, not a vulnerability in `proton`.

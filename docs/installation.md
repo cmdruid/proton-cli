@@ -1,6 +1,6 @@
-# Installation
+# Install on Linux, macOS and Windows
 
-proton is a single self-contained binary. Pick the line that matches your system.
+proton-cli is one self-contained binary, on Homebrew, winget, APT, AUR, Nix, npm, Go and as a signed download. Pick the line that matches your system.
 
 The command is `proton`. Every install also puts `proton-cli` beside it as a second name, so a line written either way runs.
 
@@ -28,7 +28,7 @@ curl -fsSL …/install.sh | sh -s -- --install-dir /usr/local/bin --version 2.5.
 ```
 
 > [!NOTE]
-> `go install` builds don't embed the CAPTCHA helper that release binaries carry. If Proton asks for human verification at login, use a release binary instead. See [Human verification](human-verification.md).
+> `go install` builds don't embed the CAPTCHA helper that release binaries carry. If Proton asks for human verification at login, use a release binary instead. See [Troubleshooting](troubleshooting.md#proton-asks-for-a-captcha).
 
 ## Debian, Ubuntu, Linux Mint
 

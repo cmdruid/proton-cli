@@ -85,7 +85,7 @@ func index(root *cobra.Command, pages map[string][]*cobra.Command) string {
 	b.WriteString("# Command reference\n\n")
 	b.WriteString("Every command, every argument and every flag, generated from the command tree.\n\n")
 	b.WriteString("```\n" + kit.Program + " <app> <collection> <verb> [TARGET...] [--flags]\n```\n\n")
-	b.WriteString("Anywhere a command shows `REF`, you can pass a full ID, the eight-character short ID a list printed, or something human: a subject, a name, a path, an email address. See [References](../references.md).\n")
+	b.WriteString("Anywhere a command shows `REF`, you can pass a full ID, the eight-character short ID a list printed, or something human: a subject, a name, a path, an email address. See [Naming the thing you want](../language.md#naming-the-thing-you-want).\n")
 
 	for _, group := range root.Groups() {
 		fmt.Fprintf(&b, "\n## %s\n\n", strings.TrimSuffix(group.Title, ":"))

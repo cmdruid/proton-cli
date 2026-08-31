@@ -1,6 +1,6 @@
-# Output
+# Output, JSON and exit codes
 
-Data goes to **stdout**. Progress bars, confirmations, footers, warnings, prompts and errors go to **stderr**. So a redirect gives you clean data and you still see what happened.
+Data goes to stdout; progress bars, confirmations, footers, warnings, prompts and errors go to stderr. So a redirect gives you clean data and you still see what happened. Five response shapes, one JSON envelope per list, and exit codes that tell failures apart.
 
 ## The five shapes
 

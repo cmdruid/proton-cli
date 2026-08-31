@@ -4,9 +4,9 @@
 
 # proton-cli
 
-**Proton, in your terminal.**
+**Your CLI for Proton Mail, Drive, Calendar, Pass and Contacts.**
 
-_Unofficial, community-built, not affiliated with Proton AG._
+_One binary, end-to-end encrypted. A community project, not affiliated with Proton AG._
 
 [![Release](https://img.shields.io/github/v/release/roman-16/proton-cli?sort=semver&style=flat-square&color=6D4AFF)](https://github.com/roman-16/proton-cli/releases/latest) [![Downloads](https://img.shields.io/github/downloads/roman-16/proton-cli/total?style=flat-square&color=6D4AFF)](https://github.com/roman-16/proton-cli/releases) [![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-6D4AFF?style=flat-square)](docs/installation.md) [![License](https://img.shields.io/github/license/roman-16/proton-cli?style=flat-square&color=6D4AFF)](LICENSE)
 
@@ -20,10 +20,10 @@ _Unofficial, community-built, not affiliated with Proton AG._
 </div>
 <br />
 
-Read your mail, move files in and out of Drive, manage calendars, passwords, and contacts, all without opening a browser. proton logs in the way the Proton apps do and does the encryption on your machine, so your keys stay yours.
+Read your mail, move files in and out of Drive, manage calendars, passwords and contacts, all without opening a browser. proton logs in the way the Proton apps do and does the encryption on your machine, so your keys stay yours.
 
 - **Real end-to-end encryption.** SRP login and the full PGP key hierarchy, handled locally with Proton's own [go-srp](https://github.com/ProtonMail/go-srp) and [gopenpgp](https://github.com/ProtonMail/gopenpgp). No bridge, no proxy, no browser in the middle.
-- **Five apps, one binary.** Mail, Drive, Calendar, Pass, and Contacts, in a single static executable on Linux, macOS, and Windows.
+- **Five apps, one binary.** Mail, Drive, Calendar, Pass and Contacts, in a single static executable on Linux, macOS and Windows.
 - **Built for pipes and cron.** JSON and YAML with one envelope shape for every list, streaming stdin and stdout, exit codes that mean something, and `--dry-run` on everything that changes state, showing the rows it would touch.
 
 ## Install
@@ -36,7 +36,7 @@ curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/in
 irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 | iex
 ```
 
-Also on Homebrew, winget, APT, AUR, Nix, npm, and as plain signed binaries - see [Installation](docs/installation.md). The command is `proton`, and `proton-cli` works too.
+Also on Homebrew, winget, APT, AUR, Nix, npm, and as plain signed binaries - see [Install](docs/installation.md). The command is `proton`, and `proton-cli` works too.
 
 ## Sixty seconds
 
@@ -59,7 +59,7 @@ proton calendar events list
 proton pass items totp github.com
 ```
 
-Every command reads the same way - `proton <app> <collection> <verb>` - and anywhere one wants an ID, a subject, name, path, or address works too. → [Getting started](docs/getting-started.md) · [The language](docs/language.md)
+Every command reads the same way - `proton <app> <collection> <verb>` - and anywhere one wants an ID, a subject, name, path, or address works too. → [Quickstart](docs/quickstart.md) · [How commands read](docs/language.md)
 
 ## What you can do
 
@@ -68,9 +68,22 @@ Every command reads the same way - `proton <app> <collection> <verb>` - and anyw
 - **[Calendar](docs/apps/calendar.md)** - events and reminders. Recurrence occurrence by occurrence, attendees, invitations, .ics in and out.
 - **[Pass](docs/apps/pass.md)** - logins and secrets. Notes, cards, SSH keys, identities, aliases, two-factor codes, item history.
 - **[Contacts](docs/apps/contacts.md)** - your address book. Typed addresses and phones, the full vCard field set, duplicate merging.
-- **[Account](docs/apps/account.md)** - profiles and settings. Sessions, per-app settings, more than one account side by side.
+- **[Account](docs/apps/account.md)** - signing in, sessions, and more than one account side by side.
 
 [`proton api`](docs/apps/api.md) reaches any endpoint the commands don't. The [command reference](docs/commands/README.md) has every command, argument and flag.
+
+## How it compares
+
+Proton ships a CLI for Drive and one for Pass, and Bridge for mail in a desktop client. This is one binary across all five apps, with one grammar and one output shape.
+
+| | Mail | Drive | Calendar | Pass | Contacts |
+| --- | --- | --- | --- | --- | --- |
+| **proton-cli** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Proton Drive CLI | | ✓ | | | |
+| Proton Pass CLI | | | | ✓ | |
+| Proton Mail Bridge | IMAP/SMTP only | | | | |
+
+Bridge is a background service your mail client talks to, and needs a paid plan. proton-cli is a command you run, on any plan. → [FAQ](docs/faq.md)
 
 ## Automate it
 
@@ -94,13 +107,13 @@ Data goes to stdout and progress to stderr, so redirects stay clean. Exit codes 
 
 Your password never reaches Proton: login is SRP, and the key password it derives stays local and unlocks your PGP keys in memory. Mail, files, events, contacts, and Pass items are decrypted after they arrive and encrypted before they leave, with the same key hierarchy the web clients use.
 
-The saved session keeps your key password encrypted with a key held server-side, so revoking the session from any Proton app makes a leaked copy of the file useless. proton-cli is unaudited; the storage model is written down in [Security](SECURITY.md) and the mechanics in [How it works](docs/how-it-works.md).
+The saved session keeps your key password encrypted with a key held server-side, so revoking the session from any Proton app makes a leaked copy of the file useless. proton-cli is unaudited; the whole model is written down in [Security and encryption](docs/how-it-works.md).
 
 ## Documentation
 
-Everything is at **[proton-cli.lerchster.dev](https://proton-cli.lerchster.dev)** and in [`docs/`](docs/README.md) beside the code. [`CHANGELOG.md`](CHANGELOG.md) records what each version changed, and `proton changelog` prints it.
+Everything is at **[proton-cli.lerchster.dev](https://proton-cli.lerchster.dev)** and in [`docs/`](docs/README.md) beside the code. Start with [Quickstart](docs/quickstart.md), reach for the [FAQ](docs/faq.md) when you wonder whether this is the right tool, and [Troubleshooting](docs/troubleshooting.md) when a command surprises you.
 
-Already installed? `proton update`. An install no package manager owns says so itself, once a day.
+[`CHANGELOG.md`](CHANGELOG.md) records what each version changed, and `proton changelog` prints it. Already installed? `proton update`. An install no package manager owns says so itself, once a day.
 
 ## Contributing
 

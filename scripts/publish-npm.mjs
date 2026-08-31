@@ -20,8 +20,23 @@ const SCOPE = "roman-16";
 const NAME = "proton-cli";
 const BIN = "proton";
 const REPO = "https://github.com/roman-16/proton-cli";
+const SITE = "https://proton-cli.lerchster.dev";
 const DESCRIPTION =
-  "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts.";
+  "Your CLI for Proton Mail, Drive, Calendar, Pass and Contacts. One binary, end-to-end encrypted.";
+const KEYWORDS = [
+  "cli",
+  "command-line",
+  "contacts",
+  "end-to-end-encryption",
+  "email",
+  "proton",
+  "proton-calendar",
+  "proton-drive",
+  "proton-mail",
+  "proton-pass",
+  "protonmail",
+  "terminal",
+];
 
 const RAW = `${REPO.replace("github.com", "raw.githubusercontent.com")}/main`;
 const BLOB = `${REPO}/blob/main`;
@@ -133,8 +148,9 @@ writeJSON(join(rootDir, "package.json"), {
   name: `@${SCOPE}/${NAME}`,
   version,
   description: DESCRIPTION,
+  keywords: KEYWORDS,
   license: "MIT",
-  homepage: REPO,
+  homepage: SITE,
   repository: { type: "git", url: `git+${REPO}.git` },
   bin: { [BIN]: `bin/${BIN}.js`, [NAME]: `bin/${BIN}.js` },
   files: ["bin"],

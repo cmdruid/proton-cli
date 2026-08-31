@@ -1,6 +1,8 @@
-# Scripting
+# Scripting and automation
 
-Data goes to stdout, everything else to stderr, and exit codes say what went wrong. See [Output](output.md) for the details.
+Pipelines, `jq`, cron and systemd. Data goes to stdout, everything else to stderr, and exit codes say what went wrong, so proton-cli composes with the rest of your shell instead of fighting it.
+
+See [Output](output.md) for the response shapes in full.
 
 ## Capturing new IDs
 
@@ -268,10 +270,10 @@ alias newsletter-xyz
 
 ## Automation notes
 
-- **Credentials**: an account is attached to a profile by `account login`. Hand the password over with `--password-file`, from a path only your user can read - systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all give you one. An account in [two-password mode](configuration.md#two-password-mode) needs `--second-password-file` beside it, from a second such path.
+- **Credentials**: an account is attached to a profile by `account login`. Hand the password over with `--password-file`, from a path only your user can read - systemd's `LoadCredential=`, Kubernetes secrets and Docker secrets all give you one. An account in [two-password mode](apps/account.md#two-password-mode) needs `--second-password-file` beside it, from a second such path.
 - **2FA**: `--totp` is only consulted during a fresh login. For unattended jobs, sign in once interactively so the session file exists, then let the job reuse it.
 - **Elevation**: Proton asks for the password again before `calendar settings calendars delete`, `mail messages expire` and `mail settings autoreply set`. A session cannot answer for it, so those commands take `--password-file` and `--password-stdin` of their own.
-- **CAPTCHA**: a login on a headless machine can hit human verification, which needs a desktop. Log in on a desktop first and copy the session, or run the job somewhere with a display. See [Human verification](human-verification.md).
+- **CAPTCHA**: a login on a headless machine can hit human verification, which needs a desktop. Log in on a desktop first and copy the session, or run the job somewhere with a display. See [Troubleshooting](troubleshooting.md#signing-in-on-a-headless-machine).
 - **`--quiet`** silences the `✓` lines and progress bars, useful in cron.
 - **Bad moments upstream**: a 502 from Proton's edge or a connection that fails is waited out and asked again - for anything that only reads, and for signing in. Nothing that changes something is ever sent twice. A failure that outlasts the waiting exits 5, so a job can tell "Proton is having trouble, come back later" from "the password is wrong" (exit 2).
 - **Rate limits**: bulk commands page through Proton's API and respect its caps (150 messages per page). Long-running loops should sleep between iterations.

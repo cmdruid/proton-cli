@@ -1,8 +1,8 @@
-# Account
+# Your Proton account from the command line
 
-Signing in and out, account settings, and the sessions Proton holds for you.
+Sign in once and your password is never asked for again on that machine. This page covers signing in and out, unattended and two-password sign-in, running several Proton accounts side by side, the sessions Proton holds across your devices, and your account settings.
 
-Every command and flag is in the [`proton account` reference](../commands/account.md). For profiles, environment variables and where things are stored, see [Configuration](../configuration.md).
+Every command and flag is in the [`proton account` reference](../commands/account.md).
 
 ## Where you stand
 
@@ -20,31 +20,99 @@ ID:          Kd91mQxT…
 
 `Session: valid` and `Unlocked: yes` together mean this machine can act as the account right now.
 
-## Signing in and out
+## Signing in
+
+An account reaches proton one way:
 
 ```bash
 proton account login
-proton account logout
+```
+
+It asks for your email, password and two-factor code, attaches the account to a profile, and saves the session. Every later command acts as whichever profile it names.
+
+Signing in also **unlocks your keys**, so your password is needed once per machine and not again. Your password itself never leaves your machine: it derives the keys that decrypt your data locally. See [Security and encryption](../how-it-works.md).
+
+Signing in again as the same account changes nothing, so an unattended job can run it ahead of its real work and recover on its own from a session that expired or was revoked:
+
+```bash
+proton account login --user "$ACCOUNT" --password-file "$CRED"
+proton drive items upload backup.zst /backups
+```
+
+A two-factor code is only asked for when the account actually has one enabled. **Security keys are not supported**: FIDO2 needs a browser. If your account uses one, add an authenticator app in Proton's settings and sign in with that code.
+
+### Two-password mode
+
+Proton can keep the password that proves who you are apart from the one that opens your data. If your account is in [two-password mode](https://proton.me/support/switch-two-password-mode), `login` asks for the second password once it has signed in, exactly where Proton's own sign-in asks for it:
+
+```console
+$ proton account login
+Email:            alice@proton.me
+Password:
+Second password:
+✓ Signed in as alice@proton.me (profile "default").
+```
+
+It is the second one that seals into the session, so afterwards nothing is asked again. `proton account settings get` reports which mode the account is in.
+
+### Handing over the password without a terminal
+
+A password is read from a pipe or a file, [never from a flag value](../design-notes.md#why-a-password-is-never-a-flag-value).
+
+```bash
+# a pipe
+printf '%s' "$PW" | proton account login --user alice@proton.me --password-stdin
+
+# a file
+proton account login --user alice@proton.me --password-file /run/secrets/proton
+```
+
+A second password is read the same way, through flags of its own. Standard input has one reader, so an account in two-password mode takes at most one of its two secrets from a pipe:
+
+```bash
+proton account login --user alice@proton.me \
+    --password-file /run/secrets/proton \
+    --second-password-file /run/secrets/proton-second
+```
+
+Three commands reach an endpoint Proton guards behind an elevated session, and ask for your password again at that moment - `calendar settings calendars delete`, `mail messages expire` and `mail settings autoreply set`:
+
+```bash
+printf '%s' "$PW" | proton calendar settings calendars delete Work --password-stdin
+```
+
+`--password-stdin` takes standard input for the password and nothing else, so it cannot be combined with a `-` argument that wants the same stream:
+
+```console
+$ printf '%s' "$PW" | proton --password-stdin mail messages send --body - ...
+Error: --password-stdin and --body - both read standard input, which can only be read once.
+Try:   pass the password with --password-file instead
+```
+
+## Signing out
+
+```bash
+proton account logout              # forget the session on this machine
 proton account logout --revoke     # also invalidate it at Proton
 proton account logout --all        # every profile on this machine
 ```
 
-`login` asks for whatever a flag has not already supplied, as long as it is running in a terminal. Without one, name the account with `--user` and hand the password over with `--password-file` or `--password-stdin` ([why not `--password`](../design-notes.md#why-a-password-is-never-a-flag-value)).
+Revoking is what makes a leaked copy of the session file worthless: the sealed key password cannot be opened without a live session.
 
-It also unlocks your keys, so your password is needed **once** per machine and not again. Signing in again as the same account changes nothing, so an unattended job can run it ahead of its real work and recover on its own from a session that expired.
-
-An account in [two-password mode](https://proton.me/support/switch-two-password-mode) is asked for its second password once it has signed in - that is the one its keys are locked with - or reads it from `--second-password-file` / `--second-password-stdin`. Standard input has one reader, so at most one of the two secrets can come down a pipe.
-
-Security keys are not supported: they need a browser. If your account uses one, add an authenticator app in Proton's settings and sign in with that code.
-
-## Profiles
+## More than one account
 
 A profile is a named session slot on this machine, so a personal and a work account never mix.
 
 ```console
-$ proton --profile work account login
+$ proton account login --profile work
 ✓ Signed in as you@company.com (profile "work").
 
+$ proton --profile work mail messages list
+```
+
+To see what is signed in here, answered from disk with no API call:
+
+```console
 $ proton account profiles list
 PROFILE   EMAIL             UNLOCKED  SAVED             ACTIVE
 ────────  ────────────────  ────────  ────────────────  ──────
@@ -52,9 +120,30 @@ default   you@proton.me     yes       2026-04-15 14:31  ✓
 work      you@company.com   yes       2026-04-15 15:02
 ```
 
-`profiles list` works offline. `export PROTON_PROFILE=work` makes one the default for a shell.
+Or make a profile the default for a shell:
 
-## Sessions
+```bash
+export PROTON_PROFILE=work
+proton mail messages list
+```
+
+A profile nobody signed in acts as nobody, and says so before it reaches the network:
+
+```console
+$ proton --profile work mail messages list
+Error: Profile "work" is not signed in.
+Try:   proton account login --profile work
+```
+
+Pointing a profile at a different account is a fine thing to want; it just has to be said out loud, since the name means that account everywhere else:
+
+```console
+$ proton account login --profile work --user someone@else.com
+Error: Profile "work" is signed in as alice@company.com.
+Try:   proton account logout --profile work
+```
+
+## Sessions on your other devices
 
 Every session Proton holds for your account, across all your devices - the "Sessions" section of Proton's account settings.
 
@@ -73,6 +162,14 @@ proton account sessions revoke --others     # everything but this one
 ```
 
 **If you lose a device, revoke its session.** That also makes the credentials saved on it useless, even to someone who already copied the file.
+
+## Where the session lives
+
+`account login` writes `~/.config/proton-cli/sessions/<profile>.json` with mode `0600` and reuses it, so later commands don't re-authenticate. It holds the session tokens and your key password, [encrypted with a key held on Proton's side](../how-it-works.md#how-credentials-are-stored-at-rest).
+
+Two things end a session: revoking it, and Proton expiring it. Either means signing in again.
+
+Copying that file to another machine is how a headless box gets a session it cannot obtain itself. Treat it as a secret while copying: it contains the refresh token. See [Troubleshooting](../troubleshooting.md#signing-in-on-a-headless-machine).
 
 ## Settings
 

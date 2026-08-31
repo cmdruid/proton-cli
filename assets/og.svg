@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="proton-cli, your CLI for Proton Mail, Drive, Calendar, Pass and Contacts">
+  <title>proton-cli</title>
+
+  <defs>
+    <radialGradient id="glow" cx="0.12" cy="0.08" r="0.85">
+      <stop offset="0" stop-color="#6D4AFF" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#6D4AFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#16141C"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <rect x="0" y="0" width="1200" height="6" fill="#6D4AFF"/>
+
+  <g transform="translate(80 68) scale(0.4375)">
+    <rect x="20" y="20" width="216" height="216" rx="56" fill="#6D4AFF"/>
+    <polyline points="79,96 115,128 79,160" fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="131" y="150" width="56" height="20" rx="10" fill="#FFFFFF"/>
+  </g>
+
+  <text x="200" y="145" font-family="monospace" font-size="62" font-weight="700" fill="#FFFFFF"
+        textLength="372" lengthAdjust="spacing">proton-cli</text>
+
+  <text x="80" y="264" font-family="monospace" font-size="30" fill="#CFC9DC"
+        textLength="1024" lengthAdjust="spacing">Your CLI for Proton Mail, Drive, Calendar, Pass and Contacts.</text>
+
+  <rect x="80" y="316" width="1040" height="204" rx="16" fill="#1C1925" stroke="#343140" stroke-width="1"/>
+  <circle cx="112" cy="348" r="6" fill="#3E3A4C"/>
+  <circle cx="134" cy="348" r="6" fill="#3E3A4C"/>
+  <circle cx="156" cy="348" r="6" fill="#3E3A4C"/>
+
+  <g font-family="monospace" font-size="22">
+    <text x="112" y="404" fill="#8A6EFF" textLength="13" lengthAdjust="spacing">$</text>
+    <text x="138" y="404" fill="#D9D4E4" textLength="442" lengthAdjust="spacing">proton mail messages list --unread</text>
+
+    <text x="112" y="446" fill="#8A6EFF" textLength="13" lengthAdjust="spacing">$</text>
+    <text x="138" y="446" fill="#D9D4E4" textLength="624" lengthAdjust="spacing">proton drive items upload ./report.pdf /Documents</text>
+
+    <text x="112" y="488" fill="#8A6EFF" textLength="13" lengthAdjust="spacing">$</text>
+    <text x="138" y="488" fill="#D9D4E4" textLength="416" lengthAdjust="spacing">proton pass items totp github.com</text>
+  </g>
+
+  <text x="80" y="580" font-family="monospace" font-size="21" fill="#8F8AA0"
+        textLength="756" lengthAdjust="spacing">One binary · Linux, macOS, Windows · end-to-end encrypted</text>
+</svg>

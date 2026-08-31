@@ -61,9 +61,10 @@ type enumeration struct {
 var enumerations = []enumeration{{
 	what: "the commands Proton makes you prove yourself for again",
 	pages: []string{
-		"../../docs/configuration.md",
+		"../../docs/apps/account.md",
 		"../../docs/limitations.md",
 		"../../docs/scripting.md",
+		"../../docs/troubleshooting.md",
 	},
 	members: func(root *cobra.Command) []string {
 		var out []string

@@ -6,7 +6,7 @@ Every command, every argument and every flag, generated from the command tree.
 proton <app> <collection> <verb> [TARGET...] [--flags]
 ```
 
-Anywhere a command shows `REF`, you can pass a full ID, the eight-character short ID a list printed, or something human: a subject, a name, a path, an email address. See [References](../references.md).
+Anywhere a command shows `REF`, you can pass a full ID, the eight-character short ID a list printed, or something human: a subject, a name, a path, an email address. See [Naming the thing you want](../language.md#naming-the-thing-you-want).
 
 ## Apps
 

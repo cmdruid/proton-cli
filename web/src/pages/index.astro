@@ -4,7 +4,7 @@ import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import Apps from "../components/Apps.astro";
 import Footer from "../components/Footer.astro";
 import Install from "../components/Install.astro";
-import { repo } from "../../site.ts";
+import { description, origin, repo, tagline } from "../../site.ts";
 
 const demoAlt =
   "Listing unread mail, uploading a file to Drive, previewing which files a cleanup would remove, and listing Pass items";
@@ -15,7 +15,7 @@ const traits = [
     title: "Real end-to-end encryption",
   },
   {
-    body: "Mail, Drive, Calendar, Pass and Contacts, in a single static executable on Linux, macOS and Windows.",
+    body: "Mail, Drive, Calendar, Pass and Contacts, in a single static executable on Linux, macOS and Windows. One grammar and one output shape across all five.",
     title: "Five apps, one binary",
   },
   {
@@ -23,27 +23,58 @@ const traits = [
     title: "Built for pipes and cron",
   },
 ];
+
+const questions = [
+  { href: "/faq/#is-proton-cli-made-by-proton", text: "Is this made by Proton?" },
+  {
+    href: "/faq/#proton-has-its-own-drive-cli-and-pass-cli-why-use-this-one",
+    text: "How does it compare to Proton's own CLIs?",
+  },
+  {
+    href: "/faq/#how-is-it-different-from-proton-mail-bridge",
+    text: "How is it different from Bridge?",
+  },
+  { href: "/faq/#is-it-safe-to-give-it-my-proton-password", text: "Is my password safe?" },
+  { href: "/faq/#do-i-need-a-paid-proton-plan", text: "Do I need a paid plan?" },
+  { href: "/faq/#does-it-work-on-a-headless-server", text: "Does it work on a server?" },
+];
+
+const application = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  applicationCategory: "DeveloperApplication",
+  applicationSubCategory: "Command Line Interface",
+  author: { "@type": "Person", name: "roman-16", url: repo.replace("/proton-cli", "") },
+  codeRepository: repo,
+  description,
+  downloadUrl: `${repo}/releases/latest`,
+  license: "https://opensource.org/licenses/MIT",
+  name: "proton-cli",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+  operatingSystem: "Linux, macOS, Windows",
+  url: origin,
+};
 ---
 
 <StarlightPage
   frontmatter={{
-    description:
-      "Read your mail, move files in and out of Drive, and manage calendars, passwords and contacts without opening a browser.",
+    description,
     hero: {
       actions: [
         { link: "/installation/", text: "Install", variant: "primary" },
-        { link: "/getting-started/", text: "Get started", variant: "secondary" },
+        { link: "/quickstart/", text: "Quickstart", variant: "secondary" },
         { link: repo, text: "GitHub", variant: "minimal" },
       ],
-      tagline:
-        "Read your mail, move files in and out of Drive, and manage calendars, passwords and contacts without opening a browser. Your keys stay on your machine.",
-      title: "Proton, in your terminal.",
+      tagline: `${tagline} One binary, end-to-end encrypted, and your keys never leave your machine.`,
+      title: "proton-cli",
     },
     template: "splash",
-    title: "Proton, in your terminal.",
+    title: "Your CLI for Proton",
   }}
   hasSidebar={false}
 >
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(application)} />
+
   <Install />
 
   <section class="demo">
@@ -69,6 +100,21 @@ const traits = [
       >, and anywhere one wants an ID, a subject, name or URL works too.
     </p>
     <Apps />
+  </section>
+
+  <section class="what">
+    <h2>Common questions</h2>
+    <p class="lead">
+      Proton ships a CLI for Drive and one for Pass, and Bridge for mail in a desktop client. This is
+      one binary across all five apps.
+    </p>
+    <ul class="questions">
+      {questions.map(({ href, text }) => (
+        <li>
+          <a href={href}>{text}</a>
+        </li>
+      ))}
+    </ul>
   </section>
 
   <Footer />
@@ -99,6 +145,15 @@ const traits = [
     gap: 2.5rem;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
     margin-block: 5rem;
+  }
+
+  /*
+   * The gap is the grid's to set. Markdown flow gives every element after the
+   * first a top margin, which here would drop all but one column.
+   */
+  .trait,
+  .questions li {
+    margin: 0;
   }
 
   .trait h2 {
@@ -142,5 +197,30 @@ const traits = [
   .lead {
     color: var(--sl-color-gray-3);
     margin-block: 0.75rem 2rem;
+  }
+
+  .questions {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .questions a {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--foreground);
+    display: block;
+    font-size: var(--sl-text-sm);
+    padding: 0.875rem 1rem;
+    text-decoration: none;
+  }
+
+  .questions a:hover {
+    border-color: var(--sl-color-text-accent);
+    color: var(--sl-color-text-accent);
   }
 </style>
