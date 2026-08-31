@@ -3,7 +3,6 @@ package drive
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
@@ -100,7 +99,7 @@ func (s *Service) FindRevision(ctx context.Context, dc *Context, path, r string)
 	}
 	var matches []Revision
 	for _, rev := range revs {
-		if strings.HasPrefix(strings.ToLower(rev.ID), strings.ToLower(r)) {
+		if ref.Matches(rev.ID, r) {
 			matches = append(matches, rev)
 		}
 	}

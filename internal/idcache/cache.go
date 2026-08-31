@@ -1,7 +1,8 @@
 // Package idcache stores the set of full Proton IDs the user has seen
-// recently, so that interactive listings can shorten IDs to an 8-char
-// prefix and the user can paste that prefix back into any command that
-// takes an ID.
+// recently, so that interactive listings can show the shortened form of an ID
+// and the user can paste that back into any command that takes an ID. What is
+// stored is always the whole ID; internal/ref owns both how it is shortened and
+// how the short form is matched against it.
 //
 // The cache is a per-profile flat JSON array of full IDs at
 // ~/.config/proton-cli/idcache/<profile>.json. Writes are atomic
@@ -16,8 +17,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
+
+	"github.com/roman-16/proton-cli/internal/ref"
 )
 
 // MaxEntries caps the cache size. Older entries are pruned FIFO on write.
@@ -87,8 +89,8 @@ func (c *Cache) Save(ids ...string) error {
 	return c.writeAtomic(out)
 }
 
-// Resolve returns the full ID for a prefix. Returns ErrNotFound on miss,
-// *AmbiguousError when multiple cached IDs share the prefix.
+// Resolve returns the full ID a short one names. Returns ErrNotFound on miss,
+// *AmbiguousError when several cached IDs answer to the same short form.
 func (c *Cache) Resolve(prefix string) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -96,7 +98,7 @@ func (c *Cache) Resolve(prefix string) (string, error) {
 	ids := c.load()
 	var hits []string
 	for _, id := range ids {
-		if strings.HasPrefix(id, prefix) {
+		if ref.Matches(id, prefix) {
 			hits = append(hits, id)
 		}
 	}

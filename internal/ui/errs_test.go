@@ -34,11 +34,8 @@ func TestWriteErrorShapes(t *testing.T) {
 		&errs.NotFound{Kind: "message", Ref: "Invoice #9999"},
 		"errs_not_found",
 	}, {
-		"ambiguous, with the candidates as hints",
-		&errs.Ambiguous{Kind: "contact", Ref: "jane", Candidates: []errs.Candidate{
-			{ID: "7Kd91mQx", Label: "jane@example.com"},
-			{ID: "3Ns8pT2v", Label: "jane.roe@work.example"},
-		}},
+		"ambiguous, with the candidates listed",
+		&errs.Ambiguous{Kind: "contact", Ref: "jane", Candidates: twoContacts},
 		"errs_ambiguous",
 	}, {
 		"a wrapped error from elsewhere keeps its chain",
@@ -54,6 +51,42 @@ func TestWriteErrorShapes(t *testing.T) {
 			check(t, tc.golden, out, errb)
 		})
 	}
+}
+
+// The candidates a listing offers are IDs, so they are written the way a listing
+// writes them - but only while that still tells them apart. A short ID that
+// matched several is the case where it cannot: shortening them all would print
+// the same token twice and answer nothing.
+func TestAmbiguousShortensCandidatesWhileTheyStayDistinct(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		err    *errs.Ambiguous
+		golden string
+	}{{
+		"distinct once shortened",
+		&errs.Ambiguous{Kind: "contact", Ref: "jane", Candidates: twoContacts},
+		"errs_ambiguous_short",
+	}, {
+		"matched by a short ID they share",
+		&errs.Ambiguous{Kind: "cached ID", Ref: "abcd1234", Candidates: []errs.Candidate{
+			{ID: "abcd1234FIRSTabc" + idTail + "=="},
+			{ID: "abcd1234SECONDab" + idTail + "=="},
+		}},
+		"errs_ambiguous_collides",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			u, out, errb := fixture(t, Options{})
+			WriteError(u.Err, tc.err, u.ErrStyle(), true)
+			check(t, tc.golden, out, errb)
+		})
+	}
+}
+
+const idTail = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+var twoContacts = []errs.Candidate{
+	{ID: "7Kd91mQxT9wLpN4v" + idTail + "==", Label: "jane@example.com"},
+	{ID: "3Ns8pT2vSJf2oHzH" + idTail + "==", Label: "jane.roe@work.example"},
 }
 
 // Messages are sentences wherever they are printed: capitalised, and closed.

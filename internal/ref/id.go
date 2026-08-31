@@ -2,17 +2,12 @@ package ref
 
 import "strings"
 
-// What a reference looks like, declared once.
+// What a reference looks like, declared once, so that the grammar a listing
+// prints and the grammar the next command reads are one thing rather than two
+// that happen to agree.
 //
-// This used to be common knowledge rather than stated knowledge: the ID cache
-// had one idea of a complete ID, the leading-dash workaround in the cli layer
-// had another, and the renderer that prints references had a third. They agreed
-// often enough to look correct, and where they disagreed the CLI printed
-// references it would not read back - `pass items list` shows SHARE/ITEM, and a
-// share whose ID begins with a dash produced a row nobody could paste.
-//
-// So the shapes are written down, and they are written down from measurement.
-// Every one below was taken from a live account rather than inferred:
+// The shapes are written down from measurement. Every one below was taken from a
+// live account rather than inferred:
 //
 //	kind                                       length  padding  bytes
 //	messages, conversations, labels, folders,      88  "=="        64
@@ -26,12 +21,11 @@ import "strings"
 // calendar joins a calendar and an event as `${calendarID}.${eventID}` - neither
 // would be safe if an ID could contain a slash or a dot.
 //
-// Session UIDs are lowercase alphanumeric, so they can never begin with a dash
-// and never need protecting from flag parsing. They are recognised all the same,
-// so that classifying a reference never depends on which command is asking.
+// Session UIDs are lowercase alphanumeric. They are recognised all the same, so
+// that classifying a reference never depends on which command is asking.
 
-// ShortLen is how many leading characters of an ID identify it in interactive
-// output. Eight is short enough to read back off the screen and long enough that
+// ShortLen is how many characters of an ID identify it in interactive output.
+// Eight is short enough to read back off the screen and long enough that
 // collisions within one account are vanishingly rare; when two cached IDs do
 // collide, resolution reports the ambiguity rather than guessing.
 const ShortLen = 8
@@ -46,6 +40,37 @@ const (
 	// is a timestamp, so it is never shortened or matched against the cache.
 	Occurrence = "@"
 )
+
+// Shorten writes a reference the way interactive output shows it: ShortLen
+// characters of each ID it joins, with what follows an "@" carried over whole
+// because that names an occurrence rather than a thing.
+//
+// Leading dashes are skipped, so a short ID never begins with one and never has
+// to be marked as data on the command line. '-' is one of base64url's sixty-four
+// characters, so about one ID in sixty-four starts with one; the eight
+// characters are still a run taken verbatim out of the ID, begun one place
+// later, and Matches is how they are found again.
+func Shorten(reference string) string {
+	if reference == "" {
+		return reference
+	}
+	parts, occurrence := Split(reference)
+	for i, p := range parts {
+		parts[i] = shortenID(p)
+	}
+	out := Join(parts...)
+	if occurrence == "" && !strings.Contains(reference, Occurrence) {
+		return out
+	}
+	return out + Occurrence + occurrence
+}
+
+// Matches reports whether short names full: what Shorten writes for an ID is a
+// prefix of that ID once its leading dashes are skipped, and so is any longer
+// run the user types instead.
+func Matches(full, short string) bool {
+	return strings.HasPrefix(body(full), short)
+}
 
 // Full reports whether s is a complete ID as Proton issues them.
 //
@@ -64,15 +89,16 @@ func Full(s string) bool {
 	return false
 }
 
-// Short reports whether s could be the beginning of an ID, and so worth looking
-// up in the cache of what has been shown.
+// Short reports whether s could be a shortened ID, and so worth looking up in
+// the cache of what has been shown.
 //
 // The predicate is deliberately loose: plenty of search terms ("Personal",
 // "invoice-2024") match it. That costs nothing, because a lookup is only used
 // when it hits - a miss falls through to the original text, which the service
-// layer then treats as a name to search for.
+// layer then treats as a name to search for. A leading dash is the one thing it
+// rules out, because Shorten never writes one.
 func Short(s string) bool {
-	return len(s) >= ShortLen && !Full(s) && len(s) < 60 &&
+	return len(s) >= ShortLen && s[0] != '-' && !Full(s) && len(s) < 60 &&
 		!strings.HasSuffix(s, "==") && isBase64URL(s)
 }
 
@@ -90,55 +116,43 @@ func Split(reference string) (parts []string, occurrence string) {
 // Join writes the IDs back as the single token a user pastes.
 func Join(parts ...string) string { return strings.Join(parts, Compound) }
 
-// Unambiguous reports whether s begins with a dash and is certainly a reference
-// whatever command it was passed to.
+// Unambiguous reports whether s begins with a dash and is a reference whatever
+// command it was passed to, so that argv can mark it as data before the flag
+// parser reaches it.
 //
-// A complete ID settles it by shape - no run of shorthand flags is 22 or 88
-// characters of base64. A separator settles it outright, because no flag or
-// cluster of flags contains a slash or an at-sign.
+// Shape settles it, on two rules. A token opening with two dashes is a long
+// flag, because that is what two dashes mean - and a flag's name is spelt from
+// the same alphabet an ID is, so "--second-password-file" is twenty-two legal
+// characters and would otherwise read as a Drive link. Below that, no single
+// shorthand and no run of them is 22, 32 or 88 characters of base64, and nothing
+// shorter has to be asked about at all, because a short ID never begins with a
+// dash.
 //
-// It answers without knowing the command, which is what makes it the right
-// question when there is no command to ask about - reporting a parse failure
-// after the fact, say. The cli layer can do better than this before the fact,
-// because it can ask the command whether the token names flags it actually has;
-// a short reference such as "-Qt-s7R_" is unknowable here and decidable there.
+// An ID that opens with two dashes is therefore the user's to mark, with the
+// "--" every shell already has for it.
 func Unambiguous(s string) bool {
 	if len(s) < 2 || s[0] != '-' || s[1] == '-' {
 		return false
 	}
-	// The dash is part of the ID rather than a prefix to strip: '-' is one of
-	// base64url's sixty-four characters, which is the whole reason this problem
-	// exists. A Drive link really is named "-Qt-s7R_oGCru5u3Kv6Y8Q", all
-	// twenty-two characters of it.
-	if strings.Contains(s, Compound) || strings.Contains(s, Occurrence) {
-		return isCompound(s)
-	}
-	return Full(s)
-}
-
-// isCompound reports whether every ID in a compound reference is well formed.
-func isCompound(s string) bool {
 	parts, _ := Split(s)
 	for _, p := range parts {
-		if p == "" || !isBase64URL(p) {
+		if !Full(p) {
 			return false
 		}
 	}
 	return true
 }
 
-// Plausible reports whether s is shaped like a leading-dash reference at all:
-// dash-first, and base64url in every segment.
-//
-// It is the question to ask when something else will rule out the alternative -
-// the cli layer pairs it with "and it names no shorthand this command has" - and
-// the question to ask before offering advice about "--", where being generous
-// costs nothing.
-func Plausible(s string) bool {
-	if len(s) < ShortLen || s[0] != '-' || s[1] == '-' {
-		return false
+// body is the ID with the leading dashes skipped: everything that identifies it,
+// and nothing a shell would read as the start of a flag.
+func body(id string) string { return strings.TrimLeft(id, "-") }
+
+func shortenID(id string) string {
+	b := body(id)
+	if len(b) <= ShortLen {
+		return b
 	}
-	return isCompound(s)
+	return b[:ShortLen]
 }
 
 func isBase64URL(s string) bool {

@@ -172,7 +172,7 @@ func Execute() {
 	// Probed on a tree of its own, because Find and ParseFlags leave state
 	// behind and the tree that answers the command has to start clean.
 	if err := unknownSubcommand(newRoot(), os.Args[1:]); err != nil {
-		ui.WriteError(os.Stderr, err, ui.StyleFor(os.Stderr))
+		ui.WriteError(os.Stderr, err, ui.StyleFor(os.Stderr), false)
 		os.Exit(exitCode(err))
 	}
 
@@ -194,7 +194,7 @@ func Execute() {
 		printHVFinalError(os.Stderr, hvErr, app.FromOrNil(root.Context()))
 		os.Exit(exitCode(err))
 	}
-	ui.WriteError(os.Stderr, rewrapFlagError(err, os.Args), errorStyle(root))
+	ui.WriteError(os.Stderr, rewrapFlagError(err, os.Args), errorStyle(root), shortIDs(root))
 	announce(cmd)
 	os.Exit(exitCode(err))
 }
@@ -269,6 +269,16 @@ func errorStyle(root *cobra.Command) ui.Style {
 		return a.UI.ErrStyle()
 	}
 	return ui.StyleFor(os.Stderr)
+}
+
+// shortIDs answers the way every other screen answers it, from the app the
+// command ran under. A failure with no app behind it - a flag that did not parse
+// - had no listing either, so it names things whole.
+func shortIDs(root *cobra.Command) bool {
+	if a := app.FromOrNil(root.Context()); a != nil {
+		return a.UI.ShortIDs()
+	}
+	return false
 }
 
 // printHVFinalError formats the user-facing message when a 9001 reaches the

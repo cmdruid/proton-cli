@@ -22,6 +22,60 @@ const (
 	realSession = "f67sujpymjfyxxpa4k2wqzvhn7cd8rgb"
 )
 
+// Shorten is what a listing prints, so what it writes has to be readable back:
+// eight characters taken out of the ID, and never a leading dash.
+func TestShortenSkipsLeadingDashes(t *testing.T) {
+	for name, tc := range map[string]struct{ in, want string }{
+		"a message":                 {realMessage, "fYNK4pNC"},
+		"a dash-leading Pass share": {realVault, "x76EpiVS"},
+		"a dash-leading Drive link": {realDriveLink, "Qt-s7R_o"},
+		"a session UID":             {realSession, "f67sujpy"},
+		"a compound reference":      {realVault + "/" + realItem, "x76EpiVS/_fb26gvM"},
+		"an occurrence is carried whole": {
+			realVault + "/" + realItem + "@2026-04-22T09:00",
+			"x76EpiVS/_fb26gvM@2026-04-22T09:00",
+		},
+		"already short":     {"abc", "abc"},
+		"exactly eight":     {"12345678", "12345678"},
+		"a run of dashes":   {"--Qt-s7R_oGCru5u3Kv6Y8Q", "Qt-s7R_o"},
+		"empty stays empty": {"", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := Shorten(tc.in)
+			if got != tc.want {
+				t.Errorf("Shorten(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			for _, part := range strings.Split(got, Compound) {
+				if strings.HasPrefix(part, "-") {
+					t.Errorf("Shorten(%q) = %q, which the flag parser would eat", tc.in, got)
+				}
+			}
+		})
+	}
+}
+
+// What Shorten writes is what Matches finds, or a listing names things the next
+// command cannot look up.
+func TestMatchesFindsWhatShortenWrote(t *testing.T) {
+	for _, id := range []string{realMessage, realVault, realItem, realDriveLink, realSession} {
+		if !Matches(id, Shorten(id)) {
+			t.Errorf("%q does not answer to %q", id, Shorten(id))
+		}
+		if Matches(id, "zzzzzzzz") {
+			t.Errorf("%q answered to something else", id)
+		}
+	}
+	// A longer run of the same characters narrows rather than misses, which is
+	// what an ambiguous short ID tells the user to type.
+	if !Matches(realVault, "x76EpiVSJf2") {
+		t.Error("a longer run of an ID's body should still match it")
+	}
+	// The dash belongs to the ID, not to the short form, so it is not typed back.
+	if Matches(realVault, "-x76EpiV") {
+		t.Error("a short ID never carries the leading dash")
+	}
+}
+
 func TestFullRecognisesEveryShapeProtonIssues(t *testing.T) {
 	for name, id := range map[string]string{
 		"a message":         realMessage,
@@ -82,6 +136,7 @@ func TestShort(t *testing.T) {
 		{"a name that looks like one", "Personal", true},
 		{"a hyphenated name", "john-doe-2026", true},
 		{"seven characters", "AbC1234", false},
+		{"a leading dash, which Shorten never writes", "-x76EpiV", false},
 		{"a complete ID", realMessage, false},
 		{"a Drive link", realDriveLink, false},
 		{"a session UID", realSession, false},
@@ -135,11 +190,10 @@ func TestSplitAndJoinRoundTrip(t *testing.T) {
 // fails on a valid ID, and a false positive is a flag treated as data.
 func TestUnambiguousAcceptsWhatOnlyAReferenceCanBe(t *testing.T) {
 	for name, s := range map[string]string{
-		"a dash-leading Pass share":     "-" + strings.TrimPrefix(realVault, "-"),
-		"a dash-leading Drive link":     realDriveLink,
-		"a dash-leading compound short": "-x76EpiV/_fb26gvM",
-		"a dash-leading compound full":  realVault + "/" + realItem,
-		"an occurrence":                 "-x76EpiV/_fb26gvM@2026-04-22T09:00",
+		"a dash-leading Pass share":    "-" + strings.TrimPrefix(realVault, "-"),
+		"a dash-leading Drive link":    realDriveLink,
+		"a dash-leading compound full": realVault + "/" + realItem,
+		"an occurrence":                realVault + "/" + realItem + "@2026-04-22T09:00",
 	} {
 		if !Unambiguous(s) {
 			t.Errorf("%s should be unmistakable: %q", name, s)
@@ -149,15 +203,18 @@ func TestUnambiguousAcceptsWhatOnlyAReferenceCanBe(t *testing.T) {
 
 func TestUnambiguousRejectsAnythingAFlagCouldBe(t *testing.T) {
 	for name, s := range map[string]string{
-		"a long flag":         "--album",
-		"the end of flags":    "--",
-		"a shorthand":         "-o",
-		"a shorthand cluster": "-abc",
-		"a short ID":          "-x76EpiV",
-		"a bare dash":         "-",
-		"empty":               "",
-		"not dash-leading":    realMessage,
-		"a negative number":   "-30",
+		"a long flag": "--album",
+		// A flag's name is spelt from the same alphabet an ID is, and this one runs
+		// to twenty-two characters of it - the length of a Drive link.
+		"a long flag as long as a Drive link": "--second-password-file",
+		"the end of flags":                    "--",
+		"a shorthand":                         "-o",
+		"a shorthand cluster":                 "-abc",
+		"a compound of short IDs":             "-x76EpiV/_fb26gvM",
+		"a bare dash":                         "-",
+		"empty":                               "",
+		"not dash-leading":                    realMessage,
+		"a negative number":                   "-30",
 		// Shapes that are close to an ID without being one. Each was a real
 		// case before the grammar was written down in one place.
 		"a padded ID one character short":           "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A",

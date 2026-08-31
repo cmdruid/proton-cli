@@ -112,8 +112,9 @@ type Candidate struct {
 
 // Ambiguous means a reference matched more than one thing. Exit 4.
 //
-// The candidates are hints rather than part of the message, so the rendered
-// output reads as one problem followed by a list, like every other error.
+// The candidates stay data rather than becoming lines, because how much of an ID
+// to show is a question about the screen: internal/ui shortens them where
+// shortening still tells them apart, and prints them whole where it would not.
 type Ambiguous struct {
 	Kind       string
 	Ref        string
@@ -124,18 +125,6 @@ func (e *Ambiguous) Error() string {
 	return fmt.Sprintf("%q matches %d %s.", e.Ref, len(e.Candidates), plural(e.Kind, len(e.Candidates)))
 }
 
-func (e *Ambiguous) Hints() []string {
-	out := make([]string, 0, len(e.Candidates)+1)
-	out = append(out, "narrow the term, or use one of:")
-	for _, c := range e.Candidates {
-		line := "  " + c.ID
-		if c.Label != "" {
-			line += "  " + c.Label
-		}
-		out = append(out, line)
-	}
-	return out
-}
 func (e *Ambiguous) ExitCode() int { return 4 }
 
 // Exit wraps an error with an explicit process exit code, for cases where the

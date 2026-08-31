@@ -223,8 +223,7 @@ func Create(c *Invocation, spec ui.ResultSpec, apply func() (string, error)) err
 
 // ── references ──
 
-// Expand turns an eight-character short ID into the full one using the local
-// cache.
+// Expand turns a short ID into the full one using the local cache.
 //
 // Anything that is not short-ID-shaped, and anything the cache has not seen,
 // passes through untouched: it may well be a name or a subject that the service
@@ -242,12 +241,11 @@ func Expand(a *app.App, reference string) (string, error) {
 	}
 	var amb *idcache.AmbiguousError
 	if errors.As(err, &amb) {
-		lines := []string{"use one of:"}
-		for _, cand := range amb.Candidates {
-			lines = append(lines, "  "+cand)
+		candidates := make([]errs.Candidate, 0, len(amb.Candidates))
+		for _, id := range amb.Candidates {
+			candidates = append(candidates, errs.Candidate{ID: id})
 		}
-		return "", errs.Problemf("%q matches %d cached IDs.", reference, len(amb.Candidates)).
-			Hint(lines...).Exit(4)
+		return "", &errs.Ambiguous{Kind: "cached ID", Ref: reference, Candidates: candidates}
 	}
 	if errors.Is(err, idcache.ErrNotFound) {
 		return reference, nil

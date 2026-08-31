@@ -1,9 +1,14 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/roman-16/proton-cli/internal/ref"
+)
 
 func TestShort(t *testing.T) {
 	const full = "5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv=="
+	const dashed = "-Qt-s7R_oGCru5u3Kv6Y8Q"
 	for _, tc := range []struct {
 		name  string
 		in    string
@@ -15,6 +20,11 @@ func TestShort(t *testing.T) {
 		{"already short is untouched", "abc", true, "abc"},
 		{"exactly eight is untouched", "12345678", true, "12345678"},
 		{"empty stays empty", "", true, ""},
+		// A leading dash belongs to the ID, but a token starting with one belongs
+		// to the flag parser, so the eight characters begin after it.
+		{"a leading dash is skipped", dashed, true, "Qt-s7R_o"},
+		{"shortening off keeps the dash", dashed, false, dashed},
+		{"a dashed half of a compound", full + "/" + dashed, true, "5bH2mQxK/Qt-s7R_o"},
 		// A compound reference is one pasteable token, so both halves shorten and
 		// the separator survives.
 		{"compound shortens each half", full + "/" + full, true, "5bH2mQxK/5bH2mQxK"},
@@ -32,16 +42,24 @@ func TestShort(t *testing.T) {
 }
 
 // A short ID must stay copy-safe: no ellipsis, no marker, nothing a shell would
-// have to quote.
+// have to quote and nothing a flag parser would claim.
 func TestShortIsCopySafe(t *testing.T) {
-	got := Short("5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv==", true)
-	for _, bad := range []string{"…", "...", " ", "*"} {
-		if contains(got, bad) {
-			t.Errorf("short ID %q contains %q, which breaks pasting it back", got, bad)
+	for _, id := range []string{
+		"5bH2mQxKT9wLpN4vRs8kZc1yXd7fGh3jAe6bUi0oQm2nWr5tYv==",
+		"-Qt-s7R_oGCru5u3Kv6Y8Q",
+	} {
+		got := Short(id, true)
+		for _, bad := range []string{"…", "...", " ", "*"} {
+			if contains(got, bad) {
+				t.Errorf("short ID %q contains %q, which breaks pasting it back", got, bad)
+			}
 		}
-	}
-	if len(got) != ShortIDLen {
-		t.Errorf("short ID length %d, want %d", len(got), ShortIDLen)
+		if got[0] == '-' {
+			t.Errorf("short ID %q starts with a dash, which the flag parser would eat", got)
+		}
+		if len(got) != ref.ShortLen {
+			t.Errorf("short ID length %d, want %d", len(got), ref.ShortLen)
+		}
 	}
 }
 

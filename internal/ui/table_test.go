@@ -74,12 +74,18 @@ func TestTableLastPage(t *testing.T) {
 }
 
 // A short ID is the interactive form: the same table, shortened, is what a user
-// copies from.
+// copies from. The last row's ID begins with a dash, as about one Proton ID in
+// sixty-four does, and the column has to show something a shell will hand back
+// to the command rather than to the flag parser.
 func TestTableShortIDs(t *testing.T) {
 	t.Setenv("PROTON_CLI_FORCE_TTY", "1")
 	u, out, errb := fixture(t, Options{})
 	spec := TableSpec[message]{Noun: "messages", Columns: messageColumns(), Total: Unknown, Page: Unpaged}
-	if err := Table(u, spec, messages()); err != nil {
+	rows := append(messages(), message{
+		"-Qt-s7R_oGCru5u3Kv6Y8QwYf9hJ5gAe3bUi0oQm7nWr4tYv==", "Alpine Club",
+		"Hut booking confirmed", "2026-04-14 08:15", false, false, 1,
+	})
+	if err := Table(u, spec, rows); err != nil {
 		t.Fatal(err)
 	}
 	check(t, "table_short_ids", out, errb)

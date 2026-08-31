@@ -26,6 +26,15 @@ func firstIDLineCell(stdout string) string {
 	return ""
 }
 
+// shortID is what a listing prints for an ID: eight characters, begun after any
+// leading dashes, so the token is never handed to the flag parser. The rule is
+// written out here rather than borrowed from the binary, because a test that
+// takes the rule from the code under test cannot notice the code getting it
+// wrong.
+func shortID(id string) string {
+	return strings.TrimLeft(id, "-")[:8]
+}
+
 func TestShortIDDisplayInTTY(t *testing.T) {
 	t.Parallel()
 	stdout, _, code := runWithEnv(t,
@@ -37,6 +46,9 @@ func TestShortIDDisplayInTTY(t *testing.T) {
 	id := firstIDLineCell(stdout)
 	if len(id) != 8 {
 		t.Errorf("expected 8-char ID under PROTON_CLI_FORCE_TTY, got %q (len %d)", id, len(id))
+	}
+	if strings.HasPrefix(id, "-") {
+		t.Errorf("a short ID a shell would read as a flag: %q", id)
 	}
 }
 
@@ -137,7 +149,7 @@ func TestShortIDRoundTripMail(t *testing.T) {
 	// Run a list command so the cache learns the ID.
 	runOK(t, "mail", "messages", "list", "--page-size", "20")
 
-	prefix := msgID[:8]
+	prefix := shortID(msgID)
 	stdout, stderr, code := run(t, "mail", "messages", "get", prefix)
 	if code != 0 {
 		t.Fatalf("read by short prefix exit %d; stderr: %s", code, stderr)
@@ -219,10 +231,8 @@ func TestShortIDRoundTripContacts(t *testing.T) {
 	// Populate cache.
 	runOK(t, "contacts", "list")
 
-	// `--` guards against the ~1.5% of IDs whose 8-char prefix starts with '-'
-	// (which cobra would otherwise read as a flag).
-	prefix := id[:8]
-	got := runOK(t, "contacts", "get", "--", prefix)
+	prefix := shortID(id)
+	got := runOK(t, "contacts", "get", prefix)
 	if !strings.Contains(got, name) {
 		t.Errorf("contacts get by short prefix should resolve; stdout:\n%s", got)
 	}
@@ -244,9 +254,7 @@ func TestShortIDRoundTripPass(t *testing.T) {
 	// Populate cache.
 	runOK(t, "pass", "items", "list")
 
-	// `--` guards against the ~1.5% of IDs whose 8-char prefix starts with '-'
-	// (which cobra would otherwise read as a flag), as the contacts case does.
-	got := runOK(t, "pass", "items", "get", "--", shareID[:8]+"/"+itemID[:8])
+	got := runOK(t, "pass", "items", "get", shortID(shareID)+"/"+shortID(itemID))
 	if !strings.Contains(got, name) {
 		t.Errorf("pass items get by short prefixes should resolve; stdout:\n%s", got)
 	}

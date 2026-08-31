@@ -895,13 +895,16 @@ var layers = map[string][]string{
 	// wrongly, and the alternative to borrowing that is restating it - which is
 	// precisely what produced listings whose rows the next command rejected.
 	// ref is a leaf over errs, so this is a downward import and not an inversion.
-	"ui":          {"units", "progress", "errs", "ref"},
-	"proton":      {"errs", "crypto/aead", "hv", "hv/hvexit"},
-	"errs":        {},
-	"units":       {},
-	"progress":    {},
-	"mailtext":    {},
-	"idcache":     {},
+	"ui":       {"units", "progress", "errs", "ref"},
+	"proton":   {"errs", "crypto/aead", "hv", "hv/hvexit"},
+	"errs":     {},
+	"units":    {},
+	"progress": {},
+	"mailtext": {},
+	// idcache reaches ref for the reason ui does: it stores whole IDs and answers
+	// short ones, and how the two relate belongs where the notation is declared
+	// rather than restated here.
+	"idcache":     {"ref"},
 	"ref":         {"errs"},
 	"changelog":   {},
 	"contentline": {},

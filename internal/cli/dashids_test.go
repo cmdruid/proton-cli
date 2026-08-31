@@ -8,13 +8,13 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
 	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 const (
-	dashedID    = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A=="
-	plainID     = "NWM5AYGxFIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A5C-ADmohv7TjXfYbDEIHZPQ=="
-	shortDashed = "-abc=="
+	dashedID = "-bJxDLEMvt-Z6t4Yna7V8SYQ_FIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A=="
+	plainID  = "NWM5AYGxFIHWT2_QbBr-whe-bIE8rbZunzr5RhXGaihvQ43z2qcxcqFgVRwi7A5C-ADmohv7TjXfYbDEIHZPQ=="
 )
 
 func TestPreprocessArgs(t *testing.T) {
@@ -69,29 +69,6 @@ func TestRewrapFlagError(t *testing.T) {
 	t.Run("nil passes through", func(t *testing.T) {
 		if rewrapFlagError(nil, []string{"proton"}) != nil {
 			t.Error("rewrapFlagError(nil) != nil")
-		}
-	})
-	t.Run("pflag shorthand error with ID-shape token rewraps", func(t *testing.T) {
-		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		fs.SetOutput(io.Discard)
-		err := fs.Parse([]string{dashedID})
-		if err == nil {
-			t.Fatal("expected pflag parse error")
-		}
-		gotMsg := rewrapFlagError(err, []string{"proton"}).Error()
-		if !strings.Contains(gotMsg, "looks like a flag") || !strings.Contains(gotMsg, "insert -- before it") || !strings.Contains(gotMsg, dashedID) {
-			t.Errorf("unexpected rewrapped message: %s", gotMsg)
-		}
-	})
-	t.Run("pflag shorthand error with non-ID token passes through", func(t *testing.T) {
-		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		fs.SetOutput(io.Discard)
-		err := fs.Parse([]string{"-xyz"})
-		if err == nil {
-			t.Fatal("expected pflag parse error")
-		}
-		if strings.Contains(rewrapFlagError(err, []string{"proton"}).Error(), "looks like a flag because") {
-			t.Error("rewrap fired on non-ID token")
 		}
 	})
 	t.Run("cobra accepts-N-args error with dashed ID rewraps", func(t *testing.T) {
@@ -168,11 +145,6 @@ const (
 // is rendered exactly as a listing renders it - shortened for a terminal, full
 // for a pipe - and then has to survive being typed back as the next command's
 // argument.
-//
-// It failed in both forms before. `pass items list` printed SHARE/ITEM rows that
-// answered "Unknown shorthand flag: 'x'", and a shortened Drive link did the
-// same, because deciding by shape alone cannot tell "-Qt-s7R_" from a run of
-// eight shorthand flags.
 func TestEveryReferenceTheCLIPrintsCanBeTypedBackIn(t *testing.T) {
 	for _, tc := range []struct{ name, command, reference string }{
 		{"a Pass item", "pass items get", ui.Short(kit.JoinPair(realVault, realItem), false)},
@@ -228,9 +200,40 @@ func TestPreprocessArgsStillProtectsAPositionalAfterABoolFlag(t *testing.T) {
 	}
 }
 
-// A token that really does name shorthand flags this command has must stay
-// flags. That reading wins over "it looks like a reference", and it is the one
-// thing the length heuristics could never get right.
+// No flag this CLI declares may be read as a reference, or writing it would put
+// "--" in front of it and hand the flag and everything after it to the command as
+// arguments.
+//
+// The trap is that a flag's name is spelt from the same alphabet an ID is:
+// "--second-password-file" is twenty-two legal characters, which is a Drive link
+// exactly. Two dashes settle it, and this walks the tree so that the next long
+// flag somebody adds is settled too.
+func TestNoFlagTheCLIDeclaresIsReadAsAReference(t *testing.T) {
+	var walk func(*cobra.Command)
+	walk = func(cmd *cobra.Command) {
+		spelling := func(f *pflag.Flag) {
+			tokens := []string{"--" + f.Name}
+			if f.Shorthand != "" {
+				tokens = append(tokens, "-"+f.Shorthand)
+			}
+			for _, token := range tokens {
+				in := []string{"proton", token}
+				if got := preprocessArgs(in); !equalSlice(got, in) {
+					t.Errorf("%s: %q was taken for a reference: %v", cmd.CommandPath(), token, got)
+				}
+			}
+		}
+		cmd.Flags().VisitAll(spelling)
+		cmd.PersistentFlags().VisitAll(spelling)
+		for _, sub := range cmd.Commands() {
+			walk(sub)
+		}
+	}
+	walk(newRoot())
+}
+
+// A token that names shorthand flags stays flags. Nothing decides between the
+// two readings, because no flag and no run of shorthands has an ID's shape.
 func TestPreprocessArgsLeavesRealShorthandFlagsAlone(t *testing.T) {
 	for _, token := range []string{"-o", "-ojson", "-h", "-v"} {
 		in := []string{"proton", "mail", "messages", "list", token}

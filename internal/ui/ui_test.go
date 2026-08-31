@@ -222,7 +222,7 @@ func TestSeverities(t *testing.T) {
 	u.Note("Downloading report.pdf.")
 	u.Warn("report.pdf downloaded, but the signature on block 3 is unverified,\nso who wrote it cannot be confirmed.")
 	u.Hint("3 messages.")
-	WriteError(u.Err, errs.Problemf("No message matching %q.", "Invoice #9999"), u.errStyle)
+	WriteError(u.Err, errs.Problemf("No message matching %q.", "Invoice #9999"), u.errStyle, false)
 
 	check(t, "severities", out, errb)
 }
