@@ -82,6 +82,10 @@ For a scheduled one-way copy, `proton drive items upload --recursive` in a cron 
 
 Not covered, and not planned. proton-cli mirrors what the Proton **web clients** let you do for Mail, Drive, Calendar, Pass and Contacts. Proton VPN has [its own CLI](https://protonvpn.com/support/linux-vpn-tool). See [Limits](limitations.md).
 
+## Can it import my Gmail, or add a Zoom link to an event?
+
+No, and neither can any terminal program. Both hand you off to another company's consent screen - Google's, Zoom's - and only a browser can complete one. Proton's own importer works the same way. Set those up in the web client; what they produce is readable here like anything else.
+
 ## Does it support security keys?
 
 Yes. `proton account login` asks you to touch the key you registered with Proton, and signs in with it:
@@ -95,6 +99,8 @@ Touch your security key.
 ```
 
 On Linux and macOS the key has to be one you plug into USB. On Windows the sign-in goes through Windows Hello, so a key built into the machine works too. A key held in a phone does not: that needs the Bluetooth handoff a browser does, which no terminal can.
+
+Registering a key is a browser's job as well - WebAuthn enrolment has no non-browser form. Add it in Proton's security settings once, and `login` uses it from then on.
 
 If the account also has an authenticator app, a code is asked for and pressing Enter reaches for the key instead. A touch needs you there, so unattended jobs still want `--totp` - or better, a session you signed in once and left in place.
 

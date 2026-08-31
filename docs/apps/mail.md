@@ -150,7 +150,7 @@ proton mail messages export REF --output - | formail -X ""
 
 It takes the same filters as `trash` and `move`. `--format eml` writes one file per message named `<date> <subject>.eml`; `--format mbox` concatenates. `--no-attachments` skips downloads, which is much faster for a large archive.
 
-**Exported files are not encrypted**, and their DKIM signatures no longer verify. The web client's export behaves the same way.
+**Exported files are not encrypted**, and their `DKIM-Signature` and `ARC-*` headers no longer verify, since the body they signed was the encrypted one. The web client's export behaves the same way.
 
 Going the other way, `--eml` reads a file back into a draft or a send:
 
