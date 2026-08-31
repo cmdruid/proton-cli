@@ -106,6 +106,7 @@ jobs:
 
   release:
     needs: resolve
+    if: needs.resolve.outputs.release == 'true'
     runs-on: ubuntu-latest
     outputs:
       goreleaser: ${{ steps.goreleaser.outcome }}
