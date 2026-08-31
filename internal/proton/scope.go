@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/roman-16/proton-cli/internal/errs"
 )
 
 // Scope elevation, mirroring how the web clients do it.
@@ -56,12 +58,12 @@ const lockPath = "/core/v4/users/lock"
 // scopesPath reports the scopes a session currently holds.
 const scopesPath = "/core/v4/auth/scopes"
 
-// ScopeCredentials is what an elevation needs. TOTP is only consulted when the
-// account has two-factor enabled and the server asks for it.
+// ScopeCredentials is what an elevation needs from the person. A second factor
+// is not part of it: whether Proton wants one is answered by the parameters the
+// exchange fetches, so it is asked for then and not before.
 type ScopeCredentials struct {
 	Username string
 	Password []byte
-	TOTP     string
 }
 
 // ScopeResolver supplies credentials when the server reports a missing scope.
@@ -114,18 +116,41 @@ func isMissingScope(status int, body []byte) bool {
 // directions, and discarding the server's half would throw away the guarantee
 // that we are talking to something which knows the verifier.
 func (c *Client) Elevate(ctx context.Context, s Scope, cr ScopeCredentials) error {
-	extra := map[string]any{}
-	if cr.TOTP != "" {
-		extra["TwoFactorCode"] = cr.TOTP
-	}
 	if _, err := c.exchange(ctx, srpExchange{
 		method: "PUT", path: s.endpoint(),
 		username: cr.Username, password: cr.Password,
-		scope: s, extra: extra,
+		scope: s, secondFactor: c.answerSecondFactor(ctx),
 	}); err != nil {
 		return fmt.Errorf("elevate to %s scope: %w", s, err)
 	}
 	return nil
+}
+
+// answerSecondFactor answers the challenge an elevation is met with.
+//
+// An account with a second factor is asked for one here rather than up front,
+// because until the parameters arrive there is nothing to say Proton wants one -
+// and asking anyway would spend a code on a guess, or a touch on nothing.
+func (c *Client) answerSecondFactor(ctx context.Context) func(twoFA) (map[string]any, error) {
+	return func(t twoFA) (map[string]any, error) {
+		if t.Enabled == 0 {
+			return nil, nil
+		}
+		offer := t.offer(c.host())
+		if !offer.TOTP && offer.SecurityKey == nil {
+			return nil, errs.Problemf("This account uses a two-factor method proton does not support (0x%x).",
+				t.Enabled).Exit(2)
+		}
+		resolver := c.getSecondFactorResolver()
+		if resolver == nil {
+			return nil, errs.Problemf("This account needs a second factor, and there is nothing here to ask.").Exit(2)
+		}
+		answer, err := resolver(ctx, offer)
+		if err != nil {
+			return nil, err
+		}
+		return offer.answer(answer)
+	}
 }
 
 // Relock drops every elevated scope. Best-effort: the operation it protects has

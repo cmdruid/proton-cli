@@ -2,12 +2,102 @@ package proton
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+// What a security key answers with has to reach Proton in the shape its own
+// clients send: the challenge handed back exactly as it arrived, three binary
+// fields in ordinary base64, and the credential as an array of numbers. None of
+// it can be checked against Proton without a key registered on the account, so
+// it is pinned here against the shape read out of the web clients.
+func TestASecurityKeyAnswerIsSentTheWayProtonReadsIt(t *testing.T) {
+	const challenge = `{"publicKey":{"rpId":"account.proton.me","challenge":[1,2,3]}}`
+
+	var sent []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent, _ = io.ReadAll(r.Body)
+		_, _ = w.Write([]byte(`{"Code":1000}`))
+	}))
+	defer srv.Close()
+
+	offer := SecondFactorOffer{SecurityKey: &SecurityKeyRequest{
+		Options: json.RawMessage(challenge), Host: "account.proton.me",
+	}}
+	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
+	if err := c.auth2FA(context.Background(), offer, SecondFactorAnswer{
+		SecurityKey: &SecurityKeyAssertion{
+			ClientData:        []byte("client data"),
+			AuthenticatorData: []byte("authenticator data"),
+			Signature:         []byte{0xff, 0x00},
+			CredentialID:      []byte{7, 8, 9},
+		},
+	}); err != nil {
+		t.Fatalf("auth2FA: %v", err)
+	}
+
+	var body struct {
+		FIDO2 struct {
+			AuthenticationOptions json.RawMessage
+			ClientData            string
+			AuthenticatorData     string
+			Signature             string
+			CredentialID          []int
+		}
+		TwoFactorCode string `json:",omitempty"`
+	}
+	if err := json.Unmarshal(sent, &body); err != nil {
+		t.Fatalf("the request is not JSON: %v", err)
+	}
+	if string(body.FIDO2.AuthenticationOptions) != challenge {
+		t.Errorf("AuthenticationOptions = %s, want the challenge exactly as it arrived", body.FIDO2.AuthenticationOptions)
+	}
+	if body.FIDO2.ClientData != "Y2xpZW50IGRhdGE=" {
+		t.Errorf("ClientData = %q, want standard base64", body.FIDO2.ClientData)
+	}
+	if body.FIDO2.AuthenticatorData != "YXV0aGVudGljYXRvciBkYXRh" {
+		t.Errorf("AuthenticatorData = %q, want standard base64", body.FIDO2.AuthenticatorData)
+	}
+	if body.FIDO2.Signature != "/wA=" {
+		t.Errorf("Signature = %q, want standard base64", body.FIDO2.Signature)
+	}
+	if len(body.FIDO2.CredentialID) != 3 || body.FIDO2.CredentialID[0] != 7 {
+		t.Errorf("CredentialID = %v, want the credential as an array of numbers", body.FIDO2.CredentialID)
+	}
+	if body.TwoFactorCode != "" {
+		t.Errorf("a code was sent alongside the key: %q", body.TwoFactorCode)
+	}
+}
+
+// Proton says an account has a security key by naming the keys it has. One that
+// names none is a door with nothing behind it, and offering it would leave the
+// person waiting to touch something that could never answer.
+func TestWhatAnAccountIsOffered(t *testing.T) {
+	challenge := json.RawMessage(`{"publicKey":{}}`)
+	registered := twoFA{Enabled: twoFAOTP | twoFAFIDO2}
+	registered.FIDO2.AuthenticationOptions = challenge
+	registered.FIDO2.RegisteredKeys = []struct{ Name string }{{Name: "a yubikey"}}
+
+	bare := twoFA{Enabled: twoFAFIDO2}
+	bare.FIDO2.AuthenticationOptions = challenge
+
+	if offer := registered.offer("account.proton.me"); !offer.TOTP || offer.SecurityKey == nil {
+		t.Errorf("offer = %+v, want both a code and a key", offer)
+	} else if offer.SecurityKey.Host != "account.proton.me" {
+		t.Errorf("host = %q, want the host that sent the challenge", offer.SecurityKey.Host)
+	}
+	if offer := bare.offer("account.proton.me"); offer.TOTP || offer.SecurityKey != nil {
+		t.Errorf("offer = %+v, want nothing offered for a key that is not registered", offer)
+	}
+	if offer := (twoFA{Enabled: twoFAOTP}).offer("account.proton.me"); !offer.TOTP || offer.SecurityKey != nil {
+		t.Errorf("offer = %+v, want only a code", offer)
+	}
+}
 
 // Signing in is what an unattended job does before its real work, at an hour
 // nobody is watching. Proton's edge has bad moments, and a moment is not a
@@ -151,7 +241,8 @@ func TestATwoFactorCodeIsNeverSentTwice(t *testing.T) {
 	defer srv.Close()
 
 	c := New(Options{BaseURL: srv.URL, Logger: slog.New(slog.DiscardHandler)})
-	err := c.auth2FA(context.Background(), "123456")
+	err := c.auth2FA(context.Background(),
+		SecondFactorOffer{TOTP: true}, SecondFactorAnswer{TOTP: "123456"})
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || apiErr.HTTPStatus != http.StatusBadGateway {
 		t.Fatalf("err = %v, want the 502 reported as what it is", err)
@@ -185,24 +276,27 @@ func TestAnSRPExchangeIsRestartedWholeOrNotAtAll(t *testing.T) {
 	// answers is what each run of the exchange gets, in order; a run past the end
 	// of the list is granted the scope. runs is how many the loop should make.
 	cases := []struct {
-		name    string
-		extra   map[string]any
-		answers []error
-		runs    int
+		name         string
+		secondFactor func(twoFA) (map[string]any, error)
+		answers      []error
+		runs         int
 	}{
 		{name: "granted at once", runs: 1},
 		{name: "granted after a server that broke", answers: broke(1), runs: 2},
 		{name: "a server that stayed broken", answers: broke(transientWaits + 1), runs: transientWaits + 1},
 		{name: "credentials Proton refused", answers: refused, runs: 1},
 		{
-			name:  "a server that broke, with a two-factor code",
-			extra: map[string]any{"TwoFactorCode": "123456"}, answers: broke(1), runs: 1,
+			name: "a server that broke, with a second factor",
+			secondFactor: func(twoFA) (map[string]any, error) {
+				return map[string]any{"TwoFactorCode": "123456"}, nil
+			},
+			answers: broke(1), runs: 1,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New(Options{Logger: slog.New(slog.DiscardHandler)})
-			x := srpExchange{method: "POST", path: "/core/v4/auth", extra: tc.extra}
+			x := srpExchange{method: "POST", path: "/core/v4/auth", secondFactor: tc.secondFactor}
 
 			var runs int
 			resp, err := c.retrying(context.Background(),

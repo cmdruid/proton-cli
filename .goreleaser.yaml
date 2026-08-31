@@ -38,6 +38,13 @@ builds:
     goarch:
       - amd64
       - arm64
+    # Every authenticator on Windows belongs to the operating system, which hands
+    # out assertions through webauthn.dll and reserves the USB devices themselves
+    # to administrators. Reaching that API is what this tag compiles in, and it is
+    # why signing in with a security key on Windows needs a release binary rather
+    # than a `go install` build - the same bargain the CAPTCHA helper makes.
+    flags:
+      - -tags=embed_hv,webauthn
   - id: windows-alias
     binary: proton-cli
     main: ./cmd/proton-cli

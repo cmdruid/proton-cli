@@ -252,3 +252,17 @@ func TestQuietSilencesEverySeverity(t *testing.T) {
 		t.Errorf("--quiet still wrote out=%q err=%q", out.String(), errb.String())
 	}
 }
+
+// An instruction is part of the question rather than commentary on it, so it is
+// the one thing --quiet does not take away: a run waiting for a finger on a
+// security key, having said nothing about why, cannot be told from a hang.
+func TestAnInstructionSurvivesQuiet(t *testing.T) {
+	u, out, errb := fixture(t, Options{Quiet: true})
+	u.Instruct("Touch your security key.")
+	if errb.String() != "Touch your security key.\n" {
+		t.Errorf("err = %q, want the instruction", errb.String())
+	}
+	if out.Len() != 0 {
+		t.Errorf("an instruction reached the answer stream: %q", out.String())
+	}
+}

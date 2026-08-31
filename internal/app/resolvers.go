@@ -2,14 +2,18 @@ package app
 
 import (
 	"context"
+	"errors"
 
+	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/fido"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// The transport has exactly two reasons to need something from a person: Proton
-// asked for human verification, or Proton asked the session to be elevated. Both
-// arrive as callbacks installed here, so the request path stays free of any
-// notion of a user interface and no command has to anticipate either event.
+// The transport has exactly three reasons to need something from a person:
+// Proton asked for human verification, Proton asked the session to be elevated,
+// or Proton asked for a second factor. All three arrive as callbacks installed
+// here, so the request path stays free of any notion of a user interface and no
+// command has to anticipate any of them.
 
 type scopeReasonKey struct{}
 
@@ -45,14 +49,77 @@ func (a *App) installScopeResolver() {
 		if err != nil {
 			return proton.ScopeCredentials{}, err
 		}
-		return proton.ScopeCredentials{
-			Username: user,
-			Password: []byte(password),
-			// A code is supplied only if one is already to hand. Prompting for a
-			// TOTP that may not be wanted would burn a thirty-second window on a
-			// guess; if the server does want one, it says so and the user can
-			// pass --totp.
-			TOTP: a.Creds.TOTPIfSet(),
-		}, nil
+		return proton.ScopeCredentials{Username: user, Password: []byte(password)}, nil
 	})
+}
+
+// installSecondFactorResolver teaches the client how to answer Proton when it
+// asks for a second factor, whether that is signing in or a session being asked
+// to prove itself again.
+//
+// Which factor answers is decided here and not by the caller: an account may
+// have both, only the person at the terminal knows whether the key is in the
+// room, and a code that was passed as a flag is a person who has already said.
+func (a *App) installSecondFactorResolver() {
+	a.API.SetSecondFactorResolver(func(ctx context.Context, offer proton.SecondFactorOffer) (proton.SecondFactorAnswer, error) {
+		if offer.SecurityKey != nil && a.Creds.prefersSecurityKey(offer.TOTP) {
+			return a.securityKey(ctx, *offer.SecurityKey)
+		}
+		code, err := a.Creds.TOTP()
+		if err != nil {
+			return proton.SecondFactorAnswer{}, err
+		}
+		return proton.SecondFactorAnswer{TOTP: code}, nil
+	})
+}
+
+// securityKey runs the WebAuthn ceremony and turns whatever it ran into into a
+// sentence about what to do next.
+func (a *App) securityKey(ctx context.Context, req proton.SecurityKeyRequest) (proton.SecondFactorAnswer, error) {
+	assertion, err := fido.Assert(ctx, fido.Request{Options: req.Options, Host: req.Host}, fido.Prompts{
+		Touch: a.UI.Instruct,
+		PIN:   a.Creds.SecurityKeyPIN,
+	})
+	if err != nil {
+		return proton.SecondFactorAnswer{}, keyProblem(err)
+	}
+	return proton.SecondFactorAnswer{SecurityKey: &proton.SecurityKeyAssertion{
+		ClientData:        assertion.ClientData,
+		AuthenticatorData: assertion.AuthenticatorData,
+		Signature:         assertion.Signature,
+		CredentialID:      assertion.CredentialID,
+	}}, nil
+}
+
+// keyProblem says what a key refused to do and what would get past it. Every one
+// of these ends a sign-in, so each exits 2 the way a wrong password does.
+func keyProblem(err error) error {
+	switch {
+	case errors.Is(err, fido.ErrNoDevice):
+		return errs.Problemf("No security key is connected to this machine.").
+			Hint("plug in the key you registered with Proton and run this again").Exit(2)
+	case errors.Is(err, fido.ErrPermission):
+		return errs.Problemf("A security key is connected but proton cannot open it.").
+			Hint("install the udev rules for FIDO devices (the libfido2 package ships them),",
+				"then unplug the key and plug it in again").Exit(2)
+	case errors.Is(err, fido.ErrNoCredential):
+		return errs.Problemf("This security key is not one this account is registered with.").
+			Hint("try the key you registered at https://account.proton.me/mail/account-password").Exit(2)
+	case errors.Is(err, fido.ErrDenied):
+		return errs.Problemf("The security key was not used in time.").
+			Hint("run this again and touch the key when it lights up").Exit(2)
+	case errors.Is(err, fido.ErrPINRequired):
+		return errs.Problemf("This security key asks for its PIN, and there is nobody here to ask.").
+			Hint("run this in a terminal, or sign in with --totp instead").Exit(2)
+	case errors.Is(err, fido.ErrPINWrong):
+		return errs.Problemf("That is not the PIN of this security key.").
+			Hint("run this again - a key locks itself after a few wrong PINs").Exit(2)
+	case errors.Is(err, fido.ErrPINBlocked):
+		return errs.Problemf("This security key has locked itself after too many wrong PINs.").
+			Hint("reset it with its manufacturer's own tool, or sign in with --totp").Exit(2)
+	case errors.Is(err, fido.ErrUnsupported):
+		return errs.Problemf("This build cannot reach a security key on this machine.").
+			Hint("sign in with --totp, or install proton from a release rather than with go install").Exit(2)
+	}
+	return err
 }

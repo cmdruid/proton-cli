@@ -231,6 +231,20 @@ func (u *UI) Hint(msg string) {
 	_, _ = fmt.Fprintln(u.Err, u.errStyle.Paint(Muted, msg))
 }
 
+// Instruct writes something the person has to do before the command can carry
+// on: touch the key, follow the dialog that just opened.
+//
+// It is dimmed like a hint and, unlike one, survives --quiet. An instruction is
+// part of the question, not commentary on it - and a run sitting there waiting
+// for a finger, having said nothing about why, is indistinguishable from one
+// that has hung.
+func (u *UI) Instruct(msg string) {
+	if msg == "" {
+		return
+	}
+	_, _ = fmt.Fprintln(u.Err, u.errStyle.Paint(Muted, msg))
+}
+
 // Warn reports something that is true, is not a failure, and is worth noticing:
 // a file that arrived but could not be attributed, a change that was saved but
 // whose notification bounced, a filter about to cover more than the reader

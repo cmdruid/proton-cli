@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 
 	"github.com/ProtonMail/go-srp"
 	"github.com/roman-16/proton-cli/internal/errs"
@@ -19,6 +20,9 @@ type authInfo struct {
 	Version         int
 	Salt            string
 	SRPSession      string
+	// TwoFA is answered only when the session asking is already signed in, which
+	// is how proving a session again learns what it may prove itself with.
+	TwoFA twoFA `json:"2FA"`
 }
 
 type authResp struct {
@@ -27,9 +31,36 @@ type authResp struct {
 	AccessToken  string
 	RefreshToken string
 	ServerProof  string
-	TwoFA        struct {
-		Enabled int
-	} `json:"2FA"`
+	TwoFA        twoFA `json:"2FA"`
+}
+
+// twoFA is what Proton says about an account's second factor, in the sign-in
+// answer and again when a session is asked to prove itself a second time.
+type twoFA struct {
+	Enabled int
+	FIDO2   struct {
+		// AuthenticationOptions is a WebAuthn challenge, carried as it arrived: it
+		// goes back with the answer, and re-encoding what the server wrote is a way
+		// of disagreeing with it about what it said.
+		AuthenticationOptions json.RawMessage
+		RegisteredKeys        []struct {
+			Name string
+		}
+	}
+}
+
+// offer is what this account can answer with, as a question for whoever is at
+// the terminal. A security key that is enabled but registers no keys is Proton
+// describing a door with nothing behind it, and is offered as no key at all.
+func (t twoFA) offer(host string) SecondFactorOffer {
+	offer := SecondFactorOffer{TOTP: t.Enabled&twoFAOTP != 0}
+	if t.Enabled&twoFAFIDO2 != 0 && len(t.FIDO2.RegisteredKeys) > 0 {
+		offer.SecurityKey = &SecurityKeyRequest{
+			Options: t.FIDO2.AuthenticationOptions,
+			Host:    host,
+		}
+	}
+	return offer
 }
 
 // Two-factor methods, as the bitfield Proton returns in 2FA.Enabled.
@@ -40,17 +71,89 @@ const (
 	twoFAFIDO2 = 2
 )
 
-// TOTPFunc supplies a two-factor code. It is called only when the server says
-// the account has TOTP enabled, so an account without two-factor never triggers
-// a prompt and a code is never asked for speculatively - which matters, because
-// a TOTP is only valid for thirty seconds.
-type TOTPFunc func() (string, error)
+// SecondFactorFunc answers Proton's second-factor challenge.
+//
+// It is called only when the server says this account has one, and it is given
+// what the server will accept rather than being asked for a particular kind:
+// which of the two to use is a question for whoever is at the terminal, and only
+// they know whether the key is in the room. Nothing is asked speculatively - a
+// code lives thirty seconds and a touch cannot be taken back.
+type SecondFactorFunc func(context.Context, SecondFactorOffer) (SecondFactorAnswer, error)
+
+// SecondFactorOffer is what Proton will accept from this account.
+type SecondFactorOffer struct {
+	TOTP        bool
+	SecurityKey *SecurityKeyRequest
+}
+
+// SecurityKeyRequest is a WebAuthn challenge and the host that sent it. Both
+// halves matter: what a key is asked to sign, and who is entitled to ask.
+type SecurityKeyRequest struct {
+	Options json.RawMessage
+	Host    string
+}
+
+// SecondFactorAnswer is what came back. Exactly one of the two is filled in.
+type SecondFactorAnswer struct {
+	TOTP        string
+	SecurityKey *SecurityKeyAssertion
+}
+
+// SecurityKeyAssertion is what a key answered a challenge with.
+type SecurityKeyAssertion struct {
+	ClientData        []byte
+	AuthenticatorData []byte
+	Signature         []byte
+	CredentialID      []byte
+}
+
+// SetSecondFactorResolver installs what answers a second-factor challenge, for
+// signing in and for proving a session again later.
+func (c *Client) SetSecondFactorResolver(r SecondFactorFunc) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.secondFactor = r
+}
+
+func (c *Client) getSecondFactorResolver() SecondFactorFunc {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.secondFactor
+}
+
+// answer puts a second factor where the request that carries it wants it. Every
+// endpoint that asks for one takes both kinds under the same two names, so this
+// is written once.
+func (offer SecondFactorOffer) answer(a SecondFactorAnswer) (map[string]any, error) {
+	switch {
+	case a.SecurityKey != nil:
+		if offer.SecurityKey == nil {
+			return nil, errors.New("a security key answered a challenge that did not ask for one")
+		}
+		// The credential is a JSON array of numbers, which is how the web clients
+		// send it and so how Proton expects to read it.
+		credential := make([]int, len(a.SecurityKey.CredentialID))
+		for i, b := range a.SecurityKey.CredentialID {
+			credential[i] = int(b)
+		}
+		return map[string]any{"FIDO2": map[string]any{
+			"AuthenticationOptions": offer.SecurityKey.Options,
+			"ClientData":            base64.StdEncoding.EncodeToString(a.SecurityKey.ClientData),
+			"AuthenticatorData":     base64.StdEncoding.EncodeToString(a.SecurityKey.AuthenticatorData),
+			"Signature":             base64.StdEncoding.EncodeToString(a.SecurityKey.Signature),
+			"CredentialID":          credential,
+		}}, nil
+	case a.TOTP != "":
+		return map[string]any{"TwoFactorCode": a.TOTP}, nil
+	}
+	return nil, errs.Problemf("This account needs a second factor to sign in, and none was given.").Exit(2)
+}
 
 // Login performs the full web-client auth flow (unauth session → SRP → 2FA).
 // On a Proton 9001 (human-verification) response from the SRP step, Login
 // consults the installed HVResolver (if any) and retries the auth POST once
 // with HV headers, redoing getAuthInfo to obtain a fresh SRPSession.
-func (c *Client) Login(ctx context.Context, username string, password []byte, totp TOTPFunc) error {
+func (c *Client) Login(ctx context.Context, username string, password []byte) error {
 	sess, err := c.createSession(ctx)
 	if err != nil {
 		return fmt.Errorf("login: %w", err)
@@ -87,30 +190,36 @@ func (c *Client) Login(ctx context.Context, username string, password []byte, to
 	c.encKeyBlob = ""
 	c.mu.Unlock()
 
-	switch {
-	case auth.TwoFA.Enabled&twoFAOTP != 0:
-		if totp == nil {
-			return fmt.Errorf("login: account requires a two-factor code")
-		}
-		code, err := totp()
-		if err != nil {
-			return err
-		}
-		if err := c.auth2FA(ctx, code); err != nil {
-			return fmt.Errorf("login: %w", err)
-		}
-	case auth.TwoFA.Enabled&twoFAFIDO2 != 0:
-		// A security key needs a browser to talk WebAuthn, which a terminal has no
-		// way to do. Saying so is better than the stream of 401s that would follow
-		// a silently half-finished sign-in.
-		return errs.Problemf("This account signs in with a security key, which proton cannot use.").
-			Hint("add a TOTP authenticator app at https://account.proton.me/mail/account-password,",
-				"then sign in with --totp or let proton ask for the code.").Exit(2)
-	case auth.TwoFA.Enabled != 0:
+	if auth.TwoFA.Enabled == 0 {
+		return nil
+	}
+	offer := auth.TwoFA.offer(c.host())
+	if !offer.TOTP && offer.SecurityKey == nil {
 		return errs.Problemf("This account uses a two-factor method proton does not support (0x%x).",
 			auth.TwoFA.Enabled).Exit(2)
 	}
+	resolver := c.getSecondFactorResolver()
+	if resolver == nil {
+		return fmt.Errorf("login: account requires a second factor")
+	}
+	answer, err := resolver(ctx, offer)
+	if err != nil {
+		return err
+	}
+	if err := c.auth2FA(ctx, offer, answer); err != nil {
+		return fmt.Errorf("login: %w", err)
+	}
 	return nil
+}
+
+// host is the machine the API answers on, which is the only relying party a
+// security key may be asked about.
+func (c *Client) host() string {
+	u, err := url.Parse(c.base)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }
 
 // srpExchange is one SRP exchange: the endpoint that answers it, who is proving
@@ -126,6 +235,10 @@ type srpExchange struct {
 	scope Scope
 	// extra is what the endpoint wants alongside the proof.
 	extra map[string]any
+	// secondFactor answers the challenge the parameters come back with, for the
+	// exchanges that carry one in the same request as the proof. It is consulted
+	// after the parameters arrive, because only they say whether Proton wants one.
+	secondFactor func(twoFA) (map[string]any, error)
 
 	hvToken string
 	hvType  string
@@ -133,12 +246,12 @@ type srpExchange struct {
 
 // repeatable reports whether the whole exchange may be run a second time.
 //
-// One carrying a two-factor code may not: a code is single-use, so a second run
+// One carrying a second factor may not. A code is single-use, so a second run
 // submits one Proton has already taken and is told it is wrong - which would put
-// the blame on the person for a bad moment upstream.
+// the blame on the person for a bad moment upstream - and a challenge a key has
+// signed is spent the same way.
 func (x srpExchange) repeatable() bool {
-	_, twoFactor := x.extra["TwoFactorCode"]
-	return !twoFactor
+	return x.secondFactor == nil
 }
 
 // exchange runs an SRP exchange: fresh parameters, then the proof.
@@ -185,6 +298,15 @@ func (c *Client) srpCall(ctx context.Context, x srpExchange, info *authInfo) (*R
 	}
 	for k, v := range x.extra {
 		payload[k] = v
+	}
+	if x.secondFactor != nil {
+		answer, err := x.secondFactor(info.TwoFA)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range answer {
+			payload[k] = v
+		}
 	}
 
 	resp, err := c.authCall(ctx, Request{
@@ -275,14 +397,18 @@ func (c *Client) loginSRP(ctx context.Context, username string, password []byte,
 	return &r, nil
 }
 
-func (c *Client) auth2FA(ctx context.Context, totp string) error {
+func (c *Client) auth2FA(ctx context.Context, offer SecondFactorOffer, answer SecondFactorAnswer) error {
+	body, err := offer.answer(answer)
+	if err != nil {
+		return err
+	}
 	// Not repeatable, whatever goes wrong: a code is single-use and lives for
 	// thirty seconds, so by the time a wait is over it is either spent or expired,
 	// and submitting it again is answered with "incorrect code" - a sentence that
-	// blames the person for something Proton did.
-	_, err := c.authCall(ctx, Request{
-		Method: "POST", Path: "/core/v4/auth/2fa",
-		Body: map[string]string{"TwoFactorCode": totp},
+	// blames the person for something Proton did. A challenge a key has signed is
+	// spent in the same way.
+	_, err = c.authCall(ctx, Request{
+		Method: "POST", Path: "/core/v4/auth/2fa", Body: body,
 	})
 	return err
 }

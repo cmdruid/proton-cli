@@ -42,6 +42,22 @@ Two situations have none:
 - **Headless machines** - servers, containers, CI, anything without a display. See below.
 - **`go install` builds** - they don't embed the helper. Use a [release binary](installation.md), or [bring your own helper](#bringing-your-own-captcha-helper).
 
+## A security key that nothing finds
+
+`login` reports a key it cannot see and a key it cannot open as two different things, because they have different fixes.
+
+**"No security key is connected to this machine."** Nothing answered on USB. Plug the key in - the one you registered with Proton - and run the command again. A passkey held in a phone cannot answer here at all: reaching it needs a browser's Bluetooth handoff, so use a code instead.
+
+**"A security key is connected but proton cannot open it."** On Linux, `/dev/hidraw*` belongs to root until a udev rule says otherwise, and no sign-in should need to be root. Every distribution ships the rules with its FIDO packages - `libfido2` on most, `yubikey-personalization` alongside it for YubiKeys. On NixOS:
+
+```nix
+services.udev.packages = [ pkgs.libfido2 ];
+```
+
+Unplug the key and plug it in again afterwards: the rules apply when the device appears.
+
+**"This build cannot reach a security key on this machine."** A Windows build installed with `go install`. Windows hands out assertions through its own API, which the released binaries are built to reach and a `go install` build is not - the same difference that leaves it without the CAPTCHA helper. Install from a [release](installation.md), or sign in with `--totp`.
+
 ## Signing in on a headless machine
 
 Only **login** can hit a CAPTCHA. Everything after it uses the saved session, so the fix is to obtain the session somewhere with a display and carry it over:

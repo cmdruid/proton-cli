@@ -25,6 +25,8 @@ Sign in and save the session for this profile.
 
 Signing in also unlocks your keys, so your password is needed once per machine and not again. Anything a flag has not set is asked for, as long as this is a terminal.
 
+An account with a security key is asked to touch it. With an authenticator app enabled as well, an empty answer to the code prompt reaches for the key instead - so --totp is what an unattended job uses, a key being something only a person can answer.
+
 An account in two-password mode is asked for its second password once it has signed in, because that is the secret its keys are locked with rather than the one that proves who it is. A one-password account is never asked for it.
 
 Signing in again as the same account changes nothing, so an unattended job can run it first and recover from a session that expired.

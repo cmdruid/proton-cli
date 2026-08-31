@@ -156,6 +156,7 @@ func New(opts Options) (*App, error) {
 	})
 	a.Creds.stdinOwner = a.Stdin
 	a.installScopeResolver()
+	a.installSecondFactorResolver()
 	return a, nil
 }
 
@@ -285,7 +286,7 @@ func (a *App) Login(ctx context.Context, user string) error {
 	if err != nil {
 		return err
 	}
-	if err := a.API.Login(ctx, user, []byte(password), a.Creds.TOTP); err != nil {
+	if err := a.API.Login(ctx, user, []byte(password)); err != nil {
 		return err
 	}
 	if err := a.saveSession(); err != nil {

@@ -82,11 +82,23 @@ For a scheduled one-way copy, `proton drive items upload --recursive` in a cron 
 
 Not covered, and not planned. proton-cli mirrors what the Proton **web clients** let you do for Mail, Drive, Calendar, Pass and Contacts. Proton VPN has [its own CLI](https://protonvpn.com/support/linux-vpn-tool). See [Limits](limitations.md).
 
-## Does it support security keys or passkeys?
+## Does it support security keys?
 
-No. FIDO2 and WebAuthn need a browser, so proton-cli cannot sign in with one. If your account uses a security key, add an authenticator app in Proton's settings and sign in with a TOTP code instead.
+Yes. `proton account login` asks you to touch the key you registered with Proton, and signs in with it:
 
-Ironically, it will happily *read* you a TOTP code for any other service: `proton pass items totp github.com`.
+```console
+$ proton account login
+Email:             you@proton.me
+Password:
+Touch your security key.
+✓ Signed in as you@proton.me (profile "default").
+```
+
+On Linux and macOS the key has to be one you plug into USB. On Windows the sign-in goes through Windows Hello, so a key built into the machine works too. A key held in a phone does not: that needs the Bluetooth handoff a browser does, which no terminal can.
+
+If the account also has an authenticator app, a code is asked for and pressing Enter reaches for the key instead. A touch needs you there, so unattended jobs still want `--totp` - or better, a session you signed in once and left in place.
+
+It will also happily *read* you a TOTP code for any other service: `proton pass items totp github.com`.
 
 ## Is my mail actually decrypted locally?
 

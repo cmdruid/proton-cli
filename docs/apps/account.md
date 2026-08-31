@@ -39,7 +39,35 @@ proton account login --user "$ACCOUNT" --password-file "$CRED"
 proton drive items upload backup.zst /backups
 ```
 
-A two-factor code is only asked for when the account actually has one enabled. **Security keys are not supported**: FIDO2 needs a browser. If your account uses one, add an authenticator app in Proton's settings and sign in with that code.
+A second factor is only asked for when the account actually has one enabled.
+
+### Security keys
+
+An account that signs in with a security key is asked to touch it:
+
+```console
+$ proton account login
+Email:             alice@proton.me
+Password:
+Touch your security key.
+✓ Signed in as alice@proton.me (profile "default").
+```
+
+With an authenticator app enabled as well, the code prompt is the choice: type a code, or press Enter to use the key.
+
+```console
+$ proton account login
+Email:             alice@proton.me
+Password:
+This account also has a security key. Press Enter to use it instead of a code.
+Two-factor code:
+Touch your security key.
+✓ Signed in as alice@proton.me (profile "default").
+```
+
+The key has to be one you plug in - on Windows, where the sign-in goes through Windows Hello, one built into the machine counts. A passkey living in a phone does not, because reaching it needs the Bluetooth handoff only a browser performs; sign in with a code instead.
+
+**On Linux, a key needs udev rules** to be readable by anyone but root. Every distribution ships them with `libfido2` or its own FIDO package, and `login` says so if it finds a key it cannot open.
 
 ### Two-password mode
 

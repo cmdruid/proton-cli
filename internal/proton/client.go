@@ -94,6 +94,7 @@ type Client struct {
 	dryRun        bool
 	hvResolver    HVResolver
 	scopeResolver ScopeResolver
+	secondFactor  SecondFactorFunc
 	persist       func()
 	reload        func() (acc, ref string, ok bool)
 	sessionGuard  func() error

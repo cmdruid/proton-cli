@@ -80,10 +80,10 @@ type Credentials struct {
 	// stdinOwner is set once the App exists, so Supply can claim standard input.
 	stdinOwner func(claim string) (io.Reader, error)
 
-	// prompter is built once and reused, so every question shares one reader and
+	// prompt is built once and reused, so every question shares one reader and
 	// one label column: a value typed ahead of its question survives, and the
 	// answers line up under each other.
-	prompter *ui.Prompter
+	prompt *ui.Prompter
 
 	user, password, totp string
 	haveUser             bool
@@ -100,6 +100,10 @@ const (
 	// somebody has stored it under.
 	labelSecondPassword = "Second password"
 	labelTOTP           = "Two-factor code"
+	// labelSecurityKeyPIN is the PIN of the key itself, which is set on the key
+	// and known only to it. It is never the account password, and a key counts
+	// wrong answers, so it is worth being unmistakable about which is wanted.
+	labelSecurityKeyPIN = "Security key PIN"
 	// labelPassphrase is the secret that locks a file rather than the account.
 	// It is never the account password, and calling it something else is what
 	// keeps somebody from typing one where the other was meant.
@@ -301,13 +305,47 @@ func (c *Credentials) TOTP() (string, error) {
 	return v, nil
 }
 
-// TOTPIfSet returns a two-factor code only if one was already supplied, for
-// callers that would rather proceed and let the server say whether it wanted one.
-func (c *Credentials) TOTPIfSet() string {
-	if c.haveTOTP {
-		return c.totp
+// SecurityKeyPIN returns the PIN that unlocks the key itself, asked for only
+// when a key has said it will not answer without one.
+func (c *Credentials) SecurityKeyPIN() (string, error) {
+	return c.ask(labelSecurityKeyPIN, true,
+		errs.Problemf("This security key asks for its PIN, and there is nobody here to ask.").
+			Hint("run this in a terminal, or sign in with --totp instead").Exit(2))
+}
+
+// prefersSecurityKey reports whether the key answers this challenge, for an
+// account where it is not the only thing that could.
+//
+// The question is put once, as the code prompt itself: an answer is a code, and
+// an empty one is the key. A code that arrived as a flag has already answered it,
+// and a run with nobody to ask is left to the code path, which is the one that
+// can say what flag to pass.
+func (c *Credentials) prefersSecurityKey(alsoTOTP bool) bool {
+	switch {
+	case !alsoTOTP:
+		return true
+	case c.haveTOTP || c.flagTOTP != "":
+		return false
+	case !c.ui.CanPrompt():
+		return false
 	}
-	return c.flagTOTP
+	c.ui.Instruct("This account also has a security key. Press Enter to use it instead of a code.")
+	code, err := c.prompter().Line(labelTOTP)
+	if err != nil || code == "" {
+		return true
+	}
+	c.totp, c.haveTOTP = code, true
+	return false
+}
+
+// prompter is the one question block a sign-in asks, built on first use so every
+// label in it lines up whether or not it ends up being asked.
+func (c *Credentials) prompter() *ui.Prompter {
+	if c.prompt == nil {
+		c.prompt = c.ui.Ask(labelEmail, labelPassword, labelSecondPassword,
+			labelTOTP, labelSecurityKeyPIN, labelPassphrase)
+	}
+	return c.prompt
 }
 
 // ask prompts, or reports missing when there is nobody to ask.
@@ -315,10 +353,7 @@ func (c *Credentials) ask(label string, secret bool, missing error) (string, err
 	if !c.ui.CanPrompt() {
 		return "", missing
 	}
-	if c.prompter == nil {
-		c.prompter = c.ui.Ask(labelEmail, labelPassword, labelSecondPassword, labelTOTP, labelPassphrase)
-	}
-	p := c.prompter
+	p := c.prompter()
 	var (
 		v   string
 		err error

@@ -6,7 +6,7 @@ proton-cli aims for parity with what the Proton web clients let you do. Some thi
 
 | What you can't do | Why | Instead |
 | --- | --- | --- |
-| Sign in with a security key | FIDO2 speaks WebAuthn, which needs a browser | Add a TOTP authenticator to the account |
+| Sign in with a passkey held in a phone | The handoff runs over Bluetooth from a browser | Use a key you can plug in, or a TOTP code |
 | Sign in on a headless machine | Proton may ask for a CAPTCHA, which needs a display | [Copy a session across](troubleshooting.md#signing-in-on-a-headless-machine) |
 | Pick any colour for a label | Proton allows only its 20 accent colours | `--color` prints the palette when refused |
 | Trust `list` immediately after a change | Proton's index is eventually consistent | `get` the ID the command printed ([why](design-notes.md#why-search-lags)) |

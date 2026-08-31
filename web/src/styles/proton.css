@@ -157,6 +157,16 @@
   }
 
   /*
+   * Search is drawn as a field and behaves as one - click it and you type - so
+   * it takes a field's cursor. That it is a button underneath is an
+   * implementation detail, and pointing at it with a hand promises a different
+   * interaction than the one that follows.
+   */
+  button[data-open-modal] {
+    cursor: text;
+  }
+
+  /*
    * A line too long to fit scrolls, so the bar under it belongs to the block it
    * scrolls rather than to the operating system: at a terminal's own weight, it
    * reads as part of the panel instead of sitting on top of it.
