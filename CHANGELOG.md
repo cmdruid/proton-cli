@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Adding a version section here is what publishes a release, so this file is the one place a version is decided: see [Releases](CONTRIBUTING.md#releases). Versions that shipped before this file existed are on the [releases page](https://github.com/roman-16/proton-cli/releases).
 
+## [2.10.0] - 2026-08-31
+
+### Added
+
+- Signing in with a security key. An account with one is asked to touch it, and one that also has an authenticator app reaches for the key when the code prompt is answered with nothing. The same answer satisfies the re-authentication guarding `calendar settings calendars delete`, `mail messages expire` and `mail settings autoreply set`, which an account with only a key could not give before.
+- A CAPTCHA can be solved on any device. `proton` prints the page, opens it in your browser where it can, and waits while you solve it - here, on your phone, anywhere. A machine with no display signs in like any other.
+- `--verified TOKEN` and `PROTON_VERIFIED` carry a verification solved out of band, for a run that cannot wait for one. A run that may not ask - `--no-input`, or no terminal - now prints the page and the token to repeat the command with, so a scheduled job can hand the link to a person and try again.
+
+### Changed
+
+- A CAPTCHA opens in your own browser rather than a window `proton` draws. Nothing to install on Linux: `libwebkit2gtk`, `libgtk-3` and `glib-networking` are no longer needed, the `.deb` and `.rpm` packages no longer depend on GTK or WebKit, and a `go install` build verifies exactly as a release binary does.
+
+### Removed
+
+- The embedded CAPTCHA webview helper, and `PROTON_HV_HELPER` with it. Your browser does the job and there is no helper left to point at.
+
 ## [2.9.0] - 2026-08-31
 
 ### Added

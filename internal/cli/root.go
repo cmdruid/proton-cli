@@ -42,6 +42,7 @@ type globalFlags struct {
 	fullIDs  bool
 	noColor  bool
 	noInput  bool
+	verified string
 }
 
 // newRoot assembles the whole command tree and returns it.
@@ -83,6 +84,8 @@ func newRoot() *cobra.Command {
 	pf.BoolVar(&g.fullIDs, "full-ids", false, "Show full IDs in interactive output (default: shortened to 8 chars on TTY)")
 	pf.BoolVar(&g.noColor, "no-color", false, "Disable colored output (env: NO_COLOR)")
 	pf.BoolVar(&g.noInput, "no-input", false, "Never prompt; a missing credential becomes an error (env: PROTON_NO_INPUT)")
+	pf.StringVar(&g.verified, "verified", "",
+		"A human verification already solved, as the refusal printed it (env: PROTON_VERIFIED)")
 
 	// Pointing the CLI at something other than Proton is a thing to do while
 	// developing this tool and never while using it, so it is hidden rather than
@@ -125,11 +128,12 @@ func newRoot() *cobra.Command {
 			FullIDs:  g.fullIDs,
 			NoColor:  g.noColor,
 			NoInput:  g.noInput,
+			Verified: g.verified,
 		})
 		if err != nil {
 			return err
 		}
-		a.API.SetHVResolver(cliHVResolver(cmd.Context(), a))
+		a.API.SetHVResolver(cliHVResolver(a))
 
 		newCtx := app.WithApp(cmd.Context(), a)
 		cmd.SetContext(newCtx)
@@ -189,10 +193,12 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, "\nCancelled.")
 		os.Exit(130)
 	}
+	// A human verification that reaches here was never answered, and what to do
+	// about it depends on why. It becomes an ordinary refusal so that it is
+	// written by the one thing that writes refusals.
 	var hvErr *proton.HumanVerificationError
 	if errors.As(err, &hvErr) {
-		printHVFinalError(os.Stderr, hvErr, app.FromOrNil(root.Context()))
-		os.Exit(exitCode(err))
+		err = hvFinalError(hvErr, app.FromOrNil(root.Context()))
 	}
 	ui.WriteError(os.Stderr, rewrapFlagError(err, os.Args), errorStyle(root), shortIDs(root))
 	announce(cmd)
@@ -281,27 +287,39 @@ func shortIDs(root *cobra.Command) bool {
 	return false
 }
 
-// printHVFinalError formats the user-facing message when a 9001 reaches the
-// top level and the captcha helper could not run.
-func printHVFinalError(w *os.File, hv *proton.HumanVerificationError, a *app.App) {
-	println := func(s string) { _, _ = fmt.Fprintln(w, s) }
-	printf := func(format string, args ...any) { _, _ = fmt.Fprintf(w, format, args...) }
+// hvFinalError is the refusal a human verification becomes when it reaches the
+// top level unanswered.
+//
+// There are three ways to get here and they want different words. A verification
+// that was presented and refused is over: the challenge is spent and a fresh one
+// is what the next run will be given. A challenge nobody could be asked about
+// carries the two halves an unattended caller needs - the page, and the token to
+// repeat the command with - because the proof outlives the run that asked for it
+// even though the challenge does not. And a challenge offering no CAPTCHA cannot
+// be finished by any client, so it says so rather than pointing at a page.
+func hvFinalError(hv *proton.HumanVerificationError, a *app.App) error {
+	if hv.Refused {
+		return errs.Problemf("Proton did not accept the verification.").
+			Hint("solve the CAPTCHA fully, then run the command again").Exit(2)
+	}
+	page, err := verificationPage(hv, a)
+	if err != nil {
+		return errs.Problemf("Proton wants to confirm you are human by %s, and that cannot be done from a terminal.",
+			strings.Join(hv.Methods, " or ")).
+			Hint("sign in to your account in a browser once, then try again").Exit(2)
+	}
+	return errs.Problemf("Proton wants to confirm you are human, and this run cannot wait while you do.").
+		Hint("solve "+page, "then run the same command again with --verified "+hv.Token).Exit(2)
+}
 
-	println("Error: Proton requires CAPTCHA verification, but proton cannot run a")
-	println("webview in this environment.")
-	if a != nil && a.HVUnavailableDetail != "" {
-		printf("\n  %s\n", a.HVUnavailableDetail)
+// verificationPage is the address to send somebody to, from whichever client is
+// at hand. A failure before the app exists has no API to ask, and the address
+// depends on the host that raised the challenge.
+func verificationPage(hv *proton.HumanVerificationError, a *app.App) (string, error) {
+	if a == nil {
+		return "", fmt.Errorf("no client to build a verification address with")
 	}
-	println("")
-	println("Run the command on a desktop machine with a working webview:")
-	println("  Linux:   apt install libwebkit2gtk-4.1-0 libgtk-3-0")
-	println("           (or the equivalent for your distro)")
-	println("  macOS:   no setup needed (system WebKit)")
-	println("  Windows: no setup needed (WebView2 ships with Edge)")
-	if len(hv.Methods) > 0 {
-		println("")
-		printf("Methods Proton offered: %s\n", strings.Join(hv.Methods, ", "))
-	}
+	return a.API.VerifyURL(hv)
 }
 
 // Root returns the assembled command tree, for the documentation generator and

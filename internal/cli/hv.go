@@ -1,71 +1,57 @@
 package cli
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/roman-16/proton-cli/internal/app"
-	"github.com/roman-16/proton-cli/internal/hv"
 	"github.com/roman-16/proton-cli/internal/proton"
 )
 
-// cliHVResolver returns the HVResolver installed on the client. On a captcha
-// challenge it extracts and runs the embedded proton-hv webview helper;
-// other methods are not yet implemented and map to proton.ErrHVUnavailable so
-// the original 9001 surfaces with an honest message.
-func cliHVResolver(_ context.Context, a *app.App) proton.HVResolver {
+// cliHVResolver answers Proton's human-verification challenges by sending a
+// person to Proton's own verification page.
+//
+// The page is what makes this work anywhere: opened in an ordinary browser it
+// submits the solved CAPTCHA itself, leaving the proof standing on the challenge
+// token - so what goes back to Proton is the challenge this run was given, and
+// the browser can be on another machine entirely. Nothing has to be rendered
+// here, which is why a server verifies as readily as a desktop.
+//
+// The address is printed whether or not a browser opened. Whether a machine can
+// show a page is not a question worth asking - a forwarded display, a container
+// with a launcher and no session, and a desktop all answer it differently and
+// wrongly - and a run that claimed to have opened something it had not would
+// leave nothing on screen to act on.
+func cliHVResolver(a *app.App) proton.HVResolver {
 	return func(hvErr *proton.HumanVerificationError) (string, string, error) {
-		if hvErr == nil {
+		page, err := a.API.VerifyURL(hvErr)
+		if err != nil {
 			return "", "", proton.ErrHVUnavailable
 		}
-		methods := hvErr.Methods
 
-		if slices.Contains(methods, "captcha") {
-			if a == nil {
-				return "", "", proton.ErrHVUnavailable
-			}
-			// The page must come from the API that issued the challenge, so the
-			// client builds the URL rather than the helper guessing.
-			captchaURL, err := a.API.CaptchaURL(hvErr.Token)
-			if err != nil {
-				return "", "", err
-			}
-
-			// Fresh context: the user may take minutes to solve; the helper
-			// enforces its own 5-minute capture timeout.
-			token, err := hv.Resolve(context.Background(), captchaURL)
-			if err == nil {
-				return token, "captcha", nil
-			}
-			var unavail *hv.UnavailableError
-			var cancelled *hv.CancelledError
-			switch {
-			case errors.As(err, &unavail):
-				if a != nil {
-					a.HVUnavailableDetail = unavail.Detail
-				}
-				return "", "", proton.ErrHVUnavailable
-			case errors.As(err, &cancelled):
-				return "", "", fmt.Errorf("captcha cancelled: %s", cancelled.Detail)
-			case errors.Is(err, hv.ErrHelperMissing):
-				if a != nil {
-					a.HVUnavailableDetail = "this build of proton has no embedded captcha helper " +
-						"(produced by `go install` or a non-release build); install via the official " +
-						"release tarball, or set " + hv.EnvHelper + " to a helper you built"
-				}
-				return "", "", proton.ErrHVUnavailable
-			default:
-				return "", "", err
-			}
+		// A verification solved before this run started is presented rather than
+		// asked for again. It is the only way through for a run that cannot wait,
+		// because signing in mints a challenge each time it is asked and a person
+		// cannot answer one that has already been discarded.
+		if token := a.Verified; token != "" {
+			return token, proton.MethodCaptcha, nil
+		}
+		if !a.UI.CanPrompt() {
+			return "", "", proton.ErrHVUnavailable
 		}
 
-		if a != nil {
-			a.HVUnavailableDetail = fmt.Sprintf(
-				"Proton offered methods %v but only `captcha` is implemented in this build",
-				methods)
+		a.UI.Break()
+		a.UI.Instruct("Proton wants to confirm you are human. Solve the CAPTCHA on this page -")
+		if showInBrowser(page) {
+			a.UI.Instruct("it should have opened in your browser, and works on any device too:")
+		} else {
+			a.UI.Instruct("you can open it on any device:")
 		}
-		return "", "", proton.ErrHVUnavailable
+		a.UI.Break()
+		a.UI.Instruct("  " + page)
+		a.UI.Break()
+		if err := a.UI.Await("Press Enter once it says you are verified."); err != nil {
+			return "", "", fmt.Errorf("human verification: %w", err)
+		}
+		return hvErr.Token, proton.MethodCaptcha, nil
 	}
 }

@@ -24,10 +24,9 @@
           __structuredAttrs = true;
 
           src = self;
-          vendorHash = "sha256-mhzCAmQsuoMEgQKy7FQYnxoz9AHUCaSZoxejcRiJVjc=";
+          vendorHash = "sha256-B3K5KrypJGmkgAPd1tkx9DBiA2bAXLq+KeK3iDua6ro=";
 
           subPackages = [ "cmd/proton" ];
-          tags = [ "embed_hv" ];
 
           ldflags = [
             "-s"
@@ -35,31 +34,7 @@
             "-X=github.com/roman-16/proton-cli/internal/cli.version=${version}"
           ];
 
-          nativeBuildInputs = [
-            pkgs.installShellFiles
-            pkgs.pkg-config
-          ]
-          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.wrapGAppsHook3 ];
-
-          # glib-networking is the CAPTCHA webview's TLS: GIO loads it as a
-          # module rather than having it built in, and nix has no ambient
-          # libraries to supply one, so without it the window opens and says
-          # "TLS support is not available".
-          buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-            pkgs.glib-networking
-            pkgs.gtk3
-            pkgs.webkitgtk_4_1
-          ];
-
-          # Builds the embedded CAPTCHA webview helper for the host platform,
-          # matching the release binaries and the nixpkgs package.
-          preBuild = ''
-            bash scripts/build-hv-helpers.sh
-          '';
-
-          overrideModAttrs = _: {
-            preBuild = null;
-          };
+          nativeBuildInputs = [ pkgs.installShellFiles ];
 
           # The program is `proton`, with `proton-cli` beside it as a second
           # name. Fish autoloads a completion file named after the command

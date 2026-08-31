@@ -23,6 +23,46 @@ func TestNoInputUnsetIsFalse(t *testing.T) {
 	}
 }
 
+// A verification is done in another window on another machine, so the only
+// thing to say about it is that it is done. Anything typed is that and nothing
+// more.
+func TestAwaitTakesAnyLineAsTheAnswer(t *testing.T) {
+	for _, typed := range []string{"\n", "y\n", "done\n", "   \n"} {
+		unsetenv(t, "PROTON_NO_INPUT")
+		u, _, errb := fixture(t, Options{})
+		u.In = strings.NewReader(typed)
+		if err := u.Await("Press Enter once it says you are verified."); err != nil {
+			t.Errorf("typed %q: %v", typed, err)
+		}
+		if !strings.Contains(errb.String(), "Press Enter") {
+			t.Errorf("typed %q: the question went nowhere: %q", typed, errb.String())
+		}
+	}
+}
+
+// An input that ends without a line is nobody answering, which is a no. A job
+// with its input closed has to fail rather than treat silence as consent.
+func TestAwaitTreatsAnEndOfInputAsNo(t *testing.T) {
+	unsetenv(t, "PROTON_NO_INPUT")
+	u, _, _ := fixture(t, Options{})
+	u.In = strings.NewReader("")
+	if err := u.Await("Press Enter once it says you are verified."); err == nil {
+		t.Error("an input that answered nothing should not read as an answer")
+	}
+}
+
+func TestAwaitRefusesWhenNothingMayBeAsked(t *testing.T) {
+	unsetenv(t, "PROTON_NO_INPUT")
+	u, _, errb := fixture(t, Options{NoInput: true})
+	u.In = strings.NewReader("\n")
+	if err := u.Await("Press Enter once it says you are verified."); err == nil {
+		t.Error("--no-input forbids waiting for an answer as much as asking for one")
+	}
+	if errb.Len() != 0 {
+		t.Errorf("a question that may not be asked was written anyway: %q", errb.String())
+	}
+}
+
 // The environment and the flag are two ways to say the same thing, so either
 // alone is enough.
 func TestCanPromptRespectsBothTheFlagAndTheEnvironment(t *testing.T) {

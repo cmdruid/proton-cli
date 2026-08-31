@@ -1,11 +1,10 @@
-[doc("Build the release-shaped binary, with the CAPTCHA webview helper embedded")]
+[doc("Build the release-shaped binary")]
 build:
-    bash scripts/build-hv-helpers.sh
-    go build -tags=embed_hv -o proton ./cmd/proton
+    go build -o proton ./cmd/proton
 
-[doc("Remove everything generated: the binary, the helpers, the completions, the release output")]
+[doc("Remove everything generated: the binary, the completions, the release output")]
 clean:
-    rm --recursive --force completions dist internal/hv/assets proton
+    rm --recursive --force completions dist proton
 
 [doc("Re-record the README panels by running a real session, then render them")]
 demo: build
@@ -105,16 +104,6 @@ snapshot: build
     set -euo pipefail
     export AUR_KEY="${AUR_KEY:-unused}"
     export TAP_WINGET_TOKEN="${TAP_WINGET_TOKEN:-unused}"
-    placeholders=()
-    trap 'rm --force ${placeholders[@]+"${placeholders[@]}"}' EXIT
-    for helper in proton-hv-linux-amd64 proton-hv-linux-arm64 \
-        proton-hv-darwin-amd64 proton-hv-darwin-arm64 \
-        proton-hv-windows-amd64.exe proton-hv-windows-arm64.exe; do
-        if [ ! -s "internal/hv/assets/$helper" ]; then
-            printf 'placeholder\n' > "internal/hv/assets/$helper"
-            placeholders+=("internal/hv/assets/$helper")
-        fi
-    done
     goreleaser release --snapshot --clean --skip=publish
 
 # How many live tests run at once.
@@ -238,7 +227,11 @@ worktree:
     #!/usr/bin/env bash
     set -euo pipefail
     work=$(mktemp --directory)
+    # What is packed is what is on disk, so a file deleted but not yet staged is
+    # absent from the copy rather than fatal to it: the point of this is to build
+    # the working tree, and the index is only how its paths are enumerated.
     git ls-files --cached --others --exclude-standard -z \
+        | while IFS= read -r -d '' path; do [ -e "$path" ] && printf '%s\0' "$path"; done \
         | tar --create --null --files-from=- \
         | tar --extract --directory="$work"
     git -C "$work" init --quiet

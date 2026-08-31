@@ -1,8 +1,8 @@
 # golangci-lint configuration (v2 schema).
 #
-# Kept CGO-free: only the default-build files are analysed (the `webview` and
-# `embed_hv` tagged sources are excluded), so `golangci-lint run ./...` needs
-# no C toolchain - matching the `just lint` contract.
+# Kept CGO-free: only the default-build files are analysed, so
+# `golangci-lint run ./...` needs no C toolchain - matching the `just lint`
+# contract.
 #
 # The standard set already covers errcheck, govet, ineffassign, staticcheck
 # and unused. We add a few low-noise linters on top to catch the classes of

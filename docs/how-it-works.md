@@ -12,7 +12,7 @@ proton talks to the same API as the Proton web apps, with the same authenticatio
 4. **Session file** - tokens plus the key password are written to `~/.config/proton-cli/sessions/<profile>.json` with mode `0600`, so later commands don't re-authenticate. What exactly is in there is [below](#how-credentials-are-stored-at-rest).
 5. **Refresh** - expired access tokens are refreshed automatically.
 
-Proton may occasionally require human verification during step 2. See [Troubleshooting](troubleshooting.md#proton-asks-for-a-captcha).
+Proton may occasionally require human verification during step 2. Its page is solved in a browser, on whatever device is to hand, and the challenge token then stands as the proof on the retry - so nothing is rendered here and no machine is too bare to sign in. See [Troubleshooting](troubleshooting.md#proton-asks-for-a-captcha).
 
 ## The key hierarchy
 

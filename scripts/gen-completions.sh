@@ -3,9 +3,8 @@
 # packages (.deb/.rpm/.apk), the AUR PKGBUILD and the Homebrew cask
 # during a goreleaser release. Run by .goreleaser.yaml's before:hooks.
 #
-# `go run ./cmd/proton` (no -tags embed_hv) uses the embed stub, so no
-# helper assets are needed and the completion output is identical
-# across every target platform.
+# The output is identical across every target platform, so one run of
+# `go run ./cmd/proton` serves all of them.
 #
 # One script per shell serves both names: the generator registers
 # `proton-cli` alongside `proton`. Fish is the exception - it autoloads

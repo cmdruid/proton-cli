@@ -153,6 +153,11 @@ func (offer SecondFactorOffer) answer(a SecondFactorAnswer) (map[string]any, err
 // On a Proton 9001 (human-verification) response from the SRP step, Login
 // consults the installed HVResolver (if any) and retries the auth POST once
 // with HV headers, redoing getAuthInfo to obtain a fresh SRPSession.
+//
+// A second refusal is marked as one. Signing in mints a challenge of its own
+// each time it is asked, so a verification that was not accepted here is a
+// verification that will never be accepted, and saying "verify" again would
+// send somebody round the same loop.
 func (c *Client) Login(ctx context.Context, username string, password []byte) error {
 	sess, err := c.createSession(ctx)
 	if err != nil {
@@ -170,6 +175,10 @@ func (c *Client) Login(ctx context.Context, username string, password []byte) er
 			switch {
 			case rerr == nil && token != "":
 				auth, err = c.loginSRP(ctx, username, password, token, kind)
+				var refused *HumanVerificationError
+				if errors.As(err, &refused) {
+					refused.Refused = true
+				}
 			case errors.Is(rerr, ErrHVUnavailable):
 				// keep err = hvErr, surfaced below
 			case rerr != nil:

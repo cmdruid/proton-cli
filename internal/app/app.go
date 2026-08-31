@@ -52,10 +52,10 @@ type App struct {
 
 	IDCache *idcache.Cache
 
-	// HVUnavailableDetail is a one-line diagnostic the HV resolver may stash
-	// when it returns proton.ErrHVUnavailable; the cli final-error formatter
-	// surfaces it.
-	HVUnavailableDetail string
+	// Verified is a human verification solved before this run started, as a
+	// refusal from an earlier one printed it. It is what lets a caller that
+	// cannot be asked a question get past a CAPTCHA at all.
+	Verified string
 
 	mu    sync.Mutex
 	cache *keys.Unlocked
@@ -80,6 +80,7 @@ type Options struct {
 	NoColor  bool
 	NoInput  bool
 	Yes      bool
+	Verified string
 }
 
 func New(opts Options) (*App, error) {
@@ -92,6 +93,7 @@ func New(opts Options) (*App, error) {
 	}
 
 	apiURL := firstNonEmpty(opts.APIURL, os.Getenv("PROTON_API_URL"))
+	verified := firstNonEmpty(opts.Verified, os.Getenv("PROTON_VERIFIED"))
 	userAgent := defaultUserAgent(opts.Version)
 
 	u := ui.New(ui.Options{
@@ -115,17 +117,18 @@ func New(opts Options) (*App, error) {
 	}
 
 	a := &App{
-		Profile: profileName,
-		Creds:   newCredentials(u, email),
-		API:     c,
-		Account: account.New(c),
-		UI:      u,
-		DryRun:  opts.DryRun,
-		FullIDs: opts.FullIDs,
-		Yes:     opts.Yes,
-		IDCache: idcache.New(idCachePath(profileName)),
-		userID:  userID,
-		email:   email,
+		Profile:  profileName,
+		Creds:    newCredentials(u, email),
+		API:      c,
+		Account:  account.New(c),
+		UI:       u,
+		DryRun:   opts.DryRun,
+		FullIDs:  opts.FullIDs,
+		Yes:      opts.Yes,
+		Verified: verified,
+		IDCache:  idcache.New(idCachePath(profileName)),
+		userID:   userID,
+		email:    email,
 	}
 	// A service that decrypts holds the keys it decrypts with, the way it holds the
 	// client it fetches with. Unlock is memoised, so the hierarchy is fetched at

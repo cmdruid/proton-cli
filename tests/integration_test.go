@@ -21,12 +21,7 @@ import (
 
 var binaryPath string
 
-// TestMain builds the CLI binary once before any integration test
-// runs. The binary is built release-shaped (with -tags=embed_hv) so
-// any test that triggers Proton's CAPTCHA HV flow can solve it via
-// the embedded webview helper instead of skipping. This requires
-// libwebkit2gtk-4.1-dev + pkg-config in the environment, which
-// `devbox shell` provides.
+// TestMain builds the CLI binary once before any integration test runs.
 func TestMain(m *testing.M) {
 	requireCredentials()
 
@@ -36,17 +31,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	workDir = dir
-	// Build the per-platform proton-hv helper into
-	// internal/hv/assets/ so the main build's //go:embed picks it up.
-	helpers := exec.Command("bash", "../scripts/build-hv-helpers.sh")
-	helpers.Stderr = os.Stderr
-	if err := helpers.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to build hv helper: %v\n", err)
-		os.Exit(1)
-	}
 
 	binaryPath = filepath.Join(dir, "proton")
-	cmd := exec.Command("go", "build", "-tags=embed_hv", "-o", binaryPath, "../cmd/proton")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "../cmd/proton")
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		_ = os.RemoveAll(dir)
@@ -410,13 +397,6 @@ func childEnv(profile string) []string {
 	for _, k := range []string{
 		"PATH", "HOME", "TMPDIR", "USER", "LANG", "TZ",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR",
-		"DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS",
-		// The CAPTCHA webview needs both halves of a working browser: somewhere
-		// to draw, which the display variables give it, and a way to fetch, which
-		// these do. GIO takes TLS from a loadable module rather than from glib
-		// itself, and finds it through these - so without them the window opens
-		// and says "TLS support is not available" instead of showing a CAPTCHA.
-		"GIO_EXTRA_MODULES", "GIO_MODULE_DIR",
 	} {
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)

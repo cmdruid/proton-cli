@@ -27,9 +27,6 @@ curl -fsSL …/install.sh | sh -s -- --install-dir /usr/local/bin --version 2.5.
 & ([scriptblock]::Create((irm …/install.ps1))) -InstallDir "C:\tools\proton-cli"
 ```
 
-> [!NOTE]
-> `go install` builds don't embed the CAPTCHA helper that release binaries carry. If Proton asks for human verification at login, use a release binary instead. See [Troubleshooting](troubleshooting.md#proton-asks-for-a-captcha).
-
 ## Debian, Ubuntu, Linux Mint
 
 The APT repository updates proton with the rest of your system:
@@ -133,5 +130,3 @@ git clone https://github.com/roman-16/proton-cli.git
 cd proton-cli
 go build ./cmd/proton
 ```
-
-That plain build has no CAPTCHA helper. For a release-shaped binary, see [Contributing](../CONTRIBUTING.md).

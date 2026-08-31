@@ -135,6 +135,25 @@ func TestDoResolver_NoLoopOnSecondHV(t *testing.T) {
 	if calls != 2 {
 		t.Errorf("server saw %d requests, want 2", calls)
 	}
+	// The two failures want different words. Somebody who has just solved a
+	// CAPTCHA has to be told it was not accepted, not sent to solve another - and
+	// the challenge they answered is spent either way.
+	if !hv.Refused {
+		t.Error("a challenge raised against a verified request is a refusal, not a fresh ask")
+	}
+}
+
+func TestDo_FirstChallengeIsNotARefusal(t *testing.T) {
+	srv, _ := newHVTestServer(t)
+	c := New(Options{BaseURL: srv.URL})
+	_, err := c.Do(context.Background(), Request{Method: "POST", Path: "/test"})
+	var hv *HumanVerificationError
+	if !errors.As(err, &hv) {
+		t.Fatalf("err = %v, want *HumanVerificationError", err)
+	}
+	if hv.Refused {
+		t.Error("nothing was verified, so nothing was refused")
+	}
 }
 
 func TestDoResolver_NotCalledFor5xx(t *testing.T) {

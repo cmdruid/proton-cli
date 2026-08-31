@@ -74,6 +74,26 @@ func (u *UI) Confirm(question string) (bool, error) {
 	return false, nil
 }
 
+// Await blocks until the person says that something which happened elsewhere is
+// done, and reports whether they said so.
+//
+// It is the one thing asked for here that is not a value. Nothing is read but
+// the fact that a line arrived, because the work was done in another window on
+// another machine and there is nothing to type about it - which is also why an
+// end of input is a no rather than an empty answer.
+func (u *UI) Await(question string) error {
+	if !u.CanPrompt() {
+		return ErrNoInput
+	}
+	_, _ = fmt.Fprintf(u.Err, "%s ", u.errStyle.Paint(Muted, question))
+	line, err := bufio.NewReader(u.In).ReadString('\n')
+	if err != nil && line == "" {
+		_, _ = fmt.Fprintln(u.Err)
+		return ErrNoInput
+	}
+	return nil
+}
+
 // Prompter asks a sequence of questions over one reader, so a value typed ahead
 // of the question that wants it is not lost between prompts.
 //

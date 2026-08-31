@@ -17,7 +17,7 @@ Eight, and none of them can name an account.
 | `PROTON_NO_INPUT` | Set to any value, even empty, to never prompt; a missing credential becomes an error |
 | `PROTON_LOG_LEVEL` | `debug`, `info`, `warn` or `error` |
 | `PROTON_NO_UPDATE_CHECK` | Set to any value, even empty, to never look for a new release ([what that is](installation.md#updating)) |
-| `PROTON_HV_HELPER` | An executable to open a CAPTCHA with, instead of the embedded one ([why](troubleshooting.md#bringing-your-own-captcha-helper)) |
+| `PROTON_VERIFIED` | A human verification already solved, as the refusal printed it ([when you need it](troubleshooting.md#nothing-here-can-be-asked)) |
 
 ## Files on disk
 
@@ -42,6 +42,7 @@ Those paths are the Linux ones. macOS uses `~/Library/Application Support/proton
 | `--no-color` | Turn colored output off (env: `NO_COLOR`) |
 | `--log-level debug\|info\|warn\|error` | Logging verbosity (env: `PROTON_LOG_LEVEL`) |
 | `--no-input` | Never prompt; a missing credential becomes an error (env: `PROTON_NO_INPUT`) |
+| `--verified TOKEN` | A human verification already solved, as the refusal printed it (env: `PROTON_VERIFIED`) |
 
 The five you type most have a single-letter form, and they cluster - so `-qn` is a quiet dry run ([why only five](design-notes.md#why-one-flag-name-means-one-thing)).
 

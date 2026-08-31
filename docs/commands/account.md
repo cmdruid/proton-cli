@@ -29,6 +29,8 @@ An account with a security key is asked to touch it. With an authenticator app e
 
 An account in two-password mode is asked for its second password once it has signed in, because that is the secret its keys are locked with rather than the one that proves who it is. A one-password account is never asked for it.
 
+Proton may ask you to prove you are human. The page it wants is printed, and can be solved on any device - so a machine with no display signs in like any other. A run that cannot be asked anything says which page to solve and which token to repeat the command with.
+
 Signing in again as the same account changes nothing, so an unattended job can run it first and recover from a session that expired.
 
 ```

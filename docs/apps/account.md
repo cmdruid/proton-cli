@@ -197,8 +197,6 @@ proton account sessions revoke --others     # everything but this one
 
 Two things end a session: revoking it, and Proton expiring it. Either means signing in again.
 
-Copying that file to another machine is how a headless box gets a session it cannot obtain itself. Treat it as a secret while copying: it contains the refresh token. See [Troubleshooting](../troubleshooting.md#signing-in-on-a-headless-machine).
-
 ## Settings
 
 ```bash

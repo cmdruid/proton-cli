@@ -82,8 +82,8 @@ jobs:
           fi
 
           # A tag outlives the run that pushed it, so a resumed release is the
-          # tag's own commit - the one the checks and the helpers ran against -
-          # and not whatever main has become since.
+          # tag's own commit - the one the checks ran against - and not whatever
+          # main has become since.
           if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
             sha=$(git rev-parse "$tag^{commit}")
             echo "Tag $tag exists; resuming the release from $sha."
@@ -104,103 +104,8 @@ jobs:
             go run ./scripts/changelog --notes
           } >> "$GITHUB_STEP_SUMMARY"
 
-  build-helpers:
-    needs: resolve
-    if: needs.resolve.outputs.release == 'true'
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - { os: ubuntu-latest,      goos: linux,   goarch: amd64 }
-          - { os: ubuntu-24.04-arm,   goos: linux,   goarch: arm64 }
-          - { os: macos-latest,       goos: darwin,  goarch: amd64 }
-          - { os: macos-latest,       goos: darwin,  goarch: arm64 }
-          - { os: windows-latest,     goos: windows, goarch: amd64 }
-          - { os: windows-11-arm,     goos: windows, goarch: arm64 }
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.resolve.outputs.sha }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: Install Linux deps
-        if: matrix.goos == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config build-essential
-
-      - name: Install Windows deps
-        # Both Windows images ship an x86_64 mingw GCC, which cannot target
-        # aarch64, and cgo cannot use MSVC. llvm-mingw targets every Windows
-        # architecture, so one pinned compiler builds both helpers.
-        if: matrix.goos == 'windows'
-        shell: bash
-        env:
-          GOARCH: ${{ matrix.goarch }}
-          LLVM_MINGW: "20260616"
-        run: |
-          case "$GOARCH" in
-            arm64) host=aarch64 ;;
-            *)     host=x86_64 ;;
-          esac
-          name="llvm-mingw-$LLVM_MINGW-ucrt-$host"
-          curl --location --fail --silent --show-error --output /c/llvm-mingw.zip \
-            "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW/$name.zip"
-          # 7-Zip, because the shell here is Git Bash and its tar is GNU tar,
-          # which reads no zip.
-          7z x -y -bso0 /c/llvm-mingw.zip -oC:/
-          printf 'C:\\%s\\bin\n' "$name" >> "$GITHUB_PATH"
-
-      - name: Build helper
-        env:
-          GOOS:   ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        shell: bash
-        run: bash scripts/build-hv-helpers.sh
-
-      - name: Smoke test helper
-        shell: bash
-        env:
-          GOOS:   ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          set +e  # we WANT a non-zero exit here
-          suffix=""
-          [[ "$GOOS" == "windows" ]] && suffix=".exe"
-          bin="internal/hv/assets/proton-hv-${GOOS}-${GOARCH}${suffix}"
-          ls -la "$bin"
-
-          out=$("$bin" 2>&1)
-          code=$?
-          echo "exit:   $code"
-          echo "stderr: $out"
-
-          if [[ "$code" != "2" ]]; then
-            echo "::error::smoke test FAILED on ${GOOS}/${GOARCH}: expected exit 2, got $code"
-            exit 1
-          fi
-          if ! grep -q '^hv: usage:' <<<"$out"; then
-            echo "::error::smoke test FAILED on ${GOOS}/${GOARCH}: stderr did not start with 'hv: usage:'"
-            exit 1
-          fi
-          echo "✓ smoke test passed for ${GOOS}/${GOARCH}"
-
-      - name: Upload helper artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: hv-helper-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: internal/hv/assets/proton-hv-*
-          if-no-files-found: error
-          retention-days: 1
-
   release:
-    needs: [resolve, build-helpers]
+    needs: resolve
     runs-on: ubuntu-latest
     outputs:
       goreleaser: ${{ steps.goreleaser.outcome }}
@@ -215,18 +120,6 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-
-      - name: Download all helper artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: internal/hv/assets
-          pattern: hv-helper-*
-          merge-multiple: true
-
-      - name: Show downloaded helpers
-        run: |
-          ls -la internal/hv/assets/
-          file internal/hv/assets/proton-hv-* || true
 
       - name: Tag the release
         # The tag is the one thing here that outlives a failed run: it is fetched

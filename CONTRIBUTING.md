@@ -24,7 +24,7 @@ Without devbox you need Go 1.26 or newer, plus `actionlint`, `charm-freeze`, `go
 
 ```bash
 go build ./cmd/proton  # quick build (no CAPTCHA helper)
-just build             # release-shaped binary, embeds the webview helper
+just build             # release-shaped binary
 just run -- mail messages list
 just lint              # format, regenerate, and check everything; run before every commit
 just test-fast         # unit, golden and conformance tests
@@ -100,14 +100,12 @@ Unit test files are named after the file they test (`size.go` → `size_test.go`
 | Path | Contents |
 | --- | --- |
 | `cmd/proton/`, `cmd/proton-cli/` | Entry points, one per name the binary answers to |
-| `cmd/proton-hv/` | The CAPTCHA webview helper binary |
 | `internal/cli/` | Cobra command tree, help screens, flags, exit codes |
 | `internal/cli/kit/` | The declared language: verbs, placeholders, shared flags, reference URLs |
 | `internal/service/` | Per-product logic (mail, drive, calendar, contacts, pass) |
 | `internal/proton/` | API client, request plumbing, error types |
 | `internal/crypto/`, `internal/account/` | Key handling, SRP login, sessions |
 | `internal/ui/` | Output formatting: tables, records, documents, JSON, YAML, progress |
-| `internal/hv/` | Human-verification webview helper |
 | `tests/` | Live-API integration tests |
 | `scripts/` | Command-reference and OpenAPI generators, installers, release helpers, README demo |
 | `assets/` | Logo and the generated README demo images |
@@ -145,11 +143,11 @@ A weekly workflow does the same thing and commits when upstream changes. See [`s
 
 The section is written when the release is cut, from the commits since the last tag, so there is no `[Unreleased]` heading accumulating between releases and a merge that is not a release leaves the file untouched. That puts the whole of a release in one reviewable diff, and it puts the burden on commit messages, which is where the reasoning is while it is still fresh.
 
-The **Release** workflow runs when CI passes on `main`, reads the newest version section, and stops there when a release for it is already published - which is what nearly every merge does, in seconds. Otherwise it builds the CAPTCHA helper on a native runner per platform, tags, and hands the section to GoReleaser as the release notes. The tag is pushed last on purpose: it is fetched by users, resolved by `go install`, and the version GoReleaser derives, so nothing that outlives a failed run happens until everything that can fail has passed. GoReleaser then builds every target, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
+The **Release** workflow runs when CI passes on `main`, reads the newest version section, and stops there when a release for it is already published - which is what nearly every merge does, in seconds. Otherwise it tags and hands the section to GoReleaser as the release notes. The tag is pushed last on purpose: it is fetched by users, resolved by `go install`, and the version GoReleaser derives, so nothing that outlives a failed run happens until everything that can fail has passed. GoReleaser then builds every target, publishes the GitHub release, and updates the APT repository, AUR, Homebrew tap, winget, and npm.
 
 Because the file decides and not the run, a release that fails partway through is finished by re-running the workflow: an existing tag is reused and its own commit released rather than whatever `main` has become, and a release already published is left alone. The file is held to its format by `just test-fast`, which is also what keeps the button safe: versions move one step at a time, so after 2.2.3 the file may say 2.2.4, 2.3.0 or 3.0.0 and nothing else, and a `[YANKED]` section is never republished.
 
-`just notes` prints the version and the notes the current file would publish. `just snapshot` runs the same GoReleaser pipeline locally without publishing, so a packaging mistake surfaces before the tag rather than after it. It builds the helper for your platform and stands in placeholders for the other four, since those need native runners: the artifacts in `dist/` prove the packaging, not the helper bytes, and the foreign binaries in there are not runnable.
+`just notes` prints the version and the notes the current file would publish. `just snapshot` runs the same GoReleaser pipeline locally without publishing, so a packaging mistake surfaces before the tag rather than after it.
 
 ## Security
 

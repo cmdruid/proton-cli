@@ -1,6 +1,6 @@
 # Troubleshooting
 
-What to do when a command fails: CAPTCHAs at login, signing in on a machine with no display, a session that expired, Proton asking for your password again, a change that doesn't show up yet, and rate limits.
+What to do when a command fails: CAPTCHAs at login, a session that expired, Proton asking for your password again, a change that doesn't show up yet, and rate limits.
 
 ## What the exit code is telling you
 
@@ -21,26 +21,51 @@ The difference between `2` and `5` matters most to a scheduled job: `2` means fi
 
 Proton's anti-abuse system sometimes asks for human verification at login - usually on a fresh install, from a new network, or after several failed attempts.
 
-proton opens a small window with Proton's CAPTCHA in it. Solve it, and the command you ran retries automatically. There is nothing extra to install.
+proton prints Proton's verification page and waits:
 
-| Platform | Needs |
-| --- | --- |
-| Linux desktop | `libwebkit2gtk-4.1`, `libgtk-3` and `glib-networking` (`apt install libwebkit2gtk-4.1-0 libgtk-3-0 glib-networking`, or your distro's equivalent). A desktop that can already run a browser has all three. |
-| macOS | nothing, system WebKit is used |
-| Windows | nothing, WebView2 ships with Edge |
+```console
+$ proton account login
+Email:             you@proton.me
+Password:
+Proton wants to confirm you are human. Solve the CAPTCHA on this page -
+you can open it on any device:
 
-### The window opens empty
+  https://verify.proton.me/?methods=captcha&token=eWLVJEM5Op3H5LcsY1cGyUxO
 
-A window that says **"TLS support is not available"** and nothing else means the webview came up but cannot fetch anything: https needs a TLS backend, and GIO loads one as a module rather than having it built in.
+Press Enter once it says you are verified.
+✓ Signed in as you@proton.me (profile "default").
+```
 
-Install `glib-networking` (above). If it is installed and the window still says this, the module is somewhere GIO is not looking - `GIO_EXTRA_MODULES` names extra directories to search, and a process started with a stripped environment will not have inherited it.
+Open it wherever you like - this machine, your phone, a laptop across the room - solve it, then press Enter and the command carries on. Where proton can hand the address to a browser it does, but the address is printed either way, so a server with no display verifies exactly like a desktop. There is nothing to install.
 
-### There is no window to draw in
+### A CAPTCHA can't be solved ahead of time
 
-Two situations have none:
+The challenge belongs to the run that asked for it: every run gets its own, and solving one does not lower the gate for the next. So the command has to be waiting when you solve it.
 
-- **Headless machines** - servers, containers, CI, anything without a display. See below.
-- **`go install` builds** - they don't embed the helper. Use a [release binary](installation.md), or [bring your own helper](#bringing-your-own-captcha-helper).
+What *does* outlive the run is the proof. Once you have solved a challenge, its token works in a later run - which is what makes the two-step below possible.
+
+### Nothing here can be asked
+
+With `--no-input`, `PROTON_NO_INPUT`, or standard input that isn't a terminal, proton can't wait. It exits with both halves you need:
+
+```console
+$ PROTON_NO_INPUT=1 proton account login --user you@proton.me --password-file ~/.proton
+Error: Proton wants to confirm you are human, and this run cannot wait while you do.
+Try:   solve https://verify.proton.me/?methods=captcha&token=eWLVJEM5Op3H5LcsY1cGyUxO
+       then run the same command again with --verified eWLVJEM5Op3H5LcsY1cGyUxO
+```
+
+Solve the page, then repeat the command with `--verified` (or `PROTON_VERIFIED`). This is how a scheduled job or a script gets through one: it surfaces the link to a person and tries again.
+
+### Email or SMS verification
+
+Proton occasionally offers only a code by email or SMS. Its page checks the code and reports the result to nobody, so no command-line client can finish one:
+
+```console
+Error: Proton wants to confirm you are human by email or sms, and that cannot be done
+       from a terminal.
+Try:   sign in to your account in a browser once, then try again
+```
 
 ## A security key that nothing finds
 
@@ -56,34 +81,7 @@ services.udev.packages = [ pkgs.libfido2 ];
 
 Unplug the key and plug it in again afterwards: the rules apply when the device appears.
 
-**"This build cannot reach a security key on this machine."** A Windows build installed with `go install`. Windows hands out assertions through its own API, which the released binaries are built to reach and a `go install` build is not - the same difference that leaves it without the CAPTCHA helper. Install from a [release](installation.md), or sign in with `--totp`.
-
-## Signing in on a headless machine
-
-Only **login** can hit a CAPTCHA. Everything after it uses the saved session, so the fix is to obtain the session somewhere with a display and carry it over:
-
-1. Run any command on a desktop machine with the same account, solving the CAPTCHA once.
-2. Copy `~/.config/proton-cli/sessions/<profile>.json` to the headless machine, preserving mode `0600`.
-3. Commands there use the existing session and skip login entirely.
-
-Treat that file as a secret while copying it: it contains the session refresh token. See [Security and encryption](how-it-works.md).
-
-macOS keeps it under `~/Library/Application Support/proton-cli/`, Windows under `%APPDATA%\proton-cli\`.
-
-### Bringing your own CAPTCHA helper
-
-`PROTON_HV_HELPER` names an executable to open the CAPTCHA with, instead of the one proton carries:
-
-```bash
-PROTON_HV_HELPER=/path/to/proton-hv proton account login
-```
-
-It is read before the embedded copy, so it works in a build that has none. Two uses:
-
-- **A build with no helper in it** - anything from `go install` - gains one. `scripts/build-hv-helpers.sh` builds it from this repository.
-- **A packaged proton** can ship the helper as a real file and give it the graphics environment a webview needs, rather than putting that environment on the CLI itself, where every editor and pager proton opens would inherit it.
-
-The helper takes a URL and prints the solved token. A path that isn't there, isn't a file, or isn't executable is reported as such rather than as verification being unavailable.
+**"This build cannot reach a security key on this machine."** A Windows build installed with `go install`. Windows hands out assertions through its own API, which the released binaries are built to reach and a `go install` build is not. Install from a [release](installation.md), or sign in with `--totp`.
 
 ## "Profile is not signed in"
 

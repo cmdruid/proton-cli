@@ -5,14 +5,12 @@ Everything the maintainer or CI runs, in whatever language suits it: shell insta
 | Directory or file | Role |
 | --- | --- |
 | `install.sh`, `install.ps1` | The installers users curl; referenced from the README |
-| `build-hv-helpers.sh` | Builds the CAPTCHA webview helpers that get embedded (`just build`) |
 | `gen-completions.sh` | Emits the shell completions shipped in releases (a goreleaser `before` hook) |
 | `changelog/` | Reads `CHANGELOG.md`: the version to release and the notes to publish (`just notes`) |
 | `gendocs/` | Generates `docs/commands/` from the command tree (`just docs`) |
 | `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source (`just openapi`) |
 | `terminal-demo/` | Records the README panel against the primary account (`just demo`) |
 | `publish-npm.mjs` | Publishes the npm package on release |
-| `release-helpers-check.sh` | Verifies a release's embedded helpers before publishing (a goreleaser `before` hook) |
 
 ## Command Reference Generator
 

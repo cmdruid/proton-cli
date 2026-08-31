@@ -2,7 +2,6 @@ version: 2
 
 before:
   hooks:
-    - bash scripts/release-helpers-check.sh
     - bash scripts/gen-completions.sh
 
 # The program is `proton`; the project, and so every artifact name, is
@@ -27,8 +26,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    flags:
-      - -tags=embed_hv
     ldflags:
       - -s -w -X github.com/roman-16/proton-cli/internal/cli.version={{.Version}}
   - <<: *build
@@ -42,9 +39,9 @@ builds:
     # out assertions through webauthn.dll and reserves the USB devices themselves
     # to administrators. Reaching that API is what this tag compiles in, and it is
     # why signing in with a security key on Windows needs a release binary rather
-    # than a `go install` build - the same bargain the CAPTCHA helper makes.
+    # than a `go install` build.
     flags:
-      - -tags=embed_hv,webauthn
+      - -tags=webauthn
   - id: windows-alias
     binary: proton-cli
     main: ./cmd/proton-cli
@@ -113,19 +110,6 @@ nfpms:
       - src: ./LICENSE
         dst: /usr/share/licenses/proton-cli/LICENSE
         packager: rpm
-    # The main binary is static (CGO-free). webkit2gtk/gtk3 are only
-    # pulled in by the embedded CAPTCHA helper, so they are optional
-    # (recommends), never hard dependencies - the CLI runs headless
-    # without them.
-    overrides:
-      deb:
-        recommends:
-          - libgtk-3-0t64 | libgtk-3-0
-          - libwebkit2gtk-4.1-0
-      rpm:
-        recommends:
-          - gtk3
-          - webkit2gtk4.1
 
 aurs:
   - name: proton-cli-bin

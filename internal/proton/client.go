@@ -349,22 +349,25 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 
 	hvErr, apiErr := classifyErrorBody(resp.Status, resp.Body)
 	if hvErr != nil {
-		// Avoid re-resolving if this request already carried an HV header
-		// (resolver loop guard).
-		if req.HVToken == "" {
-			if resolver := c.getHVResolver(); resolver != nil {
-				token, kind, rerr := resolver(hvErr)
-				switch {
-				case rerr == nil && token != "":
-					retry := req
-					retry.HVToken = token
-					retry.HVType = kind
-					return c.Do(ctx, retry)
-				case errors.Is(rerr, ErrHVUnavailable):
-					// fall through and return the original HV error
-				case rerr != nil:
-					return resp, rerr
-				}
+		// A request that already carried a verification is not asked to verify a
+		// second time: the answer was refused, and offering the same page again
+		// would send somebody to solve a challenge that has already been spent.
+		if req.HVToken != "" {
+			hvErr.Refused = true
+			return resp, hvErr
+		}
+		if resolver := c.getHVResolver(); resolver != nil {
+			token, kind, rerr := resolver(hvErr)
+			switch {
+			case rerr == nil && token != "":
+				retry := req
+				retry.HVToken = token
+				retry.HVType = kind
+				return c.Do(ctx, retry)
+			case errors.Is(rerr, ErrHVUnavailable):
+				// fall through and return the original HV error
+			case rerr != nil:
+				return resp, rerr
 			}
 		}
 		return resp, hvErr

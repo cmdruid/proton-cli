@@ -33,6 +33,7 @@ Flags:
   -o, --output string      Output format: text, json, yaml (default "text")
   -p, --profile string     Profile to act as (env: PROTON_PROFILE; default: default)
   -q, --quiet              Suppress non-essential stderr output
+      --verified string    A human verification already solved, as the refusal printed it (env: PROTON_VERIFIED)
   -y, --yes                Answer confirmation prompts with yes
 
 Per-command help:  proton <command> --help

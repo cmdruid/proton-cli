@@ -44,6 +44,6 @@ One page each, task by task, with the commands in use.
 | Page | What's in it |
 | --- | --- |
 | [FAQ](faq.md) | Is this official? How does it differ from Bridge? Is my password safe? |
-| [Troubleshooting](troubleshooting.md) | CAPTCHAs, headless machines, expired sessions, rate limits |
+| [Troubleshooting](troubleshooting.md) | CAPTCHAs, expired sessions, rate limits |
 | [Security and encryption](how-it-works.md) | Sign-in, keys, what is encrypted with what, what is on disk |
 | [Design notes](design-notes.md) | The choices behind the interface |

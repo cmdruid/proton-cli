@@ -143,6 +143,10 @@ type HumanVerificationError struct {
 	Token   string
 	Methods []string
 	WebURL  string
+	// Refused marks a challenge raised against a request that already carried a
+	// verification. The two failures need different words: one asks somebody to
+	// verify, the other says the verification they did was not accepted.
+	Refused bool
 }
 
 func (e *HumanVerificationError) Error() string {

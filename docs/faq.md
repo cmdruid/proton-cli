@@ -58,7 +58,7 @@ No. Everything works on a free account, within the limits Proton puts on free ac
 
 ## Does it work on a headless server?
 
-Yes, with one wrinkle: Proton sometimes asks for a CAPTCHA at **login**, and a CAPTCHA needs a display. Sign in once on a machine with a desktop and copy the session file across; every command afterwards uses it and never logs in again. [How to do that](troubleshooting.md#signing-in-on-a-headless-machine).
+Yes, and it signs in for itself. Proton sometimes asks for a CAPTCHA at **login**; proton prints the verification page and waits while you solve it on whatever device is to hand, then carries on. Nothing to install. [What that looks like](troubleshooting.md#proton-asks-for-a-captcha).
 
 ## Can I use two Proton accounts at once?
 

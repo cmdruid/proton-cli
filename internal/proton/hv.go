@@ -2,14 +2,25 @@ package proton
 
 import "errors"
 
+// MethodCaptcha is the one human-verification method a client can carry through
+// on its own. A code sent by email or SMS is checked by Proton's page and
+// reported to nobody, so a client that offered to complete one would be
+// promising something it cannot deliver.
+const MethodCaptcha = "captcha"
+
 // HVResolver is invoked when a Proton API request returns code 9001 (human
-// verification required). It must obtain a verification token and type -
-// typically by spawning a webview (captcha) - and return them; the client
-// then retries the original request once with the HV headers set.
+// verification required). It obtains a token and the method that produced it;
+// the client then retries the original request once with the HV headers set.
 //
-// Returning ErrHVUnavailable signals "this resolver can't help with the
-// offered methods"; the original *HumanVerificationError bubbles up. Any
-// other error aborts the retry and replaces the HV error.
+// The token is not always the answer to the challenge. A CAPTCHA solved in a
+// browser is submitted by Proton's own page, which leaves the proof standing on
+// the challenge token itself - so what comes back from a resolver that sent
+// somebody to that page is the challenge it was given. Both are carried in
+// x-pm-human-verification-token, and the server tells them apart.
+//
+// Returning ErrHVUnavailable signals "nothing here can complete the offered
+// methods"; the original *HumanVerificationError bubbles up. Any other error
+// aborts the retry and replaces the HV error.
 type HVResolver func(*HumanVerificationError) (token string, tokenType string, err error)
 
 // ErrHVUnavailable is the sentinel a resolver returns when none of the offered

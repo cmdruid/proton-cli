@@ -39,6 +39,7 @@ These are declared on the root, so they can be given to any command and mean the
 | `-o, --output string` | Output format: text, json, yaml (default `text`) |
 | `-p, --profile string` | Profile to act as (env: PROTON_PROFILE; default: default) |
 | `-q, --quiet` | Suppress non-essential stderr output |
+| `--verified string` | A human verification already solved, as the refusal printed it (env: PROTON_VERIFIED) |
 | `-y, --yes` | Answer confirmation prompts with yes |
 
 See [Configuration](../configuration.md) for what each one changes, and [Output](../output.md) for the exit codes.

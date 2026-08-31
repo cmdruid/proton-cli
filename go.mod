@@ -6,13 +6,13 @@ require (
 	github.com/ProtonMail/go-mime v0.0.0-20230322103455-7d82a3887f2f
 	github.com/ProtonMail/go-srp v0.0.7
 	github.com/ProtonMail/gopenpgp/v2 v2.10.0
+	github.com/fxamacker/cbor/v2 v2.9.2
 	github.com/go-ctap/ctaphid v0.8.1
 	github.com/goccy/go-yaml v1.19.2
 	github.com/minio/selfupdate v0.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/teambition/rrule-go v1.8.2
-	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 	golang.org/x/mod v0.39.0
 	golang.org/x/net v0.57.0
 	golang.org/x/sys v0.47.0
@@ -22,7 +22,6 @@ require (
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/ldclabs/cose v1.3.2 // indirect
 	github.com/samber/lo v1.53.0 // indirect

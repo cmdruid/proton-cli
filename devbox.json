@@ -4,7 +4,6 @@
     "actionlint":     "latest",
     "bun":            "latest",
     "charm-freeze":   "latest",
-    "gcc":            "latest",
     "git":            "latest",
     "go":             "latest",
     "golangci-lint":  "latest",
@@ -14,20 +13,13 @@
     "jq":             "latest",
     "just":           "latest",
     "nixfmt":         "latest",
-    "pkg-config":     "latest",
     "protobuf":       "latest",
     "protoc-gen-go":  "latest",
     "resvg":          "latest",
-    "shellcheck":     "latest",
-    "webkitgtk_4_1": {
-      "version":   "latest",
-      "outputs":   ["out", "dev"],
-      "platforms": ["x86_64-linux"]
-    }
+    "shellcheck":     "latest"
   },
   "env": {
-    "CGO_ENABLED":                "0",
-    "PKG_CONFIG_PATH_FOR_TARGET": "$DEVBOX_PROJECT_ROOT/tools/pkgconfig:$PKG_CONFIG_PATH_FOR_TARGET"
+    "CGO_ENABLED": "0"
   },
   "shell": {
     "init_hook": [
