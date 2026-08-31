@@ -92,7 +92,7 @@ components:
   # ChecklistKey: SendMessage=SendMessage, RecoveryMethod=RecoveryMethod, DriveUpload=DriveUpload, DriveShare=DriveShare, Import=Import, ProtectInbox=ProtectInbox, AccountLogin=AccountLogin, MobileApp=MobileApp, ClaimAddress=ClaimAddress
   # ChecklistType: 1=MailFreeUser, 2=MailPaidUser, 3=DriveUser, 4=MailBYOEUser
   # ClaimableAddressType: 0=Fixed, 1=Any
-  # CLIENT_TYPES: 1=MAIL, 2=VPN, 4=DRIVE, 5=PASS, 6=WALLET, 9=LUMO, 10=AUTHENTICATOR, 11=MEET
+  # CLIENT_TYPES: 1=MAIL, 2=VPN, 4=DRIVE, 5=PASS, 6=WALLET, 7=SPACES, 9=LUMO, 10=AUTHENTICATOR, 11=MEET
   # Clients: 0=Windows, 1=macOS, 2=Linux, 3=Android, 4=iOS, 5=Chrome, 6=Brave, 7=Firefox, 8=Edge, 9=Safari, 10=CLI
   # COLLAPSE_EVENTS: COLLAPSE=COLLAPSE, EXPAND=EXPAND
   # ColorScheme: 0=Dark, 1=Light
@@ -155,7 +155,7 @@ components:
   # FILTER_STATUS: 1=ENABLED, 0=DISABLED
   # FlagAction: 0=MARK_OBSOLETE, 1=MARK_NOT_OBSOLETE, 2=MARK_COMPROMISED, 3=MARK_NOT_COMPROMISED, 4=DISABLE_ENCRYPTION, 5=ENABLE_ENCRYPTION, 6=DISABLE_EXPECT_SIGNED, 7=ENABLE_EXPECT_SIGNED
   # FOLDER_COLOR: 0=DISABLED, 1=ENABLED
-  # ForkSearchParameters: app=App, state=State, sk=Base64Key, v=Version, u=LocalID, t=ForkType, p=Persistent, tr=Trusted, prompt=Prompt, independent=Independent, pt=PayloadType, source=Source, selector=Selector, pv=PayloadVersion, promptType=PromptType, promptBypass=PromptBypass, plan=Plan, partnerId=PartnerId, uru=UnauthenticatedReturnUrl, token=Token, forkChallenge=ForkChallenge
+  # ForkSearchParameters: app=App, state=State, sk=Base64Key, v=Version, u=LocalID, t=ForkType, p=Persistent, tr=Trusted, prompt=Prompt, independent=Independent, pt=PayloadType, source=Source, selector=Selector, pv=PayloadVersion, promptType=PromptType, promptBypass=PromptBypass, plan=Plan, partnerId=PartnerId, uru=UnauthenticatedReturnUrl, token=Token, forkChallenge=ForkChallenge, clientId=ChildClientID
   # ForkType: 1=SWITCH, 2=SIGNUP, 3=LOGIN
   # ForwardingState: 0=Pending, 1=Active, 2=Outdated, 3=Paused, 4=Rejected
   # ForwardingType: 0=InternalUnencrypted, 1=InternalEncrypted, 2=ExternalUnencrypted, 3=ExternalEncrypted
@@ -192,6 +192,7 @@ components:
   # INCOMPATIBILITY_TYPE: BROWSER=BROWSER, HARDWARE=HARDWARE
   # INHERIT_PARENT_FOLDER_COLOR: 0=DISABLED, 1=ENABLED
   # INVITATION_ERROR_TYPE: INVITATION_INVALID=INVITATION_INVALID, INVITATION_UNSUPPORTED=INVITATION_UNSUPPORTED, INVALID_METHOD=INVALID_METHOD, NO_COMPONENT=NO_COMPONENT, NO_VEVENT=NO_VEVENT, PARSING_ERROR=PARSING_ERROR, DECRYPTION_ERROR=DECRYPTION_ERROR, FETCHING_ERROR=FETCHING_ERROR, UPDATING_ERROR=UPDATING_ERROR, EVENT_CREATION_ERROR=EVENT_CREATION_ERROR, EVENT_UPDATE_ERROR=EVENT_UPDATE_ERROR, CANCELLATION_ERROR=CANCELLATION_ERROR, UNEXPECTED_ERROR=UNEXPECTED_ERROR, EXTERNAL_ERROR=EXTERNAL_ERROR
+  # INVOICE_EMAIL_STATE: 0=DISABLED, 1=ENABLED, 2=BOUNCED
   # KEY_FLAG: 8=FLAG_EMAIL_NO_SIGN, 4=FLAG_EMAIL_NO_ENCRYPT, 2=FLAG_NOT_OBSOLETE, 1=FLAG_NOT_COMPROMISED
   # KEY_TRANSPARENCY_SETTING: 0=DISABLED, 1=ENABLED
   # KeyboardKey: Backspace=Backspace, Tab=Tab, Enter=Enter, Shift=Shift, Control=Control, Alt=Alt, CapsLock=CapsLock, Escape=Escape,  =Space,  =Spacebar, PageUp=PageUp, PageDown=PageDown, End=End, Home=Home, ArrowLeft=ArrowLeft, ArrowUp=ArrowUp, ArrowRight=ArrowRight, ArrowDown=ArrowDown, Left=Left, Up=Up, Right=Right, Down=Down, Insert=Insert, Delete=Delete, 0=Zero, )=ClosedParen, 1=One, !=ExclamationMark, 2=Two, @=AtSign, 3=Three, £=PoundSign, #=Hash, 4=Four, $=DollarSign, 5=Five, %=PercentSign, 6=Six, ^=Caret, ^=Hat, 7=Seven, &=Ampersand, 8=Eight, *=Star, *=Asterisk, 9=Nine, (=OpenParen, a=a, b=b, c=c, d=d, e=e, f=f, g=g, h=h, i=i, j=j, k=k, l=l, m=m, n=n, o=o, p=p, q=q, r=r, s=s, t=t, u=u, v=v, w=w, x=x, y=y, z=z, A=A, B=B, C=C, D=D, E=E, F=F, G=G, H=H, I=I, J=J, K=K, L=L, M=M, N=N, O=O, P=P, Q=Q, R=R, S=S, T=T, U=U, V=V, W=W, X=X, Y=Y, Z=Z, Meta=Meta, Meta=LeftWindowKey, Meta=RightWindowKey, 0=Numpad0, 1=Numpad1, 2=Numpad2, 3=Numpad3, 4=Numpad4, 5=Numpad5, 6=Numpad6, 7=Numpad7, 8=Numpad8, 9=Numpad9, *=Multiply, +=Add, -=Subtract, .=DecimalPoint, Decimal=MSDecimalPoint, /=Divide, F1=F1, F2=F2, F3=F3, F4=F4, F5=F5, F6=F6, F7=F7, F8=F8, F9=F9, F10=F10, F11=F11, F12=F12, NumLock=NumLock, ScrollLock=ScrollLock, ;=SemiColon, ==Equals, ,=Comma, -=Dash, .=Period, _=UnderScore, +=PlusSign, /=Slash, /=ForwardSlash, ~=Tilde, `=GraveAccent, [=OpenBracket, ]=ClosedBracket, '=Quote, ?=QuestionMark
@@ -214,6 +215,7 @@ components:
   # MARK_AS_STATUS: read=READ, unread=UNREAD
   # MeetingState: 0=DELETED, 1=ACTIVE
   # MeetingType: 0=INSTANT, 1=PERSONAL, 2=SCHEDULED, 3=RECURRING, 4=PERMANENT
+  # MEMBER_FLAGS: 1=ToMigrateOrgKey, 2=InactiveKey, 4=NonPrimary, 8=OrgKeyResetPrivatization
   # MEMBER_INVITATION_STATUS: 0=PENDING, 1=ACCEPTED, 2=REJECTED
   # MEMBER_ORG_KEY_STATE: 0=NoKey, 1=Active, 2=Missing, 3=Pending
   # MEMBER_PERMISSIONS: 1=MANAGE_FORWARDING
@@ -261,9 +263,9 @@ components:
   # PM_SIGNATURE: 0=DISABLED, 1=ENABLED, 2=LOCKED
   # PM_SIGNATURE_REFERRAL: 0=DISABLED, 1=ENABLED
   # PREDEFINED_ROLE_NAME: Owner=OWNER, User Admin=USER_ADMIN, Security Admin=SECURITY_ADMIN
-  # Product: Account=Account, Authenticator=Authenticator, Mail=Mail, Calendar=Calendar, Wallet=Wallet, Docs=Docs, Sheets=Sheets, Lumo=Lumo, Drive=Drive, VPN=VPN, VPN=Verify, Admin=Admin, Pass=Pass, Meet=Meet, Other=Other
+  # Product: Account=Account, Authenticator=Authenticator, Mail=Mail, Calendar=Calendar, Wallet=Wallet, Docs=Docs, Sheets=Sheets, Lumo=Lumo, Drive=Drive, VPN=VPN, VPN=Verify, Admin=Admin, Pass=Pass, Meet=Meet, Spaces=Spaces, Other=Other
   # PRODUCT: 1=MAIL, 2=VPN, 3=CALENDAR, 4=DRIVE, 5=PASS, 6=WALLET, 9=LUMO, 10=AUTHENTICATOR
-  # PRODUCT_BIT: 1=MAIL, 2=DRIVE, 4=VPN, 8=PASS, 16=WALLET, 32=NEUTRON, 64=LUMO, 256=MEET
+  # PRODUCT_BIT: 1=MAIL, 2=DRIVE, 4=VPN, 8=PASS, 16=WALLET, 32=SPACES, 64=LUMO, 256=MEET
   # PROMPT_PIN: 0=DISABLED, 1=ENABLED
   # ProtectionType: 1=BLOCKED, 2=CAPTCHA, 3=OWNERSHIP_VERIFICATION, 4=DEVICE_VERIFICATION, 5=OK
   # PROTON_WEBSITES: https://status.proton.me=PROTON_STATUS_PAGE
@@ -907,6 +909,20 @@ paths:
                 RequestedModel:
                   type: string
                 HasGeneratedImages:
+                  type: string
+                ToolsUsed:
+                  type: string
+                Platform:
+                  type: string
+                NativeAppVersion:
+                  type: string
+                AppVersion:
+                  type: string
+                PromptTokens:
+                  type: string
+                CompletionTokens:
+                  type: string
+                ShareWithApertus:
                   type: string
                 Component:
                   type: string
@@ -6139,6 +6155,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         "200":
           description: Success
@@ -6763,6 +6784,10 @@ paths:
                   type: string
                 PasswordPolicies:
                   type: string
+                InvoiceEmail:
+                  type: string
+                InvoiceEmailState:
+                  type: string
       responses:
         "200":
           description: Success
@@ -6944,6 +6969,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
+  /core/v4/organizations/{mspId}/subsidiaries/billing-periods:
+    get:
+      tags: [Core]
+      summary: Get Msp Billing Periods
+      operationId: getMspBillingPeriods
+      parameters:
+        - name: mspId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
   /core/v4/organizations/{mspId}/subsidiaries/billing-summary/cost:
     get:
       tags: [Core]
@@ -6953,6 +6996,55 @@ paths:
         - name: mspId
           in: path
           required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /core/v4/organizations/{mspId}/subsidiaries/daily-usage:
+    get:
+      tags: [Core]
+      summary: Get Msp Daily Usage
+      operationId: getMspDailyUsage
+      parameters:
+        - name: mspId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /core/v4/organizations/{mspId}/subsidiaries/{type}/csv:
+    get:
+      tags: [Core]
+      summary: Get Msp Csv Report
+      operationId: getMspCsvReport
+      parameters:
+        - name: mspId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Month
+          in: query
+          schema:
+            type: string
+        - name: Year
+          in: query
           schema:
             type: string
       responses:
@@ -13796,7 +13888,10 @@ paths:
                 - Name
                 - Status
                 - ID
+                - Sieve
                 - Version
+                - Simple
+                - Tree
               properties:
                 Name:
                   type: string
