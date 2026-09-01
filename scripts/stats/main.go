@@ -96,11 +96,11 @@ func run(dir string) error {
 		fetch func() error
 	}{
 		{"traffic", func() error {
-			days, err := client.traffic(published.Traffic)
+			days, window, err := client.traffic(published.Traffic)
 			if err != nil {
 				return err
 			}
-			next.Traffic = days
+			next.Traffic, next.Window = days, window
 			return nil
 		}},
 		{"referrers and paths", func() error {
@@ -210,6 +210,7 @@ type stats struct {
 	Totals       totals         `json:"totals"`
 	Downloads    []downloadDay  `json:"downloads"`
 	Traffic      []trafficDay   `json:"traffic"`
+	Window       fortnight      `json:"traffic_window"`
 	Stars        []countDay     `json:"stars"`
 	Forks        []countDay     `json:"forks"`
 	Npm          []countDay     `json:"npm"`
@@ -243,6 +244,20 @@ type trafficDay struct {
 	Cloners  int    `json:"cloners"`
 	Views    int    `json:"views"`
 	Visitors int    `json:"visitors"`
+}
+
+// fortnight is GitHub's own total for the window it reports, which is the only
+// correct count of the people in it.
+//
+// Daily figures cannot be added up: somebody who cloned on three days is unique
+// on each of them and counts three times in the sum. GitHub deduplicates across
+// the whole window, so its number is smaller than the sum of the days and is
+// the one worth showing.
+type fortnight struct {
+	Clones   int `json:"clones"`
+	Cloners  int `json:"cloners"`
+	Views    int `json:"views"`
+	Visitors int `json:"visitors"`
 }
 
 type countDay struct {
@@ -515,24 +530,32 @@ func (a *api) releases() ([]release, error) { return github[release](a, "release
 // Every call answers with the whole window, so a row is replaced rather than
 // added to: today's bucket is still being written and corrects itself tomorrow,
 // and a gap shorter than a fortnight fills itself in without any intervention.
-func (a *api) traffic(existing []trafficDay) ([]trafficDay, error) {
+func (a *api) traffic(existing []trafficDay) ([]trafficDay, fortnight, error) {
 	type bucket struct {
 		Timestamp string `json:"timestamp"`
 		Count     int    `json:"count"`
 		Uniques   int    `json:"uniques"`
 	}
 	var views struct {
-		Views []bucket `json:"views"`
+		Count   int      `json:"count"`
+		Uniques int      `json:"uniques"`
+		Views   []bucket `json:"views"`
 	}
 	var clones struct {
-		Clones []bucket `json:"clones"`
+		Count   int      `json:"count"`
+		Uniques int      `json:"uniques"`
+		Clones  []bucket `json:"clones"`
 	}
 	base := fmt.Sprintf("https://api.github.com/repos/%s/%s/traffic/", owner, name)
 	if err := a.get(base+"views", &views); err != nil {
-		return nil, explain(err)
+		return nil, fortnight{}, explain(err)
 	}
 	if err := a.get(base+"clones", &clones); err != nil {
-		return nil, explain(err)
+		return nil, fortnight{}, explain(err)
+	}
+	window := fortnight{
+		Clones: clones.Count, Cloners: clones.Uniques,
+		Views: views.Count, Visitors: views.Uniques,
 	}
 
 	days := map[string]trafficDay{}
@@ -551,7 +574,7 @@ func (a *api) traffic(existing []trafficDay) ([]trafficDay, error) {
 		day.Date, day.Clones, day.Cloners = date, c.Count, c.Uniques
 		days[date] = day
 	}
-	return sorted(days), nil
+	return sorted(days), window, nil
 }
 
 // refused reports a credential the traffic endpoints will not accept, which is

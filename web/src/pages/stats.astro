@@ -70,6 +70,7 @@ import Footer from "../components/Footer.astro";
     totals: { downloads: number; stars: number; forks: number; latest: string };
     downloads: DownloadDay[];
     traffic: TrafficDay[];
+    traffic_window: { clones: number; cloners: number; views: number; visitors: number };
     stars: CountDay[];
     forks: CountDay[];
     npm: CountDay[];
@@ -324,21 +325,19 @@ import Footer from "../components/Footer.astro";
       root.append(growth);
     }
 
-    const traffic = data.traffic.slice(-14);
-    if (traffic.length > 0) {
-      const cloners = traffic.reduce((total, t) => total + t.cloners, 0);
-      const visitors = traffic.reduce((total, t) => total + t.visitors, 0);
+    const window = data.traffic_window;
+    if (window && window.views + window.clones > 0) {
       const audience = section(
         "Repository visitors",
-        "Last 14 days. Daily uniques do not add up to unique people, since somebody visiting on three days counts on each.",
+        "Last 14 days, as GitHub counts them: someone who came back on a later day is still one person, so these are smaller than the daily figures added together.",
       );
       audience.append(
         table(
           [
-            ["Unique cloners", number.format(cloners)],
-            ["Unique visitors", number.format(visitors)],
+            ["Clones", number.format(window.clones), number.format(window.cloners)],
+            ["Page views", number.format(window.views), number.format(window.visitors)],
           ],
-          ["", "Sum of daily uniques"],
+          ["", "Total", "Unique people"],
         ),
       );
       root.append(audience);
