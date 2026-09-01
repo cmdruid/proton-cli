@@ -280,14 +280,14 @@ func deleteCmd() *cobra.Command {
 //
 // A contact is stored as several cards, each a complete vCard carrying a slice
 // of the properties; a file has to be one card with all of them, so they are
-// merged. That merge is why this is not simply `get --output`.
+// merged. That merge is why this is not simply `get --dest`.
 func exportCmd() *cobra.Command {
 	var dest kit.Destination
 	var keyword string
 	c := &cobra.Command{
 		Use:   "export [REF...]",
 		Short: "Write contacts out as vCards",
-		Long: "Write contacts out as .vcf files, or as one stream with --output -.\n\n" +
+		Long: "Write contacts out as .vcf files, or as one stream with --dest -.\n\n" +
 			"Named contacts are written; with none named, the whole address book is,\n" +
 			"narrowed by --keyword. Properties this tool has no flag for travel too,\n" +
 			"since the stored card goes out whole.",

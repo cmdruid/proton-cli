@@ -70,8 +70,8 @@ var examples = map[string][]string{
 		"proton calendar events create --title Renewal --start 2026-09-01T09:00 --remind 1d:email",
 	},
 	"proton calendar events export": {
-		"proton calendar events export --start 2026-01-01 --end 2026-12-31 --output year.ics",
-		"proton calendar events export --calendar Work --output - > work.ics",
+		"proton calendar events export --start 2026-01-01 --end 2026-12-31 --dest year.ics",
+		"proton calendar events export --calendar Work --dest - > work.ics",
 	},
 	"proton calendar events import": {
 		"proton calendar events import holidays.ics",
@@ -158,9 +158,9 @@ var examples = map[string][]string{
 		"proton contacts list --output json",
 	},
 	"proton contacts export": {
-		"proton contacts export --output-dir ./address-book",
-		"proton contacts export jane --output jane.vcf",
-		"proton contacts export --output - > contacts.vcf",
+		"proton contacts export --dest-dir ./address-book",
+		"proton contacts export jane --dest jane.vcf",
+		"proton contacts export --dest - > contacts.vcf",
 	},
 	"proton contacts import": {
 		"proton contacts import contacts.vcf",
@@ -222,8 +222,8 @@ var examples = map[string][]string{
 		"pg_dump mydb | gzip | proton drive items upload - /Backups/db.sql.gz",
 	},
 	"proton drive items download": {
-		"proton drive items download /Documents/report.pdf --output-dir .",
-		"proton drive items download /Documents/report.pdf --output - > report.pdf",
+		"proton drive items download /Documents/report.pdf --dest-dir .",
+		"proton drive items download /Documents/report.pdf --dest - > report.pdf",
 	},
 	"proton drive items update": {"proton drive items update /Documents/report.pdf --name summary.pdf"},
 	"proton drive items move": {
@@ -245,7 +245,7 @@ var examples = map[string][]string{
 	},
 	"proton drive items revisions list":     {"proton drive items revisions list /Documents/report.pdf"},
 	"proton drive items revisions restore":  {"proton drive items revisions restore /Documents/report.pdf 5bH2mQxK"},
-	"proton drive items revisions download": {"proton drive items revisions download /Documents/report.pdf 5bH2mQxK --output-dir ."},
+	"proton drive items revisions download": {"proton drive items revisions download /Documents/report.pdf 5bH2mQxK --dest-dir ."},
 	"proton drive items revisions delete":   {"proton drive items revisions delete /Documents/report.pdf 5bH2mQxK"},
 	"proton drive items create": {
 		"proton drive items create /Documents/2026",
@@ -285,7 +285,7 @@ var examples = map[string][]string{
 		"proton drive photos list --tag favorites",
 	},
 	"proton drive photos upload":      {"proton drive photos upload ./IMG_2291.jpg"},
-	"proton drive photos download":    {"proton drive photos download 5bH2mQxK --output-dir ."},
+	"proton drive photos download":    {"proton drive photos download 5bH2mQxK --dest-dir ."},
 	"proton drive photos favorite":    {"proton drive photos favorite 5bH2mQxK"},
 	"proton drive photos unfavorite":  {"proton drive photos unfavorite 5bH2mQxK"},
 	"proton drive photos trash":       {"proton drive photos trash 5bH2mQxK"},
@@ -384,17 +384,17 @@ var examples = map[string][]string{
 		"proton mail messages unsubscribe 5bH2mQxK",
 	},
 	"proton mail messages export": {
-		"proton mail messages export 'Invoice #2291' --output-dir ./backup",
-		"proton mail messages export --folder archive --all --output-dir ./mail-backup",
-		"proton mail messages export --folder archive --older-than 1y --format mbox --output archive.mbox",
+		"proton mail messages export 'Invoice #2291' --dest-dir ./backup",
+		"proton mail messages export --folder archive --all --dest-dir ./mail-backup",
+		"proton mail messages export --folder archive --older-than 1y --format mbox --dest archive.mbox",
 	},
 	"proton mail messages attachments list": {
 		"proton mail messages attachments list 'Invoice #2291'",
 		"proton mail messages attachments list 5bH2mQxK --include-inline",
 	},
 	"proton mail messages attachments download": {
-		"proton mail messages attachments download 'Invoice #2291' --output-dir .",
-		"proton mail messages attachments download 5bH2mQxK kQ81mDx4 --output invoice.pdf",
+		"proton mail messages attachments download 'Invoice #2291' --dest-dir .",
+		"proton mail messages attachments download 5bH2mQxK kQ81mDx4 --dest invoice.pdf",
 	},
 
 	// ── mail: conversations ──
@@ -444,13 +444,13 @@ var examples = map[string][]string{
 	},
 	"proton mail conversations mark unread": {"proton mail conversations mark unread 'Quarterly numbers'"},
 	"proton mail conversations export": {
-		"proton mail conversations export 'Quarterly numbers' --output-dir ./backup",
+		"proton mail conversations export 'Quarterly numbers' --dest-dir ./backup",
 	},
 	"proton mail conversations attachments list": {
 		"proton mail conversations attachments list 'Quarterly numbers'",
 	},
 	"proton mail conversations attachments download": {
-		"proton mail conversations attachments download 'Quarterly numbers' --output-dir .",
+		"proton mail conversations attachments download 'Quarterly numbers' --dest-dir .",
 	},
 
 	// ── mail: drafts ──
@@ -619,8 +619,8 @@ var examples = map[string][]string{
 		"proton pass breaches get jane@proton.me",
 	},
 	"proton pass export": {
-		"proton pass export --output pass-backup.zip --passphrase-file ~/.backup-passphrase",
-		"proton pass export --output pass-backup.zip",
+		"proton pass export --dest pass-backup.zip --passphrase-file ~/.backup-passphrase",
+		"proton pass export --dest pass-backup.zip",
 	},
 	"proton pass import": {
 		"proton pass import pass-backup.zip --passphrase-file ~/.backup-passphrase",

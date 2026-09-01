@@ -3,6 +3,8 @@ package selfmanage
 import (
 	"encoding/json"
 	"os"
+
+	"github.com/roman-16/proton-cli/internal/config"
 	"path/filepath"
 	"time"
 )
@@ -16,11 +18,6 @@ import (
 // not urgent to the minute - and anything longer leaves a security fix sitting
 // unmentioned on a machine with no package manager to bring it.
 const Interval = 24 * time.Hour
-
-// disable switches the lookup off for good. It is read like PROTON_NO_INPUT -
-// set at all, even to nothing - because a variable that turns a behaviour off
-// should not need a second mental model for its value.
-const disable = "PROTON_NO_UPDATE_CHECK"
 
 // Check is when the last lookup was attempted, and the whole of what is
 // remembered between runs.
@@ -38,12 +35,9 @@ func (c Check) Due(now time.Time) bool { return now.Sub(c.CheckedAt) >= Interval
 // Only a copy that can replace itself qualifies: a package manager owns its own
 // updates and would refuse this one, so telling a Homebrew user about a release
 // is telling them to run a command that will decline. A development build has no
-// version to compare, and an explicit opt-out ends it.
+// version to compare.
 func Watched(exePath, version string) bool {
 	if version == "" || version == "dev" {
-		return false
-	}
-	if _, off := os.LookupEnv(disable); off {
 		return false
 	}
 	return Classify(exePath) == KindStandalone
@@ -53,11 +47,11 @@ func Watched(exePath, version string) bool {
 // ID cache. It is not profile-scoped: which binary is installed on this machine
 // has nothing to do with whose account is being used on it.
 func CheckPath() string {
-	dir, err := os.UserConfigDir()
+	dir, err := config.Dir()
 	if err != nil {
 		dir = "."
 	}
-	return filepath.Join(dir, "proton-cli", "update-check.json")
+	return filepath.Join(dir, "update-check.json")
 }
 
 // LoadCheck reads the stored attempt. Anything wrong with the file reads as no

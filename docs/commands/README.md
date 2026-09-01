@@ -31,12 +31,14 @@ These are declared on the root, so they can be given to any command and mean the
 
 | Flag | Description |
 | --- | --- |
+| `--config string` | Settings file to read (env: PROTON_CONFIG; default: config.yaml in the config directory) |
+| `--confirm string` | Which commands stop for a yes: default, deletions, mutations, reads, all (env: PROTON_CONFIRM) |
 | `-n, --dry-run` | Preview mutations without applying them |
 | `--full-ids` | Show full IDs in interactive output (default: shortened to 8 chars on TTY) |
 | `--log-level string` | Logging verbosity: debug, info, warn, error (env: PROTON_LOG_LEVEL) |
 | `--no-color` | Disable colored output (env: NO_COLOR) |
 | `--no-input` | Never prompt; a missing credential becomes an error (env: PROTON_NO_INPUT) |
-| `-o, --output string` | Output format: text, json, yaml (default `text`) |
+| `-o, --output string` | Output format: text, json, yaml (default "text") |
 | `-p, --profile string` | Profile to act as (env: PROTON_PROFILE; default: default) |
 | `-q, --quiet` | Suppress non-essential stderr output |
 | `--verified string` | A human verification already solved, as the refusal printed it (env: PROTON_VERIFIED) |

@@ -113,7 +113,7 @@ func TestDriveItemsUploadDownload(t *testing.T) {
 
 	runOK(t, "drive", "items", "upload", src, folder)
 	out := filepath.Join(tmp, "out.txt")
-	runOK(t, "drive", "items", "download", folder+"/payload.txt", "--output", out)
+	runOK(t, "drive", "items", "download", folder+"/payload.txt", "--dest", out)
 	data, err := os.ReadFile(out)
 	if err != nil {
 		t.Fatalf("downloaded file not readable: %v", err)
@@ -147,7 +147,7 @@ func TestDriveItemsUploadFromStdin(t *testing.T) {
 	}
 
 	// Download back via explicit "-" (stdout capture)
-	stdout := runOK(t, "drive", "items", "download", folder+"/"+name, "--output", "-")
+	stdout := runOK(t, "drive", "items", "download", folder+"/"+name, "--dest", "-")
 	if !strings.Contains(stdout, "piped payload") {
 		t.Errorf("stdout download mismatch: %q", stdout)
 	}
@@ -176,7 +176,7 @@ func TestDriveItemsUploadFromStdinNamed(t *testing.T) {
 		t.Errorf("expected name %q, got %q", "piped.txt", name)
 	}
 
-	stdout := runOK(t, "drive", "items", "download", dest, "--output", "-")
+	stdout := runOK(t, "drive", "items", "download", dest, "--dest", "-")
 	if !strings.Contains(stdout, payload) {
 		t.Errorf("stdout download mismatch: %q", stdout)
 	}
@@ -227,7 +227,7 @@ func TestDriveItemsDownloadBehaviors(t *testing.T) {
 		if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
 			t.Fatalf("setup: %v", err)
 		}
-		_, stderr, code := run(t, "drive", "items", "download", folder+"/a.txt", "--output", dest)
+		_, stderr, code := run(t, "drive", "items", "download", folder+"/a.txt", "--dest", dest)
 		if code == 0 {
 			t.Error("expected non-zero exit when destination exists without --force")
 		}
@@ -244,7 +244,7 @@ func TestDriveItemsDownloadBehaviors(t *testing.T) {
 		if err := os.WriteFile(dest, []byte("local-existing"), 0644); err != nil {
 			t.Fatalf("setup: %v", err)
 		}
-		runOK(t, "drive", "items", "download", "--force", folder+"/a.txt", "--output", dest)
+		runOK(t, "drive", "items", "download", "--force", folder+"/a.txt", "--dest", dest)
 		data, err := os.ReadFile(dest)
 		if err != nil {
 			t.Fatalf("read after force: %v", err)
@@ -254,8 +254,8 @@ func TestDriveItemsDownloadBehaviors(t *testing.T) {
 		}
 	})
 
-	t.Run("--output - writes to stdout", func(t *testing.T) {
-		stdout := runOK(t, "drive", "items", "download", folder+"/p.txt", "--output", "-")
+	t.Run("--dest - writes to stdout", func(t *testing.T) {
+		stdout := runOK(t, "drive", "items", "download", folder+"/p.txt", "--dest", "-")
 		assertContains(t, stdout, "stdoutpayload")
 	})
 }
@@ -311,7 +311,7 @@ func TestDriveItemsUploadMultiBlock(t *testing.T) {
 
 	runOK(t, "drive", "items", "upload", src, folder)
 	out := filepath.Join(tmp, "out.bin")
-	runOK(t, "drive", "items", "download", folder+"/big.bin", "--output", out)
+	runOK(t, "drive", "items", "download", folder+"/big.bin", "--dest", out)
 
 	got, err := os.ReadFile(out)
 	if err != nil {
@@ -345,7 +345,7 @@ func TestDriveItemsUploadManyBlocks(t *testing.T) {
 
 	runOK(t, "drive", "items", "upload", src, folder)
 	out := filepath.Join(tmp, "out.bin")
-	runOK(t, "drive", "items", "download", folder+"/many.bin", "--output", out)
+	runOK(t, "drive", "items", "download", folder+"/many.bin", "--dest", out)
 
 	got, err := os.ReadFile(out)
 	if err != nil {
@@ -384,7 +384,7 @@ func TestDriveItemsRename(t *testing.T) {
 
 	// Decryption round-trip after rename
 	out := filepath.Join(tmp, "after.txt")
-	runOK(t, "drive", "items", "download", folder+"/new.txt", "--output", out)
+	runOK(t, "drive", "items", "download", folder+"/new.txt", "--dest", out)
 	if b, _ := os.ReadFile(out); string(b) != "renameme" {
 		t.Errorf("content mismatch after rename: %q", string(b))
 	}
@@ -420,7 +420,7 @@ func TestDriveItemsMove(t *testing.T) {
 
 	// Re-encryption round-trip after move
 	out := filepath.Join(tmp, "after.txt")
-	runOK(t, "drive", "items", "download", dst+"/f.txt", "--output", out)
+	runOK(t, "drive", "items", "download", dst+"/f.txt", "--dest", out)
 	if b, _ := os.ReadFile(out); string(b) != "moveme" {
 		t.Errorf("content mismatch after move: %q", string(b))
 	}
@@ -564,7 +564,7 @@ func TestDriveRevisionsDownloadLeavesTheFileAlone(t *testing.T) {
 	folder, path, earlier := fileWithHistory(t)
 
 	out := filepath.Join(t.TempDir(), "earlier.txt")
-	_, stderr := runOKStderr(t, "drive", "items", "revisions", "download", "--output", out, path, earlier)
+	_, stderr := runOKStderr(t, "drive", "items", "revisions", "download", "--dest", out, path, earlier)
 
 	got, err := os.ReadFile(out)
 	if err != nil {
@@ -682,7 +682,7 @@ func uploadedTwice(t *testing.T, content string) (folder, src string) {
 func reads(t *testing.T, path string) string {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "downloaded")
-	runOK(t, "drive", "items", "download", "--output", out, path)
+	runOK(t, "drive", "items", "download", "--dest", out, path)
 	got, err := os.ReadFile(out)
 	if err != nil {
 		t.Fatal(err)
@@ -958,7 +958,7 @@ func TestDriveItemsCopy(t *testing.T) {
 	assertContains(t, runOK(t, "drive", "items", "list", dest), "f.txt")
 
 	out := filepath.Join(dir, "out.txt")
-	runOK(t, "drive", "items", "download", dest+"/f.txt", "--output", out)
+	runOK(t, "drive", "items", "download", dest+"/f.txt", "--dest", out)
 	got, err := os.ReadFile(out)
 	if err != nil {
 		t.Fatalf("read copied file: %v", err)
@@ -1043,16 +1043,16 @@ func TestDrivePhotosWriteLifecycle(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete photo: proton drive photos delete %s", photoID),
 		"drive", "photos", "delete", "--", photoID)
 
-	// Download round-trip via the unified model: explicit file, then output-dir.
+	// Download round-trip via the unified model: explicit file, then --dest-dir.
 	outFile := filepath.Join(dir, "photo.out")
-	runOK(t, "drive", "photos", "download", "--output", outFile, photoID)
+	runOK(t, "drive", "photos", "download", "--dest", outFile, photoID)
 	if fi, err := os.Stat(outFile); err != nil || fi.Size() == 0 {
-		t.Errorf("photos download --output produced no file: %v", err)
+		t.Errorf("photos download --dest produced no file: %v", err)
 	}
 	outDir := filepath.Join(dir, "pics")
-	runOK(t, "drive", "photos", "download", "--output-dir", outDir, photoID)
+	runOK(t, "drive", "photos", "download", "--dest-dir", outDir, photoID)
 	if entries, err := os.ReadDir(outDir); err != nil || len(entries) == 0 {
-		t.Errorf("photos download --output-dir wrote no file: %v", err)
+		t.Errorf("photos download --dest-dir wrote no file: %v", err)
 	}
 
 	// Create an album; identify it as the new entry in the listing.

@@ -27,15 +27,15 @@ proton mail conversations attachments download REF [ATTACHMENT_REF]
 ```
 
 ```bash
-proton mail conversations attachments download 'Quarterly numbers' --output-dir .
+proton mail conversations attachments download 'Quarterly numbers' --dest-dir .
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
 | `--include-inline` | Include inline attachments |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 
 ### `conversations attachments list`
 
@@ -90,16 +90,16 @@ proton mail conversations export REF
 ```
 
 ```bash
-proton mail conversations export 'Quarterly numbers' --output-dir ./backup
+proton mail conversations export 'Quarterly numbers' --dest-dir ./backup
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
 | `--format string` | How to lay the thread down: eml, mbox (default `mbox`) |
 | `--no-attachments` | Skip attachments |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 
 ### `conversations forward`
 
@@ -652,16 +652,16 @@ proton mail messages attachments download REF [ATTACHMENT_REF]
 ```
 
 ```bash
-proton mail messages attachments download 'Invoice #2291' --output-dir .
-proton mail messages attachments download 5bH2mQxK kQ81mDx4 --output invoice.pdf
+proton mail messages attachments download 'Invoice #2291' --dest-dir .
+proton mail messages attachments download 5bH2mQxK kQ81mDx4 --dest invoice.pdf
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
 | `--include-inline` | Include inline attachments when downloading them all |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 
 ### `messages attachments list`
 
@@ -778,9 +778,9 @@ proton mail messages export [REF...]
 ```
 
 ```bash
-proton mail messages export 'Invoice #2291' --output-dir ./backup
-proton mail messages export --folder archive --all --output-dir ./mail-backup
-proton mail messages export --folder archive --older-than 1y --format mbox --output archive.mbox
+proton mail messages export 'Invoice #2291' --dest-dir ./backup
+proton mail messages export --folder archive --all --dest-dir ./mail-backup
+proton mail messages export --folder archive --older-than 1y --format mbox --dest archive.mbox
 ```
 
 | Flag | Description |
@@ -788,6 +788,8 @@ proton mail messages export --folder archive --older-than 1y --format mbox --out
 | `--after string` | Match messages after this date (YYYY-MM-DD) |
 | `--all` | Act on everything in scope, rather than a subset |
 | `--before string` | Match messages before this date (YYYY-MM-DD) |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--folder string` | Folder or label to look in (default: all) |
 | `--force` | Overwrite a file that already exists |
 | `--format string` | How to lay the messages down: eml, mbox (default `eml`) |
@@ -797,8 +799,6 @@ proton mail messages export --folder archive --older-than 1y --format mbox --out
 | `--newer-than string` | Match messages newer than DURATION |
 | `--no-attachments` | Skip attachments, which is much faster |
 | `--older-than string` | Match messages older than DURATION (e.g. 30d, 2w, 1h) |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 | `--starred` | Match starred messages |
 | `--subject string` | Match text in the subject |
 | `--to string` | Match a recipient's address |

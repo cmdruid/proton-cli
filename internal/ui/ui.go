@@ -55,21 +55,14 @@ func (f Format) Machine() bool { return f != FormatText }
 // LogLevels is the domain of --log-level, in increasing severity.
 var LogLevels = []string{"debug", "info", "warn", "error"}
 
-// ParseLogLevel resolves how noisy the logger should be: the flag if given, else
-// PROTON_LOG_LEVEL, else warnings and worse.
+// ParseLogLevel resolves how noisy the logger should be, defaulting to warnings
+// and worse.
 //
 // An unrecognised value is refused rather than quietly becoming the default. A
 // mistyped --log-level used to produce silence, which looks exactly like the
 // logging working and there being nothing to say.
-//
-// The variable is not profile-scoped: how much this machine should say is a
-// property of the machine, not of the account being used on it.
-func ParseLogLevel(flag string) (slog.Level, error) {
-	v := strings.ToLower(strings.TrimSpace(flag))
-	if v == "" {
-		v = strings.ToLower(strings.TrimSpace(os.Getenv("PROTON_LOG_LEVEL")))
-	}
-	switch v {
+func ParseLogLevel(value string) (slog.Level, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "":
 		return slog.LevelWarn, nil
 	case "debug":
@@ -151,7 +144,7 @@ func New(opts Options) *UI {
 		In:       in,
 		Log:      slog.New(slog.NewTextHandler(errw, &slog.HandlerOptions{Level: opts.LogLevel})),
 		Quiet:    opts.Quiet,
-		NoInput:  opts.NoInput || NoInput(),
+		NoInput:  opts.NoInput,
 		FullIDs:  opts.FullIDs,
 		Width:    opts.Width,
 		style:    style,

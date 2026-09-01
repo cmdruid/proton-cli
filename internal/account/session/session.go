@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/roman-16/proton-cli/internal/config"
 	"github.com/roman-16/proton-cli/internal/profile"
 )
 
@@ -86,13 +87,7 @@ func Profiles() ([]Profile, error) {
 }
 
 // Dir returns ~/.config/proton-cli.
-func Dir() (string, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, "proton-cli"), nil
-}
+func Dir() (string, error) { return config.Dir() }
 
 // Path returns the session-file path for the given profile.
 func Path(name profile.Name) (string, error) {

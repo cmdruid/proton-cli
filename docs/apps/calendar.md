@@ -116,7 +116,7 @@ proton calendar reminders watch --output json | jq -c .
 ## Import and export
 
 ```bash
-proton calendar events export --start 2026-01-01 --end 2026-12-31 --output year.ics
+proton calendar events export --start 2026-01-01 --end 2026-12-31 --dest year.ics
 proton calendar events import holidays.ics
 curl -s https://example.com/team.ics | proton calendar events import -
 ```

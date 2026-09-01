@@ -577,7 +577,7 @@ func TestMailAttachmentsListAndDownload(t *testing.T) {
 
 	// Download to tempdir
 	out := filepath.Join(t.TempDir(), "att")
-	runOK(t, "mail", "messages", "attachments", "download", "--output", out, msgID, attID)
+	runOK(t, "mail", "messages", "attachments", "download", "--dest", out, msgID, attID)
 
 	info, err := os.Stat(out)
 	if err != nil {
@@ -606,7 +606,7 @@ func TestMailAttachmentsDownloadCollisionAutoSuffix(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	_, stderr := runOKStderr(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID, attID)
+	_, stderr := runOKStderr(t, "mail", "messages", "attachments", "download", "--dest-dir", dir, msgID, attID)
 
 	// Suffixed file must exist; placeholder must be untouched.
 	stem := strings.TrimSuffix(attName, filepath.Ext(attName))
@@ -628,7 +628,7 @@ func TestMailAttachmentsDownloadCollisionExplicitErrors(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("x"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "--output", dest, msgID, attID)
+	_, stderr, code := run(t, "mail", "messages", "attachments", "download", "--dest", dest, msgID, attID)
 	if code == 0 {
 		t.Errorf("expected non-zero exit on collision, got 0")
 	}
@@ -645,7 +645,7 @@ func TestMailAttachmentsDownloadForce(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("placeholder"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	runOK(t, "mail", "messages", "attachments", "download", "--output", dest, "--force", msgID, attID)
+	runOK(t, "mail", "messages", "attachments", "download", "--dest", dest, "--force", msgID, attID)
 	data, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatalf("read after force: %v", err)
@@ -660,7 +660,7 @@ func TestMailAttachmentsDownloadAll(t *testing.T) {
 	msgID, _, _ := findMessageWithAttachment(t)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID)
+	runOK(t, "mail", "messages", "attachments", "download", "--dest-dir", dir, msgID)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -676,14 +676,14 @@ func TestMailAttachmentsDownloadOutputDirAutoCreates(t *testing.T) {
 	msgID, attID, _ := findMessageWithAttachment(t)
 
 	dir := filepath.Join(t.TempDir(), "new", "deep", "nested")
-	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID, attID)
+	runOK(t, "mail", "messages", "attachments", "download", "--dest-dir", dir, msgID, attID)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("--output-dir was not created: %v", err)
+		t.Fatalf("--dest-dir was not created: %v", err)
 	}
 	if len(entries) == 0 {
-		t.Error("no file written into auto-created --output-dir")
+		t.Error("no file written into auto-created --dest-dir")
 	}
 }
 
@@ -773,7 +773,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 	msgID := findMessageWithMixedAttachments(t)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID)
+	runOK(t, "mail", "messages", "attachments", "download", "--dest-dir", dir, msgID)
 
 	written, err := os.ReadDir(dir)
 	if err != nil {
@@ -783,7 +783,7 @@ func TestMailAttachmentsDownloadAllSkipsInline(t *testing.T) {
 
 	// --include-inline should yield strictly more files.
 	dir2 := t.TempDir()
-	runOK(t, "mail", "messages", "attachments", "download", "--include-inline", "--output-dir", dir2, msgID)
+	runOK(t, "mail", "messages", "attachments", "download", "--include-inline", "--dest-dir", dir2, msgID)
 	written2, err := os.ReadDir(dir2)
 	if err != nil {
 		t.Fatalf("readdir2: %v", err)
@@ -1092,7 +1092,7 @@ func TestMailConversationsAttachmentsDownloadAll(t *testing.T) {
 	convID := findConversationFor(t, msgID)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", "--output-dir", dir, convID)
+	runOK(t, "mail", "conversations", "attachments", "download", "--dest-dir", dir, convID)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -1110,11 +1110,11 @@ func TestMailConversationsAttachmentsDownloadAllSkipsInline(t *testing.T) {
 	convID := findConversationFor(t, msgID)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", "--output-dir", dir, convID)
+	runOK(t, "mail", "conversations", "attachments", "download", "--dest-dir", dir, convID)
 	default1, _ := os.ReadDir(dir)
 
 	dir2 := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", "--include-inline", "--output-dir", dir2, convID)
+	runOK(t, "mail", "conversations", "attachments", "download", "--include-inline", "--dest-dir", dir2, convID)
 	inclAll, _ := os.ReadDir(dir2)
 
 	if len(inclAll) <= len(default1) {
@@ -1130,7 +1130,7 @@ func TestMailConversationsAttachmentsDownloadOneByID(t *testing.T) {
 	convID := findConversationFor(t, msgID)
 
 	dir := t.TempDir()
-	runOK(t, "mail", "conversations", "attachments", "download", "--output-dir", dir, convID, attID)
+	runOK(t, "mail", "conversations", "attachments", "download", "--dest-dir", dir, convID, attID)
 
 	dest := filepath.Join(dir, attName)
 	info, err := os.Stat(dest)
@@ -1517,7 +1517,7 @@ func TestMailSendWithAttachment(t *testing.T) {
 	if err := os.MkdirAll(dlDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dlDir, inboxID)
+	runOK(t, "mail", "messages", "attachments", "download", "--dest-dir", dlDir, inboxID)
 	got, err := os.ReadFile(filepath.Join(dlDir, "note.txt"))
 	if err != nil {
 		t.Fatalf("read downloaded attachment: %v", err)

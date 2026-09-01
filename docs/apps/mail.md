@@ -132,8 +132,8 @@ Snooze is on **threads**, not messages, because that is what Proton snoozes: a c
 
 ```bash
 proton mail messages attachments list REF
-proton mail messages attachments download REF --output-dir ./attachments/
-proton mail conversations attachments download REF --output-dir ./thread/
+proton mail messages attachments download REF --dest-dir ./attachments/
+proton mail conversations attachments download REF --dest-dir ./thread/
 ```
 
 Existing files are never overwritten silently: names collide into `file (2).pdf`, or pass `--force`. `--include-inline` covers embedded images too.
@@ -143,9 +143,9 @@ Existing files are never overwritten silently: names collide into `file (2).pdf`
 `export` writes ordinary RFC 822 files you can open in any mail client.
 
 ```bash
-proton mail messages export --folder archive --older-than 1y --all --output-dir ./backup
-proton mail messages export --folder inbox --all --format mbox --output inbox.mbox
-proton mail messages export REF --output - | formail -X ""
+proton mail messages export --folder archive --older-than 1y --all --dest-dir ./backup
+proton mail messages export --folder inbox --all --format mbox --dest inbox.mbox
+proton mail messages export REF --dest - | formail -X ""
 ```
 
 It takes the same filters as `trash` and `move`. `--format eml` writes one file per message named `<date> <subject>.eml`; `--format mbox` concatenates. `--no-attachments` skips downloads, which is much faster for a large archive.

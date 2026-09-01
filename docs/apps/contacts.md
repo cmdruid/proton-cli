@@ -70,8 +70,8 @@ The oldest of each set is kept, so a group or a pinned key that refers to it sti
 ## Import and export
 
 ```bash
-proton contacts export --output-dir ./address-book     # one .vcf per contact
-proton contacts export --output - > contacts.vcf       # one file, all of them
+proton contacts export --dest-dir ./address-book     # one .vcf per contact
+proton contacts export --dest - > contacts.vcf       # one file, all of them
 proton contacts import contacts.vcf
 ```
 

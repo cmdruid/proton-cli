@@ -22,27 +22,58 @@ import (
 	mailcmd "github.com/roman-16/proton-cli/internal/cli/mail"
 	passcmd "github.com/roman-16/proton-cli/internal/cli/pass"
 	selfcmd "github.com/roman-16/proton-cli/internal/cli/self"
+	"github.com/roman-16/proton-cli/internal/config"
+	"github.com/roman-16/proton-cli/internal/confirm"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/proton"
 	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // version is overridden at release time via -ldflags -X.
 var version = "dev"
 
 type globalFlags struct {
-	profile  string
-	apiURL   string
-	output   string
-	quiet    bool
-	logLevel string
-	dryRun   bool
-	yes      bool
-	fullIDs  bool
-	noColor  bool
-	noInput  bool
-	verified string
+	configPath string
+	profile    string
+	apiURL     string
+	output     string
+	quiet      bool
+	logLevel   string
+	confirm    string
+	dryRun     bool
+	yes        bool
+	fullIDs    bool
+	noColor    bool
+	noInput    bool
+	verified   string
+}
+
+// settings is what the command line said, with a boolean left alone told apart
+// from one set to false.
+//
+// The difference is what makes a preference in the file overridable for one run:
+// `--quiet=false` is a thing somebody said, while no --quiet at all leaves the
+// file to answer.
+func (g *globalFlags) settings(pf *pflag.FlagSet) config.Flags {
+	said := func(name string, value bool) *bool {
+		if !pf.Changed(name) {
+			return nil
+		}
+		return &value
+	}
+	return config.Flags{
+		Config:   g.configPath,
+		Profile:  g.profile,
+		Output:   g.output,
+		LogLevel: g.logLevel,
+		Confirm:  g.confirm,
+		Quiet:    said("quiet", g.quiet),
+		FullIDs:  said("full-ids", g.fullIDs),
+		NoColor:  said("no-color", g.noColor),
+		NoInput:  said("no-input", g.noInput),
+	}
 }
 
 // newRoot assembles the whole command tree and returns it.
@@ -74,8 +105,12 @@ func newRoot() *cobra.Command {
 	// letter, which is what stops -p meaning `--profile` here and `--page` two
 	// words later; the conformance test enforces it.
 	pf := root.PersistentFlags()
+	pf.StringVar(&g.configPath, "config", "",
+		"Settings file to read (env: "+config.PathVar+"; default: "+config.Name+" in the config directory)")
+	pf.StringVar(&g.confirm, "confirm", "",
+		"Which commands stop for a yes: "+confirm.ClassList()+" (env: "+config.ConfirmVar+")")
 	pf.StringVarP(&g.profile, "profile", "p", "", "Profile to act as (env: PROTON_PROFILE; default: default)")
-	pf.StringVarP(&g.output, "output", "o", "text", "Output format: text, json, yaml")
+	pf.StringVarP(&g.output, "output", "o", "", "Output format: text, json, yaml (default \"text\")")
 	pf.BoolVarP(&g.quiet, "quiet", "q", false, "Suppress non-essential stderr output")
 	pf.StringVar(&g.logLevel, "log-level", "",
 		"Logging verbosity: "+strings.Join(ui.LogLevels, ", ")+" (env: PROTON_LOG_LEVEL)")
@@ -106,28 +141,20 @@ func newRoot() *cobra.Command {
 	root.TraverseChildren = true
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		format, err := ui.ParseFormat(g.output)
-		if err != nil {
-			return err
-		}
-		// Both are judged here, before any command body runs and so before
-		// anything reaches the network.
-		level, err := ui.ParseLogLevel(g.logLevel)
+		// Everything the configuration decides is settled here, before any command
+		// body runs and so before anything reaches the network: a file that does not
+		// parse, a format that is not one, a policy naming a command that is not
+		// there - none of them should first cost a sign-in to discover.
+		settings, err := resolveSettings(root, g.settings(pf))
 		if err != nil {
 			return err
 		}
 		a, err := app.New(app.Options{
-			Profile:  g.profile,
+			Resolved: settings,
 			APIURL:   g.apiURL,
 			Version:  version,
-			Output:   format,
-			LogLevel: level,
-			Quiet:    g.quiet,
 			DryRun:   g.dryRun,
 			Yes:      g.yes,
-			FullIDs:  g.fullIDs,
-			NoColor:  g.noColor,
-			NoInput:  g.noInput,
 			Verified: g.verified,
 		})
 		if err != nil {
@@ -220,7 +247,7 @@ func announce(cmd *cobra.Command) {
 		return
 	}
 	if a := app.FromOrNil(cmd.Context()); a != nil {
-		selfcmd.Notice(cmd.Context(), a.UI, version)
+		selfcmd.Notice(cmd.Context(), a.UI, version, a.NoUpdateCheck)
 	}
 }
 

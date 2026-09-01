@@ -246,7 +246,7 @@ func TestMailMessagesForwardCarriesAttachmentsToTheAltAccount(t *testing.T) {
 
 	// And the bytes survived the re-keying rather than the upload.
 	dir := t.TempDir()
-	runOKSecondary(t, "mail", "messages", "attachments", "download", "--output-dir", dir, recvID)
+	runOKSecondary(t, "mail", "messages", "attachments", "download", "--dest-dir", dir, recvID)
 	got, err := os.ReadFile(filepath.Join(dir, attName))
 	if err != nil {
 		t.Fatalf("read forwarded attachment: %v", err)

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +14,8 @@ import (
 
 	"github.com/roman-16/proton-cli/internal/account/keys"
 	"github.com/roman-16/proton-cli/internal/account/session"
+	"github.com/roman-16/proton-cli/internal/config"
+	"github.com/roman-16/proton-cli/internal/confirm"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/profile"
@@ -48,8 +49,13 @@ type App struct {
 
 	DryRun  bool
 	FullIDs bool
-	// Yes answers every confirmation in advance, for scripts that mean it.
+	// Yes answers every confirmation in advance, for scripts that mean it. It
+	// answers a question; it does not lift a refusal.
 	Yes bool
+	// Confirm is which commands stop for a yes, and which are refused outright.
+	Confirm confirm.Policy
+	// NoUpdateCheck suppresses the look for a new release.
+	NoUpdateCheck bool
 
 	IDCache *idcache.Cache
 
@@ -69,29 +75,20 @@ type App struct {
 	email     string
 }
 
+// Options is one invocation's settled configuration, plus the few things that
+// are decided per run and never persisted: a preview, an answer given in
+// advance, and a verification already solved.
 type Options struct {
-	Profile  string
+	config.Resolved
 	APIURL   string
 	Version  string
-	Output   ui.Format
-	LogLevel slog.Level
-	Quiet    bool
 	DryRun   bool
-	FullIDs  bool
-	NoColor  bool
-	NoInput  bool
 	Yes      bool
 	Verified string
 }
 
 func New(opts Options) (*App, error) {
-	// The profile is judged once, here, before it can name a file or scope an
-	// environment lookup. Everything downstream takes the validated form, so there
-	// is no path by which an unchecked name reaches the filesystem.
-	profileName, err := profile.Parse(firstNonEmpty(opts.Profile, os.Getenv("PROTON_PROFILE")))
-	if err != nil {
-		return nil, errs.Problemf("%v.", err).Hint("profiles are named like `work` or `my-work.2`").Exit(2)
-	}
+	profileName := opts.Profile
 
 	apiURL := firstNonEmpty(opts.APIURL, os.Getenv("PROTON_API_URL"))
 	verified := firstNonEmpty(opts.Verified, os.Getenv("PROTON_VERIFIED"))
@@ -118,18 +115,20 @@ func New(opts Options) (*App, error) {
 	}
 
 	a := &App{
-		Profile:  profileName,
-		Creds:    newCredentials(u, email),
-		API:      c,
-		Account:  account.New(c),
-		UI:       u,
-		DryRun:   opts.DryRun,
-		FullIDs:  opts.FullIDs,
-		Yes:      opts.Yes,
-		Verified: verified,
-		IDCache:  idcache.New(idCachePath(profileName)),
-		userID:   userID,
-		email:    email,
+		Profile:       profileName,
+		Creds:         newCredentials(u, email),
+		API:           c,
+		Account:       account.New(c),
+		UI:            u,
+		DryRun:        opts.DryRun,
+		FullIDs:       opts.FullIDs,
+		Yes:           opts.Yes,
+		Confirm:       opts.Confirm,
+		NoUpdateCheck: opts.NoUpdateCheck,
+		Verified:      verified,
+		IDCache:       idcache.New(idCachePath(profileName)),
+		userID:        userID,
+		email:         email,
 	}
 	// A service that decrypts holds the keys it decrypts with, the way it holds the
 	// client it fetches with. Unlock is memoised, so the hierarchy is fetched at
@@ -212,11 +211,11 @@ func (a *App) rememberIdentity(userID, email string) {
 
 // idCachePath mirrors the session-file convention.
 func idCachePath(name profile.Name) string {
-	cd, err := os.UserConfigDir()
+	dir, err := config.Dir()
 	if err != nil {
-		cd = "."
+		dir = "."
 	}
-	return filepath.Join(cd, "proton-cli", "idcache", name.FileName(".json"))
+	return filepath.Join(dir, "idcache", name.FileName(".json"))
 }
 
 // SignedIn reports whether this profile holds a session.

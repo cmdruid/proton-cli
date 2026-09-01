@@ -646,7 +646,7 @@ func TestPassExportAndImportRoundTrip(t *testing.T) {
 
 	dir := t.TempDir()
 	archive := filepath.Join(dir, "backup.zip")
-	runOK(t, "pass", "export", "--output", archive)
+	runOK(t, "pass", "export", "--dest", archive)
 
 	raw, err := os.ReadFile(archive)
 	if err != nil {
@@ -741,7 +741,7 @@ func TestPassExportWithAPassphrase(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	archive := filepath.Join(dir, "locked.zip")
-	runOK(t, "pass", "export", "--output", archive, "--passphrase-file", secret)
+	runOK(t, "pass", "export", "--dest", archive, "--passphrase-file", secret)
 
 	raw, err := os.ReadFile(archive)
 	if err != nil {

@@ -311,7 +311,7 @@ func TestContactsExportAndImportRoundTrip(t *testing.T) {
 		"contacts", "delete", "--", id)
 
 	// Out as one stream: a .vcf file is cards one after another.
-	out := runOK(t, "contacts", "export", "--output", "-", "--", id)
+	out := runOK(t, "contacts", "export", "--dest", "-", "--", id)
 	for _, want := range []string{"BEGIN:VCARD", "END:VCARD", name, email} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the export is missing %q", want)
@@ -387,7 +387,7 @@ func TestContactsImportKeepsAPropertyTheCLICannotSet(t *testing.T) {
 	cleanupRun(t, fmt.Sprintf("Delete contact: proton contacts delete %s", id),
 		"contacts", "delete", "--", id)
 
-	if out := runOK(t, "contacts", "export", "--output", "-", "--", id); !strings.Contains(out, "ANNIVERSARY:2015-06-20") {
+	if out := runOK(t, "contacts", "export", "--dest", "-", "--", id); !strings.Contains(out, "ANNIVERSARY:2015-06-20") {
 		t.Errorf("a property the CLI has no flag for was dropped:\n%s", out)
 	}
 }

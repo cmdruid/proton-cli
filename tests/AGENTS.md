@@ -333,8 +333,8 @@ So `--` is never needed in a test, for a full ID or a short one.
 **Put flags before the positionals.** Everything after the inserted `--` is positional, so a flag written after a leading-dash *full* ID arrives as an argument and the command fails with "accepts N arg(s)" - `rewrapFlagError` catches that and explains it. Whether it happens depends on which ID the account handed out, so writing the flags last makes a test fail roughly one run in sixty rather than never:
 
 ```go
-runOK(t, "mail", "messages", "attachments", "download", "--output-dir", dir, msgID)   // always works
-runOK(t, "mail", "messages", "attachments", "download", msgID, "--output-dir", dir)   // works until the ID starts with '-'
+runOK(t, "mail", "messages", "attachments", "download", "--dest-dir", dir, msgID)   // always works
+runOK(t, "mail", "messages", "attachments", "download", msgID, "--dest-dir", dir)   // works until the ID starts with '-'
 ```
 
 `runJSON` and `runJSONArray` put `--output json` in front for the same reason, so they are safe with any reference.

@@ -20,15 +20,30 @@ There are two ways a removal surprises you: the wrong verb, and the wrong filter
 
 Only a permanent removal says *This cannot be undone*, because only a permanent removal cannot be. Trashing is recoverable, so it asks the shorter question and `restore` puts things back. A removal you named yourself, with a verb that can be undone, is not a surprise and does not interrupt you.
 
+That is the floor rather than the whole story: a [confirmation policy](language.md#asking-about-more-than-that) can ask for more. It cannot ask for less.
+
+## Why the confirmation policy resolves the other way
+
+Every setting proton reads takes the nearest answer - a flag over a variable, a variable over the file. The confirmation policy takes the most cautious one instead, and a `deny` cannot be lifted by anything on the command line.
+
+The two kinds of setting are asking different questions. `--output json` says how proton should behave for the convenience of whoever is running it, and the person at the keyboard knows best what they want this time. `deny: {"*": deletions}` says what proton must not do by accident, and the whole value of that sentence is that the next command cannot argue with it. A guard a nearer source can lower is not a guard; it is a suggestion with extra steps.
+
+It follows that no policy can make proton *less* careful than it is with no configuration at all. The built-in rules are simply the weakest source, so writing a policy can only ever ratchet.
+
+What this is not is a security boundary, and it is worth being plain about that. Anything running as you can edit the file that declares a deny. It stops a command run carelessly - which is most of them, and increasingly ones nobody typed - and it stops nothing that is trying.
+
 ## Why one flag name means one thing
 
-`--to` is always an email recipient. `--into` is always a destination container. `--force` only ever means "overwrite a local file". `--all` only ever means "everything in scope".
+`--to` is always an email recipient. `--into` is always a remote container. `--dest` is always a local path. `--force` only ever means "overwrite a local file". `--all` only ever means "everything in scope".
 
 ```bash
 proton mail messages send --to alice@proton.me       # a recipient
 proton mail messages list --to alice@proton.me       # matching a recipient
-proton mail messages move REF --into archive         # a destination
+proton mail messages move REF --into archive         # a container over there
+proton drive items download /report.pdf --dest .     # a path over here
 ```
+
+`--dest` is spelled that way because `--output` was already the format every command answers in, and a flag that meant the format almost everywhere and a filename on fourteen commands meant those fourteen could not produce JSON at all.
 
 Five flags have a single-letter form, and they are the five typed most: `-p`, `-o`, `-n`, `-q`, `-y`. The whole shorthand namespace belongs to the root, so no subcommand can take a letter and `-p` is the profile everywhere.
 

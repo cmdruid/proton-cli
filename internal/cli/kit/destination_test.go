@@ -18,7 +18,7 @@ func TestDestinationCollisionPolicy(t *testing.T) {
 		path := filepath.Join(dir, "report.pdf")
 		write(t, path, "original")
 
-		d := &Destination{output: path}
+		d := &Destination{dest: path}
 		_, err := d.Write(nil, "ignored", []byte("new"))
 		if err == nil {
 			t.Fatal("want a refusal, got none")
@@ -36,7 +36,7 @@ func TestDestinationCollisionPolicy(t *testing.T) {
 		path := filepath.Join(dir, "report.pdf")
 		write(t, path, "original")
 
-		d := &Destination{output: path, force: true}
+		d := &Destination{dest: path, force: true}
 		got, err := d.Write(nil, "ignored", []byte("new"))
 		if err != nil {
 			t.Fatal(err)
@@ -53,7 +53,7 @@ func TestDestinationCollisionPolicy(t *testing.T) {
 		dir := t.TempDir()
 		write(t, filepath.Join(dir, "report.pdf"), "first")
 
-		d := &Destination{outputDir: dir}
+		d := &Destination{destDir: dir}
 		got, err := d.Write(nil, "report.pdf", []byte("second"))
 		if err != nil {
 			t.Fatal(err)
@@ -72,7 +72,7 @@ func TestDestinationCollisionPolicy(t *testing.T) {
 		write(t, filepath.Join(dir, "a.txt"), "1")
 		write(t, filepath.Join(dir, "a (2).txt"), "2")
 
-		d := &Destination{outputDir: dir}
+		d := &Destination{destDir: dir}
 		got, err := d.Write(nil, "a.txt", []byte("3"))
 		if err != nil {
 			t.Fatal(err)
@@ -100,25 +100,25 @@ func TestSplitExt(t *testing.T) {
 
 func TestValidateRejectsImpossibleCombinations(t *testing.T) {
 	t.Run("both destinations", func(t *testing.T) {
-		d := &Destination{output: "a", outputDir: "b"}
+		d := &Destination{dest: "a", destDir: "b"}
 		if err := d.Validate(true); err == nil {
 			t.Error("want a refusal")
 		}
 	})
 	t.Run("one file for many items", func(t *testing.T) {
-		d := &Destination{output: "a"}
+		d := &Destination{dest: "a"}
 		if err := d.Validate(false); err == nil {
 			t.Error("want a refusal")
 		}
 	})
 	t.Run("stdout for many items", func(t *testing.T) {
-		d := &Destination{output: "-"}
+		d := &Destination{dest: "-"}
 		if err := d.Validate(false); err == nil {
 			t.Error("several files down one stream is one unusable run of bytes")
 		}
 	})
 	t.Run("stdout for one item", func(t *testing.T) {
-		d := &Destination{output: "-"}
+		d := &Destination{dest: "-"}
 		if err := d.Validate(true); err != nil {
 			t.Errorf("one item is exactly what a stream carries: %v", err)
 		}
@@ -147,12 +147,12 @@ func TestSafeFilename(t *testing.T) {
 	}
 }
 
-// --output-dir names where the bytes go, so a directory that is not there yet is
+// --dest-dir names where the bytes go, so a directory that is not there yet is
 // a request to make it. Photo downloads open a temporary file in it before
 // anything else does, which is where this used to give way.
 func TestDirCreatesTheDestination(t *testing.T) {
 	nested := filepath.Join(t.TempDir(), "pics", "2026")
-	d := &Destination{outputDir: nested}
+	d := &Destination{destDir: nested}
 
 	got, err := d.Dir()
 	if err != nil {
@@ -175,7 +175,7 @@ func TestDirRefusesAPathThatIsAFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "not-a-dir")
 	write(t, path, "x")
 
-	if _, err := (&Destination{outputDir: path}).Dir(); err == nil {
+	if _, err := (&Destination{destDir: path}).Dir(); err == nil {
 		t.Fatal("want an error for a destination that is a file")
 	}
 }
@@ -202,7 +202,7 @@ func TestStreamCommitsOnlyAFinishedPayload(t *testing.T) {
 	dir := t.TempDir()
 
 	target := filepath.Join(dir, "mail.mbox")
-	d := &Destination{output: target}
+	d := &Destination{dest: target}
 	got, err := d.Stream(nil, "ignored", func(w io.Writer) error {
 		if _, err := io.WriteString(w, "first "); err != nil {
 			return err
@@ -218,7 +218,7 @@ func TestStreamCommitsOnlyAFinishedPayload(t *testing.T) {
 	}
 
 	failed := filepath.Join(dir, "failed.mbox")
-	d = &Destination{output: failed}
+	d = &Destination{dest: failed}
 	if _, err := d.Stream(nil, "ignored", func(w io.Writer) error {
 		_, _ = io.WriteString(w, "partial")
 		return errors.New("stop")
@@ -238,7 +238,7 @@ func TestStreamCommitsOnlyAFinishedPayload(t *testing.T) {
 // A producer that only learns the name as the bytes arrive names the file itself.
 func TestStreamDiscoveredUsesTheNameTheProducerFound(t *testing.T) {
 	dir := t.TempDir()
-	d := &Destination{outputDir: dir}
+	d := &Destination{destDir: dir}
 	got, err := d.StreamDiscovered(nil, func(w io.Writer) (string, error) {
 		_, err := io.WriteString(w, "jpeg")
 		return "IMG_0001.jpg", err

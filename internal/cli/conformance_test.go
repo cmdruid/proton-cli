@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/roman-16/proton-cli/internal/config"
 	"github.com/roman-16/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -190,6 +192,8 @@ var flagMeanings = map[string]string{
 	"delete-photos":          "also remove the photos an album held",
 	"desc":                   "reverse the order a listing is in",
 	"description":            "free-text description",
+	"dest":                   "the local path to write the payload to; - is stdout",
+	"dest-dir":               "a local directory to fill, keeping each item's own name",
 	"detach":                 "an attachment to remove",
 	"disabled":               "create without turning it on",
 	"display-name":           "the name recipients see",
@@ -222,7 +226,7 @@ var flagMeanings = map[string]string{
 	"html":                   "treat the text as HTML rather than escaping it",
 	"include-inline":         "include inline attachments",
 	"instagram":              "an Instagram handle",
-	"into":                   "the destination container of a move or copy",
+	"into":                   "the remote container a move or copy puts something in",
 	"job-title":              "a job title",
 	"key":                    "an armoured PGP key",
 	"keyword":                "full-text search term",
@@ -254,8 +258,6 @@ var flagMeanings = map[string]string{
 	"older-than":             "select things older than a duration",
 	"organization":           "an organization name",
 	"others":                 "act on every session but this one",
-	"output":                 "where to write the payload; - is stdout",
-	"output-dir":             "a directory to fill, keeping each item's own name",
 	"page":                   "which page of results",
 	"page-size":              "how many results per page",
 	"parent":                 "the containing folder",
@@ -517,7 +519,7 @@ var filterParityExceptions = map[string]string{}
 // argument to say it with, and what to do with what it found.
 var notNarrowing = map[string]bool{
 	"limit": true, "scope": true, "help": true,
-	"into": true, "output": true, "output-dir": true, "force": true,
+	"into": true, "dest": true, "dest-dir": true, "force": true,
 	"format": true, "no-attachments": true, "label": true,
 	"in": true, "never": true, "until": true,
 }
@@ -657,6 +659,99 @@ func TestNoEnvironmentVariableCarriesACredential(t *testing.T) {
 		})
 	for _, f := range offenders {
 		t.Errorf("%s takes an account from the environment; sign in with `account login` instead", f)
+	}
+}
+
+// ── rule 13b: the settings file and the flags say the same words ──
+
+// A setting has one name wherever it is written.
+//
+// The file, the flags and the variables are three ways of saying the same
+// thing, so a key that names no flag is a key nobody can discover from --help,
+// and a rename that moves one and not the other leaves two spellings for one
+// idea. The struct tags are the list; the flag set is the check.
+func TestEverySettingsKeyIsAlsoAFlag(t *testing.T) {
+	// Two are settable only in the file and by their variable: the release check
+	// has never had a flag, and the policy's own scope words are its value rather
+	// than a flag name.
+	variableOnly := map[string]bool{"no-update-check": true}
+
+	pf := newRoot().PersistentFlags()
+	for _, key := range settingsKeys(t) {
+		if variableOnly[key] {
+			continue
+		}
+		if pf.Lookup(key) == nil {
+			t.Errorf("config.yaml takes %q but there is no --%s", key, key)
+		}
+	}
+}
+
+// Three things are decided per run and never persisted, and one of them is the
+// reason the other rules hold at all.
+//
+// A file that could say `yes: true` would answer every confirmation the same
+// file went on to demand, including a deny - which would make the whole policy
+// decorative. `dry-run` in a file turns every command into a preview that looks
+// exactly like work getting done, `verified` is one token from one refusal, and
+// `api-url` is a durable way to point a signed-in CLI at a host that is not
+// Proton.
+func TestTheSettingsFileHoldsNoPerRunDecision(t *testing.T) {
+	keys := map[string]bool{}
+	for _, k := range settingsKeys(t) {
+		keys[k] = true
+	}
+	for _, forbidden := range []string{"yes", "dry-run", "verified", "api-url"} {
+		if keys[forbidden] {
+			t.Errorf("%q is settable in config.yaml; it is decided per run", forbidden)
+		}
+	}
+}
+
+// settingsKeys is every key the file accepts, read off the struct that decodes
+// it so the list cannot fall behind the type.
+func settingsKeys(t *testing.T) []string {
+	t.Helper()
+	var keys []string
+	for _, typ := range []reflect.Type{
+		reflect.TypeOf(config.File{}), reflect.TypeOf(config.Settings{}),
+	} {
+		for i := range typ.NumField() {
+			tag := typ.Field(i).Tag.Get("yaml")
+			name, _, _ := strings.Cut(tag, ",")
+			if name != "" && name != "per-profile" {
+				keys = append(keys, name)
+			}
+		}
+	}
+	if len(keys) == 0 {
+		t.Fatal("found no settings keys; the reflection is broken")
+	}
+	return keys
+}
+
+// ── rule 13c: a global flag's name is not available to a leaf ──
+
+// A leaf that declares a flag the root already declares does not clash - it
+// shadows, silently, and the global becomes unreachable on that command.
+//
+// This is how fourteen download commands came to have no way of asking for JSON:
+// they each registered an --output meaning a file path, and cobra handed it the
+// name before the root's format flag ever saw it. A name means one thing, and
+// the root's names mean theirs everywhere.
+func TestNoLeafShadowsAGlobalFlag(t *testing.T) {
+	root := newRoot()
+	global := map[string]bool{}
+	root.PersistentFlags().VisitAll(func(f *pflag.Flag) { global[f.Name] = true })
+
+	leaves, groups := partition(t)
+	for _, c := range append(leaves, groups...) {
+		c.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
+			if global[f.Name] {
+				t.Errorf("%s declares --%s, which is the root's; it would shadow it",
+					cmdPath(c), f.Name)
+			}
+		})
 	}
 }
 

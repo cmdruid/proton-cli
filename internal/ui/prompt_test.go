@@ -5,30 +5,11 @@ import (
 	"testing"
 )
 
-// Presence is what counts, whatever the value - the same rule NO_COLOR follows,
-// so the two variables need only one mental model between them.
-func TestNoInputCountsPresenceNotValue(t *testing.T) {
-	for _, value := range []string{"1", "true", "0", "false", "no", "", " ", "anything"} {
-		t.Setenv("PROTON_NO_INPUT", value)
-		if !NoInput() {
-			t.Errorf("PROTON_NO_INPUT=%q is set, so prompting is forbidden", value)
-		}
-	}
-}
-
-func TestNoInputUnsetIsFalse(t *testing.T) {
-	unsetenv(t, "PROTON_NO_INPUT")
-	if NoInput() {
-		t.Error("an unset variable should not forbid prompting")
-	}
-}
-
 // A verification is done in another window on another machine, so the only
 // thing to say about it is that it is done. Anything typed is that and nothing
 // more.
 func TestAwaitTakesAnyLineAsTheAnswer(t *testing.T) {
 	for _, typed := range []string{"\n", "y\n", "done\n", "   \n"} {
-		unsetenv(t, "PROTON_NO_INPUT")
 		u, _, errb := fixture(t, Options{})
 		u.In = strings.NewReader(typed)
 		if err := u.Await("Press Enter once it says you are verified."); err != nil {
@@ -43,7 +24,6 @@ func TestAwaitTakesAnyLineAsTheAnswer(t *testing.T) {
 // An input that ends without a line is nobody answering, which is a no. A job
 // with its input closed has to fail rather than treat silence as consent.
 func TestAwaitTreatsAnEndOfInputAsNo(t *testing.T) {
-	unsetenv(t, "PROTON_NO_INPUT")
 	u, _, _ := fixture(t, Options{})
 	u.In = strings.NewReader("")
 	if err := u.Await("Press Enter once it says you are verified."); err == nil {
@@ -52,7 +32,6 @@ func TestAwaitTreatsAnEndOfInputAsNo(t *testing.T) {
 }
 
 func TestAwaitRefusesWhenNothingMayBeAsked(t *testing.T) {
-	unsetenv(t, "PROTON_NO_INPUT")
 	u, _, errb := fixture(t, Options{NoInput: true})
 	u.In = strings.NewReader("\n")
 	if err := u.Await("Press Enter once it says you are verified."); err == nil {
@@ -67,7 +46,6 @@ func TestAwaitRefusesWhenNothingMayBeAsked(t *testing.T) {
 // alone is enough.
 func TestCanPromptRespectsBothTheFlagAndTheEnvironment(t *testing.T) {
 	t.Run("the flag alone", func(t *testing.T) {
-		unsetenv(t, "PROTON_NO_INPUT")
 		u, _, _ := fixture(t, Options{NoInput: true})
 		if u.CanPrompt() {
 			t.Error("--no-input should forbid prompting")
@@ -81,7 +59,6 @@ func TestCanPromptRespectsBothTheFlagAndTheEnvironment(t *testing.T) {
 		}
 	})
 	t.Run("neither, but stdin is not a terminal", func(t *testing.T) {
-		unsetenv(t, "PROTON_NO_INPUT")
 		u, _, _ := fixture(t, Options{})
 		// The test process has no terminal on stdin, so prompting is impossible
 		// regardless - which is the property a cron job relies on.
@@ -95,7 +72,6 @@ func TestCanPromptRespectsBothTheFlagAndTheEnvironment(t *testing.T) {
 // Unaligned labels put every answer at a different column and make the block
 // read as three unrelated questions rather than one form.
 func TestAskAlignsTheLabelsItWasGiven(t *testing.T) {
-	unsetenv(t, "PROTON_NO_INPUT")
 	u, _, errb := fixture(t, Options{In: strings.NewReader("you@proton.me\n123456\n")})
 	p := u.Ask("Email", "Password", "Two-factor code")
 	if _, err := p.Line("Email"); err != nil {
@@ -113,7 +89,6 @@ func TestAskAlignsTheLabelsItWasGiven(t *testing.T) {
 // One reader for the whole block is what keeps a value typed before its question
 // was asked. A reader per question buffers ahead and then throws the buffer away.
 func TestAskKeepsWhatWasTypedAhead(t *testing.T) {
-	unsetenv(t, "PROTON_NO_INPUT")
 	u, _, _ := fixture(t, Options{In: strings.NewReader("you@proton.me\n123456\n")})
 	p := u.Ask("Email", "Two-factor code")
 	if got, _ := p.Line("Email"); got != "you@proton.me" {

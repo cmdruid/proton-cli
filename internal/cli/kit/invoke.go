@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/roman-16/proton-cli/internal/app"
+	"github.com/roman-16/proton-cli/internal/confirm"
 	"github.com/roman-16/proton-cli/internal/errs"
 	"github.com/roman-16/proton-cli/internal/idcache"
 	"github.com/roman-16/proton-cli/internal/ref"
@@ -91,6 +92,9 @@ func Run(steps []Step, h Handler) func(*cobra.Command, []string) error {
 			return err
 		}
 		c := &Invocation{Ctx: cmd.Context(), App: app.From(cmd.Context()), Args: args, Cmd: cmd}
+		if err := gate(c); err != nil {
+			return err
+		}
 		for _, s := range steps {
 			if err := s(c); err != nil {
 				return err
@@ -158,7 +162,7 @@ func Mutate(c *Invocation, spec ui.ResultSpec, apply func() error) error {
 		}
 		return ui.Result(c.UI(), spec)
 	}
-	if err := confirm(c, spec); err != nil {
+	if err := consent(c, spec); err != nil {
 		return err
 	}
 	// A change that affects nothing is not made. A selection that matched nothing
@@ -174,19 +178,32 @@ func Mutate(c *Invocation, spec ui.ResultSpec, apply func() error) error {
 	return ui.Result(c.UI(), spec)
 }
 
-// confirm stops for a yes before a change that cannot be taken back, or that
-// would remove things the user never named.
+// confirm stops for a yes before a change that cannot be taken back, that would
+// remove things the user never named, or that the configured policy asks about.
+//
+// The first two are the built-in floor and hold with no configuration at all.
+// The third sits on top of them and can only ever add: no policy makes a
+// deletion stop being worth a question.
 //
 // --yes is the answer given in advance, which is also the only way through in a
 // script: a prompt nobody can see is a hang, so an unattended run is told what
 // to add rather than left waiting. A change that affects nothing is not worth a
 // question, so an empty selection passes.
-func confirm(c *Invocation, spec ui.ResultSpec) error {
-	if c.App.Yes || spec.Count == 0 || !spec.Action.Asks(c.computed) {
+func consent(c *Invocation, spec ui.ResultSpec) error {
+	if c.App.Yes || spec.Count == 0 {
+		return nil
+	}
+	asked := c.App.Confirm.Require(classify(c.Cmd))
+	byPolicy := asked.Outcome == confirm.Ask
+	if !spec.Action.Asks(c.computed) && !byPolicy {
 		return nil
 	}
 	if !c.UI().CanPrompt() {
-		return Fail("%s", spec.Refusal()).
+		refusal := spec.Refusal()
+		if byPolicy && !spec.Action.Asks(c.computed) {
+			refusal += " " + policyAsks(asked.Class)
+		}
+		return Fail("%s", refusal).
 			Hint("--yes to confirm, or --dry-run to see what it would touch.")
 	}
 	ok, err := ui.Confirm(c.UI(), spec)
@@ -354,7 +371,7 @@ func Ingest[T any](c *Invocation, spec ui.ResultSpec, read func() ([]T, error)) 
 		}
 		return ui.Result(c.UI(), spec)
 	}
-	if err := confirm(c, spec); err != nil {
+	if err := consent(c, spec); err != nil {
 		return err
 	}
 	if spec.Count == 0 {

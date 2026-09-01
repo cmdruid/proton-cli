@@ -16,7 +16,7 @@ func TestMailMessagesExportToStdout(t *testing.T) {
 	t.Parallel()
 	msgID, _, subject := plainMail(t)
 
-	stdout := runOK(t, "mail", "messages", "export", "--output", "-", "--", msgID)
+	stdout := runOK(t, "mail", "messages", "export", "--dest", "-", "--", msgID)
 	msg, err := mail.ReadMessage(strings.NewReader(stdout))
 	if err != nil {
 		t.Fatalf("exported document is not parseable mail: %v\n%s", err, truncateOutput(stdout))
@@ -40,7 +40,7 @@ func TestMailMessagesExportToFile(t *testing.T) {
 	msgID, _, subject := plainMail(t)
 	dest := filepath.Join(t.TempDir(), "message.eml")
 
-	runOK(t, "mail", "messages", "export", "--output", dest, "--", msgID)
+	runOK(t, "mail", "messages", "export", "--dest", dest, "--", msgID)
 	data, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatalf("export wrote nothing to %s: %v", dest, err)
@@ -60,7 +60,7 @@ func TestMailMessagesExportFolderToDirectory(t *testing.T) {
 
 	runOK(t, "mail", "messages", "export",
 		"--folder", "inbox", "--limit", "3", "--all",
-		"--no-attachments", "--output-dir", dir)
+		"--no-attachments", "--dest-dir", dir)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -87,7 +87,7 @@ func TestMailMessagesExportMbox(t *testing.T) {
 
 	runOK(t, "mail", "messages", "export", "--format", "mbox",
 		"--folder", "inbox", "--limit", "2", "--all",
-		"--no-attachments", "--output", dest)
+		"--no-attachments", "--dest", dest)
 
 	data, err := os.ReadFile(dest)
 	if err != nil {
@@ -102,11 +102,11 @@ func TestMailMessagesExportRejectsAmbiguousOutput(t *testing.T) {
 	t.Parallel()
 	dest := filepath.Join(t.TempDir(), "one.eml")
 	_, stderr, code := run(t, "mail", "messages", "export",
-		"--folder", "inbox", "--limit", "5", "--all", "--output", dest)
+		"--folder", "inbox", "--limit", "5", "--all", "--dest", dest)
 	if code == 0 {
 		t.Error("--output with many messages should be refused")
 	}
-	assertContains(t, stderr, "--output-dir")
+	assertContains(t, stderr, "--dest-dir")
 }
 
 func TestMailMessagesExportDryRun(t *testing.T) {
@@ -114,7 +114,7 @@ func TestMailMessagesExportDryRun(t *testing.T) {
 	msgID, _, _ := plainMail(t)
 	dir := t.TempDir()
 	_, stderr := runOKStderr(t, "--dry-run", "mail", "messages", "export",
-		"--output-dir", dir, "--", msgID)
+		"--dest-dir", dir, "--", msgID)
 	assertContains(t, stderr, "Dry run")
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 0 {
@@ -127,7 +127,7 @@ func TestMailConversationsExportWholeThread(t *testing.T) {
 	_, convID, subject := plainMail(t)
 	dest := filepath.Join(t.TempDir(), "thread.mbox")
 
-	runOK(t, "mail", "conversations", "export", "--output", dest, "--", convID)
+	runOK(t, "mail", "conversations", "export", "--dest", dest, "--", convID)
 	data, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatalf("thread export wrote nothing: %v", err)
@@ -147,7 +147,7 @@ func TestMailExportImportRoundTrip(t *testing.T) {
 	_ = attID
 
 	dest := filepath.Join(t.TempDir(), "round-trip.eml")
-	runOK(t, "mail", "messages", "export", "--output", dest, "--", msgID)
+	runOK(t, "mail", "messages", "export", "--dest", dest, "--", msgID)
 
 	subject := testID() + "-roundtrip"
 	id := strings.TrimSpace(runOK(t, "mail", "drafts", "create",

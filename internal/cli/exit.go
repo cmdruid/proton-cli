@@ -10,7 +10,11 @@ import (
 // exitCode classifies an error into the CLI's exit-code scheme:
 //
 //	0 success · 1 user error · 2 auth · 3 not-found · 4 conflict/ambiguous ·
-//	5 network/server.
+//	5 network/server · 6 refused by the confirmation policy.
+//
+// A refusal has a code of its own because a caller has to be able to tell it
+// from a mistake: nothing about the command was wrong, and repeating it with
+// different arguments will not help.
 //
 // Typed errors that implement errs.ExitCoder (NotFound, Ambiguous, WrongTable,
 // explicit Exit wraps, APIError) carry their own code; everything else is a

@@ -13,7 +13,6 @@ func TestWatched(t *testing.T) {
 		name    string
 		path    string
 		version string
-		off     *string
 		want    bool
 	}{
 		{name: "a standalone install that could replace itself", path: standalone, version: "2.4.1", want: true},
@@ -21,27 +20,15 @@ func TestWatched(t *testing.T) {
 		{name: "a build with no version at all", path: standalone, version: ""},
 		{name: "an install Nix owns", path: "/nix/store/abc-proton-cli/bin/proton", version: "2.4.1"},
 		{name: "an install Homebrew owns", path: "/opt/homebrew/Caskroom/proton-cli/2.4.1/proton", version: "2.4.1"},
-		{name: "switched off", path: standalone, version: "2.4.1", off: ptr("1")},
-		{name: "switched off with nothing", path: standalone, version: "2.4.1", off: ptr("")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.off != nil {
-				t.Setenv(disable, *tc.off)
-			} else if _, set := os.LookupEnv(disable); set {
-				t.Setenv(disable, "")
-				if err := os.Unsetenv(disable); err != nil {
-					t.Fatal(err)
-				}
-			}
 			if got := Watched(tc.path, tc.version); got != tc.want {
 				t.Errorf("Watched(%q, %q) = %v, want %v", tc.path, tc.version, got, tc.want)
 			}
 		})
 	}
 }
-
-func ptr(s string) *string { return &s }
 
 func TestCheckIsDue(t *testing.T) {
 	now := time.Now()

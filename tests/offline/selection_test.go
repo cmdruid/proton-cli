@@ -49,10 +49,10 @@ func TestSendingNeedsSomethingToSend(t *testing.T) {
 // are decided by the flags alone.
 func TestOneDestinationForSeveralItemsIsRefused(t *testing.T) {
 	for _, args := range [][]string{
-		{"mail", "messages", "attachments", "download", "--output", "-", "some-message"},
-		{"mail", "messages", "attachments", "download", "--output", "/tmp/one.bin", "some-message"},
+		{"mail", "messages", "attachments", "download", "--dest", "-", "some-message"},
+		{"mail", "messages", "attachments", "download", "--dest", "/tmp/one.bin", "some-message"},
 	} {
-		refuses(t, 1, args, "--output-dir")
+		refuses(t, 1, args, "--dest-dir")
 	}
 }
 

@@ -37,8 +37,8 @@ func Available(u *ui.UI, current, latest string) {
 // The day is spent before the lookup rather than after it, so a machine that is
 // offline, or one whose owner runs a hundred commands in a shell loop, makes one
 // attempt between them rather than one each.
-func Notice(ctx context.Context, u *ui.UI, version string) {
-	if u.Quiet || !ui.IsTerminal(u.Err) {
+func Notice(ctx context.Context, u *ui.UI, version string, off bool) {
+	if off || u.Quiet || !ui.IsTerminal(u.Err) {
 		return
 	}
 	exe, err := resolveExe()

@@ -197,7 +197,7 @@ proton pass breaches list
 
 ## `export`
 
-Write every vault out as a Proton Pass archive, or to stdout with --output -.
+Write every vault out as a Proton Pass archive, or to stdout with --dest -.
 
 The file is the one Proton Pass itself writes, so it can be read back by the app as well as by this tool. Give a passphrase and the contents are encrypted to it; without one the archive holds every password in the clear.
 
@@ -206,15 +206,15 @@ proton pass export
 ```
 
 ```bash
-proton pass export --output pass-backup.zip --passphrase-file ~/.backup-passphrase
-proton pass export --output pass-backup.zip
+proton pass export --dest pass-backup.zip --passphrase-file ~/.backup-passphrase
+proton pass export --dest pass-backup.zip
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 | `--passphrase-file string` | Read the passphrase that locks the file from a file |
 | `--passphrase-stdin` | Read the passphrase that locks the file from stdin |
 

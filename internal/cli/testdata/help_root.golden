@@ -24,6 +24,8 @@ proton itself:
   version     Print the version and build information
 
 Flags:
+      --config string      Settings file to read (env: PROTON_CONFIG; default: config.yaml in the config directory)
+      --confirm string     Which commands stop for a yes: default, deletions, mutations, reads, all (env: PROTON_CONFIRM)
   -n, --dry-run            Preview mutations without applying them
       --full-ids           Show full IDs in interactive output (default: shortened to 8 chars on TTY)
   -h, --help               help for proton

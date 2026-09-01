@@ -19,52 +19,56 @@ import (
 // them once means attachments, Drive files, photos and exports behave the same,
 // and that `--force` means exactly one thing across the whole CLI.
 
-// Destination is the --output / --output-dir / --force group.
+// Destination is the --dest / --dest-dir / --force group.
+//
+// A local path is named by --dest and a remote container by --into, which is
+// what keeps the two halves of "where does this go" from sharing a word: bytes
+// land on this machine, a message lands in a folder.
 type Destination struct {
-	output    string
-	outputDir string
-	force     bool
+	dest    string
+	destDir string
+	force   bool
 }
 
 func (d *Destination) Register(c *cobra.Command) {
 	f := c.Flags()
-	f.StringVar(&d.output, "output", "", "Write to this path, or - for stdout")
-	f.StringVar(&d.outputDir, "output-dir", "", "Write into this directory, keeping each item's own name")
+	f.StringVar(&d.dest, "dest", "", "Write to this path, or - for stdout")
+	f.StringVar(&d.destDir, "dest-dir", "", "Write into this directory, keeping each item's own name")
 	f.BoolVar(&d.force, "force", false, "Overwrite a file that already exists")
 }
 
 // Validate rejects combinations that cannot mean anything, before any bytes are
 // fetched. single says whether exactly one item is being written.
 func (d *Destination) Validate(single bool) error {
-	if d.output != "" && d.outputDir != "" {
-		return Fail("--output and --output-dir cannot both be given.").
-			Hint("--output names one file; --output-dir names a directory to fill.")
+	if d.dest != "" && d.destDir != "" {
+		return Fail("--dest and --dest-dir cannot both be given.").
+			Hint("--dest names one file; --dest-dir names a directory to fill.")
 	}
-	if !single && d.output != "" {
+	if !single && d.dest != "" {
 		// Several separate files down one stream arrive as one unusable run of
 		// bytes, so stdout is no more of an answer here than a single path is.
-		names := "--output names one file"
-		if d.output == "-" {
-			names = "--output - writes one stream"
+		names := "--dest names one file"
+		if d.dest == "-" {
+			names = "--dest - writes one stream"
 		}
 		return Fail("%s, but several items were selected.", names).
-			Hint("use --output-dir to write them all into a directory.")
+			Hint("use --dest-dir to write them all into a directory.")
 	}
 	return nil
 }
 
 // Stdout reports whether the payload streams to standard output.
-func (d *Destination) Stdout() bool { return d.output == "-" }
+func (d *Destination) Stdout() bool { return d.dest == "-" }
 
 // Describe names the destination for a confirmation.
 func (d *Destination) Describe() string {
 	switch {
-	case d.output == "-":
+	case d.dest == "-":
 		return "stdout"
-	case d.output != "":
-		return d.output
-	case d.outputDir != "":
-		return d.outputDir
+	case d.dest != "":
+		return d.dest
+	case d.destDir != "":
+		return d.destDir
 	}
 	return "the current directory"
 }
@@ -73,27 +77,27 @@ func (d *Destination) Describe() string {
 // streamed to stdout.
 //
 // The collision policy differs by intent, and deliberately so: an explicit
-// --output path is refused if it exists, because the user named that exact file
+// --dest path is refused if it exists, because the user named that exact file
 // and silently replacing it would destroy something they did not mention. A name
 // the CLI chose itself gets a numbered suffix instead, because there was no
 // promise to keep.
 func (d *Destination) Write(c *Invocation, name string, data []byte) (string, error) {
-	if d.output == "-" {
+	if d.dest == "-" {
 		_, err := c.UI().Out.Write(data)
 		return "", err
 	}
-	if d.output != "" {
-		if !d.force && exists(d.output) {
-			return "", Fail("%s already exists.", d.output).Hint("--force to overwrite it.")
+	if d.dest != "" {
+		if !d.force && exists(d.dest) {
+			return "", Fail("%s already exists.", d.dest).Hint("--force to overwrite it.")
 		}
-		return d.output, os.WriteFile(d.output, data, 0o600)
+		return d.dest, os.WriteFile(d.dest, data, 0o600)
 	}
-	if d.outputDir != "" {
-		if err := EnsureDir(d.outputDir); err != nil {
+	if d.destDir != "" {
+		if err := EnsureDir(d.destDir); err != nil {
 			return "", err
 		}
 	}
-	target := filepath.Join(d.outputDir, SafeFilename(name))
+	target := filepath.Join(d.destDir, SafeFilename(name))
 	if !d.force {
 		free, err := freePath(target)
 		if err != nil {
@@ -111,7 +115,7 @@ func (d *Destination) Write(c *Invocation, name string, data []byte) (string, er
 // the destination and is renamed once the producer is done, so a failure part way
 // through leaves nothing behind rather than a plausible-looking truncated file.
 //
-// name is only consulted when the caller has no --output path of its own.
+// name is only consulted when the caller has no --dest path of its own.
 func (d *Destination) Stream(c *Invocation, name string, write func(io.Writer) error) (string, error) {
 	return d.StreamDiscovered(c, func(w io.Writer) (string, error) { return name, write(w) })
 }
@@ -120,7 +124,7 @@ func (d *Destination) Stream(c *Invocation, name string, write func(io.Writer) e
 // it starts arriving, which is the case for a Drive photo: the producer returns
 // the name it found.
 func (d *Destination) StreamDiscovered(c *Invocation, write func(io.Writer) (string, error)) (string, error) {
-	if d.output == "-" {
+	if d.dest == "-" {
 		_, err := write(c.UI().Out)
 		return "", err
 	}
@@ -259,18 +263,18 @@ func ReadTextArg(c *Invocation, value, flag string) (string, error) {
 // hand a finished buffer to Write. Reserving keeps them on the same collision
 // policy as everything else instead of inventing their own.
 func (d *Destination) Reserve(name string) (string, error) {
-	if d.output != "" {
-		if !d.force && exists(d.output) {
-			return "", Fail("%s already exists.", d.output).Hint("--force to overwrite it.")
+	if d.dest != "" {
+		if !d.force && exists(d.dest) {
+			return "", Fail("%s already exists.", d.dest).Hint("--force to overwrite it.")
 		}
-		return d.output, nil
+		return d.dest, nil
 	}
-	if d.outputDir != "" {
-		if err := EnsureDir(d.outputDir); err != nil {
+	if d.destDir != "" {
+		if err := EnsureDir(d.destDir); err != nil {
 			return "", err
 		}
 	}
-	target := filepath.Join(d.outputDir, SafeFilename(name))
+	target := filepath.Join(d.destDir, SafeFilename(name))
 	if d.force {
 		return target, nil
 	}
@@ -285,11 +289,11 @@ func (d *Destination) Reserve(name string) (string, error) {
 // not there yet.
 func (d *Destination) Dir() (string, error) {
 	switch {
-	case d.output != "":
-		dir := filepath.Dir(d.output)
+	case d.dest != "":
+		dir := filepath.Dir(d.dest)
 		return dir, EnsureDir(dir)
-	case d.outputDir != "":
-		return d.outputDir, EnsureDir(d.outputDir)
+	case d.destDir != "":
+		return d.destDir, EnsureDir(d.destDir)
 	}
 	return ".", nil
 }

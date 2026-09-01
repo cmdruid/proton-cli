@@ -171,7 +171,7 @@ A link that shows one item to somebody with no Proton account. The item stays en
 ## Backups
 
 ```bash
-proton pass export --output pass-backup.zip --passphrase-file ~/.backup-passphrase
+proton pass export --dest pass-backup.zip --passphrase-file ~/.backup-passphrase
 proton pass import pass-backup.zip --passphrase-file ~/.backup-passphrase
 ```
 

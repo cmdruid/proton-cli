@@ -13,9 +13,23 @@ Errors say what happened and what to try, so read the message first. The code is
 | `3` | Not found | Check the reference, or run the matching `list` |
 | `4` | Ambiguous, or a conflict | Narrow the term, or use the ID it printed |
 | `5` | Network or server problem | Wait and retry; this is not your command's fault |
+| `6` | Refused by your confirmation policy | Nothing about the command was wrong; the policy has to change |
 | `130` | Cancelled with `Ctrl+C` | Nothing to do |
 
 The difference between `2` and `5` matters most to a scheduled job: `2` means fix the credential, `5` means come back later. A rate limit is `5`.
+
+`6` is the one code that retrying never helps. See [Deny](language.md#deny).
+
+## The config file is refused
+
+```console
+$ proton mail messages list
+Error: /home/you/.config/proton-cli/config.yaml: [4:1] unknown field "loglevel"
+```
+
+Nothing runs until the file parses, because it carries your confirmation policy and a policy that quietly fails to load is one that fails open. The position is the line and column in the file; [the key table](configuration.md#the-config-file) has the spellings.
+
+Two mistakes account for most of these: a key that belongs at the top level written inside a `per-profile:` section, and `profile:` written inside one - which profile you are acting as can only be said at the top level.
 
 ## Proton asks for a CAPTCHA
 

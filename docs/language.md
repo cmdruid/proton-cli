@@ -97,7 +97,7 @@ Something with no place in the tree - a trashed item, a photo, an album - has no
 
 ```bash
 proton drive trash restore 7Kd91mQx
-proton drive photos download 3Ns8pT2v --output-dir ./photos
+proton drive photos download 3Ns8pT2v --dest-dir ./photos
 ```
 
 ### Full IDs that start with a dash
@@ -112,8 +112,8 @@ proton contacts delete -bJxDLEMvt-Z6t4Yna7V8SYQ_F…==
 One rule comes with it: **put your flags before the ID**, because everything after such an ID is read as another argument.
 
 ```bash
-proton mail messages attachments download --output-dir ./files -bJxDLEMvt-…==   # yes
-proton mail messages attachments download -bJxDLEMvt-…== --output-dir ./files   # no
+proton mail messages attachments download --dest-dir ./files -bJxDLEMvt-…==   # yes
+proton mail messages attachments download -bJxDLEMvt-…== --dest-dir ./files   # no
 ```
 
 Short IDs need none of this: the eight characters begin after any leading dashes, so flags can go on either side.
@@ -190,6 +190,101 @@ $ proton mail messages delete --folder spam --older-than 30d
 Error: Would delete 112 messages. This cannot be undone.
 Try:   --yes to confirm, or --dry-run to see what it would touch.
 ```
+
+## Asking about more than that
+
+The table above is the floor, and it holds with no configuration at all. On top of it you can ask proton to stop for more, or to refuse outright - useful when something other than you is typing the commands.
+
+### Writing a policy
+
+In [the config file](configuration.md#the-config-file):
+
+```yaml
+confirm:
+  ask:
+    "*": mutations
+    pass: all
+  deny:
+    "*": deletions
+    drive: all
+    mail drafts send: all
+```
+
+Or on one line, for a shell or a CI job:
+
+```bash
+export PROTON_CONFIRM='mutations, pass:all, deletions=deny, drive:all=deny, mail drafts send:all=deny'
+```
+
+A directive is `[scope:]class[=deny]`.
+
+**The scope is the start of a command**, written the way you would type it but without `proton`. Stop wherever you want to stop: at an app, at a collection inside it, or at one whole command.
+
+| Scope | What it reaches |
+| --- | --- |
+| `*` | every command |
+| `mail` | everything under `proton mail` |
+| `mail drafts` | every verb on drafts - `list`, `create`, `update`, `delete`, `send` |
+| `mail drafts send` | that one command and nothing else |
+
+In the file the scope is the key, so a scope of several words is written with the spaces in it: `mail drafts send: all`. On one line it comes before the colon: `mail drafts send:all`.
+
+A scope that names no command is refused when the file loads, rather than sitting there guarding nothing:
+
+```console
+$ proton --confirm 'mail lettuce:all' mail messages list
+Error: "mail lettuce" is not a command, so it cannot be a confirmation scope.
+Try:   mail
+```
+
+**The class is one of five:**
+
+| Class | Commands it covers |
+| --- | --- |
+| `reads` | anything that does not change state |
+| `mutations` | anything that does |
+| `deletions` | `delete`, `empty`, `uninstall` |
+| `all` | every command |
+| `default` | nothing beyond the table above - how a narrower scope opts out of a broader directive |
+
+**The narrowest scope that mentions a command is the one that decides**, so a broad rule takes exceptions:
+
+```bash
+# every change asks, except in Drive, where the usual rules apply
+PROTON_CONFIRM='mutations, drive:default'
+
+# reading anything asks, except the one listing a script runs constantly
+PROTON_CONFIRM='reads, mail messages list:default'
+```
+
+That holds within one place a policy is written. Between the file, the variable and the flag it does not: each is weighed on its own and the most cautious of them wins, so an exception written in one of them cannot stand down a rule written in another.
+
+### Ask
+
+```console
+$ proton mail drafts send 7fK2mQ
+Would send 1 message. Continue? [y/N]
+```
+
+A command that changes nothing has no filter to resolve and nothing to count, so it names itself:
+
+```console
+$ proton pass items list
+Would run proton pass items list. Continue? [y/N]
+```
+
+In a script, as with the built-in cases, the question becomes an error that `--yes` answers in advance.
+
+### Deny
+
+```console
+$ proton mail messages delete 5bH2xR9t --yes
+Error: Deleting is turned off by your confirmation policy.
+```
+
+Exit code `6`. Nothing answers a deny - not `--yes`, not `--dry-run`, and not a `--confirm` on the command line. Lifting it means editing the file that declared it.
+
+That is what makes it worth having, and also the whole of what it is: a guard against a command run carelessly, not a security boundary. Anything that can edit your config file can remove it ([the reasoning](design-notes.md#why-the-confirmation-policy-resolves-the-other-way)).
 
 ## Dry runs
 

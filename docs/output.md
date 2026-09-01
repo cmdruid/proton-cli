@@ -104,6 +104,7 @@ Anything judgeable from your command line alone - a misspelled setting key, an i
 | `3` | Not found |
 | `4` | Ambiguous, or a conflict |
 | `5` | Network or server problem |
+| `6` | Refused by your [confirmation policy](language.md#deny) |
 | `130` | Cancelled with `Ctrl+C` |
 
 ## JSON and YAML

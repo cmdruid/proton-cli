@@ -54,7 +54,7 @@ proton contacts delete jane
 
 ## `export`
 
-Write contacts out as .vcf files, or as one stream with --output -.
+Write contacts out as .vcf files, or as one stream with --dest -.
 
 Named contacts are written; with none named, the whole address book is, narrowed by --keyword. Properties this tool has no flag for travel too, since the stored card goes out whole.
 
@@ -63,17 +63,17 @@ proton contacts export [REF...]
 ```
 
 ```bash
-proton contacts export --output-dir ./address-book
-proton contacts export jane --output jane.vcf
-proton contacts export --output - > contacts.vcf
+proton contacts export --dest-dir ./address-book
+proton contacts export jane --dest jane.vcf
+proton contacts export --dest - > contacts.vcf
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
 | `--keyword string` | Match text in the name or the address |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 
 ## `get`
 

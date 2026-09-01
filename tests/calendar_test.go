@@ -1044,7 +1044,7 @@ func TestCalendarEventsExportWritesAnICSFile(t *testing.T) {
 		"calendar", "events", "delete", "--", ref)
 
 	out := runOK(t, "calendar", "events", "export",
-		"--start", "2027-09-01", "--end", "2027-09-30", "--output", "-")
+		"--start", "2027-09-01", "--end", "2027-09-30", "--dest", "-")
 
 	for _, want := range []string{"BEGIN:VCALENDAR", "END:VCALENDAR", "BEGIN:VEVENT", title} {
 		if !strings.Contains(out, want) {
@@ -1197,7 +1197,7 @@ func TestCalendarEventsImportRoundTripsAnExport(t *testing.T) {
 
 	file := filepath.Join(t.TempDir(), "export.ics")
 	runOK(t, "calendar", "events", "export",
-		"--start", "2027-10-01", "--end", "2027-10-31", "--output", file)
+		"--start", "2027-10-01", "--end", "2027-10-31", "--dest", file)
 
 	// And back in. An event carries the UID of the event it is, so reading the
 	// file back changes that event rather than making a second one - which is the

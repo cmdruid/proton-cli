@@ -2,7 +2,6 @@ package ui
 
 import (
 	"bytes"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -132,22 +131,13 @@ func TestSwatchFallbackAvoidsTheThemeableEntries(t *testing.T) {
 }
 
 func TestNoColorConventions(t *testing.T) {
-	t.Run("NO_COLOR set to anything disables colour", func(t *testing.T) {
-		t.Setenv("TERM", "xterm-256color")
-		t.Setenv("NO_COLOR", "")
-		if !NoColor() {
-			t.Error("NO_COLOR present, even empty, must disable colour")
-		}
-	})
 	t.Run("TERM=dumb disables colour", func(t *testing.T) {
-		unsetenv(t, "NO_COLOR")
 		t.Setenv("TERM", "dumb")
 		if !NoColor() {
 			t.Error("TERM=dumb must disable colour")
 		}
 	})
 	t.Run("a normal terminal allows colour", func(t *testing.T) {
-		unsetenv(t, "NO_COLOR")
 		t.Setenv("TERM", "xterm-256color")
 		if NoColor() {
 			t.Error("a normal TERM should allow colour")
@@ -177,28 +167,10 @@ func TestDirectColorDetection(t *testing.T) {
 	}
 }
 
-// unsetenv removes a variable for the duration of the test. t.Setenv cannot do
-// it: NO_COLOR counts as set even when empty, which is the case under test.
-func unsetenv(t *testing.T, key string) {
-	t.Helper()
-	prev, had := os.LookupEnv(key)
-	if err := os.Unsetenv(key); err != nil {
-		t.Fatalf("unset %s: %v", key, err)
-	}
-	t.Cleanup(func() {
-		if had {
-			_ = os.Setenv(key, prev)
-			return
-		}
-		_ = os.Unsetenv(key)
-	})
-}
-
 // A buffer is not a terminal, so nothing written to one is ever coloured. This
 // is what keeps captured output and golden files stable.
 func TestStyleForNonTerminalIsDisabled(t *testing.T) {
 	t.Setenv("TERM", "xterm-256color")
-	unsetenv(t, "NO_COLOR")
 	if StyleFor(&bytes.Buffer{}).Enabled() {
 		t.Error("a buffer must never be coloured")
 	}

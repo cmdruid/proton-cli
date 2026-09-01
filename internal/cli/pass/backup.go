@@ -23,7 +23,7 @@ func exportCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "export",
 		Short: "Write every vault out as a Proton Pass archive",
-		Long: "Write every vault out as a Proton Pass archive, or to stdout with --output -.\n\n" +
+		Long: "Write every vault out as a Proton Pass archive, or to stdout with --dest -.\n\n" +
 			"The file is the one Proton Pass itself writes, so it can be read back by\n" +
 			"the app as well as by this tool. Give a passphrase and the contents are\n" +
 			"encrypted to it; without one the archive holds every password in the clear.",

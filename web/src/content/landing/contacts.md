@@ -10,5 +10,5 @@ title: Contacts
 proton contacts list
 proton contacts get jane
 proton contacts create --name "Jane Roe" --email jane@example.com
-proton contacts export --output-dir ./address-book
+proton contacts export --dest-dir ./address-book
 ```

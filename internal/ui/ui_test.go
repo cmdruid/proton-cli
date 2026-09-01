@@ -27,9 +27,6 @@ var update = flag.Bool("update", false, "rewrite the golden files")
 // truncated, so the golden files show the full bytes a pipe receives.
 func fixture(t *testing.T, opts Options) (*UI, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
-	// NO_COLOR would otherwise leak in from the developer's environment and make
-	// StyleFor's decision depend on where the test runs.
-	t.Setenv("NO_COLOR", "1")
 	var out, errb bytes.Buffer
 	opts.Out, opts.Err = &out, &errb
 	if opts.Format == "" {
@@ -189,7 +186,6 @@ func TestRawPassesABodyWithNothingInIt(t *testing.T) {
 // is refused rather than silently becoming the default - which used to look
 // exactly like the logging working and having nothing to report.
 func TestParseLogLevel(t *testing.T) {
-	unsetenv(t, "PROTON_LOG_LEVEL")
 	for _, tc := range []struct {
 		flag string
 		want slog.Level
@@ -223,25 +219,6 @@ func TestParseLogLevel(t *testing.T) {
 				t.Errorf("ParseLogLevel(%q) error %q omits %q", tc.flag, err, level)
 			}
 		}
-	}
-}
-
-// The flag wins over the environment, matching every other setting's resolution
-// order.
-func TestParseLogLevelPrefersTheFlag(t *testing.T) {
-	t.Setenv("PROTON_LOG_LEVEL", "error")
-	if got, err := ParseLogLevel("debug"); err != nil || got != slog.LevelDebug {
-		t.Errorf("ParseLogLevel = (%v, %v), want debug", got, err)
-	}
-	if got, err := ParseLogLevel(""); err != nil || got != slog.LevelError {
-		t.Errorf("with no flag the environment applies: got (%v, %v)", got, err)
-	}
-}
-
-func TestParseLogLevelRejectsABadEnvironmentValue(t *testing.T) {
-	t.Setenv("PROTON_LOG_LEVEL", "chatty")
-	if _, err := ParseLogLevel(""); err == nil {
-		t.Error("an unusable PROTON_LOG_LEVEL should be reported, not ignored")
 	}
 }
 

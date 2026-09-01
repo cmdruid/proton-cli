@@ -18,22 +18,6 @@ import (
 // ErrNoInput reports that a value was needed but could not be asked for.
 var ErrNoInput = errs.Problemf("input is required but the terminal is not interactive")
 
-// NoInput reports whether the environment forbids prompting, honouring
-// PROTON_NO_INPUT.
-//
-// Presence is what counts, whatever the value - the same rule NO_COLOR follows.
-// Two variables that both switch a behaviour off should not need two different
-// mental models, and `PROTON_NO_INPUT=` in a CI environment file reads as
-// intent either way.
-//
-// It is deliberately not profile-scoped, unlike most PROTON_ variables: whether
-// a terminal can be asked a question is a property of the machine, not of the
-// account being used on it.
-func NoInput() bool {
-	_, set := os.LookupEnv("PROTON_NO_INPUT")
-	return set
-}
-
 // CanPrompt reports whether asking a question is possible: input has to be a
 // terminal, and prompting must not have been forbidden.
 //

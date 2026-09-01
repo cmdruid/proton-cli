@@ -74,17 +74,17 @@ proton calendar events export
 ```
 
 ```bash
-proton calendar events export --start 2026-01-01 --end 2026-12-31 --output year.ics
-proton calendar events export --calendar Work --output - > work.ics
+proton calendar events export --start 2026-01-01 --end 2026-12-31 --dest year.ics
+proton calendar events export --calendar Work --dest - > work.ics
 ```
 
 | Flag | Description |
 | --- | --- |
 | `--calendar string` | Which calendar, by name or ID (default: all of them) |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--end string` | Last day to include (YYYY-MM-DD) |
 | `--force` | Overwrite a file that already exists |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 | `--start string` | First day to include (YYYY-MM-DD) |
 
 ### `events get`

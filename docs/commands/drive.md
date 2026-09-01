@@ -124,15 +124,15 @@ proton drive items download PATH
 ```
 
 ```bash
-proton drive items download /Documents/report.pdf --output-dir .
-proton drive items download /Documents/report.pdf --output - > report.pdf
+proton drive items download /Documents/report.pdf --dest-dir .
+proton drive items download /Documents/report.pdf --dest - > report.pdf
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 
 ### `items get`
 
@@ -230,14 +230,14 @@ proton drive items revisions download PATH REVISION_REF
 ```
 
 ```bash
-proton drive items revisions download /Documents/report.pdf 5bH2mQxK --output-dir .
+proton drive items revisions download /Documents/report.pdf 5bH2mQxK --dest-dir .
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 
 ### `items revisions list`
 
@@ -567,14 +567,14 @@ proton drive photos download REF
 ```
 
 ```bash
-proton drive photos download 5bH2mQxK --output-dir .
+proton drive photos download 5bH2mQxK --dest-dir .
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--dest string` | Write to this path, or - for stdout |
+| `--dest-dir string` | Write into this directory, keeping each item's own name |
 | `--force` | Overwrite a file that already exists |
-| `--output string` | Write to this path, or - for stdout |
-| `--output-dir string` | Write into this directory, keeping each item's own name |
 
 ### `photos favorite`
 

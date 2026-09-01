@@ -51,16 +51,16 @@ Keys are `snake_case`, IDs are always complete, and enumerated values are names 
 
 ```bash
 # a year of archive, one .eml per message, named "<date> <subject>.eml"
-proton mail messages export --folder archive --older-than 1y --all --output-dir ./mail-backup
+proton mail messages export --folder archive --older-than 1y --all --dest-dir ./mail-backup
 
 # a whole folder as a single mbox, ready for Thunderbird or mutt
-proton mail messages export --folder inbox --all --format mbox --output inbox.mbox
+proton mail messages export --folder inbox --all --format mbox --dest inbox.mbox
 
 # one message straight into another tool
-proton mail messages export "Invoice #2291" --output - | formail -X ""
+proton mail messages export "Invoice #2291" --dest - | formail -X ""
 
 # metadata and bodies only, skipping attachment downloads - much faster
-proton mail messages export --folder all --all --no-attachments --output-dir ./index
+proton mail messages export --folder all --all --no-attachments --dest-dir ./index
 ```
 
 Exported files are not encrypted, so put them somewhere you would be comfortable putting the mail itself.
@@ -112,13 +112,13 @@ A single `-` means stdin for an input and stdout for an output:
 pg_dump mydb | gzip | proton drive items upload - /Backups/db.sql.gz
 
 # restore it without landing on disk
-proton drive items download /Backups/db.sql.gz --output - | gunzip | psql mydb
+proton drive items download /Backups/db.sql.gz --dest - | gunzip | psql mydb
 
 # mail a report generated on the fly
 generate-report | proton mail messages send --to team@example.com --subject "Nightly report" --body -
 
 # encrypt something else with your own tooling on the way out
-proton drive items download /report.pdf --output - | gpg --encrypt --recipient me > report.pdf.gpg
+proton drive items download /report.pdf --dest - | gpg --encrypt --recipient me > report.pdf.gpg
 ```
 
 ## Recipes
@@ -227,6 +227,22 @@ proton mail messages delete --folder spam --older-than 30d --yes
 Run it once with `--dry-run` appended to each command before trusting it.
 
 The `--yes` is not optional there. A cron job has no terminal, so anything that removes permanently, or removes what a filter picked out, refuses rather than waits for an answer nobody can give. See [When it asks first](language.md#when-it-asks-first).
+
+### Fencing off what a job may do
+
+When the thing running proton is a scheduler or an agent rather than you, say what it may not do and let a mistake fail loudly:
+
+```bash
+export PROTON_CONFIRM='deletions=deny, drive:all=deny'
+```
+
+Now a permanent deletion exits `6` and touches nothing, and `--yes` does not get past it - so the `--yes` your job needs for the trashing it *is* meant to do cannot quietly authorise more. Point a job at its own file with `PROTON_CONFIG` when the policy should not follow you around:
+
+```bash
+PROTON_CONFIG=/etc/proton/backup.yaml proton drive items upload ~/Documents /Backups
+```
+
+The full syntax is in [Writing a policy](language.md#writing-a-policy).
 
 ### Systemd timer
 

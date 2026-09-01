@@ -1,0 +1,251 @@
+// Package config is the file of durable preferences and the rules for how a
+// flag, an environment variable and that file combine.
+//
+// Everything one invocation runs with is resolved here, once, so that no other
+// package has to remember which source outranks which. Two rules do that work,
+// and they point in opposite directions on purpose:
+//
+// An ordinary setting says how the CLI should behave for the convenience of the
+// person running it, so the nearest source wins - a flag over a variable, a
+// variable over the file, the file over the built-in default.
+//
+// The confirmation policy says what the CLI must not do by accident, so the most
+// cautious source wins instead. See package confirm.
+package config
+
+import (
+	"bytes"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	"github.com/goccy/go-yaml"
+	"github.com/roman-16/proton-cli/internal/confirm"
+	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/roman-16/proton-cli/internal/profile"
+	"github.com/roman-16/proton-cli/internal/ui"
+)
+
+// Name is the file this package reads, inside Dir.
+const Name = "config.yaml"
+
+// PathVar names a file somewhere other than Dir.
+const PathVar = "PROTON_CONFIG"
+
+// Dir is where everything this CLI keeps on disk lives: ~/.config/proton-cli on
+// Linux, and the platform's own equivalent elsewhere.
+func Dir() (string, error) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "proton-cli"), nil
+}
+
+// Settings is every preference that may be written in either scope.
+//
+// The booleans are pointers so that a file which says nothing about one is not
+// the same as a file which turns it off. Without that, every scope would assert
+// every setting and a per-profile section could never leave a global one alone.
+type Settings struct {
+	Output        string           `yaml:"output"`
+	LogLevel      string           `yaml:"log-level"`
+	Quiet         *bool            `yaml:"quiet"`
+	FullIDs       *bool            `yaml:"full-ids"`
+	NoColor       *bool            `yaml:"no-color"`
+	NoInput       *bool            `yaml:"no-input"`
+	NoUpdateCheck *bool            `yaml:"no-update-check"`
+	Confirm       confirm.Document `yaml:"confirm"`
+}
+
+// File is the document on disk.
+//
+// The top level holds the settings that apply whichever profile is in use, and
+// per-profile narrows them to one. Which profile that is can only be said at the
+// top level, because it has to be known before a section can be chosen - so a
+// `profile` key inside a section is not a setting this file has, and the strict
+// decode says so.
+type File struct {
+	Profile    string `yaml:"profile"`
+	Settings   `yaml:",inline"`
+	PerProfile map[string]Settings `yaml:"per-profile"`
+}
+
+// Path is the file to read, and whether it was named rather than assumed.
+//
+// A file somebody named and that is not there is a mistake worth reporting; the
+// default one being absent is the ordinary case of having written no
+// configuration.
+func Path(flag string) (path string, named bool, err error) {
+	if flag != "" {
+		return flag, true, nil
+	}
+	if env := os.Getenv(PathVar); env != "" {
+		return env, true, nil
+	}
+	dir, err := Dir()
+	if err != nil {
+		return "", false, err
+	}
+	return filepath.Join(dir, Name), false, nil
+}
+
+// Load reads the file, rejecting a key it does not recognise.
+//
+// A configuration that fails to parse stops the command rather than being
+// skipped with a warning. It carries the confirmation policy, and a policy that
+// quietly does not load is one that fails open - which is the one outcome a
+// guard may never have.
+func Load(path string, named bool) (*File, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) && !named {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("could not read %s: %w", path, err)
+	}
+	var f File
+	if err := yaml.NewDecoder(bytes.NewReader(b), yaml.Strict()).Decode(&f); err != nil {
+		return nil, fmt.Errorf("%s: %s", path, yaml.FormatError(err, false, false))
+	}
+	return &f, nil
+}
+
+// Flags is what the command line said. A nil boolean is a flag left alone.
+type Flags struct {
+	Config   string
+	Profile  string
+	Output   string
+	LogLevel string
+	Confirm  string
+	Quiet    *bool
+	FullIDs  *bool
+	NoColor  *bool
+	NoInput  *bool
+}
+
+// Resolved is the settled answer for one invocation.
+type Resolved struct {
+	Profile       profile.Name
+	Output        ui.Format
+	LogLevel      slog.Level
+	Quiet         bool
+	FullIDs       bool
+	NoColor       bool
+	NoInput       bool
+	NoUpdateCheck bool
+	Confirm       confirm.Policy
+}
+
+// Resolve settles every setting from the file, the environment and the flags.
+//
+// The profile is settled first, because which per-profile section applies
+// depends on it and nothing about it depends on the section.
+func Resolve(f *File, flags Flags) (Resolved, error) {
+	var global, scoped Settings
+	name := ""
+	if f != nil {
+		global, name = f.Settings, f.Profile
+	}
+
+	profileName, err := profile.Parse(firstNonEmpty(flags.Profile, os.Getenv("PROTON_PROFILE"), name))
+	if err != nil {
+		return Resolved{}, errs.Problemf("%v.", err).Hint("profiles are named like `work` or `my-work.2`")
+	}
+	if f != nil {
+		scoped = f.PerProfile[profileName.String()]
+	}
+
+	format, err := ui.ParseFormat(firstNonEmpty(flags.Output, scoped.Output, global.Output))
+	if err != nil {
+		return Resolved{}, err
+	}
+	level, err := ui.ParseLogLevel(firstNonEmpty(
+		flags.LogLevel, os.Getenv("PROTON_LOG_LEVEL"), scoped.LogLevel, global.LogLevel))
+	if err != nil {
+		return Resolved{}, err
+	}
+	policy, err := resolveConfirm(global, scoped, flags.Confirm)
+	if err != nil {
+		return Resolved{}, err
+	}
+
+	return Resolved{
+		Profile:       profileName,
+		Output:        format,
+		LogLevel:      level,
+		Quiet:         firstSet(flags.Quiet, nil, scoped.Quiet, global.Quiet),
+		FullIDs:       firstSet(flags.FullIDs, nil, scoped.FullIDs, global.FullIDs),
+		NoColor:       firstSet(flags.NoColor, present("NO_COLOR"), scoped.NoColor, global.NoColor),
+		NoInput:       firstSet(flags.NoInput, present("PROTON_NO_INPUT"), scoped.NoInput, global.NoInput),
+		NoUpdateCheck: firstSet(nil, present("PROTON_NO_UPDATE_CHECK"), scoped.NoUpdateCheck, global.NoUpdateCheck),
+		Confirm:       policy,
+	}, nil
+}
+
+// ConfirmVar carries the one-line form of the policy.
+const ConfirmVar = "PROTON_CONFIRM"
+
+// resolveConfirm gathers the four places a policy can be declared.
+//
+// Each stays a source of its own rather than being folded into one list, so
+// that none of them can reach into another's scoping. What they add up to is
+// settled by package confirm, which takes the most cautious of their answers -
+// so a section, a variable or a flag can add a requirement and none of them can
+// take one away.
+func resolveConfirm(global, scoped Settings, flag string) (confirm.Policy, error) {
+	var policy confirm.Policy
+	add := func(source confirm.Source, err error) error {
+		if err != nil {
+			return err
+		}
+		if len(source) > 0 {
+			policy = append(policy, source)
+		}
+		return nil
+	}
+	for _, doc := range []confirm.Document{global.Confirm, scoped.Confirm} {
+		if err := add(doc.Source()); err != nil {
+			return nil, err
+		}
+	}
+	for _, line := range []string{os.Getenv(ConfirmVar), flag} {
+		if err := add(confirm.Parse(line)); err != nil {
+			return nil, err
+		}
+	}
+	return policy, nil
+}
+
+// present reports an environment variable set to anything at all, even nothing.
+//
+// NO_COLOR made the convention and PROTON_NO_INPUT follows it: a variable that
+// switches a behaviour off should not need a second mental model for its value,
+// and `NO_COLOR=` in a CI environment file reads as intent either way.
+func present(name string) *bool {
+	if _, ok := os.LookupEnv(name); !ok {
+		return nil
+	}
+	yes := true
+	return &yes
+}
+
+// firstSet takes the nearest source that said anything, and false when none did.
+func firstSet(vs ...*bool) bool {
+	for _, v := range vs {
+		if v != nil {
+			return *v
+		}
+	}
+	return false
+}
+
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}

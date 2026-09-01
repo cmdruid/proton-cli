@@ -20,8 +20,8 @@ proton drive items upload ./report.pdf /Documents
 proton drive items upload --recursive ./project /Backup
 pg_dump mydb | proton drive items upload - /Backups/db.sql
 
-proton drive items download /Documents/report.pdf --output-dir ./downloads/
-proton drive items download /Documents/report.pdf --output - | less
+proton drive items download /Documents/report.pdf --dest-dir ./downloads/
+proton drive items download /Documents/report.pdf --dest - | less
 ```
 
 Uploads show progress on stderr. **A name already taken is refused**, so nothing is overwritten by accident; `--if-exists` answers the question instead:
@@ -73,7 +73,7 @@ Uploading over a file with `--if-exists replace` keeps what was there as a revis
 
 ```bash
 proton drive items revisions list /Documents/report.pdf
-proton drive items revisions download /Documents/report.pdf 8f3a1c22 --output ./earlier.pdf
+proton drive items revisions download /Documents/report.pdf 8f3a1c22 --dest ./earlier.pdf
 proton drive items revisions restore /Documents/report.pdf 8f3a1c22
 ```
 
@@ -111,7 +111,7 @@ An item somebody shared with you does not live in your tree, so it has **no path
 ```bash
 proton drive photos list --tag favorites
 proton drive photos upload ./IMG_0001.jpg
-proton drive photos download 3Ns8pT2v --output-dir ./photos/
+proton drive photos download 3Ns8pT2v --dest-dir ./photos/
 proton drive photos favorite 3Ns8pT2v
 ```
 

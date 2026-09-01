@@ -153,7 +153,13 @@ const OnThisMachine = "on-this-machine"
 
 // Mutating lists the verbs that change state. Every command whose verb is in
 // here has to honour --dry-run, which kit.Mutate guarantees structurally.
+//
+// `api` is the one entry that is not obvious from its own name, and it is here
+// for the reason the others are not: a raw request is whatever the caller made
+// it, so the CLI cannot promise it changes nothing. A guard that has to read an
+// argument before it knows whether it applies is a guard with a gap in it.
 var Mutating = map[string]bool{
+	"api":    true,
 	"create": true, "update": true, "set": true, "delete": true, "trash": true,
 	"restore": true, "empty": true, "move": true, "copy": true, "upload": true,
 	"import": true, "merge": true,

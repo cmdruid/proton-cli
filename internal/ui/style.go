@@ -81,12 +81,13 @@ type Style struct {
 	direct bool
 }
 
-// NoColor reports whether colour is suppressed regardless of destination,
-// honouring the NO_COLOR convention (https://no-color.org) and TERM=dumb.
+// NoColor reports whether the terminal itself cannot carry colour.
+//
+// This is a question about the destination, not about what anybody wants: a
+// TERM of dumb or nothing has no way to render an escape. Whether colour is
+// wanted on a terminal that could show it is a preference, and preferences are
+// settled in package config before the renderer is built.
 func NoColor() bool {
-	if _, ok := os.LookupEnv("NO_COLOR"); ok {
-		return true
-	}
 	switch os.Getenv("TERM") {
 	case "dumb", "":
 		return true
