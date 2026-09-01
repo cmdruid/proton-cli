@@ -54,6 +54,18 @@ var unreachable = map[string]string{
 
 	"POST /auth/v4/sessions": "only a first sign-in creates one, and no test signs out to force another",
 	"POST /core/v4/auth/2fa": "no test account has two-factor enabled, so nothing is ever asked for a code",
+
+	// Proving the Pass extra password. The secondary account has one, and the
+	// sign-in the suite performs answers it - but Proton grants the scope for the
+	// life of the session and offers nothing that takes it back, so the exchange
+	// happens on the run that first meets it and never again. Forcing a second one
+	// means a session of its own, and Proton answers a fresh sign-in from an
+	// unattended run with a CAPTCHA that only a person can solve.
+	// TestPassExtraPasswordProtectsTheSecondaryAccount checks the outcome instead;
+	// the exchange itself is covered by internal/proton/extrapassword_test.go,
+	// against go-srp's own server.
+	"GET /pass/v1/user/srp/info":  "a session needs the extra password once, and only a person can start another session",
+	"POST /pass/v1/user/srp/auth": "the other half of the same exchange",
 }
 
 // untested are the requests a run could make and does not. Each is a gap somebody
@@ -74,8 +86,6 @@ var untested = map[string]string{
 	// good outcome and an untestable one.
 	"GET /pass/v1/breach/address/{id}/breaches":      "needs a watched address that has actually been breached",
 	"GET /pass/v1/breach/custom_email/{id}/breaches": "needs a breached address added by hand, which is the same problem",
-	"PUT /contacts/v4/contacts/emails/label":         "contact groups; needs a paid test",
-	"PUT /contacts/v4/contacts/emails/unlabel":       "contact groups; needs a paid test",
 	"POST /mail/v4/messages/{id}/unsubscribe":        "reaching it needs a message from a real mailing list carrying a List-Unsubscribe header, which no seeding can put on these accounts",
 	"GET /calendar/v1/{id}/events/{id}/attendees":    "reaching it needs an event with more attendees than a page holds, which would mean inviting a hundred addresses from these accounts",
 
@@ -96,10 +106,14 @@ func TestEveryRequestTheCLICanSendIsOneTheSuiteSends(t *testing.T) {
 		t.Fatal("found no requests in the source; the extractor is broken")
 	}
 
-	var missing, known []string
+	var missing, known, closed []string
 	for _, req := range emitted {
 		switch {
-		case exercised[req], unreachable[req] != "":
+		case exercised[req]:
+			if unreachable[req] != "" || untested[req] != "" {
+				closed = append(closed, req)
+			}
+		case unreachable[req] != "":
 		case untested[req] != "":
 			known = append(known, req)
 		default:
@@ -108,17 +122,25 @@ func TestEveryRequestTheCLICanSendIsOneTheSuiteSends(t *testing.T) {
 	}
 	sort.Strings(missing)
 	sort.Strings(known)
+	sort.Strings(closed)
 	for _, req := range missing {
 		t.Errorf("the CLI can send %s but the live suite never has;\n"+
 			"\twrite a test that reaches it, or say why nobody can in `unreachable`,\n"+
 			"\tor record it in `untested` if it is a gap you are leaving open", req)
+	}
+	// A gap that has closed has to be taken off the list. Both lists are arguments
+	// for why the suite does not reach something, and one the recording contradicts
+	// is an argument nobody should read again - a list of gaps is only worth having
+	// while every line in it is still true.
+	for _, req := range closed {
+		t.Errorf("the live suite reaches %s, so the entry excusing it is stale;\n"+
+			"\tdelete it from `unreachable` or `untested`", req)
 	}
 	// The gaps already known about are said out loud on every run, so the list is
 	// something to shorten rather than somewhere to put things.
 	for _, req := range known {
 		t.Logf("not covered by the live suite: %s (%s)", req, untested[req])
 	}
-
 }
 
 func readCoverage(path string) (map[string]bool, error) {

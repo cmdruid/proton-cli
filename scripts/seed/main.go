@@ -35,10 +35,12 @@ import (
 //
 // The secondary account is in Proton's two-password mode, so it carries a second
 // password as well: the one its keys are locked with. That is what makes signing
-// it in exercise the mode on every run.
-var accounts = []struct{ profile, userVar, passwordVar, secondVar string }{
-	{"primary", "PROTON_CLI_TEST_PRIMARY_USER", "PROTON_CLI_TEST_PRIMARY_PASSWORD", ""},
-	{"secondary", "PROTON_CLI_TEST_SECONDARY_USER", "PROTON_CLI_TEST_SECONDARY_PASSWORD", "PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD"},
+// it in exercise the mode on every run. Its Pass is protected with an extra
+// password for the same reason, and that one is handed to the sign-in because a
+// session which has not answered it cannot reach Pass at all.
+var accounts = []struct{ profile, userVar, passwordVar, secondVar, extraVar string }{
+	{"primary", "PROTON_CLI_TEST_PRIMARY_USER", "PROTON_CLI_TEST_PRIMARY_PASSWORD", "", ""},
+	{"secondary", "PROTON_CLI_TEST_SECONDARY_USER", "PROTON_CLI_TEST_SECONDARY_PASSWORD", "PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD", "PROTON_CLI_TEST_SECONDARY_EXTRA_PASSWORD"},
 }
 
 func main() {
@@ -50,7 +52,8 @@ func main() {
 		os.Exit(1)
 	}
 	for _, a := range accounts {
-		if err := signIn(a.profile, os.Getenv(a.userVar), os.Getenv(a.passwordVar), os.Getenv(a.secondVar)); err != nil {
+		if err := signIn(a.profile, os.Getenv(a.userVar), os.Getenv(a.passwordVar),
+			os.Getenv(a.secondVar), os.Getenv(a.extraVar)); err != nil {
 			fmt.Fprintf(os.Stderr, "sign in as %s: %v\n", a.profile, err)
 			os.Exit(1)
 		}
@@ -178,6 +181,9 @@ func requireCredentials() error {
 		if a.secondVar != "" {
 			wanted = append(wanted, a.secondVar)
 		}
+		if a.extraVar != "" {
+			wanted = append(wanted, a.extraVar)
+		}
 		for _, v := range wanted {
 			if os.Getenv(v) == "" {
 				missing = append(missing, v)
@@ -194,17 +200,23 @@ func requireCredentials() error {
 // signIn attaches an account to its profile. Signing in again as the same
 // account does nothing, so this costs a read once a session exists.
 //
-// A second password goes in a file rather than down the same pipe: standard
-// input has one reader, and the two secrets are two answers.
-func signIn(profile, address, password, second string) error {
+// Every secret but the one that signs in goes in a file rather than down the same
+// pipe: standard input has one reader, and each of these is an answer of its own.
+func signIn(profile, address, password, second, extra string) error {
 	args := []string{"account", "login", "--user", address, "--password-stdin"}
-	if second != "" {
-		file, err := secondPasswordFile(profile, second)
+	for _, secret := range []struct{ kind, flag, value string }{
+		{"second", "--second-password-file", second},
+		{"extra", "--extra-password-file", extra},
+	} {
+		if secret.value == "" {
+			continue
+		}
+		file, err := secretFile(profile, secret.kind, secret.value)
 		if err != nil {
 			return err
 		}
 		defer func() { _ = os.Remove(file) }()
-		args = append(args, "--second-password-file", file)
+		args = append(args, secret.flag, file)
 	}
 	cmd := command(profile, args...)
 	cmd.Stdin = strings.NewReader(password)
@@ -215,9 +227,9 @@ func signIn(profile, address, password, second string) error {
 	return nil
 }
 
-// secondPasswordFile puts a second password somewhere only this user can read it.
-func secondPasswordFile(profile, second string) (string, error) {
-	f, err := os.CreateTemp("", "proton-cli-"+profile+"-second-*")
+// secretFile puts one of a sign-in's secrets somewhere only this user can read it.
+func secretFile(profile, kind, value string) (string, error) {
+	f, err := os.CreateTemp("", "proton-cli-"+profile+"-"+kind+"-*")
 	if err != nil {
 		return "", err
 	}
@@ -226,7 +238,7 @@ func secondPasswordFile(profile, second string) (string, error) {
 		_ = f.Close()
 		return "", err
 	}
-	if _, err := f.WriteString(second); err != nil {
+	if _, err := f.WriteString(value); err != nil {
 		_ = f.Close()
 		return "", err
 	}

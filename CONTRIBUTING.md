@@ -83,6 +83,7 @@ export PROTON_CLI_TEST_PRIMARY_PASSWORD=...
 export PROTON_CLI_TEST_SECONDARY_USER=secondary@proton.me
 export PROTON_CLI_TEST_SECONDARY_PASSWORD=...
 export PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD=...
+export PROTON_CLI_TEST_SECONDARY_EXTRA_PASSWORD=...
 
 just test-one TestMailSendAndRead    # a single integration test
 just test                            # every test that runs on the two free accounts
@@ -90,6 +91,8 @@ just test-all                        # those, then the ones needing a paid plan
 ```
 
 `just login` and `just seed` sign the accounts in and fill them, for working with them by hand.
+
+The secondary account carries the modes nothing else would reach: it is in Proton's two-password mode, and its Pass is protected with an extra password. Both of its extra secrets are as required as its password, and the suite fails to start without them.
 
 Never point any of this at an account you care about. Credentials can go in a local `.env` file (see `.env.example`), which the devbox shell loads automatically.
 

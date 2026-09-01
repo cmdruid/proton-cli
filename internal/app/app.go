@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -255,6 +256,11 @@ func (a *App) Authenticate(context.Context) error {
 // a login that only stored tokens would leave the very next command asking
 // again.
 //
+// An extra password handed over here unlocks Pass for the session, which is what
+// makes Pass reachable by a run with nobody to ask. Nothing else about it is
+// eager: an account whose Pass is protected and whose password nobody supplied
+// signs in exactly as before, and the first Pass command asks.
+//
 // It is idempotent. A profile already signed in as the same account is left
 // alone, so an unattended caller can run it unconditionally before its real
 // work and recover by itself from a session that expired or was revoked.
@@ -273,6 +279,9 @@ func (a *App) Login(ctx context.Context, user string) error {
 			// why they did not beats a second SRP exchange that fails the same
 			// way, having asked for a password to do it.
 			if _, err := a.Unlock(ctx); err != nil {
+				return err
+			}
+			if err := a.unlockPass(ctx); err != nil {
 				return err
 			}
 			return a.saveSession()
@@ -298,7 +307,36 @@ func (a *App) Login(ctx context.Context, user string) error {
 	if _, err := a.Unlock(ctx); err != nil {
 		return err
 	}
+	if err := a.unlockPass(ctx); err != nil {
+		return err
+	}
 	return a.saveSession()
+}
+
+// unlockPass spends an extra password that was handed to this sign-in, so the
+// session it saves can reach Pass.
+//
+// The session is asked what it already holds rather than the account what it has:
+// the scope is the thing that decides, and it is the same question the refusal
+// would have asked later. An account with no extra password is told so, because a
+// script that supplied one has a file it does not need.
+func (a *App) unlockPass(ctx context.Context) error {
+	if !a.Creds.ExtraPasswordOffered() {
+		return nil
+	}
+	scopes, err := a.API.Scopes(ctx)
+	if err != nil {
+		return err
+	}
+	if slices.Contains(scopes, string(proton.ScopePass)) {
+		a.UI.Note("This account has no Pass extra password, so nothing needed the one you gave.")
+		return nil
+	}
+	extra, err := a.Creds.ExtraPassword()
+	if err != nil {
+		return err
+	}
+	return a.API.Elevate(ctx, proton.ScopePass, proton.ScopeCredentials{Password: []byte(extra)})
 }
 
 // refuseRepoint stops a profile being pointed at a second account behind its

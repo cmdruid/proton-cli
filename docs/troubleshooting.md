@@ -109,6 +109,24 @@ They prompt, or take `--password-file` / `--password-stdin`. The key password se
 
 Proton answers some unrelated refusals with the same code, so one of these may ask for your password and then be refused anyway, for a reason no password would have fixed.
 
+## Pass asks for an extra password
+
+```console
+$ proton pass items list
+Extra password:
+```
+
+Your Pass is protected with [an extra password](https://proton.me/support/pass-extra-password), and this session has not answered it yet. Type it once and the session can reach Pass for as long as it lives; nothing else in proton is affected.
+
+With nobody to ask, the command says so instead and exits 2. Hand the password to the sign-in:
+
+```bash
+proton account login --user "$ACCOUNT" --password-file "$CRED" \
+  --extra-password-file /run/secrets/proton-pass
+```
+
+**"That is not this account's Pass extra password."** Proton counts wrong answers and ends the session after a few of them, at which point every command exits 2 until you sign in again. It is not your Proton account password, and it is not the second password of a two-password account.
+
 ## A change I just made doesn't show up
 
 `list` reads Proton's server-side index, which is eventually consistent. A message you just sent may not appear for a few seconds, and one you just deleted may still be listed. The web client behaves the same way.

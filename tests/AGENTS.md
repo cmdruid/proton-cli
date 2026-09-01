@@ -27,13 +27,15 @@ just test-report                      # where the time went, and how deep each r
 
 `just login` and `just seed` sign the accounts in and fill them, for working with them by hand.
 
-The suite requires all five of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER`, `PROTON_CLI_TEST_SECONDARY_PASSWORD` and `PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD`. `PROTON_CLI_TEST_PAID_USER` and `PROTON_CLI_TEST_PAID_PASSWORD` are optional - see [The paid account](#the-paid-account). `.env.example` lists all of them.
+The suite requires all six of `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER`, `PROTON_CLI_TEST_SECONDARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD` and `PROTON_CLI_TEST_SECONDARY_EXTRA_PASSWORD`. `PROTON_CLI_TEST_PAID_USER` and `PROTON_CLI_TEST_PAID_PASSWORD` are optional - see [The paid account](#the-paid-account). `.env.example` lists all of them.
 
 ## The two accounts
 
 The suite creates, mutates and deletes real data, so it runs on two accounts kept for that and nothing else. Most tests act as **`primary`**; the handful that genuinely need two Proton users bring in **`secondary`**.
 
 The **secondary account is in Proton's two-password mode**, which is the only way the suite reaches that mode at all: the secret that opens its keys is not the one that signs it in, so `PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD` is as required as its password, and every run signs an account in through that path. `TestAccountSettingsReportTwoPasswordMode` fails if the account is ever switched back, because the coverage would then be gone with nothing saying so.
+
+Its **Pass is protected with an extra password** for the same reason, so `PROTON_CLI_TEST_SECONDARY_EXTRA_PASSWORD` is required too, and `TestMain`'s sign-in hands it over. Proton grants the scope it buys for the life of the session and offers nothing that takes it back, so the exchange itself happens on the run that first meets it and never again - `TestPassExtraPasswordProtectsTheSecondaryAccount` checks the outcome every run and fails if the account is ever left without an extra password. Forcing a second exchange would mean a fresh session, and Proton answers an unattended sign-in with a CAPTCHA only a person can solve.
 
 These are the harness's own variables, not the CLI's: proton takes an account from a signed-in profile, which `TestMain` establishes. The `PROTON_CLI_TEST_` prefix keeps them clear of anything the binary reads.
 

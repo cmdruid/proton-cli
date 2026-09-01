@@ -39,8 +39,19 @@ func scopeReason(ctx context.Context, s proton.Scope) string {
 
 // installScopeResolver teaches the client how to elevate a session when the
 // server refuses a request for want of a scope.
+//
+// Which secret answers is the scope's to say. Pass wants the password protecting
+// it, and nothing else about the account: no address, because SRP at version 4
+// hashes none, and no second factor, because the exchange never asks for one.
 func (a *App) installScopeResolver() {
 	a.API.SetScopeResolver(func(ctx context.Context, s proton.Scope) (proton.ScopeCredentials, error) {
+		if s == proton.ScopePass {
+			extra, err := a.Creds.ExtraPassword()
+			if err != nil {
+				return proton.ScopeCredentials{}, err
+			}
+			return proton.ScopeCredentials{Password: []byte(extra)}, nil
+		}
 		user, err := a.Creds.User()
 		if err != nil {
 			return proton.ScopeCredentials{}, err

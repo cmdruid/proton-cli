@@ -53,7 +53,7 @@ After making code changes, run these in order. Stop on the first failure and fix
 
 ## Testing
 
-Tests are **integration tests** that run against the live Proton API. They run on the primary and secondary test accounts, and require `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER` and `PROTON_CLI_TEST_SECONDARY_PASSWORD`.
+Tests are **integration tests** that run against the live Proton API. They run on the primary and secondary test accounts, and require `PROTON_CLI_TEST_PRIMARY_USER`, `PROTON_CLI_TEST_PRIMARY_PASSWORD`, `PROTON_CLI_TEST_SECONDARY_USER`, `PROTON_CLI_TEST_SECONDARY_PASSWORD`, and the secondary's `PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD` and `PROTON_CLI_TEST_SECONDARY_EXTRA_PASSWORD` - that account carries two-password mode and a Pass extra password so the suite reaches both.
 
 - **`just test-fast` is always safe** - no API, no credentials, about a second to run, and the only one an agent starts
 - **`just test` and `just test-paid` are the user's**, not the agent's: minutes each, against real accounts, spending allowances that are metered by the hour. An agent that wants one asks for it and says why.

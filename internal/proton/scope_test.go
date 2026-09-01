@@ -44,6 +44,14 @@ func TestIsMissingScope(t *testing.T) {
 			body:   `{"Code":9100}`,
 		},
 		{
+			// The Pass refusal is the one whose status is not relied on, so it is
+			// recognised under a status no other scope would be.
+			name:   "Pass refusing a session that has no extra password",
+			status: http.StatusBadRequest,
+			body:   `{"Code":9108,"Details":{"MissingScopes":["pass"]},"Error":"Access token does not have sufficient scope"}`,
+			want:   true,
+		},
+		{
 			name:   "a body that is not JSON",
 			status: http.StatusForbidden,
 			body:   `<html>gateway</html>`,
@@ -57,8 +65,12 @@ func TestIsMissingScope(t *testing.T) {
 	}
 }
 
-// The retry asks for the scope the server named, and falls back to the weaker of
-// the two when it named none.
+// The retry asks for the scope the server named, and falls back to the weakest of
+// them when it named none.
+//
+// Pass is the one that matters most to get right: it is answered with a different
+// secret, so reading it as one of the others asks for the account password and
+// then fails anyway.
 func TestScopeFromBody(t *testing.T) {
 	for _, tc := range []struct {
 		body string
@@ -67,6 +79,10 @@ func TestScopeFromBody(t *testing.T) {
 		{`{"Details":{"MissingScopes":["locked"]}}`, ScopeLocked},
 		{`{"Details":{"MissingScopes":["password"]}}`, ScopePassword},
 		{`{"Details":{"MissingScopes":["locked","password"]}}`, ScopePassword},
+		{`{"Code":9108,"Details":{"MissingScopes":["pass"]}}`, ScopePass},
+		{`{"Code":9108}`, ScopePass},
+		{`{"Details":{"MissingScopes":["pass"]}}`, ScopePass},
+		{`{"Details":{"MissingScopes":["password","pass"]}}`, ScopePass},
 		{`{"Code":9100}`, ScopeLocked},
 		{`not json`, ScopeLocked},
 	} {

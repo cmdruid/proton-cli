@@ -83,6 +83,20 @@ Second password:
 
 It is the second one that seals into the session, so afterwards nothing is asked again. `proton account settings get` reports which mode the account is in.
 
+### A Pass extra password
+
+Pass can be protected with [a password of its own](https://proton.me/support/pass-extra-password). `login` does not ask for it, because only Pass needs it: the first `proton pass` command asks, and Proton then lets the session reach Pass for as long as it lives.
+
+An unattended run has nobody to ask, so it hands the password over here instead:
+
+```bash
+proton account login --user alice@proton.me \
+    --password-file /run/secrets/proton \
+    --extra-password-file /run/secrets/proton-pass
+```
+
+On an account with no extra password the flag is reported as unnecessary and the sign-in carries on. See [Pass](pass.md#an-extra-password) for what it changes there.
+
 ### Handing over the password without a terminal
 
 A password is read from a pipe or a file, [never from a flag value](../design-notes.md#why-a-password-is-never-a-flag-value).
@@ -95,7 +109,7 @@ printf '%s' "$PW" | proton account login --user alice@proton.me --password-stdin
 proton account login --user alice@proton.me --password-file /run/secrets/proton
 ```
 
-A second password is read the same way, through flags of its own. Standard input has one reader, so an account in two-password mode takes at most one of its two secrets from a pipe:
+The second and extra passwords are read the same way, through flags of their own. Standard input has one reader, so an account with more than one secret takes at most one of them from a pipe:
 
 ```bash
 proton account login --user alice@proton.me \

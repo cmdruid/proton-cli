@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/roman-16/proton-cli/internal/errs"
 )
@@ -28,6 +29,12 @@ import (
 // particular operation is password-guarded. The alternative - a per-command
 // check - can only ever cover the operations someone remembered to annotate,
 // and gets the scope wrong as easily as right.
+//
+// Pass is the third scope and the one that behaves differently: it is refused
+// with a code of its own, answered with the password protecting Pass rather than
+// the account's, and once granted it stays. The shape is the same all the same,
+// which is why it is handled here and not in the Pass commands - see
+// extrapassword.go for the exchange.
 
 // Scope names an elevated capability a session can hold.
 type Scope string
@@ -39,10 +46,18 @@ const (
 	// ScopePassword guards changes to the credentials themselves: the password,
 	// two-factor settings, the recovery phrase.
 	ScopePassword Scope = "password"
+	// ScopePass guards every Pass endpoint for an account whose Pass is protected
+	// with an extra password. Unlike the other two it is proved with that password
+	// rather than the account's, it is granted for the life of the session, and
+	// nothing takes it back.
+	ScopePass Scope = "pass"
 )
 
 // endpoint is the SRP-guarded call that grants the scope. Mirrors queryUnlock
 // and unlockPasswordChanges in WebClients (packages/shared/lib/api/user.ts).
+//
+// ScopePass has none: it is granted by an exchange of its own, in
+// extrapassword.go.
 func (s Scope) endpoint() string {
 	if s == ScopePassword {
 		return "/core/v4/users/password"
@@ -61,6 +76,10 @@ const scopesPath = "/core/v4/auth/scopes"
 // ScopeCredentials is what an elevation needs from the person. A second factor
 // is not part of it: whether Proton wants one is answered by the parameters the
 // exchange fetches, so it is asked for then and not before.
+//
+// Username is what the account password is proved for, and is empty for the Pass
+// extra password: SRP stopped hashing the username at version 3, and the
+// verifier that one is checked against was written by a client at version 4.
 type ScopeCredentials struct {
 	Username string
 	Password []byte
@@ -84,9 +103,16 @@ func (c *Client) getScopeResolver() ScopeResolver {
 	return c.scopeResolver
 }
 
-// missingScopeCode is Proton's SCOPE_MISSING_UNEXPECTED
-// (packages/shared/lib/errors.ts).
-const missingScopeCode = 9100
+// The codes Proton refuses an unelevated session with.
+//
+// missingScopeCode is SCOPE_MISSING_UNEXPECTED (packages/shared/lib/errors.ts).
+// passScopeCode is what every Pass endpoint answers when the account has an
+// extra password the session has not been given: WebClients reads it on its own
+// (PassErrorCode.MISSING_SCOPE, packages/pass/lib/api/errors.ts).
+const (
+	missingScopeCode = 9100
+	passScopeCode    = 9108
+)
 
 // isMissingScope reports whether a response is the server asking for an elevated
 // session.
@@ -96,15 +122,23 @@ const missingScopeCode = 9100
 // source. What both answers share is Details.MissingScopes - the server saying
 // which scope it wants - so that is the surer signal, and the code is only a
 // fallback for an answer that names nothing.
+//
+// The Pass refusal is read from its code alone, whatever the status came out as.
+// It is the one scope no status is known for - the web clients match it on the
+// code and never look - and being wrong about the status would leave an account
+// with an extra password unable to reach Pass at all.
 func isMissingScope(status int, body []byte) bool {
-	if status != http.StatusForbidden {
-		return false
-	}
 	var env struct {
 		Code    int
 		Details struct{ MissingScopes []string }
 	}
 	if json.Unmarshal(body, &env) != nil {
+		return false
+	}
+	if env.Code == passScopeCode {
+		return true
+	}
+	if status != http.StatusForbidden {
 		return false
 	}
 	return len(env.Details.MissingScopes) > 0 || env.Code == missingScopeCode
@@ -116,6 +150,12 @@ func isMissingScope(status int, body []byte) bool {
 // directions, and discarding the server's half would throw away the guarantee
 // that we are talking to something which knows the verifier.
 func (c *Client) Elevate(ctx context.Context, s Scope, cr ScopeCredentials) error {
+	// The Pass exchange is not wrapped: it says what it is about in its own words,
+	// and a sentence about the extra password reads worse with a scope name in
+	// front of it.
+	if s == ScopePass {
+		return c.unlockPass(ctx, cr.Password)
+	}
 	if _, err := c.exchange(ctx, srpExchange{
 		method: "PUT", path: s.endpoint(),
 		username: cr.Username, password: cr.Password,
@@ -194,7 +234,12 @@ func (c *Client) elevateAndRetry(ctx context.Context, req Request, resp *Respons
 	if err := c.Elevate(ctx, scope, cr); err != nil {
 		return resp, err
 	}
-	defer c.Relock(ctx)
+	// The Pass scope is not an elevation to be given back: it is what the session
+	// holds from here on, there is no endpoint that takes it away, and asking for
+	// the extra password again on the next request is the one outcome to avoid.
+	if scope != ScopePass {
+		defer c.Relock(ctx)
+	}
 
 	retry := req
 	retry.elevated = true
@@ -203,20 +248,29 @@ func (c *Client) elevateAndRetry(ctx context.Context, req Request, resp *Respons
 
 // scopeFromBody reads the scope the server said was missing. Proton reports it
 // inconsistently across endpoints, so anything unrecognised falls back to the
-// weaker of the two: elevating further than necessary is worse than being asked
+// weakest of them: elevating further than necessary is worse than being asked
 // again.
+//
+// Pass is read first and from either signal, because it is the one scope the
+// account password cannot buy: guessing at it would ask for the wrong secret and
+// then fail anyway. Which one is looked for is decided here rather than by the
+// order Proton happened to list them in.
 func scopeFromBody(body []byte) Scope {
 	var env struct {
+		Code    int
 		Details struct {
 			MissingScopes []string
 		}
 	}
-	if err := json.Unmarshal(body, &env); err == nil {
-		for _, s := range env.Details.MissingScopes {
-			if Scope(s) == ScopePassword {
-				return ScopePassword
-			}
-		}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return ScopeLocked
+	}
+	named := env.Details.MissingScopes
+	switch {
+	case env.Code == passScopeCode, slices.Contains(named, string(ScopePass)):
+		return ScopePass
+	case slices.Contains(named, string(ScopePassword)):
+		return ScopePassword
 	}
 	return ScopeLocked
 }

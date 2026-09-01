@@ -204,6 +204,8 @@ var flagMeanings = map[string]string{
 	"everyone":               "answer every address that was on the message, not only the sender",
 	"expires":                "how long before it stops working",
 	"expiry":                 "a payment card expiry date",
+	"extra-password-file":    "where to read the Pass extra password from",
+	"extra-password-stdin":   "read the Pass extra password from stdin",
 	"facebook":               "a Facebook handle",
 	"field":                  "a custom field, as NAME=VALUE",
 	"first-name":             "a given name",
@@ -362,6 +364,8 @@ func TestSharedFlagNamesShareOneMeaning(t *testing.T) {
 // command that declares one of them itself.
 var kitOwnedFlags = map[string]string{
 	"all":                   "kit.All",
+	"extra-password-file":   "kit.ExtraPassword",
+	"extra-password-stdin":  "kit.ExtraPassword",
 	"passphrase-file":       "kit.Passphrase",
 	"passphrase-stdin":      "kit.Passphrase",
 	"password-file":         "kit.Reauth",
@@ -375,6 +379,8 @@ var kitOwnedFlags = map[string]string{
 // below can tell kit's own registration from a command redeclaring the name.
 var kitFlagUsage = map[string]string{
 	"all":                   kit.AllUsage,
+	"extra-password-file":   kit.ExtraPasswordFileUsage,
+	"extra-password-stdin":  kit.ExtraPasswordStdinUsage,
 	"passphrase-file":       kit.PassphraseFileUsage,
 	"passphrase-stdin":      kit.PassphraseStdinUsage,
 	"password-file":         kit.PasswordFileUsage,
@@ -723,6 +729,29 @@ func TestOnlySigningInTakesTheSecondPassword(t *testing.T) {
 	sort.Strings(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("commands carrying the second-password flags are:\n  %s\nwant:\n  %s",
+			strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// The Pass extra password belongs to signing in too, for a different reason.
+//
+// Any Pass command can be the one that finds the session without the scope it
+// buys, so the flag could be argued onto every one of them. It is on none: the
+// scope lasts as long as the session, so a command that offered the flag would be
+// offering a secret to hand over again for something already held - and the one
+// run that cannot be asked for it is the one that signs in.
+func TestOnlySigningInTakesTheExtraPassword(t *testing.T) {
+	want := []string{"proton account login"}
+	leaves, _ := partition(t)
+	var got []string
+	for _, c := range leaves {
+		if c.Flags().Lookup("extra-password-file") != nil {
+			got = append(got, cmdPath(c))
+		}
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("commands carrying the extra-password flags are:\n  %s\nwant:\n  %s",
 			strings.Join(got, "\n  "), strings.Join(want, "\n  "))
 	}
 }

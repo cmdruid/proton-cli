@@ -29,6 +29,8 @@ An account with a security key is asked to touch it. With an authenticator app e
 
 An account in two-password mode is asked for its second password once it has signed in, because that is the secret its keys are locked with rather than the one that proves who it is. A one-password account is never asked for it.
 
+Pass can be protected with an extra password of its own. It is not asked for here - the first `pass` command asks, and Proton then lets the session reach Pass for as long as it lives. --extra-password-file hands it over now instead, which is what a run with nobody to ask needs.
+
 Proton may ask you to prove you are human. The page it wants is printed, and can be solved on any device - so a machine with no display signs in like any other. A run that cannot be asked anything says which page to solve and which token to repeat the command with.
 
 Signing in again as the same account changes nothing, so an unattended job can run it first and recover from a session that expired.
@@ -43,10 +45,13 @@ proton account login --profile work
 proton account login --user me@proton.me --password-file /run/secrets/proton
 proton account login --user me@proton.me --password-stdin --totp 123456
 proton account login --user me@proton.me --password-file /run/secrets/proton --second-password-file /run/secrets/proton-second
+proton account login --user me@proton.me --password-file /run/secrets/proton --extra-password-file /run/secrets/proton-pass
 ```
 
 | Flag | Description |
 | --- | --- |
+| `--extra-password-file string` | Read the Pass extra password from a file |
+| `--extra-password-stdin` | Read the Pass extra password from stdin |
 | `--password-file string` | Read the account password from a file |
 | `--password-stdin` | Read the account password from stdin |
 | `--second-password-file string` | Read the second password (two-password mode) from a file |

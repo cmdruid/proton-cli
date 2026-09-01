@@ -113,6 +113,7 @@ func yesNo(b bool) string {
 
 func loginCmd() *cobra.Command {
 	var (
+		extra  kit.ExtraPassword
 		reauth kit.Reauth
 		second kit.SecondPassword
 		user   string
@@ -131,6 +132,10 @@ func loginCmd() *cobra.Command {
 			"An account in two-password mode is asked for its second password once it has\n" +
 			"signed in, because that is the secret its keys are locked with rather than\n" +
 			"the one that proves who it is. A one-password account is never asked for it.\n\n" +
+			"Pass can be protected with an extra password of its own. It is not asked for\n" +
+			"here - the first `pass` command asks, and Proton then lets the session reach\n" +
+			"Pass for as long as it lives. --extra-password-file hands it over now instead,\n" +
+			"which is what a run with nobody to ask needs.\n\n" +
 			"Proton may ask you to prove you are human. The page it wants is printed, and\n" +
 			"can be solved on any device - so a machine with no display signs in like any\n" +
 			"other. A run that cannot be asked anything says which page to solve and which\n" +
@@ -143,6 +148,9 @@ func loginCmd() *cobra.Command {
 				return err
 			}
 			if err := second.Supply(c); err != nil {
+				return err
+			}
+			if err := extra.Supply(c); err != nil {
 				return err
 			}
 			if err := c.App.Login(c.Ctx, user); err != nil {
@@ -165,6 +173,7 @@ func loginCmd() *cobra.Command {
 	// Naming an account belongs here. Every other command acts as whichever
 	// profile it was given, and already knows the address from its session.
 	c.Flags().StringVar(&user, "user", "", "Proton account email to sign in as")
+	extra.Declare(c)
 	reauth.Declare(c)
 	second.Declare(c)
 	return c

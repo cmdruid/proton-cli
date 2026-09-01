@@ -183,6 +183,31 @@ Importing **adds** items. Nothing in an export says which existing item it was, 
 
 Aliases are the exception. An alias address belongs to the account Proton gave it to, so each one is named and skipped while everything else lands.
 
+## An extra password
+
+Pass can be protected with [an extra password](https://proton.me/support/pass-extra-password) of its own, on top of your Proton account password. Proton then refuses every Pass request from a session that has not answered it, so the first `pass` command asks:
+
+```console
+$ proton pass items list
+Extra password:
+ID           TYPE   NAME        USERNAME  MODIFIED
+…
+```
+
+One answer covers the session, not the command: Proton grants it for as long as the session lives, so nothing asks again on this machine until you sign out or the session expires. Nothing else in proton is affected - Mail, Drive, Calendar and Contacts never ask for it.
+
+For a run with nobody to ask, hand it to the sign-in instead:
+
+```bash
+proton account login --user me@proton.me \
+  --password-file /run/secrets/proton \
+  --extra-password-file /run/secrets/proton-pass
+```
+
+A `pass` command that needs it and finds nobody to ask says so and names that flag. Like every other secret it is read from a file, from stdin with `--extra-password-stdin`, or from a prompt - never from a flag value ([why](../design-notes.md#why-a-password-is-never-a-flag-value)).
+
+Proton counts wrong answers and ends the session after a few, so a wrong one is worth reading rather than retrying blindly. Turning the extra password on or off is not something proton does - see [what proton-cli can't do](../limitations.md).
+
 ## History and breaches
 
 ```bash

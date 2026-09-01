@@ -48,6 +48,7 @@ func (s passwordSource) hint(flag string) []string {
 //	email     the account this profile is signed in as, else a prompt
 //	password  --password-file, else --password-stdin, else a prompt
 //	second    --second-password-file, else --second-password-stdin, else a prompt
+//	extra     --extra-password-file, else --extra-password-stdin, else a prompt
 //	code      --totp, else a prompt
 //
 // Only `account login` names an account, and it does so with its own --user.
@@ -77,6 +78,13 @@ type Credentials struct {
 		value  string
 		have   bool
 	}
+	// extra is the password Pass itself is protected with. It signs nothing in and
+	// opens no keys, so it is a third secret with a third source and memory.
+	extra struct {
+		source passwordSource
+		value  string
+		have   bool
+	}
 	// stdinOwner is set once the App exists, so Supply can claim standard input.
 	stdinOwner func(claim string) (io.Reader, error)
 
@@ -99,7 +107,10 @@ const (
 	// two-password mode. Proton's own sign-in calls it that, and it is the name
 	// somebody has stored it under.
 	labelSecondPassword = "Second password"
-	labelTOTP           = "Two-factor code"
+	// labelExtraPassword is what protects Pass and nothing else. Every Proton
+	// client calls it the extra password, so this one does too.
+	labelExtraPassword = "Extra password"
+	labelTOTP          = "Two-factor code"
 	// labelSecurityKeyPIN is the PIN of the key itself, which is set on the key
 	// and known only to it. It is never the account password, and a key counts
 	// wrong answers, so it is worth being unmistakable about which is wanted.
@@ -182,6 +193,49 @@ func (c *Credentials) SupplySecondPassword(file string, stdin bool) error {
 	}
 	c.second.source.stdin = r
 	return nil
+}
+
+// SupplyExtraPassword records where the password protecting Pass may be read
+// from. Only signing in declares it, because that is where the scope it buys is
+// worth having: Proton grants it for the life of the session.
+func (c *Credentials) SupplyExtraPassword(file string, stdin bool) error {
+	c.extra.source.file = file
+	if !stdin {
+		return nil
+	}
+	r, err := c.stdinOwner("--extra-password-stdin")
+	if err != nil {
+		return err
+	}
+	c.extra.source.stdin = r
+	return nil
+}
+
+// ExtraPasswordOffered reports whether one was named at all, which is what
+// decides whether signing in has anything to unlock Pass with.
+func (c *Credentials) ExtraPasswordOffered() bool {
+	return c.extra.source.file != "" || c.extra.source.stdin != nil
+}
+
+// ExtraPassword returns the password Pass is protected with, asking for it if
+// there is somebody to ask.
+//
+// The remedy names signing in with the flag rather than the flag alone: a Pass
+// command does not offer one, and the scope this buys lasts as long as the
+// session, so handing it over once at sign-in is what an unattended run does.
+func (c *Credentials) ExtraPassword() (string, error) {
+	if c.extra.have {
+		return c.extra.value, nil
+	}
+	v, err := c.read(c.extra.source, labelExtraPassword,
+		errs.Problemf("Pass is protected with an extra password, and there is nobody here to ask.").
+			Hint("proton account login --extra-password-file FILE",
+				"or run this in a terminal").Exit(2))
+	if err != nil {
+		return "", err
+	}
+	c.extra.value, c.extra.have = v, true
+	return v, nil
 }
 
 // User returns the account email.
@@ -343,7 +397,7 @@ func (c *Credentials) prefersSecurityKey(alsoTOTP bool) bool {
 func (c *Credentials) prompter() *ui.Prompter {
 	if c.prompt == nil {
 		c.prompt = c.ui.Ask(labelEmail, labelPassword, labelSecondPassword,
-			labelTOTP, labelSecurityKeyPIN, labelPassphrase)
+			labelExtraPassword, labelTOTP, labelSecurityKeyPIN, labelPassphrase)
 	}
 	return c.prompt
 }

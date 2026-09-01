@@ -102,8 +102,15 @@ type testAccount struct {
 	passwordVar string
 	// secondVar names the account's second password, set for the account that is
 	// in Proton's two-password mode and empty for the rest.
-	secondVar    string
+	secondVar string
+	// extraVar names the password that account's Pass is protected with, set for
+	// the account that has one and empty for the rest.
+	extraVar string
+	// The files each of those is written to for the run, so a command that has to
+	// be handed one can be.
 	passwordFile string
+	secondFile   string
+	extraFile    string
 }
 
 var accounts = map[string]*testAccount{
@@ -115,11 +122,18 @@ var accounts = map[string]*testAccount{
 	// The secondary account is in two-password mode, which is the only way this
 	// suite reaches the mode at all: the secret that opens its keys is not the
 	// one that signs it in, so every run signs an account in through that path.
+	//
+	// Its Pass is protected with an extra password for the same reason, and the
+	// sign-in hands that one over too. Proton grants the scope it buys for as long
+	// as the session lives, so the exchange happens on the run that first meets it
+	// and never again - TestPassExtraPasswordProtectsTheSecondaryAccount checks the
+	// outcome every run, and fails if the account is left without one.
 	secondary: {
 		profile:     secondary,
 		userVar:     "PROTON_CLI_TEST_SECONDARY_USER",
 		passwordVar: "PROTON_CLI_TEST_SECONDARY_PASSWORD",
 		secondVar:   "PROTON_CLI_TEST_SECONDARY_SECOND_PASSWORD",
+		extraVar:    "PROTON_CLI_TEST_SECONDARY_EXTRA_PASSWORD",
 	},
 	paid: {
 		profile:     paid,
@@ -158,6 +172,9 @@ func requireCredentials() {
 		wanted := []string{a.userVar, a.passwordVar}
 		if a.secondVar != "" {
 			wanted = append(wanted, a.secondVar)
+		}
+		if a.extraVar != "" {
+			wanted = append(wanted, a.extraVar)
 		}
 		for _, v := range wanted {
 			if os.Getenv(v) == "" {
@@ -212,8 +229,10 @@ func isAddress(v string) bool {
 	return at > 0 && strings.Contains(v[at:], ".")
 }
 
-// writePasswordFiles puts each account's password where runAs can hand it to
-// the one command Proton guards behind an elevated session.
+// writePasswordFiles puts each account's secrets where a command that has to be
+// handed one can read it: the password for the commands Proton guards behind an
+// elevated session, and the second and extra passwords for a test that signs an
+// account in itself.
 //
 // A session cannot carry elevation: Proton re-authenticates over SRP, and the
 // key blob sealed at login is a one-way derivation of the password rather than
@@ -221,10 +240,24 @@ func isAddress(v string) bool {
 func writePasswordFiles() {
 	for _, name := range signedIn() {
 		a := accounts[name]
-		a.passwordFile = filepath.Join(workDir, a.profile+".password")
-		if err := os.WriteFile(a.passwordFile, []byte(os.Getenv(a.passwordVar)), 0o600); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to write the %s password file: %v\n", a.profile, err)
-			os.Exit(1)
+		for _, secret := range []struct {
+			kind  string
+			value string
+			into  *string
+		}{
+			{"password", os.Getenv(a.passwordVar), &a.passwordFile},
+			{"second", os.Getenv(a.secondVar), &a.secondFile},
+			{"extra", os.Getenv(a.extraVar), &a.extraFile},
+		} {
+			if secret.value == "" {
+				continue
+			}
+			path := filepath.Join(workDir, a.profile+"."+secret.kind)
+			if err := os.WriteFile(path, []byte(secret.value), 0o600); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to write the %s %s file: %v\n", a.profile, secret.kind, err)
+				os.Exit(1)
+			}
+			*secret.into = path
 		}
 	}
 }
