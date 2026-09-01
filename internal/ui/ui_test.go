@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"log/slog"
 	"os"
@@ -146,6 +147,41 @@ func TestRawKeepsIntegers(t *testing.T) {
 		if !strings.Contains(got, "1.5") {
 			t.Errorf("%s: float not preserved: %s", format, got)
 		}
+	}
+}
+
+// Out carries the API's response and nothing else, so a body that is not JSON
+// goes to Err and the command fails. Anything else hands a parser a proxy's
+// error page and calls it a success.
+func TestRawRefusesABodyThatIsNotJSON(t *testing.T) {
+	for _, format := range []Format{FormatText, FormatJSON, FormatYAML} {
+		u, out, errb := fixture(t, Options{Format: format})
+		err := Raw(u, []byte("<html>502 Bad Gateway</html>"))
+		if err == nil {
+			t.Fatalf("%s: Raw accepted a body that is not JSON", format)
+		}
+		if out.Len() != 0 {
+			t.Errorf("%s: stdout got %q", format, out.String())
+		}
+		if !strings.Contains(errb.String(), "502 Bad Gateway") {
+			t.Errorf("%s: the body is not on stderr: %q", format, errb.String())
+		}
+		var coder errs.ExitCoder
+		if !errors.As(err, &coder) || coder.ExitCode() != 5 {
+			t.Errorf("%s: a server that answers with rubbish is exit 5, got %v", format, err)
+		}
+	}
+}
+
+// A HEAD has no body, and neither has an endpoint that answers with no content.
+// Nothing to write is not the same as something unwritable.
+func TestRawPassesABodyWithNothingInIt(t *testing.T) {
+	u, out, errb := fixture(t, Options{Format: FormatJSON})
+	if err := Raw(u, nil); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 || errb.Len() != 0 {
+		t.Errorf("an empty body wrote out=%q err=%q", out.String(), errb.String())
 	}
 }
 

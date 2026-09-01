@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
+	"github.com/roman-16/proton-cli/internal/errs"
 	"golang.org/x/term"
 )
 
@@ -293,13 +294,25 @@ func (u *UI) encode(v any) error {
 //
 // Numbers are decoded via json.Number so YAML keeps integer fields integral
 // rather than rendering 1000 as 1000.0.
+//
+// A body that is not JSON is not that shape, so it never reaches Out: a proxy's
+// error page landing where jq is waiting is a broken pipeline reported as a
+// success. It goes to Err, where it is still the thing a reader needs, and the
+// call fails as the server trouble it is. A body with nothing in it is an empty
+// answer rather than a broken one, which is what a HEAD returns.
 func Raw(u *UI, raw []byte) error {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	var v any
 	if err := dec.Decode(&v); err != nil {
-		_, err := u.Out.Write(raw)
-		return err
+		_, _ = u.Err.Write(raw)
+		if raw[len(raw)-1] != '\n' {
+			_, _ = fmt.Fprintln(u.Err)
+		}
+		return errs.Problemf("The API returned a body that is not JSON.").Exit(5)
 	}
 	return u.encode(plainNumbers(v))
 }

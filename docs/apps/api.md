@@ -14,6 +14,8 @@ proton api GET /calendar/v1 --output json | jq -r '.Calendars[].ID'
 
 Responses come back as the API returned them, in Proton's `PascalCase`, and **encrypted fields stay encrypted** - this command does no key handling. For decrypted content, use the commands for that app.
 
+Stdout carries that response and nothing else. A body that is not JSON - a proxy's error page standing in for the API's answer - goes to stderr instead and the command exits 5, so a `jq` downstream is never handed something it cannot parse.
+
 ## Finding an endpoint
 
 [`openapi.yaml`](https://github.com/roman-16/proton-cli/blob/main/openapi.yaml) documents roughly 740 endpoints - paths, methods, request and response schemas, and query parameters. It is generated from Proton's own web client source, and a weekly job keeps it in step with upstream.

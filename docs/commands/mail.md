@@ -1378,8 +1378,8 @@ proton mail settings autoreply set
 ```
 
 ```bash
-proton mail settings autoreply set --message 'Away until Monday.'
-proton mail settings autoreply set --message 'On holiday.' --start 2026-07-01 --end 2026-07-14
+proton mail settings autoreply set --repeat permanent --message 'Away until Monday.'
+proton mail settings autoreply set --message 'On holiday.' --start 2026-07-01T09:00 --end 2026-07-14T17:00
 ```
 
 | Flag | Description |

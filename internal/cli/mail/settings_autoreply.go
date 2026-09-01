@@ -88,13 +88,17 @@ func autoreplySetCmd() *cobra.Command {
 				msg = mailtext.TextToHTML(msg)
 			}
 			ar.Message = msg
+			req, err := ar.Request()
+			if err != nil {
+				return err
+			}
 			return kit.Mutate(c, ui.ResultSpec{
 				Action: ui.Enabled, Kind: "settings", Count: 1, Name: "auto-reply",
 				Detail: "on a " + mode + " schedule",
 			}, func() error {
 				// Nothing here arranges the elevation: the client does it when the
 				// server asks. All this owes the user is a reason for the prompt.
-				return c.App.Mail.AutoReplySet(app.WithScopeReason(c.Ctx, "change your auto-reply"), ar)
+				return c.App.Mail.AutoReplySet(app.WithScopeReason(c.Ctx, "change your auto-reply"), req)
 			})
 		}),
 	}
