@@ -9,6 +9,7 @@ Everything the maintainer or CI runs, in whatever language suits it: shell insta
 | `changelog/` | Reads `CHANGELOG.md`: the version to release and the notes to publish (`just notes`) |
 | `gendocs/` | Generates `docs/commands/` from the command tree (`just docs`) |
 | `openapi-generator/` | Generates `openapi.yaml` from the WebClients TypeScript source (`just openapi`) |
+| `stats/` | Records the public counters the Stats page charts (`just stats`) |
 | `terminal-demo/` | Records the README panel against the primary account (`just demo`) |
 | `publish-npm.mjs` | Publishes the npm package on release |
 
@@ -29,6 +30,20 @@ Where a command is published is `kit.ReferencePage`'s answer, and a help screen 
 CI regenerates the whole directory and fails on a diff, so a command that exists is a command that is documented, under its current name and with its current flags.
 
 It shares the tree with `internal/cli/conformance_test.go`, which checks the same commands against the rules the interface is meant to obey. Both call `cli.Root()`.
+
+## Stats
+
+Writes down what the distribution channels publish about the project, onto the `data` branch the documentation site reads at `/stats/`. Nothing here comes from the program: proton-cli has no telemetry, and this reads only counters GitHub, npm, Repology and the AUR make public.
+
+```bash
+just stats /path/to/data-branch
+```
+
+It runs daily from `.github/workflows/stats.yml`, because two of its sources cannot be read late. A release asset's downloads are a lifetime total, so a rate exists only where one day's reading is subtracted from the next - which is why the first run records a baseline and no rate at all. GitHub's traffic endpoints are stricter still: they answer with the last fourteen days and delete the rest, so a fortnight without a run loses those days for good. Stars, forks and npm carry their own timestamps and are rebuilt whole every time, so they need no catching up.
+
+Those traffic endpoints require `STATS_TOKEN` - a personal access token with classic `repo` scope, or a fine-grained one with `Administration: read`. GitHub refuses them to the token a workflow is handed by default, whatever its permissions say, so the collector treats a refusal as fatal rather than recording everything except the part that expires. Any other source failing leaves its last reading in place and the run continues.
+
+`state.json` is the previous reading of every cumulative counter and exists only to be subtracted from. `stats.json` is what the browser fetches.
 
 ## Changelog
 
