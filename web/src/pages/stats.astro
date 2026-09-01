@@ -30,8 +30,8 @@ import Footer from "../components/Footer.astro";
   </p>
   <p>
     Some channels leave no counter at all. <strong>Nix</strong> builds from source and serves from a
-    shared binary cache, <strong>go install</strong> is answered by a global module proxy, and
-    <strong>apt</strong> installs come from this project's own repository, which keeps no logs.
+    shared binary cache, <strong>go install</strong> is answered by a global module proxy,
+    and <strong>apt</strong> installs come from this project's own repository, which keeps no logs.
     Whatever those account for is missing from every figure above.
   </p>
   <p>
@@ -105,9 +105,14 @@ import Footer from "../components/Footer.astro";
   };
 
   /* A recording covering more than a day is one the cron missed, and its counts
-   * belong to the whole gap rather than to the date they were written under. */
+   * belong to the whole gap rather than to the date they were written under.
+   *
+   * A recording covering less than a day is left alone. Scaling a short interval
+   * up to a full one invents demand nobody observed: a single download caught in
+   * a ten-minute window is one download, not the hundred and forty-four a day of
+   * them would be. */
   const perDay = (row: DownloadDay, value: number) =>
-    row.hours > 0 ? (value * 24) / row.hours : value;
+    row.hours > 24 ? (value * 24) / row.hours : value;
 
   const since = (days: number) => {
     const from = new Date();
