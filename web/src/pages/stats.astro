@@ -24,12 +24,20 @@ import Footer from "../components/Footer.astro";
 
   <h2>What these numbers are not</h2>
   <p>
-    A download is not a person. Mirrors, scanners and CI fetch releases too, and nothing here reports
-    whether the binary was ever run, or run twice. Three channels are invisible: <strong>Nix</strong>
-    builds from source and serves from a shared binary cache, <strong>go install</strong> is answered
-    by a global module proxy, and <strong>apt</strong> installs come from this project's own
-    repository, which keeps no logs. Clone counts are dominated by this repository's own CI, which
-    re-clones on every run, so the chart plots unique cloners rather than clones.
+    A download is not a person. Release assets are fetched by mirrors, scanners and continuous
+    integration as well as by people, and nothing here reports whether what was downloaded was ever
+    run, or run twice.
+  </p>
+  <p>
+    Some channels leave no counter at all. <strong>Nix</strong> builds from source and serves from a
+    shared binary cache, <strong>go install</strong> is answered by a global module proxy, and
+    <strong>apt</strong> installs come from this project's own repository, which keeps no logs.
+    Whatever those account for is missing from every figure above.
+  </p>
+  <p>
+    Clones count automation as readily as people, because a checkout in continuous integration is a
+    full clone and runs on every push. That is why the figure here is unique cloners rather than
+    clones.
   </p>
 
   <Footer />
@@ -128,8 +136,9 @@ import Footer from "../components/Footer.astro";
     return node;
   };
 
-  /* Bars rather than an area, because a day here is a small whole number of
-   * people and a smoothed curve would invent the values between them.
+  /* Bars rather than an area, because each day is a separate count rather than
+   * a reading of something continuous, and a line between two of them would
+   * draw values that were never measured.
    *
    * The axis is the whole window in days rather than however many rows happen
    * to exist, so a week of recordings draws as a week against the right-hand
@@ -373,7 +382,7 @@ import Footer from "../components/Footer.astro";
     const npmRecent = data.npm.slice(-30).reduce((total, d) => total + d.count, 0);
     const npm = section(
       "npm",
-      "Counted apart from everything above, and never added into it. npm reports registry requests, and mirrors re-fetch every package continuously - the six platform packages are mutually exclusive, so one install can only ever pull one of them, and near-equal counts across all six are machines rather than people.",
+      "Counted apart from everything above, and never added into it. npm reports registry requests rather than installs, and mirrors re-fetch packages continuously. The six platform packages are mutually exclusive - an install pulls exactly one of them - so whatever the six have in common is machinery rather than people.",
     );
     npm.append(
       el("p", "figure-inline", `${number.format(npmRecent)} requests in the last 30 days`),

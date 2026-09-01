@@ -51,8 +51,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "Roman"
+          git config user.email "roman@lerchster.dev"
 
           # The branch carries no history in common with main, so the first run
           # starts it empty rather than from a tree of source it has no use for.

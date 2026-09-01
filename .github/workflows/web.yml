@@ -56,5 +56,5 @@ jobs:
           external_repository: roman-16/proton-cli-web
           publish_branch: gh-pages
           publish_dir: web/dist
-          user_email: github-actions[bot]@users.noreply.github.com
-          user_name: github-actions[bot]
+          user_email: roman@lerchster.dev
+          user_name: Roman
