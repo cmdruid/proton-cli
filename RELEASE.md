@@ -121,5 +121,5 @@ goreleaser release --snapshot --clean --skip=publish
 
 ## Aftercare
 
-- Leave `.github/workflows/release.yml` disabled on this fork until the roman-16 publishers are gone from it.
+- Leave the Release workflow disabled (`gh workflow disable Release`) until `.github/workflows/release.yml` is retargeted. Re-enabling the inherited file would try to publish changelog `2.10.0` as this fork’s first release.
 - Rebuild notes belong in [INSTALL.md](INSTALL.md), not here.
