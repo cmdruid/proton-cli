@@ -51,9 +51,6 @@ type updateStatus struct {
 	UpdateAvailable bool   `json:"update_available"`
 }
 
-// releaseNotes is where a reader goes to find out what they just installed.
-const releaseNotes = "https://github.com/roman-16/proton-cli/releases/tag/v"
-
 func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall bool) error {
 	u := c.UI()
 	client := &http.Client{Timeout: 60 * time.Second}
@@ -131,7 +128,7 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 		return err
 	}
 	if !c.App.DryRun {
-		c.Note("  Release notes: %s%s", releaseNotes, latest)
+		c.Note("  Release notes: %s%s", selfmanage.ReleaseNotesBase(), latest)
 	}
 	return nil
 }

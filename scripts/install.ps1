@@ -10,7 +10,7 @@
   `winget install Roman-16.ProtonCLI`.)
 
 .EXAMPLE
-  irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 | iex
+  irm https://raw.githubusercontent.com/cmdruid/proton-cli/main/scripts/install.ps1 | iex
 
 .EXAMPLE
   # Pin a version or install directory (run the script directly, not piped):
@@ -25,7 +25,7 @@ param(
 $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
-$repo = 'roman-16/proton-cli'
+$repo = 'cmdruid/proton-cli'
 # The OS architecture, not the process one: an x64 PowerShell emulated on an
 # ARM64 machine should still be handed the ARM64 binary.
 $arch = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [Runtime.InteropServices.Architecture]::Arm64) { 'arm64' } else { 'amd64' }

@@ -1,6 +1,18 @@
 package selfmanage
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestGitHubRepo(t *testing.T) {
+	if got := githubRepo(); got != "cmdruid/proton-cli" {
+		t.Errorf("githubRepo() = %q, want cmdruid/proton-cli", got)
+	}
+	if got := releasesURL(); !strings.HasPrefix(got, "https://github.com/cmdruid/proton-cli/releases") {
+		t.Errorf("releasesURL() = %q", got)
+	}
+}
 
 func TestAssetName(t *testing.T) {
 	cases := []struct {

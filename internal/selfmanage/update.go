@@ -23,24 +23,37 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-const (
-	owner = "roman-16"
+// owner and repo are the GitHub project proton update, changelog, and the
+// install scripts fetch from. They are vars so a fork can retarget them
+// (including via -ldflags) without touching the rest of the tree.
+var (
+	owner = "cmdruid"
 	repo  = "proton-cli"
 )
 
-// releasesURL is the base of the GitHub Releases download namespace.
-const releasesURL = "https://github.com/" + owner + "/" + repo + "/releases"
+func githubRepo() string { return owner + "/" + repo }
+
+// releasesURL is the GitHub Releases namespace for this build.
+func releasesURL() string {
+	return "https://github.com/" + githubRepo() + "/releases"
+}
 
 // changelogURL is CHANGELOG.md on the default branch.
 //
 // The file on main rather than the copy compiled into this binary, because the
 // question worth asking is what a release the reader does not have yet changed,
 // and no build can carry notes written after it.
-const changelogURL = "https://raw.githubusercontent.com/" + owner + "/" + repo + "/main/CHANGELOG.md"
+func changelogURL() string {
+	return "https://raw.githubusercontent.com/" + githubRepo() + "/main/CHANGELOG.md"
+}
+
+// ReleaseNotesBase is the prefix of a release-notes URL; callers append the
+// version (with no leading "v").
+func ReleaseNotesBase() string { return releasesURL() + "/tag/v" }
 
 // Changelog fetches the project's CHANGELOG.md.
 func Changelog(ctx context.Context, client *http.Client) ([]byte, error) {
-	return get(ctx, client, changelogURL, nil)
+	return get(ctx, client, changelogURL(), nil)
 }
 
 // AssetName returns the raw release binary name for a platform, matching the
@@ -63,7 +76,7 @@ func AssetName(goos, goarch string) (string, error) {
 // by following the /releases/latest redirect to /releases/tag/vX.Y.Z. This
 // avoids the GitHub API's unauthenticated rate limit.
 func LatestVersion(ctx context.Context, client *http.Client) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, releasesURL+"/latest", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, releasesURL()+"/latest", nil)
 	if err != nil {
 		return "", err
 	}
@@ -123,7 +136,7 @@ func Download(ctx context.Context, client *http.Client, version string, prog pro
 	if err != nil {
 		return nil, err
 	}
-	base := releasesURL + "/download/v" + strings.TrimPrefix(version, "v")
+	base := releasesURL() + "/download/v" + strings.TrimPrefix(version, "v")
 
 	sums, err := get(ctx, client, base+"/checksums.txt", nil)
 	if err != nil {

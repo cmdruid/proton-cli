@@ -7,7 +7,7 @@
 # required.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/cmdruid/proton-cli/main/scripts/install.sh | sh
 #
 # Options (after `... | sh -s --`):
 #   --version <X.Y.Z>   Install a specific release (default: latest).
@@ -19,10 +19,10 @@
 #   PROTON_CLI_INSTALL_DIR  Same as --install-dir.
 #
 # Windows: use the PowerShell installer instead:
-#   irm https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/cmdruid/proton-cli/main/scripts/install.ps1 | iex
 set -eu
 
-REPO="roman-16/proton-cli"
+REPO="cmdruid/proton-cli"
 # The project is proton-cli, which is what names the release asset; the program
 # it installs is `proton`, and ALIAS is the second name it also answers to.
 BIN="proton"
