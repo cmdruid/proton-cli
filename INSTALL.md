@@ -124,7 +124,7 @@ git log HEAD..origin/main --oneline   # review, then merge/rebase if wanted
 # re-run section 2 (compile)
 ```
 
-`proton update` is retargeted at `cmdruid/proton-cli`. It still only verifies SHA-256 from the same GitHub account, so only run it after we have published a release from this clone. Until then it will fail (no releases yet).
+`proton update` is retargeted at `cmdruid/proton-cli`. It still only verifies SHA-256 from the same GitHub account, so only run it after we have published a release from this clone (see [RELEASE.md](RELEASE.md)). Until then it will fail (no releases yet). Rebuild from this clone instead of `proton update`.
 
 Never install from upstream:
 
