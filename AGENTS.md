@@ -25,7 +25,7 @@ Grammar: `proton <app> <collection> <verb> [TARGET…]`. Apps: `mail`, `drive`, 
 
 ## Do not
 
-- Cut a GitHub Release or run `proton update` until the owner asks and [RELEASE.md](RELEASE.md) has been followed. Do not install roman-16's release binaries or `curl | sh` from upstream.
+- Cut a GitHub Release or run `proton update` until the owner asks and [RELEASE.md](RELEASE.md) has been followed. Do not enable the Release workflow while CHANGELOG.md still tops out at 2.10.0. Do not install roman-16's release binaries or `curl | sh` from upstream.
 - `git push` to `origin`, force-push, or open PRs unless the owner asked.
 - Run `just test` / `just test-paid` (live API against real accounts). `just test-fast` is offline and fine.
 - Point `PROTON_API_URL` at anything other than `https://mail.proton.me/api`.

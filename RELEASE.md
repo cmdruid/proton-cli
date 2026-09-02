@@ -10,16 +10,19 @@ A release on [cmdruid/proton-cli](https://github.com/cmdruid/proton-cli) is a **
 
 Until that exists, install by rebuilding from this clone ([INSTALL.md](INSTALL.md) §2). Do not run `proton update`.
 
-## What we are not doing
+This fork publishes **only** to GitHub Releases. APT, AUR, Homebrew, winget, and npm are not part of the pipeline (removed from `.goreleaser.yaml` and `.github/workflows/release.yml`).
 
-Upstream treats `CHANGELOG.md` as a release button: a new version heading on `main` makes `.github/workflows/release.yml` tag, run GoReleaser, and publish to GitHub **plus** APT, AUR, Homebrew, winget, and npm — all of which still name `roman-16`.
+## Automation is still off
 
-On this fork that automation is **disabled** (`gh workflow disable Release` on `cmdruid/proton-cli`). Reasons:
+`.github/workflows/release.yml` will, when enabled, treat a new `CHANGELOG.md` version heading on `main` as a release request: tag, GoReleaser, GitHub Release. It is **disabled** (`gh workflow disable Release`) because the newest heading is still **2.10.0**, unpublished here. Enabling it now would ship `v2.10.0` as our first release.
 
-1. The newest changelog section is still `2.10.0`. That tag exists upstream, not here. An inherited run would try to publish `v2.10.0` as *our* first release.
-2. AUR / Homebrew / winget / npm / APT in `.goreleaser.yaml` and the workflow still point at roman-16’s accounts and secrets we do not have.
+Enable it only after `CHANGELOG.md` names **2.10.1** (or newer) and that commit is what you intend to ship:
 
-Do not re-enable `release.yml` on this repository until those publishers are removed or retargeted.
+```bash
+gh workflow enable Release --repo cmdruid/proton-cli
+```
+
+Until then, cut by hand as below, or do not cut at all.
 
 ## Versioning
 
@@ -47,7 +50,7 @@ goreleaser release --snapshot --clean --skip=publish
 
 `just notes` / `just snapshot` are the same if `just` is installed.
 
-## Cut the release (manual, GitHub only)
+## Cut the release (manual)
 
 1. **Diff since the last tag** (or since the fork, if there is no tag on origin):
 
@@ -66,6 +69,7 @@ goreleaser release --snapshot --clean --skip=publish
 
    ### Changed
    - Self-update and installers fetch GitHub Releases from cmdruid/proton-cli.
+   - Releases publish to GitHub only.
    ```
 
    Categories are the Keep a Changelog six, in that order, only those that apply. `go run ./scripts/changelog` must print `2.10.1`. Versions may only step to a patch, minor, or major of the previous heading.
@@ -81,13 +85,12 @@ goreleaser release --snapshot --clean --skip=publish
    git push origin v2.10.1
    ```
 
-5. **Publish GitHub assets only.** Skip AUR, Homebrew, winget, and distro packages:
+5. **Publish the GitHub Release:**
 
    ```bash
    go run ./scripts/changelog --notes > /tmp/proton-cli-notes.md
    export GITHUB_TOKEN="$(gh auth token)"
-   goreleaser release --clean --release-notes /tmp/proton-cli-notes.md \
-     --skip=aur,homebrew,winget,nfpm
+   goreleaser release --clean --release-notes /tmp/proton-cli-notes.md
    rm -f /tmp/proton-cli-notes.md
    ```
 
@@ -121,5 +124,4 @@ goreleaser release --snapshot --clean --skip=publish
 
 ## Aftercare
 
-- Leave the Release workflow disabled (`gh workflow disable Release`) until `.github/workflows/release.yml` is retargeted. Re-enabling the inherited file would try to publish changelog `2.10.0` as this fork’s first release.
 - Rebuild notes belong in [INSTALL.md](INSTALL.md), not here.

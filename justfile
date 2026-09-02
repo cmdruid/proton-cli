@@ -106,8 +106,6 @@ seed *args: build
 snapshot: build
     #!/usr/bin/env bash
     set -euo pipefail
-    export AUR_KEY="${AUR_KEY:-unused}"
-    export TAP_WINGET_TOKEN="${TAP_WINGET_TOKEN:-unused}"
     goreleaser release --snapshot --clean --skip=publish
 
 # How many live tests run at once.
