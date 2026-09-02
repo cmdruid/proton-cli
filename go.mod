@@ -1,4 +1,4 @@
-module github.com/roman-16/proton-cli
+module github.com/cmdruid/proton-cli
 
 go 1.26.5
 

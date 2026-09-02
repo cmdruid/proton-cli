@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/contentline"
+	"github.com/cmdruid/proton-cli/internal/contentline"
 )
 
 // Layouts for the three shapes an iCalendar date value takes.

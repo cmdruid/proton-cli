@@ -12,9 +12,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

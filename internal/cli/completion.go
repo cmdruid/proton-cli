@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
 	"github.com/spf13/cobra"
 )
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // Lookup resolves references against a collection small enough to fetch whole:

@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/selfmanage"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/selfmanage"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // selfAction is the operation a self-management command performs on the running
@@ -104,21 +104,13 @@ func managedHint(kind selfmanage.Kind, action selfAction) (via, remedy string) {
 			return "Nix", "update it through your flake or nixpkgs configuration"
 		}
 		return "Nix", "remove it through your flake or nixpkgs configuration"
-	case selfmanage.KindHomebrew:
-		if update {
-			return "Homebrew", "brew upgrade --cask proton-cli"
-		}
-		return "Homebrew", "brew uninstall --cask proton-cli"
-	case selfmanage.KindNpm:
-		if update {
-			return "npm", "npm update -g @roman-16/proton-cli"
-		}
-		return "npm", "npm uninstall -g @roman-16/proton-cli"
-	case selfmanage.KindWinget:
-		if update {
-			return "winget", "winget upgrade Roman-16.ProtonCLI"
-		}
-		return "winget", "winget uninstall Roman-16.ProtonCLI"
+	case selfmanage.KindHomebrew, selfmanage.KindNpm, selfmanage.KindWinget:
+		via := map[selfmanage.Kind]string{
+			selfmanage.KindHomebrew: "Homebrew",
+			selfmanage.KindNpm:      "npm",
+			selfmanage.KindWinget:   "winget",
+		}[kind]
+		return via, "this fork is not distributed there; rebuild from https://github.com/cmdruid/proton-cli"
 	}
 	return "", ""
 }
@@ -129,16 +121,8 @@ func managedHint(kind selfmanage.Kind, action selfAction) (via, remedy string) {
 func permissionRemedies(action selfAction) []string {
 	uninstall := action == actionUninstall
 	switch runtime.GOOS {
-	case "darwin":
-		if uninstall {
-			return []string{"brew uninstall --cask proton-cli"}
-		}
-		return []string{"brew upgrade --cask proton-cli"}
-	case "windows":
-		if uninstall {
-			return []string{"winget uninstall Roman-16.ProtonCLI"}
-		}
-		return []string{"winget upgrade Roman-16.ProtonCLI"}
+	case "darwin", "windows":
+		return []string{"rebuild from https://github.com/cmdruid/proton-cli"}
 	default:
 		if uninstall {
 			return []string{

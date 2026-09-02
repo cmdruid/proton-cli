@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/mailtext"
+	"github.com/cmdruid/proton-cli/internal/mailtext"
 )
 
 func TestFormatSubjectAddsPrefixOnlyOnce(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/ProtonMail/go-srp"
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 )
 
 // The Pass extra password.

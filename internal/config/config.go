@@ -21,10 +21,10 @@ import (
 	"path/filepath"
 
 	"github.com/goccy/go-yaml"
-	"github.com/roman-16/proton-cli/internal/confirm"
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/profile"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/confirm"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/profile"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // Name is the file this package reads, inside Dir.

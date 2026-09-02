@@ -5,7 +5,7 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/mailtext"
+	"github.com/cmdruid/proton-cli/internal/mailtext"
 )
 
 // A message the CLI sends passes through three stages: Content describes what it

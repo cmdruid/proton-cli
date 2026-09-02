@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // shrinkBackoff makes retry backoff negligible for the duration of a test so

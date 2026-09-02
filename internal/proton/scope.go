@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 )
 
 // Scope elevation, mirroring how the web clients do it.

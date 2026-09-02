@@ -27,7 +27,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/roman-16/proton-cli/tests/fixture"
+	"github.com/cmdruid/proton-cli/tests/fixture"
 )
 
 // The accounts. These variables are this program's own, not the CLI's:

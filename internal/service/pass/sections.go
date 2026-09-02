@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/otp"
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	"github.com/cmdruid/proton-cli/internal/otp"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 )
 
 // Extra fields, and the sections some item types group them under.

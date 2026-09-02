@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/app"
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/proton"
-	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
-	"github.com/roman-16/proton-cli/internal/ui"
-	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/cmdruid/proton-cli/internal/app"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	calsvc "github.com/cmdruid/proton-cli/internal/service/calendar"
+	"github.com/cmdruid/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/units"
 	"github.com/spf13/cobra"
 )
 

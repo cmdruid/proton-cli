@@ -141,8 +141,7 @@ detect_os() {
 	Darwin) echo darwin ;;
 	MINGW* | MSYS* | CYGWIN* | Windows_NT)
 		die "Windows is not supported by this script. Use the PowerShell installer:
-  irm https://raw.githubusercontent.com/$REPO/main/scripts/install.ps1 | iex
-or install via winget: winget install Roman-16.ProtonCLI" ;;
+  irm https://raw.githubusercontent.com/$REPO/main/scripts/install.ps1 | iex" ;;
 	*) die "unsupported OS: $(uname -s)" ;;
 	esac
 }

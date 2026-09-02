@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/ical"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/cmdruid/proton-cli/internal/ical"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/units"
 )
 
 // A reminder is an event's notification, at the moment it goes off.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Proton stores the auto-responder as one settings object whose StartTime and

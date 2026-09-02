@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 )
 
 func TestNetworkErrorExitCode(t *testing.T) {

@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/ref"
+	"github.com/cmdruid/proton-cli/internal/ref"
 )
 
 func TestShort(t *testing.T) {

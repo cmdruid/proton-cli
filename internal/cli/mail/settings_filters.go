@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/proton"
-	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	mailsvc "github.com/cmdruid/proton-cli/internal/service/mail"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/progress"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/progress"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 type UploadOptions struct {

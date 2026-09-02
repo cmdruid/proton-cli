@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/changelog"
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/selfmanage"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/changelog"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/selfmanage"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 // releasesPage is where the releases older than the changelog are written down.
-const releasesPage = "https://github.com/roman-16/proton-cli/releases"
+const releasesPage = "https://github.com/cmdruid/proton-cli/releases"
 
 // ChangelogCmd prints what each release changed.
 //

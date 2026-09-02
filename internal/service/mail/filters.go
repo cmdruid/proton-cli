@@ -3,7 +3,7 @@ package mail
 import (
 	"context"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // sieveVersion is the Sieve dialect version Proton's filter endpoints expect.

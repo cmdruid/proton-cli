@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/ical"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/ical"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // A recurring event is one record standing for many occurrences, plus one extra

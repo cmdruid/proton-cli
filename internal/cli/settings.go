@@ -4,9 +4,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/config"
-	"github.com/roman-16/proton-cli/internal/confirm"
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/config"
+	"github.com/cmdruid/proton-cli/internal/confirm"
+	"github.com/cmdruid/proton-cli/internal/errs"
 	"github.com/spf13/cobra"
 )
 

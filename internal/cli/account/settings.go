@@ -3,10 +3,10 @@ package account
 import (
 	"encoding/json"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

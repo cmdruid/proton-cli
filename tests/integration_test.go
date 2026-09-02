@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roman-16/proton-cli/tests/fixture"
+	"github.com/cmdruid/proton-cli/tests/fixture"
 )
 
 var binaryPath string

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Send stores Content as a draft and delivers it. If anything after draft

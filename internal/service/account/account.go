@@ -9,7 +9,7 @@ package account
 import (
 	"context"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 type Service struct {

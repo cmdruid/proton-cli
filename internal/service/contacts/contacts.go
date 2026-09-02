@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/ref"
-	"github.com/roman-16/proton-cli/internal/vcard"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/crypto/pgp"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ref"
+	"github.com/cmdruid/proton-cli/internal/vcard"
 )
 
 type Service struct {

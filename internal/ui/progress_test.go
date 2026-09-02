@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/progress"
+	"github.com/cmdruid/proton-cli/internal/progress"
 )
 
 // A progress bar is for a human watching a terminal. Everywhere else it must

@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 
 	gomime "github.com/ProtonMail/go-mime"
-	"github.com/roman-16/proton-cli/internal/mailtext"
+	"github.com/cmdruid/proton-cli/internal/mailtext"
 )
 
 // Exporting a message rebuilds it as RFC 822: Proton keeps the original header

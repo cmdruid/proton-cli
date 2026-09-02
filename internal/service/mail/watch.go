@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Watching the mailbox is asking Proton what has changed since last time.

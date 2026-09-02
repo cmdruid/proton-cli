@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
 )
 
 // testKeyRing generates a throwaway key pair, returning the ring and its armored

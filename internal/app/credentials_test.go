@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // An account with both a code and a key is asked once, as the code prompt: an

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Block-transfer tuning, mirroring the Proton web client's upload worker

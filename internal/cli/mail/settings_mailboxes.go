@@ -3,9 +3,9 @@ package mail
 import (
 	"context"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	mailsvc "github.com/cmdruid/proton-cli/internal/service/mail"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

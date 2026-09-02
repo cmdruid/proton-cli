@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/contentline"
+	"github.com/cmdruid/proton-cli/internal/contentline"
 )
 
 // A self-contained iCalendar document is what goes out by email: an invitation,

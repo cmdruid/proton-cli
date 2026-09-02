@@ -1,11 +1,11 @@
 package account
 
 import (
-	"github.com/roman-16/proton-cli/internal/account/session"
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/profile"
-	"github.com/roman-16/proton-cli/internal/ui"
-	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/cmdruid/proton-cli/internal/account/session"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/profile"
+	"github.com/cmdruid/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/units"
 	"github.com/spf13/cobra"
 )
 

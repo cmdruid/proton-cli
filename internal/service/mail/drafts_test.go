@@ -3,7 +3,7 @@ package mail
 import (
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
 )
 
 func TestDraftPayloadCarriesTheSenderIdentity(t *testing.T) {

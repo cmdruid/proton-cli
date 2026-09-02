@@ -4,11 +4,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/mailtext"
-	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
-	"github.com/roman-16/proton-cli/internal/ui"
-	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/mailtext"
+	mailsvc "github.com/cmdruid/proton-cli/internal/service/mail"
+	"github.com/cmdruid/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/units"
 	"github.com/spf13/cobra"
 )
 

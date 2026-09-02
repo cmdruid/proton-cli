@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/app"
-	"github.com/roman-16/proton-cli/internal/idcache"
+	"github.com/cmdruid/proton-cli/internal/app"
+	"github.com/cmdruid/proton-cli/internal/idcache"
 )
 
 // A compound reference is one pasteable token. The separator is safe because

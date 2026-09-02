@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/ical"
+	"github.com/cmdruid/proton-cli/internal/ical"
 )
 
 func atVienna(t *testing.T, month, day, hour int) time.Time {

@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 )
 
 // Reading a Proton Pass backup back in.

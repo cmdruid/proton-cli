@@ -4,8 +4,8 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/crypto/aead"
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	"github.com/cmdruid/proton-cli/internal/crypto/aead"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 	"google.golang.org/protobuf/proto"
 )
 

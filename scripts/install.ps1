@@ -6,8 +6,6 @@
   Downloads the latest proton-cli release from GitHub Releases, verifies its
   SHA-256 checksum, and installs it into a user directory as `proton`, with
   `proton-cli` beside it as a second name. No package manager required.
-  (winget remains the recommended Windows channel:
-  `winget install Roman-16.ProtonCLI`.)
 
 .EXAMPLE
   irm https://raw.githubusercontent.com/cmdruid/proton-cli/main/scripts/install.ps1 | iex

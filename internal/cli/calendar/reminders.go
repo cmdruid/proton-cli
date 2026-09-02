@@ -1,10 +1,10 @@
 package calendar
 
 import (
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/ical"
-	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/ical"
+	calsvc "github.com/cmdruid/proton-cli/internal/service/calendar"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

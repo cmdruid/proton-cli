@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 func TestExitCode(t *testing.T) {

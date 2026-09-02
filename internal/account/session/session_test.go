@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/profile"
+	"github.com/cmdruid/proton-cli/internal/profile"
 )
 
 // A session without a sealed key password is one that still needs the account

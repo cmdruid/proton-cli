@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 )
 
 type row struct{ id, label string }

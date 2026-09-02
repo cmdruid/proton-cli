@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/confirm"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/confirm"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // write puts a configuration file somewhere and returns its path.

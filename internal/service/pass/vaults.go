@@ -8,11 +8,11 @@ import (
 	"strconv"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/crypto/aead"
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/fetch"
-	"github.com/roman-16/proton-cli/internal/proton"
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	"github.com/cmdruid/proton-cli/internal/crypto/aead"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/fetch"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 	"google.golang.org/protobuf/proto"
 )
 

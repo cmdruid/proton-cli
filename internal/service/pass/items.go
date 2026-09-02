@@ -8,11 +8,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/crypto/aead"
-	"github.com/roman-16/proton-cli/internal/fetch"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/ref"
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	"github.com/cmdruid/proton-cli/internal/crypto/aead"
+	"github.com/cmdruid/proton-cli/internal/fetch"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ref"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 	"google.golang.org/protobuf/proto"
 )
 

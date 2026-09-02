@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/progress"
-	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/cmdruid/proton-cli/internal/progress"
+	"github.com/cmdruid/proton-cli/internal/units"
 	"golang.org/x/term"
 )
 

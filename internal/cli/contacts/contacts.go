@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	ctsvc "github.com/roman-16/proton-cli/internal/service/contacts"
-	"github.com/roman-16/proton-cli/internal/ui"
-	"github.com/roman-16/proton-cli/internal/vcard"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	ctsvc "github.com/cmdruid/proton-cli/internal/service/contacts"
+	"github.com/cmdruid/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/vcard"
 	"github.com/spf13/cobra"
 )
 

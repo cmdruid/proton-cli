@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/minio/selfupdate"
-	"github.com/roman-16/proton-cli/internal/progress"
+	"github.com/cmdruid/proton-cli/internal/progress"
 	"golang.org/x/mod/semver"
 )
 

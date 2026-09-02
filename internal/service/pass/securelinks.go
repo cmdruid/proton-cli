@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/crypto/aead"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/crypto/aead"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Secure links: a URL that shows one item to somebody with no Proton account.

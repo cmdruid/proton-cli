@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // A filter written as conditions and actions rather than as a Sieve script.

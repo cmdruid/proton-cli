@@ -7,9 +7,9 @@ import (
 	"fmt"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/fetch"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/fetch"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 type Service struct {

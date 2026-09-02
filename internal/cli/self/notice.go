@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/selfmanage"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/selfmanage"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // lookup is all the time a courtesy may take. A machine that cannot answer in

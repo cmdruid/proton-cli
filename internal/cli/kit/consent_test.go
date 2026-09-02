@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/app"
-	"github.com/roman-16/proton-cli/internal/confirm"
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/app"
+	"github.com/cmdruid/proton-cli/internal/confirm"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

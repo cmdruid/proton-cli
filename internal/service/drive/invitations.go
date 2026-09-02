@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 const sigContextMember = "drive.share-member.member"

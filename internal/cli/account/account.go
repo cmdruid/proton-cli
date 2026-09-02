@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/account/session"
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/profile"
-	acctsvc "github.com/roman-16/proton-cli/internal/service/account"
-	"github.com/roman-16/proton-cli/internal/ui"
-	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/cmdruid/proton-cli/internal/account/session"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/profile"
+	acctsvc "github.com/cmdruid/proton-cli/internal/service/account"
+	"github.com/cmdruid/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/units"
 	"github.com/spf13/cobra"
 )
 

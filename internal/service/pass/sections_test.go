@@ -3,7 +3,7 @@ package pass
 import (
 	"testing"
 
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 )
 
 func TestExtraFieldsParseTextAndHidden(t *testing.T) {

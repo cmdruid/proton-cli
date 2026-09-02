@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // One selection model, for every collection.

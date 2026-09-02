@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/contentline"
+	"github.com/cmdruid/proton-cli/internal/contentline"
 )
 
 // UID mints an identifier for a new contact, from a cryptographic source so that

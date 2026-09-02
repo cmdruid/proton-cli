@@ -10,9 +10,9 @@ import (
 	"strconv"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/progress"
-	"github.com/roman-16/proton-cli/internal/proton"
+	pgphelper "github.com/cmdruid/proton-cli/internal/crypto/pgp"
+	"github.com/cmdruid/proton-cli/internal/progress"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // A download is not finished when the bytes arrive; it is finished when the bytes

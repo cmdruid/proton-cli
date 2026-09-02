@@ -14,9 +14,9 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/config"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/config"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -1038,7 +1038,7 @@ var layers = map[string][]string{
 }
 
 func TestPackagesImportDownwardOnly(t *testing.T) {
-	const mod = "github.com/roman-16/proton-cli/internal/"
+	const mod = "github.com/cmdruid/proton-cli/internal/"
 	for pkg, allowed := range layers {
 		permitted := map[string]bool{}
 		for _, a := range allowed {

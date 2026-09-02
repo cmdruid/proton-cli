@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
 )
 
 // testKeys hands a service the key hierarchy a test wants it to decrypt with.

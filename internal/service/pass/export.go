@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 )
 
 // The file Proton Pass writes when you ask it for a backup, and reads when you

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/config"
-	"github.com/roman-16/proton-cli/internal/profile"
+	"github.com/cmdruid/proton-cli/internal/config"
+	"github.com/cmdruid/proton-cli/internal/profile"
 )
 
 // Session is what one profile keeps on disk between runs.

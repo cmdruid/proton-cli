@@ -8,8 +8,8 @@
 package drive
 
 import (
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	drivesvc "github.com/roman-16/proton-cli/internal/service/drive"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	drivesvc "github.com/cmdruid/proton-cli/internal/service/drive"
 	"github.com/spf13/cobra"
 )
 

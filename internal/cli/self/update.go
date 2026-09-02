@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	"github.com/roman-16/proton-cli/internal/selfmanage"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	"github.com/cmdruid/proton-cli/internal/selfmanage"
+	"github.com/cmdruid/proton-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -81,8 +81,8 @@ func runUpdate(c *kit.Invocation, version, target string, checkOnly, reinstall b
 
 	if version == "dev" && target == "" && !reinstall {
 		return kit.Fail("This is a development build, so there is no version to compare against.").
-			Hint("proton update 1.9.11",
-				"curl -fsSL https://raw.githubusercontent.com/roman-16/proton-cli/main/scripts/install.sh | sh")
+			Hint("rebuild from https://github.com/cmdruid/proton-cli",
+				"or proton update VERSION after this fork has a GitHub Release")
 	}
 
 	if !newer && target == "" && !reinstall {

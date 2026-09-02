@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/roman-16/proton-cli/tests/fixture"
+	"github.com/cmdruid/proton-cli/tests/fixture"
 	"sync"
 )
 

@@ -11,12 +11,12 @@ import (
 	"time"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/fetch"
-	"github.com/roman-16/proton-cli/internal/ical"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/ref"
-	"github.com/roman-16/proton-cli/internal/units"
+	pgphelper "github.com/cmdruid/proton-cli/internal/crypto/pgp"
+	"github.com/cmdruid/proton-cli/internal/fetch"
+	"github.com/cmdruid/proton-cli/internal/ical"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ref"
+	"github.com/cmdruid/proton-cli/internal/units"
 )
 
 // Event is one thing on a calendar: a one-off event, or one occurrence of a

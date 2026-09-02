@@ -14,8 +14,8 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/roman-16/proton-cli/internal/crypto/aead"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/crypto/aead"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 const localKeyPath = "/auth/v4/sessions/local/key"

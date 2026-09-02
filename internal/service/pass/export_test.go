@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+	pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 )
 
 // testdata/protonpass-export.zip is an archive Proton Pass itself wrote, with

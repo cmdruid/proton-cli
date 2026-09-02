@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
 	"strings"
 	"testing"
 )

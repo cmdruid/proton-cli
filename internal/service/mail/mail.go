@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
-	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/ref"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
+	pgphelper "github.com/cmdruid/proton-cli/internal/crypto/pgp"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ref"
 )
 
 // WrongTableError signals that an ID-shaped REF was passed to the wrong

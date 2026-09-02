@@ -3,7 +3,7 @@ package vcard
 import (
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/contentline"
+	"github.com/cmdruid/proton-cli/internal/contentline"
 	"testing"
 )
 

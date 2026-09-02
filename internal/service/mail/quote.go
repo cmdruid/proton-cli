@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/mailtext"
+	"github.com/cmdruid/proton-cli/internal/mailtext"
 )
 
 // Replying and forwarding derive a new Content from the message being answered:

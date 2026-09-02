@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/roman-16/proton-cli/internal/app"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/app"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // cliHVResolver answers Proton's human-verification challenges by sending a

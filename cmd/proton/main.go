@@ -6,7 +6,7 @@ import (
 	// zone database - Windows and minimal containers among them.
 	_ "time/tzdata"
 
-	"github.com/roman-16/proton-cli/internal/cli"
+	"github.com/cmdruid/proton-cli/internal/cli"
 )
 
 func main() {

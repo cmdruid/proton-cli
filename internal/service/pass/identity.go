@@ -1,6 +1,6 @@
 package pass
 
-import pb "github.com/roman-16/proton-cli/internal/service/pass/proto"
+import pb "github.com/cmdruid/proton-cli/internal/service/pass/proto"
 
 // An identity's fields, declared once.
 //

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/ical"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ical"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // windowDoer answers the events endpoint from a per-window fixture and records

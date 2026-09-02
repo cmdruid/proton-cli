@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	passsvc "github.com/roman-16/proton-cli/internal/service/pass"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	passsvc "github.com/cmdruid/proton-cli/internal/service/pass"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // What Pass keeps on the account rather than in a vault.

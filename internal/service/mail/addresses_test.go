@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
 )
 
 // testSender is a stand-in sending identity for tests that only need an address,

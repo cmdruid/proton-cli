@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // stubDoer records the requests issued through the proton.Doer seam and replays

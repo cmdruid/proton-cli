@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Outgoing mail carries the sending address's signature followed by Proton's own

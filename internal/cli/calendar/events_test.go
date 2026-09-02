@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	calsvc "github.com/roman-16/proton-cli/internal/service/calendar"
+	calsvc "github.com/cmdruid/proton-cli/internal/service/calendar"
 )
 
 // A reference names an event and, for a recurring one, which occurrence. The

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 )
 
 // The ui package is the only place that decides what the CLI looks like, so its

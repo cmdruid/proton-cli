@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // ConversationAttachment carries its parent MessageID so callers can

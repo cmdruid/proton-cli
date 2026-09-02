@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/ical"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/ical"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Attendee participation statuses (ATTENDEE_STATUS_API in WebClients).

@@ -4,7 +4,7 @@
 // every service reports the same shapes for "no match" and "too many matches".
 package ref
 
-import "github.com/roman-16/proton-cli/internal/errs"
+import "github.com/cmdruid/proton-cli/internal/errs"
 
 // Pick selects the single match for r among matches. It returns:
 //

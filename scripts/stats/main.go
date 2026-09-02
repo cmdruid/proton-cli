@@ -41,7 +41,7 @@ const (
 
 	// Repology answers 403 to a generic user agent and asks that automated
 	// callers identify themselves with a way to be contacted.
-	userAgent = "proton-cli-stats/1 (+https://github.com/roman-16/proton-cli)"
+	userAgent = "proton-cli-stats/1 (+https://github.com/cmdruid/proton-cli)"
 )
 
 // npmPlatforms are the per-platform packages the scoped root pulls in through

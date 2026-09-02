@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/tests/fixture"
+	"github.com/cmdruid/proton-cli/tests/fixture"
 )
 
 // The fixture. Both accounts hold the same of it, so a test can act as either

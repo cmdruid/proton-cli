@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Group is a contact group (a Type-2 label).

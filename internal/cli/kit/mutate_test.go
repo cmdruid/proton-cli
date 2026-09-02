@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/app"
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/proton"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/app"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // What follows is the guard's specification. It has one job - to stand between a

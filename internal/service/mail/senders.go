@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Who reaches the inbox, and who does not.

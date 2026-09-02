@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 	"golang.org/x/term"
 )
 

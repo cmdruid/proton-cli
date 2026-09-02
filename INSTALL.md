@@ -57,6 +57,8 @@ chmod 755 "$HOME/.local/bin/proton"
 
 The binary reports version `dev` unless you inject ldflags. Leave it as `dev`: `proton update` refuses to overwrite a development build unless you name a release, which is the behavior we want.
 
+Do **not** run `go install github.com/roman-16/proton-cli/cmd/proton@latest` — that module path is upstream and would download his tree. This fork’s module is `github.com/cmdruid/proton-cli`. After this tree is on `origin`, `go install github.com/cmdruid/proton-cli/cmd/proton@main` installs from the fork; `@latest` needs a semver tag (see [RELEASE.md](RELEASE.md)). Prefer the `go build` line above.
+
 Check:
 
 ```bash

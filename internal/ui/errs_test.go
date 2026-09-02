@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 )
 
 func TestWriteErrorShapes(t *testing.T) {

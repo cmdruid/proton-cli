@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/fido"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/fido"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // The transport has exactly three reasons to need something from a person:

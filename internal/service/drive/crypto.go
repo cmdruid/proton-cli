@@ -11,7 +11,7 @@ import (
 	"log/slog"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
+	pgphelper "github.com/cmdruid/proton-cli/internal/crypto/pgp"
 )
 
 // This file holds the node-key crypto for Drive: passphrase unlocking, name

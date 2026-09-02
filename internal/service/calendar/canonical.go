@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // canonicalAddr is an address in the form Proton derives it to. Only

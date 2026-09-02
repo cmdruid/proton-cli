@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/roman-16/proton-cli/internal/ref"
+	"github.com/cmdruid/proton-cli/internal/ref"
 )
 
 // MaxEntries caps the cache size. Older entries are pruned FIFO on write.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/errs"
 )
 
 // Mailboxes: the one ID space behind three ideas.

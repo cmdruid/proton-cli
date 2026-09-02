@@ -3,14 +3,14 @@ package mail
 import (
 	"context"
 	"errors"
-	"github.com/roman-16/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
 	"strings"
 	"testing"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/errs"
-	"github.com/roman-16/proton-cli/internal/proton"
+	pgphelper "github.com/cmdruid/proton-cli/internal/crypto/pgp"
+	"github.com/cmdruid/proton-cli/internal/errs"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 func genMailKeyRing(t *testing.T) *pgp.KeyRing {

@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	pgp "github.com/ProtonMail/gopenpgp/v2/crypto"
-	pgphelper "github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/ical"
-	"github.com/roman-16/proton-cli/internal/proton"
+	pgphelper "github.com/cmdruid/proton-cli/internal/crypto/pgp"
+	"github.com/cmdruid/proton-cli/internal/ical"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Every write to a calendar goes through the sync endpoint, which takes a batch

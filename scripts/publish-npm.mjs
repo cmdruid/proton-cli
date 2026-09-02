@@ -19,7 +19,7 @@ import { join } from "node:path";
 const SCOPE = "roman-16";
 const NAME = "proton-cli";
 const BIN = "proton";
-const REPO = "https://github.com/roman-16/proton-cli";
+const REPO = "https://github.com/cmdruid/proton-cli";
 const SITE = "https://proton-cli.lerchster.dev";
 const DESCRIPTION =
   "Your CLI for Proton Mail, Drive, Calendar, Pass and Contacts. One binary, end-to-end encrypted.";

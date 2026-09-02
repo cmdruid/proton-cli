@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/roman-16/proton-cli/internal/ref"
+import "github.com/cmdruid/proton-cli/internal/ref"
 
 // Short renders a reference the way a terminal shows it. No ellipsis is
 // appended: a short ID is the canonical interactive form, meant to be pasted

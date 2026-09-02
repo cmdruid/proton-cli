@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // An event has to be written against a named time zone, not just an instant.

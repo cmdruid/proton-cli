@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/contentline"
+	"github.com/cmdruid/proton-cli/internal/contentline"
 )
 
 const prodID = "-//proton-cli//EN"

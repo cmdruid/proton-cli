@@ -6,8 +6,8 @@
 package calendar
 
 import (
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	mailsvc "github.com/roman-16/proton-cli/internal/service/mail"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	mailsvc "github.com/cmdruid/proton-cli/internal/service/mail"
 	"github.com/spf13/cobra"
 )
 

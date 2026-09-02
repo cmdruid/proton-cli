@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Pass Monitor: which of your addresses have turned up in a data breach.

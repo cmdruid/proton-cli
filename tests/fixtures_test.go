@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/roman-16/proton-cli/tests/fixture"
+	"github.com/cmdruid/proton-cli/tests/fixture"
 )
 
 // What the account holds for the suite to read, brought about when something

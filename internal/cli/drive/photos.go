@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/roman-16/proton-cli/internal/cli/kit"
-	drivesvc "github.com/roman-16/proton-cli/internal/service/drive"
-	"github.com/roman-16/proton-cli/internal/ui"
-	"github.com/roman-16/proton-cli/internal/units"
+	"github.com/cmdruid/proton-cli/internal/cli/kit"
+	drivesvc "github.com/cmdruid/proton-cli/internal/service/drive"
+	"github.com/cmdruid/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/units"
 	"github.com/spf13/cobra"
 )
 

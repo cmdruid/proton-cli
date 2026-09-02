@@ -1,8 +1,8 @@
 package kit
 
 import (
-	"github.com/roman-16/proton-cli/internal/crypto/pgp"
-	"github.com/roman-16/proton-cli/internal/ui"
+	"github.com/cmdruid/proton-cli/internal/crypto/pgp"
+	"github.com/cmdruid/proton-cli/internal/ui"
 )
 
 // SignatureField reports whether what was decrypted is also provably from who it

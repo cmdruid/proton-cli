@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/roman-16/proton-cli/internal/crypto/aead"
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/crypto/aead"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // keyDoer answers the item-key endpoint from a fixture and records what was asked.

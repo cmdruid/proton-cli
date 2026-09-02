@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/roman-16/proton-cli/internal/proton"
+	"github.com/cmdruid/proton-cli/internal/proton"
 )
 
 // Every organising action Proton offers on mail reduces to four primitives:

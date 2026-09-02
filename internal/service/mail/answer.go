@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/roman-16/proton-cli/internal/account/keys"
-	"github.com/roman-16/proton-cli/internal/mailtext"
+	"github.com/cmdruid/proton-cli/internal/account/keys"
+	"github.com/cmdruid/proton-cli/internal/mailtext"
 )
 
 // AnswerSpec is what the user supplied for a reply or forward; the parent message

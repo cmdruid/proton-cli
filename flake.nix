@@ -31,7 +31,7 @@
           ldflags = [
             "-s"
             "-w"
-            "-X=github.com/roman-16/proton-cli/internal/cli.version=${version}"
+            "-X=github.com/cmdruid/proton-cli/internal/cli.version=${version}"
           ];
 
           nativeBuildInputs = [ pkgs.installShellFiles ];
@@ -57,7 +57,7 @@
 
           meta = {
             description = "Unofficial, end-to-end encrypted CLI for Proton Mail, Drive, Calendar, Pass and Contacts";
-            homepage = "https://github.com/roman-16/proton-cli";
+            homepage = "https://github.com/cmdruid/proton-cli";
             license = pkgs.lib.licenses.mit;
             mainProgram = "proton";
             platforms = pkgs.lib.platforms.linux ++ pkgs.lib.platforms.darwin;

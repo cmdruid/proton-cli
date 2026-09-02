@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/roman-16/proton-cli/internal/changelog"
+	"github.com/cmdruid/proton-cli/internal/changelog"
 )
 
 func main() {
